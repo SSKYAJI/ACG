@@ -1,4 +1,4 @@
-.PHONY: install scan compile demo benchmark test lint clean
+.PHONY: install scan compile demo benchmark test lint clean viz-install viz
 
 install:
 	python3 -m venv .venv
@@ -31,3 +31,9 @@ lint:
 
 clean:
 	rm -rf .acg demo-app/.acg demo-app/agent_lock.json __pycache__ .pytest_cache .ruff_cache
+
+viz-install:
+	cd viz && npm install
+
+viz:
+	cd viz && npm run dev
