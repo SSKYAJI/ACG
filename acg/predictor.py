@@ -63,6 +63,10 @@ _ENTITY_BEFORE_ROLE_RE = re.compile(
     r"\b([a-z][\w-]+)\s+(?:flow|feature|page|component|endpoint|api|route|module|service)\b",
     re.IGNORECASE,
 )
+_ENTITY_CONJUNCTION_RE = re.compile(
+    r"\b([a-z][\w-]+)\s+(?:and|or)\s+([a-z][\w-]+)\b",
+    re.IGNORECASE,
+)
 _ENTITY_STOPWORDS = {
     "the", "a", "an", "this", "that", "all", "any", "src", "lib", "test",
     "tests", "testing", "spec", "specs", "playwright", "vitest", "jest",
@@ -128,23 +132,33 @@ def _append_entity(entities: list[str], entity: str, *, stopwords: set[str]) -> 
     entities.append(candidate)
 
 
-def _extract_entity_noun(prompt: str) -> str | None:
-    """Pull a one-word domain noun out of a test-task prompt.
+def _extract_entity_nouns(prompt: str) -> list[str]:
+    """Pull up to four one-word domain nouns out of a test-task prompt.
 
     >>> _extract_entity_noun("Write end-to-end Playwright tests for the checkout flow.")
     'checkout'
     >>> _extract_entity_noun("Add unit tests for the auth helper.")
     'auth'
     """
+    entities: list[str] = []
     for pattern in (_ENTITY_AFTER_TESTS_RE, _ENTITY_BEFORE_ROLE_RE):
         for match in pattern.finditer(prompt):
-            entity = match.group(1).lower()
-            if entity in _ENTITY_STOPWORDS:
-                continue
-            if "/" in entity or "." in entity:
-                continue  # path-like — covered by static seed already
-            return entity
-    return None
+            _append_entity(entities, match.group(1), stopwords=_ENTITY_STOPWORDS)
+            if len(entities) >= 4:
+                return entities
+    for match in _ENTITY_CONJUNCTION_RE.finditer(prompt):
+        _append_entity(entities, match.group(1), stopwords=_ENTITY_STOPWORDS)
+        if len(entities) >= 4:
+            return entities
+        _append_entity(entities, match.group(2), stopwords=_ENTITY_STOPWORDS)
+        if len(entities) >= 4:
+            return entities
+    return entities
+
+
+def _extract_entity_noun(prompt: str) -> str | None:
+    entities = _extract_entity_nouns(prompt)
+    return entities[0] if entities else None
 
 
 def _extract_sibling_entities(prompt: str) -> list[str]:
@@ -307,7 +321,7 @@ def _test_scaffold_seed(
         return []
     framework, test_dir, ext, config_path = layout
 
-    entity = _extract_entity_noun(task.prompt) or task.id
+    entities = _extract_entity_nouns(task.prompt) or [task.id]
     is_e2e = bool(_E2E_RE.search(task.prompt))
 
     seeds: list[PredictedWrite] = []
@@ -329,24 +343,25 @@ def _test_scaffold_seed(
                 )
             )
 
-    # The actual spec file.
-    if framework == "playwright" and is_e2e:
-        spec_path = f"{test_dir}/e2e/{entity}{ext}"
-    elif framework == "pytest":
-        spec_path = f"{test_dir}/test_{entity}{ext}"
-    else:
-        spec_path = f"{test_dir}/{entity}{ext}"
+    # The actual spec file(s).
+    for entity in entities:
+        if framework == "playwright" and is_e2e:
+            spec_path = f"{test_dir}/e2e/{entity}{ext}"
+        elif framework == "pytest":
+            spec_path = f"{test_dir}/test_{entity}{ext}"
+        else:
+            spec_path = f"{test_dir}/{entity}{ext}"
 
-    seeds.append(
-        PredictedWrite(
-            path=spec_path,
-            confidence=SEED_TEST_SCAFFOLD_CONFIDENCE,
-            reason=(
-                f"{framework} convention: {test_dir}/ with {ext}"
-                f" extension, entity '{entity}' from task prompt."
-            ),
+        seeds.append(
+            PredictedWrite(
+                path=spec_path,
+                confidence=SEED_TEST_SCAFFOLD_CONFIDENCE,
+                reason=(
+                    f"{framework} convention: {test_dir}/ with {ext}"
+                    f" extension, entity '{entity}' from task prompt."
+                ),
+            )
         )
-    )
     return seeds
 
 
