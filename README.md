@@ -1,10 +1,40 @@
 # Agent Context Graph (ACG)
 
+![ci](https://github.com/<org>/cognition/actions/workflows/ci.yml/badge.svg)
+
 > **It's `package-lock.json` for parallel coding agents.**
 
 Parallel coding agents are powerful, but they collide on shared files. Devin now manages teams of Devins, but public docs only say the coordinator resolves conflicts after the fact. **ACG moves that work before execution.** It scans the repo, predicts each task's write-set, emits a committable `agent_lock.json`, and enforces it with a write-validator (and a Windsurf hook in the stretch plan). In our demo, naive parallel agents collide on auth, Prisma, and navigation files. With ACG, safe tasks run in parallel, risky tasks serialize, and illegal writes are blocked before they corrupt the diff.
 
 LA Hacks 2026 — Cognition track (primary) · ASUS track (secondary).
+
+## Live execution mode
+
+ACG ships with a runtime (`acg/runtime.py`) that executes a lockfile
+against two `llama-server` instances:
+
+- **Orchestrator** (port 8081) — thinks aloud about the dispatch plan
+- **Sub-agents** (port 8080) — propose write-sets per task, no thinking
+
+Each worker's proposed writes are validated against its task's
+`allowed_paths` via `validate_write()`. Both ALLOWED and BLOCKED proposals
+are recorded to `demo-app/.acg/run_trace.json`. The viz replays the trace
+in real time:
+
+```bash
+make compile-gemma   # build the lockfile against live Gemma
+make run-gemma       # execute it; ~30s, writes run_trace.json
+make viz             # open the live-replay visualizer
+```
+
+Offline / CI mode uses a deterministic mock:
+
+```bash
+make run-mock && make viz
+```
+
+See `viz/README.md` for the visualizer architecture and `acg/runtime.py`
+for the runtime's prompt construction and validation pipeline.
 
 ## Demo
 
