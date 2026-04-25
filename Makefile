@@ -19,9 +19,9 @@ install:
 	cd graph_builder && npm install
 
 scan:
-	cd graph_builder && npm run scan -- --repo ../demo-app --out ../demo-app/.acg/context_graph.json
+	./.venv/bin/acg init-graph --repo demo-app --language typescript
 
-compile: scan
+compile:
 	./.venv/bin/acg compile --repo demo-app --tasks demo-app/tasks.json --out demo-app/agent_lock.json
 
 explain:
@@ -58,7 +58,7 @@ gemma-ping:
 	@echo "orchestrator @ $(GEMMA_HOST):$(GEMMA_ORCH_PORT)"
 	@curl -fsS http://$(GEMMA_HOST):$(GEMMA_ORCH_PORT)/v1/models | head -c 200 && echo
 
-compile-gemma: scan
+compile-gemma:
 	$(GEMMA_ENV) ./.venv/bin/acg compile --repo demo-app --tasks demo-app/tasks.json --out demo-app/agent_lock.json
 
 demo-gemma: compile-gemma

@@ -20,6 +20,12 @@ from .compiler import compile_lockfile
 from .enforce import EXIT_ALLOWED, EXIT_BLOCKED, EXIT_USER_ERROR, cli_validate
 from .explain import render
 from .llm import LLMClient
+from .repo_graph import (
+    GraphScanError,
+    context_graph_path,
+    load_context_graph,
+    scan_context_graph,
+)
 from .schema import AgentLock, TasksInput
 
 app = typer.Typer(
@@ -34,14 +40,10 @@ _err_console = Console(stderr=True)
 
 def _load_repo_graph(repo_path: Path) -> dict:
     """Load ``<repo>/.acg/context_graph.json`` if present, else return ``{}``."""
-    graph_path = repo_path / ".acg" / "context_graph.json"
-    if not graph_path.exists():
-        return {}
-    try:
-        return json.loads(graph_path.read_text())
-    except (OSError, json.JSONDecodeError) as exc:
-        _err_console.print(f"[yellow]warning[/]: could not read {graph_path}: {exc}")
-        return {}
+    graph = load_context_graph(repo_path)
+    if not graph and context_graph_path(repo_path).exists():
+        _err_console.print(f"[yellow]warning[/]: could not read {context_graph_path(repo_path)}")
+    return graph
 
 
 def _load_tasks(tasks_path: Path) -> TasksInput:
@@ -51,9 +53,7 @@ def _load_tasks(tasks_path: Path) -> TasksInput:
 @app.command("compile")
 def cmd_compile(
     repo: Annotated[Path, typer.Option(exists=True, file_okay=False, help="Repository root.")],
-    tasks: Annotated[
-        Path, typer.Option(exists=True, dir_okay=False, help="Path to tasks.json.")
-    ],
+    tasks: Annotated[Path, typer.Option(exists=True, dir_okay=False, help="Path to tasks.json.")],
     out: Annotated[Path, typer.Option(help="Where to write agent_lock.json.")],
     language: Annotated[
         str,
@@ -61,38 +61,34 @@ def cmd_compile(
             "--language",
             help=(
                 "Source language of the target repo. "
-                "'typescript' (default) expects an existing context graph from "
-                "graph_builder/scan.ts; 'java' runs the in-process tree-sitter "
-                "scanner before compiling."
+                "'typescript' (default) runs graph_builder/scan.ts; "
+                "'java' runs the in-process tree-sitter scanner before compiling."
             ),
         ),
     ] = "typescript",
 ) -> None:
     """Compile ``tasks.json`` + repo graph into ``agent_lock.json``."""
     language_normalized = language.strip().lower()
-    if language_normalized == "java":
-        from graph_builder import scan_java
-
-        graph_path = repo / ".acg" / "context_graph.json"
-        scan_java.write_graph(repo, graph_path)
-        _console.print(
-            f"[dim]scanned Java repo → {graph_path} "
-            f"(language=java)[/]"
-        )
-    elif language_normalized not in ("typescript", "javascript", "ts", "js"):
+    if language_normalized not in ("auto", "typescript", "javascript", "ts", "js", "java"):
         _err_console.print(
             f"[red]unsupported --language {language!r}; "
-            "expected one of: typescript, javascript, java[/]"
+            "expected one of: auto, typescript, javascript, java[/]"
         )
         raise typer.Exit(code=EXIT_USER_ERROR)
 
     tasks_input = _load_tasks(tasks)
+    try:
+        repo_graph = scan_context_graph(repo, language_normalized)
+    except (GraphScanError, ValueError) as exc:
+        _err_console.print(f"[red]graph scan failed:[/] {exc}")
+        raise typer.Exit(code=EXIT_USER_ERROR) from exc
+    _console.print(
+        f"[dim]scanned {repo_graph.get('language', 'unknown')} repo → {context_graph_path(repo)}[/]"
+    )
     repo_graph = _load_repo_graph(repo)
     if not repo_graph:
-        _console.print(
-            "[dim]no .acg/context_graph.json found; running with empty graph "
-            "(seeds + LLM only).[/]"
-        )
+        _err_console.print("[red]graph scan did not produce a readable context graph[/]")
+        raise typer.Exit(code=EXIT_USER_ERROR)
     llm = LLMClient.from_env()
     lock = compile_lockfile(repo, tasks_input, repo_graph, llm)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -104,9 +100,42 @@ def cmd_compile(
     )
 
 
+@app.command("init-graph")
+def cmd_init_graph(
+    repo: Annotated[Path, typer.Option(exists=True, file_okay=False, help="Repository root.")],
+    language: Annotated[
+        str,
+        typer.Option(
+            "--language",
+            help="Source language to scan: auto, typescript, javascript, or java.",
+        ),
+    ] = "auto",
+    out: Annotated[
+        Path | None,
+        typer.Option(
+            help=("Where to write context_graph.json. Defaults to <repo>/.acg/context_graph.json."),
+        ),
+    ] = None,
+) -> None:
+    """Initialize a deterministic ``context_graph.json`` for a repository."""
+    try:
+        graph = scan_context_graph(repo, language, out)
+    except (GraphScanError, ValueError) as exc:
+        _err_console.print(f"[red]graph scan failed:[/] {exc}")
+        raise typer.Exit(code=EXIT_USER_ERROR) from exc
+    out_path = out or context_graph_path(repo)
+    _console.print(
+        f"[green]wrote[/] {out_path} ({len(graph.get('files') or [])} files, "
+        f"{len(graph.get('hotspots') or [])} hotspots, "
+        f"language={graph.get('language', 'unknown')})"
+    )
+
+
 @app.command("explain")
 def cmd_explain(
-    lock: Annotated[Path, typer.Option(exists=True, dir_okay=False, help="Path to agent_lock.json.")],
+    lock: Annotated[
+        Path, typer.Option(exists=True, dir_okay=False, help="Path to agent_lock.json.")
+    ],
 ) -> None:
     """Print a human-readable summary of an existing lockfile."""
     lockfile = AgentLock.model_validate_json(lock.read_text())
@@ -115,7 +144,9 @@ def cmd_explain(
 
 @app.command("validate-write")
 def cmd_validate_write(
-    lock: Annotated[Path, typer.Option(exists=True, dir_okay=False, help="Path to agent_lock.json.")],
+    lock: Annotated[
+        Path, typer.Option(exists=True, dir_okay=False, help="Path to agent_lock.json.")
+    ],
     task: Annotated[str, typer.Option(help="Task id attempting the write.")],
     path: Annotated[str, typer.Option(help="Repository-relative write path.")],
     quiet: Annotated[bool, typer.Option(help="Suppress success message.")] = False,
@@ -167,10 +198,24 @@ def cmd_validate_lockfile(
 
 @app.command("run")
 def cmd_run(
-    lock: Annotated[Path, typer.Option(exists=True, dir_okay=False, help="Path to agent_lock.json.")],
-    repo: Annotated[Path, typer.Option(exists=True, file_okay=False, help="Repository root (used to locate .acg/context_graph.json).")],
+    lock: Annotated[
+        Path, typer.Option(exists=True, dir_okay=False, help="Path to agent_lock.json.")
+    ],
+    repo: Annotated[
+        Path,
+        typer.Option(
+            exists=True,
+            file_okay=False,
+            help="Repository root (used to locate .acg/context_graph.json).",
+        ),
+    ],
     out: Annotated[Path, typer.Option(help="Where to write run_trace.json.")],
-    mock: Annotated[bool, typer.Option("--mock", help="Use the deterministic offline runtime LLM instead of live servers.")] = False,
+    mock: Annotated[
+        bool,
+        typer.Option(
+            "--mock", help="Use the deterministic offline runtime LLM instead of live servers."
+        ),
+    ] = False,
 ) -> None:
     """Execute the lockfile under runtime enforcement; emit a run trace JSON."""
     import asyncio
@@ -186,7 +231,9 @@ def cmd_run(
     orch_llm = (
         MockRuntimeLLM(role="orchestrator")
         if use_mock
-        else RuntimeLLM(cfg.orch_url, cfg.orch_model, cfg.orch_api_key, timeout=cfg.request_timeout_s)
+        else RuntimeLLM(
+            cfg.orch_url, cfg.orch_model, cfg.orch_api_key, timeout=cfg.request_timeout_s
+        )
     )
     sub_llm = (
         MockRuntimeLLM(role="worker")
@@ -216,8 +263,12 @@ def cmd_run(
 
 @app.command("report")
 def cmd_report(
-    naive: Annotated[Path, typer.Option(exists=True, dir_okay=False, help="Naive run metrics JSON.")],
-    planned: Annotated[Path, typer.Option(exists=True, dir_okay=False, help="ACG-planned run metrics JSON.")],
+    naive: Annotated[
+        Path, typer.Option(exists=True, dir_okay=False, help="Naive run metrics JSON.")
+    ],
+    planned: Annotated[
+        Path, typer.Option(exists=True, dir_okay=False, help="ACG-planned run metrics JSON.")
+    ],
     out: Annotated[Path, typer.Option(help="Output PNG path.")],
 ) -> None:
     """Render the benchmark chart PNG."""
