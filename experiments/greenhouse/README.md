@@ -58,6 +58,23 @@ overlap signal.
 
 ## Head-to-head harness
 
-The harness that drives parallel coding agents against this lockfile —
-ACG-planned vs. naive — lives at `experiments/greenhouse/headtohead.py`
-(written by the human author, not by the in-repo Devin sessions).
+```bash
+make headtohead-greenhouse        # mock LLMs, runs in <2s, deterministic
+make headtohead-greenhouse-gemma  # live GX10 — ~1m wall, real worker LLM output
+```
+
+The harness writes `experiments/greenhouse/headtohead.json` containing
+two metric blocks (`naive`, `planned`) shaped the same as
+`.acg/run_naive.json` / `.acg/run_acg.json` so the existing
+`acg report` chart renderer can consume them.
+
+To produce a chart comparing the two strategies:
+
+```bash
+./.venv/bin/python -c "
+import json; d = json.load(open('experiments/greenhouse/headtohead.json'))
+json.dump(d['naive'],   open('/tmp/g_naive.json',   'w'))
+json.dump(d['planned'], open('/tmp/g_planned.json', 'w'))
+"
+./.venv/bin/acg report --naive /tmp/g_naive.json --planned /tmp/g_planned.json --out docs/greenhouse_benchmark.png
+```
