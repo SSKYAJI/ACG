@@ -17,99 +17,251 @@
     "total_wall_s"
   ],
   "properties": {
-    "version": { "const": "1.0" },
-    "generated_at": { "type": "string", "format": "date-time" },
-    "lockfile": { "type": "string", "description": "Path to the agent_lock.json this trace executed against." },
+    "version": {
+      "const": "1.0",
+      "description": "Schema version of this run trace; bumped on breaking shape changes."
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when the runtime serialized this trace."
+    },
+    "lockfile": {
+      "type": "string",
+      "description": "Path to the agent_lock.json this trace executed against."
+    },
     "config": {
       "type": "object",
+      "description": "Endpoint and model configuration the runtime invoked.",
       "required": ["orch_url", "orch_model", "sub_url", "sub_model"],
       "properties": {
-        "orch_url": { "type": "string" },
-        "orch_model": { "type": "string" },
-        "sub_url": { "type": "string" },
-        "sub_model": { "type": "string" }
+        "orch_url": {
+          "type": "string",
+          "description": "Base URL of the orchestrator llama-server instance."
+        },
+        "orch_model": {
+          "type": "string",
+          "description": "Model identifier used by the orchestrator endpoint."
+        },
+        "sub_url": {
+          "type": "string",
+          "description": "Base URL of the sub-agent llama-server instance."
+        },
+        "sub_model": {
+          "type": "string",
+          "description": "Model identifier used by sub-agent workers."
+        }
       }
     },
-    "orchestrator": { "$ref": "#/$defs/OrchestratorResult" },
+    "orchestrator": {
+      "$ref": "#/$defs/OrchestratorResult",
+      "description": "Single orchestrator turn that approved or rejected the dispatch plan."
+    },
     "workers": {
       "type": "array",
+      "description": "Per-task worker proposals, in completion order across all groups.",
       "items": { "$ref": "#/$defs/WorkerResult" }
     },
     "groups_executed": {
       "type": "array",
+      "description": "Per-group execution metadata in scheduling order.",
       "items": { "$ref": "#/$defs/GroupResult" }
     },
-    "started_at": { "type": "string", "format": "date-time" },
-    "finished_at": { "type": "string", "format": "date-time" },
-    "total_wall_s": { "type": "number", "minimum": 0 }
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when the runtime began executing the lockfile."
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when the runtime finished the last group."
+    },
+    "total_wall_s": {
+      "type": "number",
+      "minimum": 0,
+      "description": "End-to-end wall-clock seconds from started_at to finished_at."
+    }
   },
   "$defs": {
     "OrchestratorResult": {
       "type": "object",
+      "description": "One orchestrator response captured before worker fan-out.",
       "required": ["url", "model", "wall_s", "completion_tokens", "finish_reason", "content", "reasoning_content"],
       "properties": {
-        "url": { "type": "string" },
-        "model": { "type": "string" },
-        "wall_s": { "type": "number", "minimum": 0 },
-        "completion_tokens": { "type": "integer", "minimum": 0 },
-        "finish_reason": { "type": "string" },
-        "content": { "type": "string" },
+        "url": {
+          "type": "string",
+          "description": "Endpoint URL the orchestrator request was sent to."
+        },
+        "model": {
+          "type": "string",
+          "description": "Model identifier the orchestrator endpoint reported."
+        },
+        "wall_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Wall-clock seconds the orchestrator call took."
+        },
+        "completion_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Token count consumed by the orchestrator response."
+        },
+        "finish_reason": {
+          "type": "string",
+          "description": "Why the orchestrator stopped (e.g. 'stop', 'length')."
+        },
+        "content": {
+          "type": "string",
+          "description": "Orchestrator's user-visible answer text."
+        },
         "reasoning_content": {
           "type": "string",
           "description": "Captured chain-of-thought (empty when the server runs with --reasoning-budget 0)."
         },
         "parsed": {
           "type": ["object", "null"],
+          "description": "Optional structured parse of the orchestrator's content.",
           "properties": {
-            "approved": { "type": "boolean" },
-            "concerns": { "type": "array", "items": { "type": "string" } },
-            "dispatch_order": { "type": "array", "items": { "type": "integer" } }
+            "approved": {
+              "type": "boolean",
+              "description": "Whether the orchestrator approved the proposed dispatch plan."
+            },
+            "concerns": {
+              "type": "array",
+              "description": "Free-form concerns the orchestrator raised about the plan.",
+              "items": {
+                "type": "string",
+                "description": "One concern, one line."
+              }
+            },
+            "dispatch_order": {
+              "type": "array",
+              "description": "Group ids in the order the orchestrator wants them executed.",
+              "items": {
+                "type": "integer",
+                "description": "Id of an execution group, 1-indexed."
+              }
+            }
           }
         }
       }
     },
     "WorkerResult": {
       "type": "object",
+      "description": "One sub-agent worker run, including its proposed writes and validation outcomes.",
       "required": ["task_id", "group_id", "wall_s", "completion_tokens", "finish_reason", "raw_content", "proposals", "allowed_count", "blocked_count"],
       "properties": {
-        "task_id": { "type": "string" },
-        "group_id": { "type": "integer", "minimum": 1 },
-        "url": { "type": "string" },
-        "model": { "type": "string" },
-        "wall_s": { "type": "number", "minimum": 0 },
-        "completion_tokens": { "type": "integer", "minimum": 0 },
-        "finish_reason": { "type": "string" },
-        "raw_content": { "type": "string" },
+        "task_id": {
+          "type": "string",
+          "description": "Lockfile task id this worker was assigned."
+        },
+        "group_id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Execution group this worker belonged to."
+        },
+        "url": {
+          "type": "string",
+          "description": "Endpoint URL the worker request was sent to."
+        },
+        "model": {
+          "type": "string",
+          "description": "Model identifier the worker endpoint reported."
+        },
+        "wall_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Wall-clock seconds the worker call took."
+        },
+        "completion_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Token count consumed by the worker response."
+        },
+        "finish_reason": {
+          "type": "string",
+          "description": "Why the worker stopped (e.g. 'stop', 'length')."
+        },
+        "raw_content": {
+          "type": "string",
+          "description": "Verbatim worker response before proposal parsing."
+        },
         "proposals": {
           "type": "array",
+          "description": "Parsed write proposals from this worker, in order.",
           "items": { "$ref": "#/$defs/Proposal" }
         },
-        "allowed_count": { "type": "integer", "minimum": 0 },
-        "blocked_count": { "type": "integer", "minimum": 0 },
-        "error": { "type": ["string", "null"] }
+        "allowed_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of proposals that passed validate_write()."
+        },
+        "blocked_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of proposals that validate_write() rejected."
+        },
+        "error": {
+          "type": ["string", "null"],
+          "description": "Error message if the worker call failed; null on success."
+        }
       }
     },
     "Proposal": {
       "type": "object",
+      "description": "A single file-write proposal emitted by a worker.",
       "required": ["file", "description", "allowed", "reason"],
       "properties": {
-        "file": { "type": "string" },
-        "description": { "type": "string" },
-        "allowed": { "type": "boolean" },
-        "reason": { "type": ["string", "null"] }
+        "file": {
+          "type": "string",
+          "description": "Repo-relative path the worker proposed to modify."
+        },
+        "description": {
+          "type": "string",
+          "description": "Worker's short explanation of the intended change."
+        },
+        "allowed": {
+          "type": "boolean",
+          "description": "Whether validate_write() permitted the proposal under allowed_paths."
+        },
+        "reason": {
+          "type": ["string", "null"],
+          "description": "Validator-supplied reason when blocked; null when allowed."
+        }
       }
     },
     "GroupResult": {
       "type": "object",
+      "description": "Per-group execution metadata captured by the runtime.",
       "required": ["id", "type", "started_at", "wall_s", "worker_ids"],
       "properties": {
-        "id": { "type": "integer", "minimum": 1 },
-        "type": { "enum": ["parallel", "serial"] },
-        "started_at": { "type": "string", "format": "date-time" },
-        "wall_s": { "type": "number", "minimum": 0 },
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Lockfile group id this entry corresponds to."
+        },
+        "type": {
+          "enum": ["parallel", "serial"],
+          "description": "Whether the group's tasks ran concurrently or sequentially."
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC timestamp when the group began executing."
+        },
+        "wall_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Wall-clock seconds the group took, end to end."
+        },
         "worker_ids": {
           "type": "array",
-          "items": { "type": "string" }
+          "description": "Task ids of workers dispatched in this group.",
+          "items": {
+            "type": "string",
+            "description": "Task id of a worker dispatched in this group."
+          }
         }
       }
     }

@@ -2,113 +2,212 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://acg.dev/schema/agent_lock/v1",
   "title": "Agent Context Graph Lockfile",
+  "description": "Committable plan that pins each task's predicted writes, allowed paths, and DAG position.",
   "type": "object",
   "required": ["version", "generated_at", "repo", "tasks", "execution_plan"],
   "properties": {
-    "version": { "const": "1.0" },
-    "generated_at": { "type": "string", "format": "date-time" },
+    "version": {
+      "const": "1.0",
+      "description": "Schema version of this lockfile; bumped on breaking shape changes."
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when the compiler emitted this lockfile."
+    },
     "generator": {
       "type": "object",
+      "description": "Provenance metadata describing the tool and model that produced the lockfile.",
       "properties": {
-        "tool": { "type": "string" },
-        "version": { "type": "string" },
-        "model": { "type": "string" }
+        "tool": {
+          "type": "string",
+          "description": "Name of the tool that generated the lockfile (e.g. 'acg')."
+        },
+        "version": {
+          "type": "string",
+          "description": "Semantic version of the generating tool."
+        },
+        "model": {
+          "type": "string",
+          "description": "Identifier of the LLM used for predictor reranking, if any."
+        }
       }
     },
     "repo": {
       "type": "object",
+      "description": "Repository metadata captured at compile time.",
       "required": ["root", "languages"],
       "properties": {
-        "root": { "type": "string" },
-        "git_url": { "type": "string" },
-        "commit": { "type": "string" },
+        "root": {
+          "type": "string",
+          "description": "Absolute or repo-relative path to the repository root."
+        },
+        "git_url": {
+          "type": "string",
+          "description": "Optional remote URL of the repository for cross-machine reference."
+        },
+        "commit": {
+          "type": "string",
+          "description": "Git commit SHA the lockfile was compiled against."
+        },
         "languages": {
           "type": "array",
-          "items": { "type": "string" }
+          "description": "Programming languages detected in the repo (e.g. 'typescript', 'python').",
+          "items": {
+            "type": "string",
+            "description": "A single language identifier in lowercase."
+          }
         }
       }
     },
     "tasks": {
       "type": "array",
+      "description": "All compiled tasks with their predicted writes and allowed-path globs.",
       "items": { "$ref": "#/$defs/Task" }
     },
     "execution_plan": {
       "type": "object",
+      "description": "Topologically ordered DAG of parallel and serial groups for the runtime.",
       "required": ["groups"],
       "properties": {
         "groups": {
           "type": "array",
+          "description": "Ordered execution groups; later groups wait on their declared upstream groups.",
           "items": { "$ref": "#/$defs/Group" }
         }
       }
     },
     "conflicts_detected": {
       "type": "array",
+      "description": "Cross-task overlaps the planner found, plus how each was resolved.",
       "items": { "$ref": "#/$defs/Conflict" }
     }
   },
   "$defs": {
     "Task": {
       "type": "object",
+      "description": "A single task as serialized into the lockfile.",
       "required": ["id", "prompt", "predicted_writes", "allowed_paths", "depends_on"],
       "properties": {
-        "id": { "type": "string", "pattern": "^[a-z0-9_-]+$" },
-        "prompt": { "type": "string" },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$",
+          "description": "Stable, kebab-case task identifier; unique within a lockfile."
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Natural-language description of what the task should accomplish."
+        },
         "predicted_writes": {
           "type": "array",
+          "description": "Predictor's anticipated file edits, sorted by descending confidence.",
           "items": { "$ref": "#/$defs/PredictedWrite" }
         },
         "allowed_paths": {
           "type": "array",
-          "items": { "type": "string" },
-          "description": "Glob patterns the task is allowed to modify"
+          "description": "Glob patterns the task is permitted to write; enforced by validate_write().",
+          "items": {
+            "type": "string",
+            "description": "A repo-relative glob pattern (e.g. 'src/app/**/*.ts')."
+          }
         },
         "depends_on": {
           "type": "array",
-          "items": { "type": "string" }
+          "description": "Upstream task ids that must finish before this task starts.",
+          "items": {
+            "type": "string",
+            "description": "Id of an upstream task this task depends on."
+          }
         },
-        "parallel_group": { "type": "integer", "minimum": 1 },
-        "rationale": { "type": "string" }
+        "parallel_group": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "DAG level this task belongs to; same group ids may run in parallel."
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Optional human-facing note explaining the task's scope or risk."
+        }
       }
     },
     "PredictedWrite": {
       "type": "object",
+      "description": "A predicted file write with confidence and short rationale.",
       "required": ["path", "confidence"],
       "properties": {
-        "path": { "type": "string" },
-        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
-        "reason": { "type": "string" }
+        "path": {
+          "type": "string",
+          "description": "Repo-relative path the predictor expects the task to modify."
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Predictor confidence in the prediction, on [0, 1]."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Short explanation of why the predictor flagged this path."
+        }
       }
     },
     "Group": {
       "type": "object",
+      "description": "A node in the execution DAG; runs after all of its waits_for groups.",
       "required": ["id", "tasks", "type"],
       "properties": {
-        "id": { "type": "integer", "minimum": 1 },
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Monotonic group identifier, 1-indexed in execution order."
+        },
         "tasks": {
           "type": "array",
-          "items": { "type": "string" }
+          "description": "Task ids that belong to this group.",
+          "items": {
+            "type": "string",
+            "description": "Id of a task contained in this group."
+          }
         },
-        "type": { "enum": ["parallel", "serial"] },
+        "type": {
+          "enum": ["parallel", "serial"],
+          "description": "Whether tasks in this group run concurrently or one after another."
+        },
         "waits_for": {
           "type": "array",
-          "items": { "type": "integer" }
+          "description": "Group ids that must complete before this group starts.",
+          "items": {
+            "type": "integer",
+            "description": "Id of an upstream group this group depends on."
+          }
         }
       }
     },
     "Conflict": {
       "type": "object",
+      "description": "A detected file overlap between two or more tasks and the chosen resolution.",
       "required": ["files", "between_tasks", "resolution"],
       "properties": {
         "files": {
           "type": "array",
-          "items": { "type": "string" }
+          "description": "Repo-relative file paths shared by the conflicting tasks.",
+          "items": {
+            "type": "string",
+            "description": "A single shared file path."
+          }
         },
         "between_tasks": {
           "type": "array",
-          "items": { "type": "string" }
+          "description": "Ids of the tasks that overlap on the listed files.",
+          "items": {
+            "type": "string",
+            "description": "Id of a task involved in the conflict."
+          }
         },
-        "resolution": { "type": "string" }
+        "resolution": {
+          "type": "string",
+          "description": "How the planner resolved the conflict (e.g. 'serialize', 'manual')."
+        }
       }
     }
   }
