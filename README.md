@@ -136,6 +136,12 @@ Long form in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 - **Cognition** — Devin Manage Devins coordinates child Devins but doesn't publish how it resolves conflicts. ACG is the pre-flight artifact the coordinator can consume before fanning out. See [`docs/COGNITION_INTEGRATION.md`](docs/COGNITION_INTEGRATION.md).
 - **ASUS GX10** — Local-first AI infrastructure for compliance-heavy enterprises that cannot ship code to cloud LLMs. The same OpenAI-compatible client that talks to Groq talks to vLLM on the GX10. See [`docs/ASUS_DEPLOYMENT.md`](docs/ASUS_DEPLOYMENT.md).
 
+## Cascade integration
+
+ACG's validator runs inside Windsurf via the `pre_write_code` hook —
+out-of-bounds writes are blocked at the IDE layer before the diff
+lands. See [`docs/CASCADE_INTEGRATION.md`](docs/CASCADE_INTEGRATION.md).
+
 ## Honesty box (non-negotiable)
 
 1. **n=5 single-trial.** Directional evidence only. Not a benchmark paper.
