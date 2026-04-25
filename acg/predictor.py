@@ -23,6 +23,8 @@ SEED_FILE_CONFIDENCE = 0.95
 SEED_SYMBOL_CONFIDENCE = 0.85
 SEED_TOPICAL_CONFIDENCE = 0.7
 SEED_TEST_SCAFFOLD_CONFIDENCE = 0.85
+SEED_ENV_CONFIDENCE = 0.8
+SEED_ENV_LOCAL_CONFIDENCE = 0.65
 TOP_GRAPH_FILES_FOR_LLM = 50
 MAX_PREDICTIONS = 8
 
@@ -64,6 +66,11 @@ _ENTITY_STOPWORDS = {
     "tests", "testing", "spec", "specs", "playwright", "vitest", "jest",
     "pytest", "cypress", "end", "to", "unit", "integration", "e2e",
 }
+_ENV_TRIGGER_RE = re.compile(
+    r"\b(oauth|stripe|auth0|clerk|nextauth|api[\s-]?key|secret|"
+    r"credentials?|provider[s]?|env(?:ironment)?\s+vars?)\b",
+    re.IGNORECASE,
+)
 
 # (config_filename, default_testdir, default_extension)
 _FRAMEWORK_DEFAULTS: dict[str, tuple[str | None, str, str]] = {
@@ -217,6 +224,37 @@ def _test_scaffold_seed(
             ),
         )
     )
+    return seeds
+
+
+def _env_seed(task: TaskInput, repo_root: Path | None) -> list[PredictedWrite]:
+    if not _ENV_TRIGGER_RE.search(task.prompt):
+        return []
+    seeds = [
+        PredictedWrite(
+            path=".env.example",
+            confidence=SEED_ENV_CONFIDENCE,
+            reason=(
+                "Env-var seed: prompt mentions credentials/providers; agents typically"
+                " extend `.env.example`."
+            ),
+        )
+    ]
+    has_next_config = bool(
+        repo_root
+        and (
+            (repo_root / "next.config.js").exists()
+            or (repo_root / "next.config.ts").exists()
+        )
+    )
+    if has_next_config:
+        seeds.append(
+            PredictedWrite(
+                path=".env.local",
+                confidence=SEED_ENV_LOCAL_CONFIDENCE,
+                reason="Next.js project: `.env.local` is the conventional secrets file.",
+            )
+        )
     return seeds
 
 
@@ -421,6 +459,7 @@ def predict_writes(
     if task.hints and task.hints.touches:
         seeds += _topical_seed(list(task.hints.touches), repo_graph)
     seeds += _test_scaffold_seed(task, repo_root)
+    seeds += _env_seed(task, repo_root)
     # Deduplicate seeds, keeping the highest-confidence variant per path.
     by_path: dict[str, PredictedWrite] = {}
     for pw in seeds:
