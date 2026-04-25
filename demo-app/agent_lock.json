@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-04-25T18:39:08.184384Z",
+  "generated_at": "2026-04-25T19:05:25.217032Z",
   "generator": {
     "tool": "acg",
     "version": "0.1.0",
@@ -22,22 +22,22 @@
         {
           "path": "prisma/schema.prisma",
           "confidence": 1.0,
-          "reason": "The task explicitly states to update the Prisma schema with required fields."
+          "reason": "Task explicitly requires updating Prisma schema with required fields for OAuth."
         },
         {
           "path": "src/server/auth/config.ts",
           "confidence": 0.9,
-          "reason": "Google OAuth provider configuration needs to be added to the existing auth configuration."
-        },
-        {
-          "path": "src/app/api/auth/[...nextauth]/route.ts",
-          "confidence": 0.8,
-          "reason": "NextAuth route handler needs to be updated to reflect changes in authentication configuration."
+          "reason": "Adding a new provider (Google) involves updating the NextAuth configuration."
         },
         {
           "path": "src/server/auth/index.ts",
+          "confidence": 0.8,
+          "reason": "This file likely handles the main auth setup and exports auth functions."
+        },
+        {
+          "path": "src/app/api/auth/[...nextauth]/route.ts",
           "confidence": 0.7,
-          "reason": "This is the central auth entry point and likely needs adjustments to integrate the new provider."
+          "reason": "This is the NextAuth API route handler that needs to be connected to the auth configuration."
         }
       ],
       "allowed_paths": [
@@ -56,17 +56,17 @@
         {
           "path": "prisma/schema.prisma",
           "confidence": 1.0,
-          "reason": "The task explicitly requires updating Prisma with a subscription model."
+          "reason": "Task explicitly requires updating Prisma with a subscription model."
         },
         {
           "path": "src/components/Sidebar.tsx",
           "confidence": 0.9,
-          "reason": "The task requires adding a sidebar entry for the new billing dashboard."
+          "reason": "Task requires adding a new sidebar entry."
         },
         {
           "path": "src/app/dashboard/billing/page.tsx",
           "confidence": 0.8,
-          "reason": "The task requires adding a billing dashboard tab at /dashboard/billing."
+          "reason": "Task requires adding a new billing dashboard tab at /dashboard/billing."
         }
       ],
       "allowed_paths": [
@@ -90,7 +90,7 @@
         {
           "path": "src/components/Sidebar.tsx",
           "confidence": 0.8,
-          "reason": "The task requires updating sidebar entry styling."
+          "reason": "The task requires updating the sidebar entry styling."
         }
       ],
       "allowed_paths": [
@@ -104,8 +104,22 @@
     {
       "id": "tests",
       "prompt": "Write end-to-end Playwright tests for the checkout flow.",
-      "predicted_writes": [],
-      "allowed_paths": [],
+      "predicted_writes": [
+        {
+          "path": "playwright.config.ts",
+          "confidence": 0.85,
+          "reason": "playwright config file inferred from task prompt (project does not declare one yet)."
+        },
+        {
+          "path": "tests/e2e/checkout.spec.ts",
+          "confidence": 0.85,
+          "reason": "playwright convention: tests/ with .spec.ts extension, entity 'checkout' from task prompt."
+        }
+      ],
+      "allowed_paths": [
+        "playwright.config.ts",
+        "tests/e2e/checkout.spec.ts"
+      ],
       "depends_on": [
         "oauth",
         "billing",

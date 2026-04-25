@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 from typing import Any
 
 from .llm import LLMProtocol
@@ -21,6 +22,7 @@ from .schema import PredictedWrite, TaskInput
 SEED_FILE_CONFIDENCE = 0.95
 SEED_SYMBOL_CONFIDENCE = 0.85
 SEED_TOPICAL_CONFIDENCE = 0.7
+SEED_TEST_SCAFFOLD_CONFIDENCE = 0.85
 TOP_GRAPH_FILES_FOR_LLM = 50
 MAX_PREDICTIONS = 8
 
@@ -30,6 +32,192 @@ _FILE_MENTION_RE = re.compile(
 )
 # Symbol candidates: camelCase tokens length > 5 (e.g. ``getCurrentUser``).
 _SYMBOL_RE = re.compile(r"\b([a-z][a-zA-Z0-9]{5,})\b")
+
+# --- Test-scaffold seed ------------------------------------------------------
+#
+# Greenfield-aware prediction for "write tests" tasks.  Two-stage detection:
+#   1. Existing config file in the repo (e.g. ``playwright.config.ts``) wins —
+#      we parse its ``testDir`` and use the matching framework extension.
+#   2. If no config exists, the prompt's framework keyword (playwright /
+#      vitest / jest / pytest / cypress) selects a canonical default layout.
+#
+# Driven by §7-§8 of the agent file-set prediction survey: the project's
+# declared conventions are the highest-precision signal we can lift before
+# spending any LLM compute.
+
+_TEST_TASK_KEYWORDS_RE = re.compile(
+    r"\b(tests?|testing|specs?|e2e|playwright|vitest|jest|cypress|pytest)\b",
+    re.IGNORECASE,
+)
+# "tests for [the] checkout" / "specs covering signup" / "tests of [the] api"
+_ENTITY_AFTER_TESTS_RE = re.compile(
+    r"\btests?\s+(?:for|covering|of)\s+(?:the\s+|a\s+|an\s+)?([a-z][\w-]+)",
+    re.IGNORECASE,
+)
+# "checkout flow" / "auth feature" / "billing endpoint" — domain-noun + role
+_ENTITY_BEFORE_ROLE_RE = re.compile(
+    r"\b([a-z][\w-]+)\s+(?:flow|feature|page|component|endpoint|api|route|module|service)\b",
+    re.IGNORECASE,
+)
+_ENTITY_STOPWORDS = {
+    "the", "a", "an", "this", "that", "all", "any", "src", "lib", "test",
+    "tests", "testing", "spec", "specs", "playwright", "vitest", "jest",
+    "pytest", "cypress", "end", "to", "unit", "integration", "e2e",
+}
+
+# (config_filename, default_testdir, default_extension)
+_FRAMEWORK_DEFAULTS: dict[str, tuple[str | None, str, str]] = {
+    "playwright": ("playwright.config.ts", "tests", ".spec.ts"),
+    "vitest": ("vitest.config.ts", "tests", ".test.ts"),
+    "jest": ("jest.config.js", "__tests__", ".test.ts"),
+    "cypress": ("cypress.config.ts", "cypress/e2e", ".cy.ts"),
+    "pytest": (None, "tests", ".py"),
+}
+# Order matters: keywords closer to the start are more specific, so "playwright"
+# beats the generic "tests" in a prompt that names both.
+_FRAMEWORK_KEYWORD_PRIORITY = ("playwright", "cypress", "vitest", "jest", "pytest")
+_TESTDIR_RE = re.compile(r"testDir\s*:\s*['\"]([^'\"]+)['\"]")
+# Both forms — "e2e" and "end-to-end" / "end to end" — are common in the wild.
+_E2E_RE = re.compile(r"\b(?:e2e|end[-\s]to[-\s]end)\b", re.IGNORECASE)
+
+
+def _looks_like_test_task(prompt: str) -> bool:
+    return bool(_TEST_TASK_KEYWORDS_RE.search(prompt))
+
+
+def _extract_entity_noun(prompt: str) -> str | None:
+    """Pull a one-word domain noun out of a test-task prompt.
+
+    >>> _extract_entity_noun("Write end-to-end Playwright tests for the checkout flow.")
+    'checkout'
+    >>> _extract_entity_noun("Add unit tests for the auth helper.")
+    'auth'
+    """
+    for pattern in (_ENTITY_AFTER_TESTS_RE, _ENTITY_BEFORE_ROLE_RE):
+        for match in pattern.finditer(prompt):
+            entity = match.group(1).lower()
+            if entity in _ENTITY_STOPWORDS:
+                continue
+            if "/" in entity or "." in entity:
+                continue  # path-like — covered by static seed already
+            return entity
+    return None
+
+
+def _read_testdir_from_js_config(path: Path) -> str | None:
+    """Best-effort regex extract of ``testDir`` from a Playwright/Vitest config."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    match = _TESTDIR_RE.search(text)
+    if not match:
+        return None
+    return match.group(1).strip("./").rstrip("/") or None
+
+
+def _detect_test_layout(
+    repo_root: Path | None, prompt: str
+) -> tuple[str, str, str, str | None] | None:
+    """Pick a framework + (test_dir, extension, config_path) tuple for the task.
+
+    Returns ``None`` if neither a known config file nor a known framework
+    keyword in the prompt can be matched.
+    """
+    # 1. Existing config files in the repo win (highest precision).
+    if repo_root and repo_root.is_dir():
+        for ext_variant in ("ts", "js", "mjs"):
+            cfg = repo_root / f"playwright.config.{ext_variant}"
+            if cfg.exists():
+                td = _read_testdir_from_js_config(cfg) or "tests"
+                return ("playwright", td, ".spec.ts", cfg.name)
+        for ext_variant in ("ts", "js", "mjs"):
+            cfg = repo_root / f"vitest.config.{ext_variant}"
+            if cfg.exists():
+                td = _read_testdir_from_js_config(cfg) or "tests"
+                return ("vitest", td, ".test.ts", cfg.name)
+        for fname in ("jest.config.ts", "jest.config.js", "jest.config.mjs"):
+            cfg = repo_root / fname
+            if cfg.exists():
+                return ("jest", "__tests__", ".test.ts", cfg.name)
+        for fname in ("cypress.config.ts", "cypress.config.js"):
+            cfg = repo_root / fname
+            if cfg.exists():
+                return ("cypress", "cypress/e2e", ".cy.ts", cfg.name)
+        # pytest: configured via pyproject.toml or pytest.ini — we use the
+        # default 'tests/' layout if either exists.
+        for fname in ("pytest.ini", "pyproject.toml", "tox.ini", "setup.cfg"):
+            if (repo_root / fname).exists():
+                return ("pytest", "tests", ".py", None)
+
+    # 2. Greenfield: framework keyword in the prompt picks the convention.
+    lower_prompt = prompt.lower()
+    for kw in _FRAMEWORK_KEYWORD_PRIORITY:
+        if kw in lower_prompt:
+            cfg, td, ext = _FRAMEWORK_DEFAULTS[kw]
+            return (kw, td, ext, cfg)
+    return None
+
+
+def _test_scaffold_seed(
+    task: TaskInput, repo_root: Path | None
+) -> list[PredictedWrite]:
+    """Seed test/spec paths driven by project conventions or framework defaults.
+
+    For tasks that ask to *create* tests, this is by far the highest-precision
+    signal — the project's declared test layout (or, when missing, the named
+    framework's canonical default) tells us exactly where the new file goes.
+    Always emits the config file itself when greenfield, since the worker will
+    need to create it.
+    """
+    if not _looks_like_test_task(task.prompt):
+        return []
+    layout = _detect_test_layout(repo_root, task.prompt)
+    if layout is None:
+        return []
+    framework, test_dir, ext, config_path = layout
+
+    entity = _extract_entity_noun(task.prompt) or task.id
+    is_e2e = bool(_E2E_RE.search(task.prompt))
+
+    seeds: list[PredictedWrite] = []
+
+    # Config file itself, only if it doesn't exist yet (greenfield).
+    if config_path:
+        config_exists = bool(
+            repo_root and (repo_root / config_path).exists()
+        )
+        if not config_exists:
+            seeds.append(
+                PredictedWrite(
+                    path=config_path,
+                    confidence=SEED_TEST_SCAFFOLD_CONFIDENCE,
+                    reason=(
+                        f"{framework} config file inferred from task prompt"
+                        f" (project does not declare one yet)."
+                    ),
+                )
+            )
+
+    # The actual spec file.
+    if framework == "playwright" and is_e2e:
+        spec_path = f"{test_dir}/e2e/{entity}{ext}"
+    elif framework == "pytest":
+        spec_path = f"{test_dir}/test_{entity}{ext}"
+    else:
+        spec_path = f"{test_dir}/{entity}{ext}"
+
+    seeds.append(
+        PredictedWrite(
+            path=spec_path,
+            confidence=SEED_TEST_SCAFFOLD_CONFIDENCE,
+            reason=(
+                f"{framework} convention: {test_dir}/ with {ext}"
+                f" extension, entity '{entity}' from task prompt."
+            ),
+        )
+    )
+    return seeds
 
 
 def _static_seed(prompt: str) -> list[PredictedWrite]:
@@ -210,6 +398,7 @@ def predict_writes(
     task: TaskInput,
     repo_graph: dict[str, Any],
     llm: LLMProtocol,
+    repo_root: Path | None = None,
 ) -> list[PredictedWrite]:
     """Predict the file write-set for a single task.
 
@@ -217,6 +406,11 @@ def predict_writes(
         task: Input task as supplied via ``tasks.json``.
         repo_graph: Output of :mod:`graph_builder.scan` (TS) or an empty dict.
         llm: LLM client implementing :class:`~acg.llm.LLMProtocol`.
+        repo_root: Optional path to the target repository.  When provided,
+            enables the test-scaffold seed (which inspects on-disk config
+            files like ``playwright.config.ts``).  Safe to omit; the seed
+            falls back to prompt-keyword inference and emits ``[]`` if
+            neither a config nor a framework keyword is present.
 
     Returns:
         Up to :data:`MAX_PREDICTIONS` :class:`PredictedWrite` items, sorted by
@@ -226,6 +420,7 @@ def predict_writes(
     seeds += _symbol_seed(task.prompt, repo_graph)
     if task.hints and task.hints.touches:
         seeds += _topical_seed(list(task.hints.touches), repo_graph)
+    seeds += _test_scaffold_seed(task, repo_root)
     # Deduplicate seeds, keeping the highest-confidence variant per path.
     by_path: dict[str, PredictedWrite] = {}
     for pw in seeds:

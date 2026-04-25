@@ -120,7 +120,7 @@ def compile_lockfile(
     deps_by_id = _resolve_dependencies(tasks_input.tasks)
     tasks: list[Task] = []
     for ti in tasks_input.tasks:
-        writes = predict_writes(ti, repo_graph, llm)
+        writes = predict_writes(ti, repo_graph, llm, repo_root=repo_path)
         allowed_paths = _build_allowed_paths(writes)
         tasks.append(
             Task(

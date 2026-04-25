@@ -12,7 +12,10 @@ node_modules/
 dist/
 
 # ACG outputs (working artifacts; the published chart lives in docs/benchmark.png)
-.acg/
+# NOTE: `.acg/` is root-anchored so it doesn't blanket-exclude `demo-app/.acg/`
+# (git's gitignore rules say a re-include like `!demo-app/.acg/foo.json` cannot
+# resurrect a file if its *parent directory* is already excluded).
+/.acg/
 demo-app/.next/
 demo-app/node_modules/
 demo-app/.acg/*
