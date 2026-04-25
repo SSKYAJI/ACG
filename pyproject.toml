@@ -30,8 +30,14 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0,<9.0", "ruff>=0.5,<1.0"]
-# MCP server (FastMCP) and Agentverse (uagents-adapter) wrappers are roadmap
-# items; see docs/COGNITION_INTEGRATION.md for the planned tool surface.
+mcp = ["fastmcp>=2.0,<3.0"]
+index-vector = [
+    "sentence-transformers>=2.7,<3.0",
+    "numpy>=1.26,<3.0",
+]
+# MCP server (FastMCP) is shipped under the `mcp` extra; the local-embeddings
+# indexer ships under the `index-vector` extra. See `docs/MCP_SERVER.md` and
+# `docs/plans/acg-index-rewrite.md`.
 
 [project.scripts]
 acg = "acg.cli:app"
