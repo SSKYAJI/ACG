@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "oauth",
+      "prompt": "Add Google OAuth login. Use NextAuth. Update Prisma schema with required fields.",
+      "hints": {
+        "touches": ["auth", "prisma"]
+      }
+    },
+    {
+      "id": "billing",
+      "prompt": "Add a billing dashboard tab at /dashboard/billing with Stripe integration. Add a sidebar entry. Update Prisma with subscription model.",
+      "hints": {
+        "touches": ["billing", "prisma", "navigation"]
+      }
+    },
+    {
+      "id": "settings",
+      "prompt": "Redesign the user settings page at /settings. Reorganize sections. Update sidebar entry styling.",
+      "hints": {
+        "touches": ["settings", "navigation"]
+      }
+    },
+    {
+      "id": "tests",
+      "prompt": "Write end-to-end Playwright tests for the checkout flow.",
+      "hints": {
+        "touches": ["tests"]
+      }
+    }
+  ]
+}

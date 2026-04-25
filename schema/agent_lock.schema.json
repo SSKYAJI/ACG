@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://acg.dev/schema/agent_lock/v1",
+  "title": "Agent Context Graph Lockfile",
+  "type": "object",
+  "required": ["version", "generated_at", "repo", "tasks", "execution_plan"],
+  "properties": {
+    "version": { "const": "1.0" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "generator": {
+      "type": "object",
+      "properties": {
+        "tool": { "type": "string" },
+        "version": { "type": "string" },
+        "model": { "type": "string" }
+      }
+    },
+    "repo": {
+      "type": "object",
+      "required": ["root", "languages"],
+      "properties": {
+        "root": { "type": "string" },
+        "git_url": { "type": "string" },
+        "commit": { "type": "string" },
+        "languages": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Task" }
+    },
+    "execution_plan": {
+      "type": "object",
+      "required": ["groups"],
+      "properties": {
+        "groups": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Group" }
+        }
+      }
+    },
+    "conflicts_detected": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Conflict" }
+    }
+  },
+  "$defs": {
+    "Task": {
+      "type": "object",
+      "required": ["id", "prompt", "predicted_writes", "allowed_paths", "depends_on"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9_-]+$" },
+        "prompt": { "type": "string" },
+        "predicted_writes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/PredictedWrite" }
+        },
+        "allowed_paths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Glob patterns the task is allowed to modify"
+        },
+        "depends_on": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "parallel_group": { "type": "integer", "minimum": 1 },
+        "rationale": { "type": "string" }
+      }
+    },
+    "PredictedWrite": {
+      "type": "object",
+      "required": ["path", "confidence"],
+      "properties": {
+        "path": { "type": "string" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "reason": { "type": "string" }
+      }
+    },
+    "Group": {
+      "type": "object",
+      "required": ["id", "tasks", "type"],
+      "properties": {
+        "id": { "type": "integer", "minimum": 1 },
+        "tasks": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "type": { "enum": ["parallel", "serial"] },
+        "waits_for": {
+          "type": "array",
+          "items": { "type": "integer" }
+        }
+      }
+    },
+    "Conflict": {
+      "type": "object",
+      "required": ["files", "between_tasks", "resolution"],
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "between_tasks": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "resolution": { "type": "string" }
+      }
+    }
+  }
+}

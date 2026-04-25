@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.env
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+
+# ACG outputs (working artifacts; the published chart lives in docs/benchmark.png)
+.acg/
+demo-app/.next/
+demo-app/node_modules/
+demo-app/.acg/
+
+# OS
+.DS_Store

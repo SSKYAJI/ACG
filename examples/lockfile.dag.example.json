@@ -1,0 +1,155 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-04-25T12:00:00Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "llama-3.3-70b-versatile"
+  },
+  "repo": {
+    "root": "demo-app",
+    "git_url": "https://github.com/example/demo-app",
+    "commit": "0000000000000000000000000000000000000000",
+    "languages": ["typescript", "prisma"]
+  },
+  "tasks": [
+    {
+      "id": "oauth",
+      "prompt": "Add Google OAuth login. Use NextAuth. Update Prisma schema with required fields.",
+      "predicted_writes": [
+        {
+          "path": "src/server/auth/config.ts",
+          "confidence": 0.95,
+          "reason": "NextAuth config home in the T3 layout."
+        },
+        {
+          "path": "prisma/schema.prisma",
+          "confidence": 0.9,
+          "reason": "NextAuth + Prisma adapter requires Account, Session, User, VerificationToken models."
+        },
+        {
+          "path": "src/app/api/auth/[...nextauth]/route.ts",
+          "confidence": 0.85,
+          "reason": "NextAuth route handler must exist for OAuth callbacks."
+        }
+      ],
+      "allowed_paths": [
+        "prisma/schema.prisma",
+        "src/app/api/auth/[...nextauth]/**",
+        "src/server/auth/**"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": "Disjoint from settings; runs in parallel group 1."
+    },
+    {
+      "id": "settings",
+      "prompt": "Redesign the user settings page at /settings. Reorganize sections. Update sidebar entry styling.",
+      "predicted_writes": [
+        {
+          "path": "src/app/settings/page.tsx",
+          "confidence": 0.95,
+          "reason": "Task explicitly names the settings page route."
+        },
+        {
+          "path": "src/components/Sidebar.tsx",
+          "confidence": 0.85,
+          "reason": "Task explicitly mentions updating the sidebar entry."
+        }
+      ],
+      "allowed_paths": [
+        "src/app/settings/**",
+        "src/components/Sidebar.tsx"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": "Disjoint from oauth; runs in parallel group 1."
+    },
+    {
+      "id": "billing",
+      "prompt": "Add a billing dashboard tab at /dashboard/billing with Stripe integration. Add a sidebar entry. Update Prisma with subscription model.",
+      "predicted_writes": [
+        {
+          "path": "src/app/dashboard/billing/page.tsx",
+          "confidence": 0.95,
+          "reason": "Task explicitly names the billing route."
+        },
+        {
+          "path": "src/server/stripe.ts",
+          "confidence": 0.85,
+          "reason": "Stripe client lives next to other server modules in T3."
+        },
+        {
+          "path": "prisma/schema.prisma",
+          "confidence": 0.9,
+          "reason": "Subscription model requires Prisma schema changes."
+        },
+        {
+          "path": "src/components/Sidebar.tsx",
+          "confidence": 0.85,
+          "reason": "Task explicitly mentions adding a sidebar entry."
+        }
+      ],
+      "allowed_paths": [
+        "prisma/schema.prisma",
+        "src/app/dashboard/billing/**",
+        "src/components/Sidebar.tsx",
+        "src/server/stripe.ts"
+      ],
+      "depends_on": ["oauth", "settings"],
+      "parallel_group": 2,
+      "rationale": "Overlaps with oauth on prisma/schema.prisma and with settings on components/sidebar.tsx; serializes after group 1."
+    },
+    {
+      "id": "tests",
+      "prompt": "Write end-to-end Playwright tests for the checkout flow.",
+      "predicted_writes": [
+        {
+          "path": "tests/e2e/checkout.spec.ts",
+          "confidence": 0.95,
+          "reason": "Task explicitly asks for a Playwright spec for checkout."
+        }
+      ],
+      "allowed_paths": [
+        "tests/e2e/**"
+      ],
+      "depends_on": ["billing"],
+      "parallel_group": 3,
+      "rationale": "Tests target the final integrated state; serialized after billing."
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": ["oauth", "settings"],
+        "type": "parallel",
+        "waits_for": []
+      },
+      {
+        "id": 2,
+        "tasks": ["billing"],
+        "type": "serial",
+        "waits_for": [1]
+      },
+      {
+        "id": 3,
+        "tasks": ["tests"],
+        "type": "serial",
+        "waits_for": [2]
+      }
+    ]
+  },
+  "conflicts_detected": [
+    {
+      "files": ["prisma/schema.prisma"],
+      "between_tasks": ["oauth", "billing"],
+      "resolution": "Serialize billing after oauth; both modify the Prisma schema."
+    },
+    {
+      "files": ["src/components/Sidebar.tsx"],
+      "between_tasks": ["settings", "billing"],
+      "resolution": "Serialize billing after settings; both touch the sidebar component."
+    }
+  ]
+}

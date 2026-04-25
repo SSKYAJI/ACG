@@ -1,0 +1,17 @@
+{
+  "name": "acg-graph-builder",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "scan": "tsx scan.ts"
+  },
+  "dependencies": {
+    "ts-morph": "^22.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.15.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.12.0"
+  }
+}

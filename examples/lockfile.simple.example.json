@@ -1,0 +1,66 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-04-25T12:00:00Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "llama-3.3-70b-versatile"
+  },
+  "repo": {
+    "root": "examples/simple-repo",
+    "languages": ["typescript", "markdown"]
+  },
+  "tasks": [
+    {
+      "id": "add_readme",
+      "prompt": "Expand the README with a quickstart section and architecture overview. Add supporting docs under docs/.",
+      "predicted_writes": [
+        {
+          "path": "README.md",
+          "confidence": 0.95,
+          "reason": "Task explicitly names the README."
+        },
+        {
+          "path": "docs/quickstart.md",
+          "confidence": 0.8,
+          "reason": "Task asks for a quickstart section; new doc file is the natural home."
+        }
+      ],
+      "allowed_paths": ["README.md", "docs/**"],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": "Touches only documentation; disjoint from dependency work."
+    },
+    {
+      "id": "bump_deps",
+      "prompt": "Bump package dependencies to their latest patch versions and regenerate the lockfile.",
+      "predicted_writes": [
+        {
+          "path": "package.json",
+          "confidence": 0.95,
+          "reason": "Task explicitly names dependency bumps."
+        },
+        {
+          "path": "package-lock.json",
+          "confidence": 0.9,
+          "reason": "Lockfile is regenerated when dependencies are bumped."
+        }
+      ],
+      "allowed_paths": ["package.json", "package-lock.json"],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": "Touches only dependency manifests; disjoint from documentation."
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": ["add_readme", "bump_deps"],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}
