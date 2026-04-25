@@ -1,0 +1,62 @@
+[
+  {
+    "id": "oauth",
+    "prompt": "Add Google OAuth login. Use NextAuth. Update Prisma schema with required fields.",
+    "hints": {"touches": ["auth", "prisma"]},
+    "ground_truth_paths": [
+      "prisma/schema.prisma",
+      "src/server/auth/config.ts",
+      "src/app/api/auth/[...nextauth]/route.ts",
+      ".env.example"
+    ]
+  },
+  {
+    "id": "settings",
+    "prompt": "Redesign the user settings page at /settings. Reorganize sections. Update sidebar entry styling.",
+    "hints": {"touches": ["settings", "navigation"]},
+    "ground_truth_paths": ["src/app/settings/page.tsx", "src/components/Sidebar.tsx"]
+  },
+  {
+    "id": "billing",
+    "prompt": "Add a billing dashboard tab at /dashboard/billing with Stripe integration. Add a sidebar entry. Update Prisma with subscription model.",
+    "hints": {"touches": ["billing", "prisma", "navigation"]},
+    "ground_truth_paths": [
+      "prisma/schema.prisma",
+      "src/components/Sidebar.tsx",
+      "src/app/dashboard/billing/page.tsx",
+      "src/app/api/billing/checkout/route.ts",
+      "src/app/api/billing/webhook/route.ts",
+      ".env.example"
+    ]
+  },
+  {
+    "id": "tests",
+    "prompt": "Write end-to-end Playwright tests for the checkout flow.",
+    "hints": {"touches": ["tests"]},
+    "ground_truth_paths": ["playwright.config.ts", "tests/e2e/checkout.spec.ts"]
+  },
+  {
+    "id": "health",
+    "prompt": "Add a health API endpoint.",
+    "hints": {"touches": ["health", "api"]},
+    "ground_truth_paths": ["src/app/api/health/route.ts"]
+  },
+  {
+    "id": "profile",
+    "prompt": "Update the profile page and load the current auth user.",
+    "hints": {"touches": ["profile", "auth"]},
+    "ground_truth_paths": ["src/app/profile/page.tsx", "src/server/auth/index.ts"]
+  },
+  {
+    "id": "projects",
+    "prompt": "Add a projects dashboard page and sidebar navigation entry.",
+    "hints": {"touches": ["projects", "navigation"]},
+    "ground_truth_paths": ["src/app/projects/page.tsx", "src/components/Sidebar.tsx"]
+  },
+  {
+    "id": "database",
+    "prompt": "Update the Prisma database client and schema.",
+    "hints": {"touches": ["prisma", "database"]},
+    "ground_truth_paths": ["src/server/db.ts", "prisma/schema.prisma"]
+  }
+]
