@@ -25,6 +25,8 @@ SEED_TOPICAL_CONFIDENCE = 0.7
 SEED_TEST_SCAFFOLD_CONFIDENCE = 0.85
 SEED_ENV_CONFIDENCE = 0.8
 SEED_ENV_LOCAL_CONFIDENCE = 0.65
+SEED_SIBLING_PATTERN_PRIMARY_CONFIDENCE = 0.75
+SEED_SIBLING_PATTERN_SECONDARY_CONFIDENCE = 0.65
 TOP_GRAPH_FILES_FOR_LLM = 50
 MAX_PREDICTIONS = 8
 
@@ -71,6 +73,31 @@ _ENV_TRIGGER_RE = re.compile(
     r"credentials?|provider[s]?|env(?:ironment)?\s+vars?)\b",
     re.IGNORECASE,
 )
+_SIBLING_TASK_RE = re.compile(
+    r"\b(add|create|implement)\b.*\b(api|endpoint|route|webhook|checkout|integration)\b",
+    re.IGNORECASE,
+)
+_ACTION_ENTITY_PATTERNS = (
+    re.compile(r"\badd\s+(?:the\s+|a\s+|an\s+)?([a-z][\w-]+)\b", re.IGNORECASE),
+    re.compile(r"\bimplement\s+(?:the\s+|a\s+|an\s+)?([a-z][\w-]+)\b", re.IGNORECASE),
+    re.compile(r"\bcreate\s+(?:the\s+|a\s+|an\s+)?([a-z][\w-]+)\b", re.IGNORECASE),
+)
+_RESOURCE_ENTITY_RE = re.compile(
+    r"\b([a-z][\w-]+)\s+(?:api|endpoint|route|webhook|checkout|integration)\b",
+    re.IGNORECASE,
+)
+_SIBLING_ENTITY_STOPWORDS = _ENTITY_STOPWORDS | {
+    "dashboard",
+    "entry",
+    "handler",
+    "hook",
+    "implement",
+    "new",
+    "tab",
+    "update",
+    "wire",
+}
+_ROUTE_FILENAME_RE = re.compile(r"^route\.(?:ts|tsx|js|jsx)$", re.IGNORECASE)
 
 # (config_filename, default_testdir, default_extension)
 _FRAMEWORK_DEFAULTS: dict[str, tuple[str | None, str, str]] = {
@@ -92,6 +119,15 @@ def _looks_like_test_task(prompt: str) -> bool:
     return bool(_TEST_TASK_KEYWORDS_RE.search(prompt))
 
 
+def _append_entity(entities: list[str], entity: str, *, stopwords: set[str]) -> None:
+    candidate = entity.lower()
+    if candidate in stopwords or candidate in entities:
+        return
+    if "/" in candidate or "." in candidate:
+        return
+    entities.append(candidate)
+
+
 def _extract_entity_noun(prompt: str) -> str | None:
     """Pull a one-word domain noun out of a test-task prompt.
 
@@ -109,6 +145,93 @@ def _extract_entity_noun(prompt: str) -> str | None:
                 continue  # path-like — covered by static seed already
             return entity
     return None
+
+
+def _extract_sibling_entities(prompt: str) -> list[str]:
+    entities: list[str] = []
+    for pattern in _ACTION_ENTITY_PATTERNS:
+        for match in pattern.finditer(prompt):
+            _append_entity(entities, match.group(1), stopwords=_SIBLING_ENTITY_STOPWORDS)
+            if len(entities) >= 4:
+                return entities
+    for match in _RESOURCE_ENTITY_RE.finditer(prompt):
+        _append_entity(entities, match.group(1), stopwords=_SIBLING_ENTITY_STOPWORDS)
+        if len(entities) >= 4:
+            return entities
+    entity = _extract_entity_noun(prompt)
+    if entity:
+        _append_entity(entities, entity, stopwords=_SIBLING_ENTITY_STOPWORDS)
+    return entities
+
+
+def _sibling_pattern_seed(task: TaskInput, repo_graph: dict[str, Any]) -> list[PredictedWrite]:
+    if not _SIBLING_TASK_RE.search(task.prompt):
+        return []
+
+    entities = _extract_sibling_entities(task.prompt)
+    if not entities:
+        return []
+
+    files = repo_graph.get("files") or []
+    existing_paths = {
+        entry.get("path", "")
+        for entry in files
+        if isinstance(entry, dict) and isinstance(entry.get("path"), str)
+    }
+    pattern_members: dict[tuple[str, ...], set[str]] = {}
+
+    for entry in files:
+        path = entry.get("path", "") if isinstance(entry, dict) else ""
+        parts = path.split("/")
+        if len(parts) < 2 or "api" not in parts or not _ROUTE_FILENAME_RE.match(parts[-1]):
+            continue
+        dir_parts = parts[:-1]
+        for start in range(len(dir_parts)):
+            for end in range(start, len(dir_parts)):
+                pattern = tuple(dir_parts[:start] + ["*"] + dir_parts[end + 1 :] + [parts[-1]])
+                pattern_members.setdefault(pattern, set()).add(path)
+
+    ranked_patterns: list[tuple[int, int, tuple[str, ...]]] = []
+    for pattern, members in pattern_members.items():
+        if len(members) < 2 or pattern.count("*") != 1:
+            continue
+        wildcard_index = pattern.index("*")
+        api_indexes = [idx for idx, part in enumerate(pattern) if part == "api"]
+        if not api_indexes or wildcard_index <= api_indexes[-1]:
+            continue
+        ranked_patterns.append((len(pattern) - 1, wildcard_index, pattern))
+
+    if not ranked_patterns:
+        return []
+
+    best_pattern = sorted(ranked_patterns, key=lambda item: (-item[0], -item[1], item[2]))[0][2]
+    wildcard_index = best_pattern.index("*")
+    seeds: list[PredictedWrite] = []
+
+    for entity in entities:
+        candidate_parts = list(best_pattern)
+        candidate_parts[wildcard_index] = entity
+        candidate_path = "/".join(candidate_parts)
+        if candidate_path in existing_paths or any(seed.path == candidate_path for seed in seeds):
+            continue
+        confidence = (
+            SEED_SIBLING_PATTERN_PRIMARY_CONFIDENCE
+            if not seeds
+            else SEED_SIBLING_PATTERN_SECONDARY_CONFIDENCE
+        )
+        seeds.append(
+            PredictedWrite(
+                path=candidate_path,
+                confidence=confidence,
+                reason=(
+                    "Sibling-pattern seed: existing API routes follow "
+                    f"{'/'.join(best_pattern)}; substitute task entity '{entity}'."
+                ),
+            )
+        )
+        if len(seeds) >= 2:
+            break
+    return seeds
 
 
 def _read_testdir_from_js_config(path: Path) -> str | None:
@@ -460,6 +583,7 @@ def predict_writes(
         seeds += _topical_seed(list(task.hints.touches), repo_graph)
     seeds += _test_scaffold_seed(task, repo_root)
     seeds += _env_seed(task, repo_root)
+    seeds += _sibling_pattern_seed(task, repo_graph)
     # Deduplicate seeds, keeping the highest-confidence variant per path.
     by_path: dict[str, PredictedWrite] = {}
     for pw in seeds:
