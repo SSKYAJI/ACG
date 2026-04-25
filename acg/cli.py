@@ -103,6 +103,39 @@ def cmd_validate_write(
     raise typer.Exit(code=code)
 
 
+@app.command("validate-lockfile")
+def cmd_validate_lockfile(
+    lock: Annotated[
+        Path, typer.Option(exists=True, dir_okay=False, help="Path to agent_lock.json.")
+    ],
+    schema: Annotated[
+        Path,
+        typer.Option(
+            exists=True,
+            dir_okay=False,
+            help="Path to agent_lock.schema.json.",
+        ),
+    ] = Path("schema/agent_lock.schema.json"),
+) -> None:
+    """Validate a lockfile against the JSON Schema (exit 2 = invalid)."""
+    import jsonschema
+
+    try:
+        payload = json.loads(lock.read_text())
+        schema_dict = json.loads(schema.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        _err_console.print(f"[red]error reading inputs: {exc}[/]")
+        raise typer.Exit(code=EXIT_USER_ERROR) from exc
+
+    try:
+        jsonschema.validate(payload, schema_dict)
+    except jsonschema.ValidationError as exc:
+        _err_console.print(f"[red]INVALID:[/] {exc.message}")
+        raise typer.Exit(code=EXIT_BLOCKED) from exc
+
+    _console.print("[green]OK[/]")
+
+
 @app.command("run")
 def cmd_run(
     lock: Annotated[Path, typer.Option(exists=True, dir_okay=False, help="Path to agent_lock.json.")],
