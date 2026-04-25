@@ -6,6 +6,7 @@ import json
 import subprocess
 import sys
 import time
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from acg.index import aggregate  # noqa: E402
+from acg.index.bm25 import BM25Indexer  # noqa: E402
+from acg.index.framework import FrameworkIndexer  # noqa: E402
+from acg.index.pagerank import PageRankIndexer  # noqa: E402
+from acg.index.types import Indexer  # noqa: E402
 from acg.schema import TaskInput, TaskInputHints  # noqa: E402
 
 FIXTURE_DIR = ROOT / "benchmark" / "fixtures"
@@ -57,7 +62,10 @@ def _repo_for_dataset(name: str) -> Path:
     raise ValueError(f"unknown dataset {name}")
 
 
-def evaluate_dataset(name: str) -> dict[str, float]:
+def evaluate_dataset(
+    name: str,
+    indexers: Sequence[Indexer] | None = None,
+) -> dict[str, float]:
     rows = _load_fixture(name)
     repo = _repo_for_dataset(name)
     start = time.perf_counter()
@@ -65,7 +73,10 @@ def evaluate_dataset(name: str) -> dict[str, float]:
     precision_total = 0.0
     for row in rows:
         truth = set(row["ground_truth_paths"])
-        predictions = [write.path for write in aggregate(_task(row), repo, {}, top_n=5)]
+        predictions = [
+            write.path
+            for write in aggregate(_task(row), repo, {}, indexers=indexers, top_n=5)
+        ]
         hits = len(set(predictions) & truth)
         recall_total += hits / len(truth) if truth else 1.0
         precision_total += hits / 5
@@ -77,7 +88,29 @@ def evaluate_dataset(name: str) -> dict[str, float]:
     }
 
 
-def _markdown(results: dict[str, dict[str, float]]) -> str:
+def _indexers_with_embeddings() -> Sequence[Indexer] | None:
+    """Return the default first-pass indexer list with EmbeddingsIndexer appended.
+
+    Returns ``None`` when ``sentence-transformers`` is not importable so callers
+    can fall back to the base indexer set without crashing.
+    """
+
+    try:
+        import sentence_transformers  # noqa: F401
+    except ImportError:
+        return None
+
+    from acg.index.embeddings import EmbeddingsIndexer
+
+    return [
+        FrameworkIndexer(),
+        PageRankIndexer(),
+        BM25Indexer(),
+        EmbeddingsIndexer(),
+    ]
+
+
+def _table(results: dict[str, dict[str, float]]) -> str:
     lines = [
         "| dataset | recall@5 | precision@5 | wall_s |",
         "| --- | ---: | ---: | ---: |",
@@ -86,20 +119,75 @@ def _markdown(results: dict[str, dict[str, float]]) -> str:
         lines.append(
             f"| {name} | {metrics['recall@5']:.2f} | {metrics['precision@5']:.2f} | {metrics['wall_s']:.2f} |"
         )
-    mean_recall = sum(item["recall@5"] for item in results.values()) / len(results)
-    mean_precision = sum(item["precision@5"] for item in results.values()) / len(results)
-    mean_wall = sum(item["wall_s"] for item in results.values()) / len(results)
-    lines.append(f"| mean | {mean_recall:.2f} | {mean_precision:.2f} | {mean_wall:.2f} |")
+    if results:
+        mean_recall = sum(item["recall@5"] for item in results.values()) / len(results)
+        mean_precision = sum(item["precision@5"] for item in results.values()) / len(results)
+        mean_wall = sum(item["wall_s"] for item in results.values()) / len(results)
+        lines.append(f"| mean | {mean_recall:.2f} | {mean_precision:.2f} | {mean_wall:.2f} |")
     return "\n".join(lines)
 
 
+def _delta_table(
+    base: dict[str, dict[str, float]],
+    embed: dict[str, dict[str, float]],
+) -> str:
+    lines = [
+        "| dataset | recall@5 | precision@5 | wall_s | Δrecall@5 |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    deltas: list[float] = []
+    for name in sorted(embed.keys()):
+        metrics = embed[name]
+        delta = metrics["recall@5"] - base.get(name, {}).get("recall@5", 0.0)
+        deltas.append(delta)
+        lines.append(
+            f"| {name} | {metrics['recall@5']:.2f} | {metrics['precision@5']:.2f} "
+            f"| {metrics['wall_s']:.2f} | {delta:+.2f} |"
+        )
+    if embed:
+        mean_recall = sum(item["recall@5"] for item in embed.values()) / len(embed)
+        mean_precision = sum(item["precision@5"] for item in embed.values()) / len(embed)
+        mean_wall = sum(item["wall_s"] for item in embed.values()) / len(embed)
+        mean_delta = sum(deltas) / len(deltas)
+        lines.append(
+            f"| mean | {mean_recall:.2f} | {mean_precision:.2f} | {mean_wall:.2f} | {mean_delta:+.2f} |"
+        )
+    return "\n".join(lines)
+
+
+def _markdown(payload: dict[str, dict[str, dict[str, float]]]) -> str:
+    base = payload.get("base") or {}
+    embed = payload.get("with_embeddings") or {}
+    sections: list[str] = []
+    sections.append("## Base (framework + pagerank + bm25 + cochange)")
+    sections.append("")
+    sections.append(_table(base))
+    sections.append("")
+    sections.append("## With embeddings (+ EmbeddingsIndexer, ACG_INDEX_EMBEDDINGS=1)")
+    sections.append("")
+    if embed:
+        sections.append(_delta_table(base, embed))
+    else:
+        sections.append("# embeddings extra not installed — skipped")
+    return "\n".join(sections)
+
+
 def main() -> None:
-    results = {
-        name: evaluate_dataset(name)
-        for name in ("demo-app", "t3-app", "express")
+    base_results: dict[str, dict[str, float]] = {}
+    embed_results: dict[str, dict[str, float]] = {}
+    embed_indexers = _indexers_with_embeddings()
+    for name in ("demo-app", "t3-app", "express"):
+        base_results[name] = evaluate_dataset(name, indexers=None)
+        if embed_indexers is not None:
+            embed_results[name] = evaluate_dataset(name, indexers=embed_indexers)
+    payload: dict[str, dict[str, dict[str, float]]] = {
+        "base": base_results,
+        "with_embeddings": embed_results,
     }
-    RESULTS_PATH.write_text(json.dumps(results, indent=2, sort_keys=True) + "\n")
-    print(_markdown(results))
+    RESULTS_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    print(_markdown(payload))
+    if embed_indexers is None:
+        print("\n# embeddings extra not installed — install with `pip install -e '.[index-vector]'`")
 
 
 if __name__ == "__main__":
