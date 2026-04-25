@@ -1,0 +1,53 @@
+[
+  {
+    "id": "post-router",
+    "prompt": "Add a posts tRPC router and protected createPost mutation.",
+    "hints": {"touches": ["post", "trpc"]},
+    "ground_truth_paths": [
+      "cli/template/extras/src/server/api/routers/post/with-prisma.ts",
+      "cli/template/extras/src/server/api/root.ts"
+    ]
+  },
+  {
+    "id": "user-model",
+    "prompt": "Add a user profile model to Prisma.",
+    "hints": {"touches": ["prisma", "user"]},
+    "ground_truth_paths": ["cli/template/extras/src/server/db/schema-prisma/with-auth.prisma"]
+  },
+  {
+    "id": "billing-page",
+    "prompt": "Add a billing dashboard page.",
+    "hints": {"touches": ["billing", "page"]},
+    "ground_truth_paths": ["cli/template/extras/src/app/page/base.tsx"]
+  },
+  {
+    "id": "stripe-api",
+    "prompt": "Add a Stripe webhook API endpoint.",
+    "hints": {"touches": ["stripe", "api"]},
+    "ground_truth_paths": ["cli/template/extras/src/server/api/routers/post/with-prisma.ts"]
+  },
+  {
+    "id": "auth-config",
+    "prompt": "Update NextAuth authOptions and session callbacks.",
+    "hints": {"touches": ["auth"]},
+    "ground_truth_paths": ["cli/template/extras/src/server/auth/config/base.ts", "cli/template/extras/src/server/auth/base.ts"]
+  },
+  {
+    "id": "env",
+    "prompt": "Add STRIPE_SECRET_KEY environment validation.",
+    "hints": {"touches": ["env"]},
+    "ground_truth_paths": ["cli/template/base/src/env.js"]
+  },
+  {
+    "id": "dashboard-layout",
+    "prompt": "Add dashboard layout and navigation shell.",
+    "hints": {"touches": ["dashboard", "layout"]},
+    "ground_truth_paths": ["cli/template/extras/src/app/layout/base.tsx"]
+  },
+  {
+    "id": "settings-router",
+    "prompt": "Add settings router for account preferences.",
+    "hints": {"touches": ["settings", "trpc"]},
+    "ground_truth_paths": ["cli/template/extras/src/utils/api.ts"]
+  }
+]

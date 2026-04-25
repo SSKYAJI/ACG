@@ -1,0 +1,50 @@
+[
+  {
+    "id": "json-middleware",
+    "prompt": "Update Express JSON body parser middleware.",
+    "hints": {"touches": ["middleware", "json"]},
+    "ground_truth_paths": ["test/express.json.js", "lib/express.js"]
+  },
+  {
+    "id": "router-route",
+    "prompt": "Add router route dispatch behavior and tests.",
+    "hints": {"touches": ["router", "route"]},
+    "ground_truth_paths": ["test/acceptance/multi-router.js", "test/app.router.js"]
+  },
+  {
+    "id": "request-tests",
+    "prompt": "Write tests for request hostname and protocol helpers.",
+    "hints": {"touches": ["request", "tests"]},
+    "ground_truth_paths": ["test/req.hostname.js", "test/req.protocol.js", "lib/request.js"]
+  },
+  {
+    "id": "response-send",
+    "prompt": "Update response send and json behavior.",
+    "hints": {"touches": ["response", "json"]},
+    "ground_truth_paths": ["lib/response.js", "test/res.send.js", "test/res.json.js"]
+  },
+  {
+    "id": "static-files",
+    "prompt": "Update static file middleware options.",
+    "hints": {"touches": ["static", "middleware"]},
+    "ground_truth_paths": ["lib/express.js", "test/express.static.js"]
+  },
+  {
+    "id": "application-settings",
+    "prompt": "Add application setting for strict routing.",
+    "hints": {"touches": ["application", "settings"]},
+    "ground_truth_paths": ["lib/application.js", "test/app.router.js"]
+  },
+  {
+    "id": "view-engine",
+    "prompt": "Update view engine rendering and lookup tests.",
+    "hints": {"touches": ["view", "render"]},
+    "ground_truth_paths": ["lib/view.js", "examples/view-constructor/github-view.js"]
+  },
+  {
+    "id": "query-parser",
+    "prompt": "Add query parser configuration coverage.",
+    "hints": {"touches": ["query", "parser"]},
+    "ground_truth_paths": ["lib/utils.js", "test/req.query.js"]
+  }
+]
