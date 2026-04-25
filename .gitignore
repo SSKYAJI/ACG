@@ -15,7 +15,11 @@ dist/
 .acg/
 demo-app/.next/
 demo-app/node_modules/
-demo-app/.acg/
+demo-app/.acg/*
+# Allow the runtime trace + context graph to ship with the repo so the viz
+# works from a fresh clone and the demo has a permanent artifact.
+!demo-app/.acg/run_trace.json
+!demo-app/.acg/context_graph.json
 
 # OS
 .DS_Store

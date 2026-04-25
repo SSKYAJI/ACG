@@ -1,10 +1,14 @@
-.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma
+.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock
 
 # Override these on the command line if your ASUS hostname / port differ:
 #   make compile-gemma GEMMA_HOST=100.x.y.z GEMMA_PORT=8080
+# NOTE: do NOT put inline `# comments` after the value — GNU make preserves the
+# trailing whitespace, which then breaks the URL expansion below.
 GEMMA_HOST      ?= gx10-f2c9
-GEMMA_PORT      ?= 8080   # sub-agent / predictor server (--reasoning-budget 0)
-GEMMA_ORCH_PORT ?= 8081   # orchestrator server (thinking enabled)
+# sub-agent / predictor server (--reasoning-budget 0)
+GEMMA_PORT      ?= 8080
+# orchestrator server (thinking enabled)
+GEMMA_ORCH_PORT ?= 8081
 GEMMA_ENV       := ACG_LLM_URL=http://$(GEMMA_HOST):$(GEMMA_PORT)/v1 ACG_LLM_MODEL=gemma ACG_LLM_API_KEY=local
 GEMMA_ORCH_ENV  := ACG_ORCH_URL=http://$(GEMMA_HOST):$(GEMMA_ORCH_PORT)/v1 ACG_ORCH_MODEL=gemma ACG_ORCH_API_KEY=local
 
@@ -62,3 +66,17 @@ demo-gemma: compile-gemma
 	$(GEMMA_ENV) ./.venv/bin/acg run-benchmark --mode naive   --repo demo-app --tasks demo-app/tasks.json --out .acg/run_naive.json
 	$(GEMMA_ENV) ./.venv/bin/acg run-benchmark --mode planned --repo demo-app --tasks demo-app/tasks.json --lock demo-app/agent_lock.json --out .acg/run_acg.json
 	./.venv/bin/acg report --naive .acg/run_naive.json --planned .acg/run_acg.json --out docs/benchmark.png
+
+# Live Gemma runtime: orchestrator (port 8081, thinking) + sub-agents (port 8080).
+run-gemma:
+	$(GEMMA_ENV) $(GEMMA_ORCH_ENV) ./.venv/bin/acg run \
+	  --lock demo-app/agent_lock.json \
+	  --repo demo-app \
+	  --out demo-app/.acg/run_trace.json
+
+# Offline runtime against the deterministic mock client. No GX10 needed.
+run-mock:
+	./.venv/bin/acg run --mock \
+	  --lock demo-app/agent_lock.json \
+	  --repo demo-app \
+	  --out demo-app/.acg/run_trace.json

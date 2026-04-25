@@ -8,6 +8,7 @@ the CLI.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -100,6 +101,55 @@ def cmd_validate_write(
     else:
         _err_console.print(f"[yellow]{message}[/]")
     raise typer.Exit(code=code)
+
+
+@app.command("run")
+def cmd_run(
+    lock: Annotated[Path, typer.Option(exists=True, dir_okay=False, help="Path to agent_lock.json.")],
+    repo: Annotated[Path, typer.Option(exists=True, file_okay=False, help="Repository root (used to locate .acg/context_graph.json).")],
+    out: Annotated[Path, typer.Option(help="Where to write run_trace.json.")],
+    mock: Annotated[bool, typer.Option("--mock", help="Use the deterministic offline runtime LLM instead of live servers.")] = False,
+) -> None:
+    """Execute the lockfile under runtime enforcement; emit a run trace JSON."""
+    import asyncio
+    from dataclasses import asdict
+
+    from .runtime import MockRuntimeLLM, RuntimeConfig, RuntimeLLM, run_lockfile
+
+    lockfile = AgentLock.model_validate_json(lock.read_text())
+    repo_graph = _load_repo_graph(repo)
+    cfg = RuntimeConfig.from_env()
+    use_mock = mock or os.environ.get("ACG_MOCK_LLM") == "1"
+
+    orch_llm = (
+        MockRuntimeLLM(role="orchestrator")
+        if use_mock
+        else RuntimeLLM(cfg.orch_url, cfg.orch_model, cfg.orch_api_key, timeout=cfg.request_timeout_s)
+    )
+    sub_llm = (
+        MockRuntimeLLM(role="worker")
+        if use_mock
+        else RuntimeLLM(cfg.sub_url, cfg.sub_model, cfg.sub_api_key, timeout=cfg.request_timeout_s)
+    )
+
+    async def _run() -> object:
+        try:
+            return await run_lockfile(
+                lockfile,
+                repo_graph,
+                orch_llm,
+                sub_llm,
+                lockfile_path=str(lock),
+                config=cfg,
+            )
+        finally:
+            await orch_llm.aclose()
+            await sub_llm.aclose()
+
+    result = asyncio.run(_run())
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(asdict(result), indent=2, default=str) + "\n")
+    _console.print(f"[green]wrote[/] {out}")
 
 
 @app.command("report")

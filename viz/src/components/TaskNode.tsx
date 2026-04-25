@@ -4,15 +4,26 @@ import type { TaskNodeData } from "../types";
 export type TaskFlowNode = Node<TaskNodeData, "task">;
 
 export function TaskNode({ data }: NodeProps<TaskFlowNode>) {
-  const { task, groupType, status, isSelected } = data;
+  const {
+    task,
+    groupType,
+    status,
+    isSelected,
+    liveAllowed,
+    liveBlocked,
+    blockedJustNow,
+  } = data;
   const classes = [
     "task-node",
     groupType,
     status,
     isSelected ? "selected" : "",
+    blockedJustNow ? "shake" : "",
   ]
     .filter(Boolean)
     .join(" ");
+
+  const showLive = status !== "idle" && (liveAllowed > 0 || liveBlocked > 0);
 
   return (
     <div className={classes}>
@@ -34,6 +45,19 @@ export function TaskNode({ data }: NodeProps<TaskFlowNode>) {
           </span>
         )}
       </div>
+      {showLive && (
+        <div className="badges">
+          <span className="badge allowed" title="ALLOWED proposals">
+            ✓ {liveAllowed}
+          </span>
+          <span
+            className={`badge blocked${liveBlocked > 0 ? " active" : ""}`}
+            title="BLOCKED proposals (writes outside allowed_paths)"
+          >
+            ✕ {liveBlocked}
+          </span>
+        </div>
+      )}
       <Handle type="source" position={Position.Bottom} />
     </div>
   );

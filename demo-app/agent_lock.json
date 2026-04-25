@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-04-25T16:59:25.116589Z",
+  "generated_at": "2026-04-25T18:39:08.184384Z",
   "generator": {
     "tool": "acg",
     "version": "0.1.0",
@@ -22,29 +22,28 @@
         {
           "path": "prisma/schema.prisma",
           "confidence": 1.0,
-          "reason": "The task explicitly asks to update the Prisma schema with required fields."
+          "reason": "The task explicitly states to update the Prisma schema with required fields."
         },
         {
           "path": "src/server/auth/config.ts",
           "confidence": 0.9,
-          "reason": "NextAuth configuration needs to be updated to include the Google provider."
+          "reason": "Google OAuth provider configuration needs to be added to the existing auth configuration."
         },
         {
           "path": "src/app/api/auth/[...nextauth]/route.ts",
-          "confidence": 0.7,
-          "reason": "This file handles NextAuth routes and might need updates to support the new provider configuration."
+          "confidence": 0.8,
+          "reason": "NextAuth route handler needs to be updated to reflect changes in authentication configuration."
         },
         {
           "path": "src/server/auth/index.ts",
-          "confidence": 0.6,
-          "reason": "This is the main entry point for auth and likely needs modification to integrate the new configuration."
+          "confidence": 0.7,
+          "reason": "This is the central auth entry point and likely needs adjustments to integrate the new provider."
         }
       ],
       "allowed_paths": [
         "prisma/schema.prisma",
         "src/app/api/auth/[...nextauth]/**",
-        "src/server/auth/**",
-        "src/server/auth/index.ts"
+        "src/server/auth/**"
       ],
       "depends_on": [],
       "parallel_group": 1,
@@ -57,16 +56,22 @@
         {
           "path": "prisma/schema.prisma",
           "confidence": 1.0,
-          "reason": "Task explicitly requires updating Prisma with a subscription model."
+          "reason": "The task explicitly requires updating Prisma with a subscription model."
         },
         {
           "path": "src/components/Sidebar.tsx",
           "confidence": 0.9,
-          "reason": "Task requires adding a sidebar entry for the billing dashboard."
+          "reason": "The task requires adding a sidebar entry for the new billing dashboard."
+        },
+        {
+          "path": "src/app/dashboard/billing/page.tsx",
+          "confidence": 0.8,
+          "reason": "The task requires adding a billing dashboard tab at /dashboard/billing."
         }
       ],
       "allowed_paths": [
         "prisma/schema.prisma",
+        "src/app/dashboard/billing/**",
         "src/components/Sidebar.tsx"
       ],
       "depends_on": [],
@@ -79,12 +84,12 @@
       "predicted_writes": [
         {
           "path": "src/app/settings/page.tsx",
-          "confidence": 1.0,
-          "reason": "The task explicitly asks to redesign the user settings page."
+          "confidence": 0.9,
+          "reason": "The task explicitly requires redesigning the user settings page at /settings."
         },
         {
           "path": "src/components/Sidebar.tsx",
-          "confidence": 0.9,
+          "confidence": 0.8,
           "reason": "The task requires updating sidebar entry styling."
         }
       ],
@@ -99,16 +104,8 @@
     {
       "id": "tests",
       "prompt": "Write end-to-end Playwright tests for the checkout flow.",
-      "predicted_writes": [
-        {
-          "path": "tests",
-          "confidence": 1.0,
-          "reason": "The task explicitly asks to write Playwright tests, and the hint indicates touching the 'tests' directory."
-        }
-      ],
-      "allowed_paths": [
-        "tests"
-      ],
+      "predicted_writes": [],
+      "allowed_paths": [],
       "depends_on": [
         "oauth",
         "billing",

@@ -59,4 +59,75 @@ export interface TaskNodeData extends Record<string, unknown> {
   groupType: "parallel" | "serial";
   status: TaskStatus;
   isSelected: boolean;
+  liveAllowed: number;
+  liveBlocked: number;
+  blockedJustNow: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Run trace — mirrors `acg.runtime.RunResult` (see schema/run_trace.schema.json).
+// ---------------------------------------------------------------------------
+
+export interface TraceProposal {
+  file: string;
+  description: string;
+  allowed: boolean;
+  reason: string | null;
+}
+
+export interface TraceWorker {
+  task_id: string;
+  group_id: number;
+  url: string;
+  model: string;
+  wall_s: number;
+  completion_tokens: number;
+  finish_reason: string;
+  raw_content: string;
+  proposals: TraceProposal[];
+  allowed_count: number;
+  blocked_count: number;
+  error: string | null;
+}
+
+export interface TraceOrchestrator {
+  url: string;
+  model: string;
+  wall_s: number;
+  completion_tokens: number;
+  finish_reason: string;
+  content: string;
+  reasoning_content: string;
+  parsed: {
+    approved?: boolean;
+    concerns?: string[];
+    dispatch_order?: number[];
+    [key: string]: unknown;
+  } | null;
+}
+
+export interface TraceGroup {
+  id: number;
+  type: "parallel" | "serial";
+  started_at: string;
+  wall_s: number;
+  worker_ids: string[];
+}
+
+export interface RunTrace {
+  version: string;
+  generated_at: string;
+  lockfile: string;
+  config: {
+    orch_url: string;
+    orch_model: string;
+    sub_url: string;
+    sub_model: string;
+  };
+  orchestrator: TraceOrchestrator;
+  workers: TraceWorker[];
+  groups_executed: TraceGroup[];
+  started_at: string;
+  finished_at: string;
+  total_wall_s: number;
 }

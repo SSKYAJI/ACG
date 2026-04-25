@@ -6,13 +6,13 @@ import {
   MiniMap,
   MarkerType,
   type Edge,
-  type Node,
   useNodesState,
   useEdgesState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 import type { AgentLock, TaskNodeData, TaskStatus } from "../types";
+import type { WorkerProgress } from "../lib/replay";
 import { computeLayout } from "../lib/layout";
 import { TaskNode, type TaskFlowNode } from "./TaskNode";
 
@@ -23,6 +23,7 @@ interface Props {
   selectedTaskId: string | null;
   runningGroup: number | null;
   completedGroups: Set<number>;
+  workerProgress: Record<string, WorkerProgress>;
   onSelect: (id: string | null) => void;
 }
 
@@ -31,6 +32,7 @@ export function TaskGraph({
   selectedTaskId,
   runningGroup,
   completedGroups,
+  workerProgress,
   onSelect,
 }: Props) {
   const positions = useMemo(() => computeLayout(lock), [lock]);
@@ -45,11 +47,15 @@ export function TaskGraph({
       if (group && completedGroups.has(group.id)) status = "done";
       else if (group && runningGroup === group.id) status = "running";
 
+      const wp = workerProgress[task.id];
       const data: TaskNodeData = {
         task,
         groupType,
         status,
         isSelected: task.id === selectedTaskId,
+        liveAllowed: wp?.allowed ?? 0,
+        liveBlocked: wp?.blocked ?? 0,
+        blockedJustNow: wp?.blockedJustNow ?? false,
       };
 
       return {
@@ -59,7 +65,14 @@ export function TaskGraph({
         data,
       };
     });
-  }, [lock, positions, selectedTaskId, runningGroup, completedGroups]);
+  }, [
+    lock,
+    positions,
+    selectedTaskId,
+    runningGroup,
+    completedGroups,
+    workerProgress,
+  ]);
 
   const computedEdges: Edge[] = useMemo(() => {
     const edges: Edge[] = [];
@@ -119,7 +132,7 @@ export function TaskGraph({
   return (
     <div className="canvas">
       <ReactFlow
-        nodes={nodes as Node[]}
+        nodes={nodes as TaskFlowNode[]}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}

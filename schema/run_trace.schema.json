@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://acg.dev/schema/run_trace/v1",
+  "title": "ACG Runtime Trace",
+  "description": "Structured record of a single `acg run` invocation: orchestrator reasoning + per-group, per-worker proposals validated against the lockfile. Consumed by the visualizer's live-replay mode.",
+  "type": "object",
+  "required": [
+    "version",
+    "generated_at",
+    "lockfile",
+    "config",
+    "orchestrator",
+    "workers",
+    "groups_executed",
+    "started_at",
+    "finished_at",
+    "total_wall_s"
+  ],
+  "properties": {
+    "version": { "const": "1.0" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "lockfile": { "type": "string", "description": "Path to the agent_lock.json this trace executed against." },
+    "config": {
+      "type": "object",
+      "required": ["orch_url", "orch_model", "sub_url", "sub_model"],
+      "properties": {
+        "orch_url": { "type": "string" },
+        "orch_model": { "type": "string" },
+        "sub_url": { "type": "string" },
+        "sub_model": { "type": "string" }
+      }
+    },
+    "orchestrator": { "$ref": "#/$defs/OrchestratorResult" },
+    "workers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/WorkerResult" }
+    },
+    "groups_executed": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/GroupResult" }
+    },
+    "started_at": { "type": "string", "format": "date-time" },
+    "finished_at": { "type": "string", "format": "date-time" },
+    "total_wall_s": { "type": "number", "minimum": 0 }
+  },
+  "$defs": {
+    "OrchestratorResult": {
+      "type": "object",
+      "required": ["url", "model", "wall_s", "completion_tokens", "finish_reason", "content", "reasoning_content"],
+      "properties": {
+        "url": { "type": "string" },
+        "model": { "type": "string" },
+        "wall_s": { "type": "number", "minimum": 0 },
+        "completion_tokens": { "type": "integer", "minimum": 0 },
+        "finish_reason": { "type": "string" },
+        "content": { "type": "string" },
+        "reasoning_content": {
+          "type": "string",
+          "description": "Captured chain-of-thought (empty when the server runs with --reasoning-budget 0)."
+        },
+        "parsed": {
+          "type": ["object", "null"],
+          "properties": {
+            "approved": { "type": "boolean" },
+            "concerns": { "type": "array", "items": { "type": "string" } },
+            "dispatch_order": { "type": "array", "items": { "type": "integer" } }
+          }
+        }
+      }
+    },
+    "WorkerResult": {
+      "type": "object",
+      "required": ["task_id", "group_id", "wall_s", "completion_tokens", "finish_reason", "raw_content", "proposals", "allowed_count", "blocked_count"],
+      "properties": {
+        "task_id": { "type": "string" },
+        "group_id": { "type": "integer", "minimum": 1 },
+        "url": { "type": "string" },
+        "model": { "type": "string" },
+        "wall_s": { "type": "number", "minimum": 0 },
+        "completion_tokens": { "type": "integer", "minimum": 0 },
+        "finish_reason": { "type": "string" },
+        "raw_content": { "type": "string" },
+        "proposals": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Proposal" }
+        },
+        "allowed_count": { "type": "integer", "minimum": 0 },
+        "blocked_count": { "type": "integer", "minimum": 0 },
+        "error": { "type": ["string", "null"] }
+      }
+    },
+    "Proposal": {
+      "type": "object",
+      "required": ["file", "description", "allowed", "reason"],
+      "properties": {
+        "file": { "type": "string" },
+        "description": { "type": "string" },
+        "allowed": { "type": "boolean" },
+        "reason": { "type": ["string", "null"] }
+      }
+    },
+    "GroupResult": {
+      "type": "object",
+      "required": ["id", "type", "started_at", "wall_s", "worker_ids"],
+      "properties": {
+        "id": { "type": "integer", "minimum": 1 },
+        "type": { "enum": ["parallel", "serial"] },
+        "started_at": { "type": "string", "format": "date-time" },
+        "wall_s": { "type": "number", "minimum": 0 },
+        "worker_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

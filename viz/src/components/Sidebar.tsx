@@ -1,11 +1,25 @@
-import type { AgentLock, Conflict, LockTask } from "../types";
+import type {
+  AgentLock,
+  Conflict,
+  LockTask,
+  TraceProposal,
+  TraceWorker,
+} from "../types";
+import type { WorkerProgress } from "../lib/replay";
 
 interface Props {
   lock: AgentLock;
   selectedTaskId: string | null;
+  worker?: TraceWorker;
+  workerProgress?: WorkerProgress;
 }
 
-export function Sidebar({ lock, selectedTaskId }: Props) {
+export function Sidebar({
+  lock,
+  selectedTaskId,
+  worker,
+  workerProgress,
+}: Props) {
   const selected = selectedTaskId
     ? lock.tasks.find((t) => t.id === selectedTaskId) ?? null
     : null;
@@ -26,7 +40,11 @@ export function Sidebar({ lock, selectedTaskId }: Props) {
       </div>
 
       {selected ? (
-        <TaskDetail task={selected} />
+        <TaskDetail
+          task={selected}
+          worker={worker}
+          workerProgress={workerProgress}
+        />
       ) : (
         <ConflictsList conflicts={lock.conflicts_detected} />
       )}
@@ -34,7 +52,15 @@ export function Sidebar({ lock, selectedTaskId }: Props) {
   );
 }
 
-function TaskDetail({ task }: { task: LockTask }) {
+function TaskDetail({
+  task,
+  worker,
+  workerProgress,
+}: {
+  task: LockTask;
+  worker?: TraceWorker;
+  workerProgress?: WorkerProgress;
+}) {
   return (
     <div className="section">
       <h2>Task</h2>
@@ -71,6 +97,85 @@ function TaskDetail({ task }: { task: LockTask }) {
             </span>
           ))}
         </>
+      )}
+
+      {worker && <WorkerProposals worker={worker} progress={workerProgress} />}
+    </div>
+  );
+}
+
+function WorkerProposals({
+  worker,
+  progress,
+}: {
+  worker: TraceWorker;
+  progress?: WorkerProgress;
+}) {
+  // Reveal only the proposals already surfaced by the replay engine.
+  const revealed =
+    progress?.isDone || (!progress?.isRunning && (progress?.allowed ?? 0) === 0 && (progress?.blocked ?? 0) === 0)
+      ? worker.proposals
+      : sliceProposals(worker.proposals, progress);
+
+  return (
+    <>
+      <h2 style={{ marginTop: 22 }}>
+        Proposals (live)
+        {worker.error && <span className="pill rejected">error</span>}
+      </h2>
+      <div className="meta-line">
+        {worker.allowed_count} allowed · {worker.blocked_count} blocked ·{" "}
+        {worker.wall_s.toFixed(2)}s · {worker.completion_tokens} tokens
+      </div>
+      {worker.error && (
+        <div className="conflict" style={{ marginTop: 8 }}>
+          <span className="conflict-files">{worker.error}</span>
+        </div>
+      )}
+      {revealed.length === 0 ? (
+        <div className="meta-line" style={{ marginTop: 8 }}>
+          {progress?.isRunning ? "(streaming…)" : "no proposals"}
+        </div>
+      ) : (
+        <div className="proposals">
+          {revealed.map((p, i) => (
+            <ProposalRow key={`${p.file}-${i}`} proposal={p} />
+          ))}
+        </div>
+      )}
+
+      <details className="raw-reply">
+        <summary>raw worker reply</summary>
+        <pre>{worker.raw_content || "(empty)"}</pre>
+      </details>
+    </>
+  );
+}
+
+function sliceProposals(
+  all: TraceProposal[],
+  progress?: WorkerProgress,
+): TraceProposal[] {
+  if (!progress) return all;
+  const total = (progress.allowed ?? 0) + (progress.blocked ?? 0);
+  return all.slice(0, total);
+}
+
+function ProposalRow({ proposal }: { proposal: TraceProposal }) {
+  return (
+    <div
+      className={`proposal ${proposal.allowed ? "allowed" : "blocked"}`}
+      title={proposal.reason ?? ""}
+    >
+      <div className="proposal-line">
+        <span className="proposal-mark">{proposal.allowed ? "✓" : "✕"}</span>
+        <span className="proposal-file">{proposal.file}</span>
+      </div>
+      {proposal.description && (
+        <div className="proposal-desc">{proposal.description}</div>
+      )}
+      {!proposal.allowed && proposal.reason && (
+        <div className="proposal-reason">{proposal.reason}</div>
       )}
     </div>
   );
