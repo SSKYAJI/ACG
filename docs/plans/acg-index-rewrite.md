@@ -144,7 +144,9 @@ This PR is scaffolding, not the final predictor. The next steps should be priori
 
 1. **Wire `aggregate()` into `predictor.py` behind a flag.** Keep existing seeds and LLM rerank intact, but pass deterministic aggregate candidates as the seed list. This is intentionally outside this PR because the demo artifacts are frozen and the human author requested no predictor changes.
 2. **Improve framework grammars with repo-specific registration files.** T3 routers often need `root.ts`; Rails controllers usually imply routes and tests; Django REST Framework implies serializers. These should be encoded as small companion-file maps once the first public API settles.
-3. **Add a local embeddings indexer.** A vector store can capture semantic matches like "checkout" to "billing" or "subscription", but this PR intentionally avoids `openai`, `voyageai`, `lancedb`, `transformers`, or any remote model dependencies.
+3. ~~Add a local embeddings indexer.~~ **Shipped in PR 7
+   (`acg/index/embeddings.py`)** behind the optional `index-vector`
+   extra and the `ACG_INDEX_EMBEDDINGS=1` env flag.
 4. **Add HyDE-style deterministic pseudo-documents only after embeddings exist.** HyDE without embeddings is mostly prompt templating; with embeddings it could improve greenfield recall by generating canonical implementation vocabulary.
 5. **Adopt SCIP or language-server indexes for stronger symbol resolution.** Tree-sitter plus regex is fast and dependency-light, but SCIP would give cross-language definitions, references, and package metadata comparable to production code search.
 6. **Mine test naming conventions.** Track A covers test scaffold defaults. A broader test indexer should learn repo-local pairs like `lib/request.js -> test/req.*.js` and `src/foo.py -> tests/test_foo.py`.
