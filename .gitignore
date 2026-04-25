@@ -25,5 +25,9 @@ demo-app/.acg/*
 !demo-app/.acg/run_trace.json
 !demo-app/.acg/context_graph.json
 
+# Greenhouse experiment: the upstream Java repo is cloned at runtime.
+experiments/greenhouse/checkout/
+experiments/greenhouse/agent_lock.json
+
 # OS
 .DS_Store
