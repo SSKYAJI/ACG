@@ -9,7 +9,7 @@
  *   tsx scan.ts --repo <repo-root> --out <context_graph.json>
  */
 
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { Node, Project, SourceFile, SyntaxKind } from "ts-morph";
 
@@ -27,6 +27,29 @@ const IGNORE_GLOBS = [
   "**/.git/**",
   "**/coverage/**",
 ];
+
+// Non-TS asset surfacing. The predictor reasons about shared-infrastructure
+// conflicts (e.g. two tasks both editing ``prisma/schema.prisma``); ts-morph
+// only sees TS sources, so we enumerate a small allowlist of well-known
+// non-TS files and append them to the graph so the topical seed and LLM
+// rerank both have a chance to surface them.
+const ASSET_RECURSIVE_DIRS = ["prisma", "drizzle", "supabase"];
+const ASSET_ROOT_FILES = [
+  "package.json",
+  "tsconfig.json",
+  "next.config.js",
+  "next.config.mjs",
+  "next.config.ts",
+  "tailwind.config.js",
+  "tailwind.config.ts",
+  "postcss.config.js",
+  "postcss.config.cjs",
+  "drizzle.config.js",
+  "drizzle.config.ts",
+  ".env.example",
+];
+// Extensions that mark an asset as "shared infrastructure": auto-hotspot.
+const HOTSPOT_ASSET_EXTENSIONS = [".prisma"];
 
 interface CliArgs {
   repo: string;
@@ -66,6 +89,62 @@ interface FileNode {
 
 function relativePath(repoRoot: string, absolute: string): string {
   return relative(repoRoot, absolute).split("\\").join("/");
+}
+
+function makeAssetNode(rel: string): FileNode {
+  return {
+    path: rel,
+    imports: [],
+    exports: [],
+    symbols: [],
+    default_export: null,
+    is_hotspot: HOTSPOT_ASSET_EXTENSIONS.some((ext) => rel.endsWith(ext)),
+    imported_by_count: 0,
+  };
+}
+
+function listFilesUnder(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  const out: string[] = [];
+  const stack: string[] = [dir];
+  while (stack.length) {
+    const current = stack.pop()!;
+    let entries;
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const abs = resolve(current, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name.startsWith(".") || entry.name === "node_modules") {
+          continue;
+        }
+        stack.push(abs);
+      } else if (entry.isFile()) {
+        out.push(abs);
+      }
+    }
+  }
+  return out;
+}
+
+function collectAssetFiles(repoAbs: string): FileNode[] {
+  const out: FileNode[] = [];
+  for (const name of ASSET_ROOT_FILES) {
+    const abs = resolve(repoAbs, name);
+    if (existsSync(abs)) {
+      out.push(makeAssetNode(name));
+    }
+  }
+  for (const dirName of ASSET_RECURSIVE_DIRS) {
+    const dirAbs = resolve(repoAbs, dirName);
+    for (const fileAbs of listFilesUnder(dirAbs)) {
+      out.push(makeAssetNode(relativePath(repoAbs, fileAbs)));
+    }
+  }
+  return out;
 }
 
 interface AliasMapping {
@@ -327,11 +406,23 @@ function buildGraph(repoAbs: string): {
     }
   }
 
+  // Append non-TS asset files (root configs, prisma schemas) so downstream
+  // predictors can model shared-infrastructure conflicts (e.g. two tasks
+  // both editing prisma/schema.prisma).
+  for (const asset of collectAssetFiles(repoAbs)) {
+    if (!files.some((f) => f.path === asset.path)) {
+      files.push(asset);
+    }
+  }
+  files.sort((a, b) => a.path.localeCompare(b.path));
+
   const hotspots = files.filter((f) => f.is_hotspot).map((f) => f.path).sort();
 
   // Heuristic: predominantly .ts/.tsx → typescript; otherwise javascript.
-  const tsCount = files.filter((f) => /\.tsx?$/.test(f.path)).length;
-  const language = tsCount >= files.length / 2 ? "typescript" : "javascript";
+  // Asset files (.prisma, .json, .config.*) don't count toward this ratio.
+  const codeFiles = files.filter((f) => /\.[jt]sx?$/.test(f.path));
+  const tsCount = codeFiles.filter((f) => /\.tsx?$/.test(f.path)).length;
+  const language = tsCount >= Math.max(1, codeFiles.length) / 2 ? "typescript" : "javascript";
 
   return { files, symbolsIndex, hotspots, language };
 }

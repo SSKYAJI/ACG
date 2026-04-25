@@ -1,10 +1,10 @@
 {
   "version": "1.0",
-  "generated_at": "2026-04-25T13:38:29.306521Z",
+  "generated_at": "2026-04-25T16:59:25.116589Z",
   "generator": {
     "tool": "acg",
     "version": "0.1.0",
-    "model": "mock-llm-canned"
+    "model": "gemma"
   },
   "repo": {
     "root": "demo-app",
@@ -20,30 +20,31 @@
       "prompt": "Add Google OAuth login. Use NextAuth. Update Prisma schema with required fields.",
       "predicted_writes": [
         {
-          "path": "src/server/auth/config.ts",
-          "confidence": 0.95,
-          "reason": "NextAuth options home in the T3 layout"
+          "path": "prisma/schema.prisma",
+          "confidence": 1.0,
+          "reason": "The task explicitly asks to update the Prisma schema with required fields."
         },
         {
-          "path": "prisma/schema.prisma",
+          "path": "src/server/auth/config.ts",
           "confidence": 0.9,
-          "reason": "NextAuth + Prisma adapter requires schema additions"
+          "reason": "NextAuth configuration needs to be updated to include the Google provider."
         },
         {
           "path": "src/app/api/auth/[...nextauth]/route.ts",
-          "confidence": 0.85,
-          "reason": "NextAuth route handler for OAuth callbacks"
+          "confidence": 0.7,
+          "reason": "This file handles NextAuth routes and might need updates to support the new provider configuration."
         },
         {
           "path": "src/server/auth/index.ts",
-          "confidence": 0.7,
-          "reason": "Hint 'auth' matches path component."
+          "confidence": 0.6,
+          "reason": "This is the main entry point for auth and likely needs modification to integrate the new configuration."
         }
       ],
       "allowed_paths": [
         "prisma/schema.prisma",
         "src/app/api/auth/[...nextauth]/**",
-        "src/server/auth/**"
+        "src/server/auth/**",
+        "src/server/auth/index.ts"
       ],
       "depends_on": [],
       "parallel_group": 1,
@@ -54,31 +55,19 @@
       "prompt": "Add a billing dashboard tab at /dashboard/billing with Stripe integration. Add a sidebar entry. Update Prisma with subscription model.",
       "predicted_writes": [
         {
-          "path": "src/app/dashboard/billing/page.tsx",
-          "confidence": 0.95,
-          "reason": "Billing dashboard route"
-        },
-        {
           "path": "prisma/schema.prisma",
-          "confidence": 0.9,
-          "reason": "Subscription model fields"
+          "confidence": 1.0,
+          "reason": "Task explicitly requires updating Prisma with a subscription model."
         },
         {
           "path": "src/components/Sidebar.tsx",
-          "confidence": 0.85,
-          "reason": "New sidebar entry for billing"
-        },
-        {
-          "path": "src/server/stripe.ts",
-          "confidence": 0.85,
-          "reason": "Stripe client module"
+          "confidence": 0.9,
+          "reason": "Task requires adding a sidebar entry for the billing dashboard."
         }
       ],
       "allowed_paths": [
         "prisma/schema.prisma",
-        "src/app/dashboard/billing/**",
-        "src/components/Sidebar.tsx",
-        "src/server/stripe.ts"
+        "src/components/Sidebar.tsx"
       ],
       "depends_on": [],
       "parallel_group": 2,
@@ -90,13 +79,13 @@
       "predicted_writes": [
         {
           "path": "src/app/settings/page.tsx",
-          "confidence": 0.95,
-          "reason": "Settings page route"
+          "confidence": 1.0,
+          "reason": "The task explicitly asks to redesign the user settings page."
         },
         {
           "path": "src/components/Sidebar.tsx",
-          "confidence": 0.85,
-          "reason": "Sidebar entry styling"
+          "confidence": 0.9,
+          "reason": "The task requires updating sidebar entry styling."
         }
       ],
       "allowed_paths": [
@@ -112,13 +101,13 @@
       "prompt": "Write end-to-end Playwright tests for the checkout flow.",
       "predicted_writes": [
         {
-          "path": "tests/e2e/checkout.spec.ts",
-          "confidence": 0.95,
-          "reason": "Playwright spec for checkout"
+          "path": "tests",
+          "confidence": 1.0,
+          "reason": "The task explicitly asks to write Playwright tests, and the hint indicates touching the 'tests' directory."
         }
       ],
       "allowed_paths": [
-        "tests/e2e/checkout.spec.ts"
+        "tests"
       ],
       "depends_on": [
         "oauth",
