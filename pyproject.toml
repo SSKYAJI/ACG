@@ -19,7 +19,11 @@ dependencies = [
   "rapidfuzz>=3.6",
   "matplotlib>=3.9,<4.0",
   "rich>=13.7,<14.0",
-  "tree-sitter-languages>=1.10",
+  # tree-sitter-languages 1.10.x is built against the legacy tree-sitter ABI;
+  # newer tree-sitter releases (>=0.22) drop the path-based Language constructor
+  # tree-sitter-languages still calls. Pin until tree-sitter-languages catches up.
+  "tree-sitter>=0.21,<0.22",
+  "tree-sitter-languages>=1.10,<2.0",
   "python-dotenv>=1.0,<2.0",
   "pyyaml>=6.0,<7.0",
 ]
