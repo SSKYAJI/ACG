@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "lambda-event-comparator",
+      "prompt": "In EventService, replace the anonymous Comparator<Event> inner class used for sorting upcoming events with a Java 8 lambda using Comparator.comparing(Event::getStartTime). Update any imports. If the rewrite touches the JdbcTemplate query string defined alongside the bean in DatabaseConfig.java, keep the SQL identical.",
+      "hints": {
+        "touches": ["EventService", "events", "config"]
+      }
+    },
+    {
+      "id": "lambda-rowmapper-account",
+      "prompt": "In AccountRepository, replace the anonymous RowMapper<Account> inner class with a lambda. The mapping logic should remain identical. Leave the JdbcTemplate bean wiring in DatabaseConfig.java untouched unless a query string lives there.",
+      "hints": {
+        "touches": ["AccountRepository", "accounts", "config"]
+      }
+    },
+    {
+      "id": "lambda-rowmapper-invite",
+      "prompt": "In InviteRepository (or InviteService if the repository class is absent), replace anonymous RowMapper<Invite> inner classes with lambdas. Cross-check the JdbcTemplate definition in DatabaseConfig.java for any inlined query strings that should move with the lambda.",
+      "hints": {
+        "touches": ["Invite", "invites", "config"]
+      }
+    }
+  ]
+}

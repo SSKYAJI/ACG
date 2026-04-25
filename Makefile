@@ -1,4 +1,4 @@
-.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock
+.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse
 
 # Override these on the command line if your ASUS hostname / port differ:
 #   make compile-gemma GEMMA_HOST=100.x.y.z GEMMA_PORT=8080
@@ -80,3 +80,15 @@ run-mock:
 	  --lock demo-app/agent_lock.json \
 	  --repo demo-app \
 	  --out demo-app/.acg/run_trace.json
+
+# ----- Greenhouse (legacy-Java demo) -----
+
+setup-greenhouse:
+	bash experiments/greenhouse/setup.sh
+
+compile-greenhouse: setup-greenhouse
+	./.venv/bin/acg compile \
+	  --tasks experiments/greenhouse/tasks.json \
+	  --repo experiments/greenhouse/checkout \
+	  --language java \
+	  --out experiments/greenhouse/agent_lock.json
