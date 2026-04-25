@@ -10,8 +10,11 @@ import pytest
 
 from acg.predictor import (
     _detect_test_layout,
+    _env_seed,
     _extract_entity_noun,
+    _extract_entity_nouns,
     _looks_like_test_task,
+    _sibling_pattern_seed,
     _test_scaffold_seed,
     predict_writes,
 )
@@ -301,3 +304,161 @@ def test_test_scaffold_seed_missing_repo_root_is_safe(
     # (we treat that as "config does not exist").
     assert "playwright.config.ts" in paths
     assert any(p.endswith("checkout.spec.ts") for p in paths)
+
+
+# --------------------------------------------------------------------------- #
+# Env-file seed.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "prompt,should_seed",
+    [
+        ("Add Google OAuth via NextAuth.", True),
+        ("Wire up Stripe checkout.", True),
+        ("Add an Auth0 provider.", True),
+        ("Refactor the dashboard sidebar.", False),
+    ],
+)
+def test_env_seed_triggers(prompt: str, should_seed: bool, tmp_path: Path) -> None:
+    task = TaskInput(id="env", prompt=prompt, hints=None)
+    paths = {seed.path for seed in _env_seed(task, tmp_path)}
+    assert (".env.example" in paths) is should_seed
+
+
+def test_env_seed_nextjs_local_augmentation(tmp_path: Path) -> None:
+    (tmp_path / "next.config.js").write_text("/** @type {import('next').NextConfig} */\n")
+    task = TaskInput(id="oauth", prompt="Add Clerk OAuth provider.", hints=None)
+    seeds = _env_seed(task, tmp_path)
+    by_path = {seed.path: seed for seed in seeds}
+    assert by_path[".env.example"].confidence == 0.8
+    assert by_path[".env.local"].confidence == 0.65
+
+
+# --------------------------------------------------------------------------- #
+# Sibling-pattern seed.
+# --------------------------------------------------------------------------- #
+
+
+def test_sibling_pattern_seed_existing_api_dir() -> None:
+    task = TaskInput(id="stripe", prompt="Add a Stripe API endpoint.", hints=None)
+    graph = {
+        "files": [
+            {"path": "src/app/api/auth/route.ts"},
+            {"path": "src/app/api/health/route.ts"},
+            {"path": "src/app/settings/page.tsx"},
+        ]
+    }
+    seeds = _sibling_pattern_seed(task, graph)
+    assert len(seeds) == 1
+    assert seeds[0].path == "src/app/api/stripe/route.ts"
+    assert seeds[0].confidence == 0.75
+
+
+def test_sibling_pattern_seed_requires_siblings() -> None:
+    task = TaskInput(id="stripe", prompt="Add a Stripe API endpoint.", hints=None)
+    graph = {"files": [{"path": "src/app/api/auth/route.ts"}]}
+    assert _sibling_pattern_seed(task, graph) == []
+
+
+def test_sibling_pattern_seed_entity_fallback() -> None:
+    task = TaskInput(id="webhook", prompt="Implement webhook endpoint.", hints=None)
+    graph = {
+        "files": [
+            {"path": "src/app/api/auth/route.ts"},
+            {"path": "src/app/api/health/route.ts"},
+        ]
+    }
+    seeds = _sibling_pattern_seed(task, graph)
+    assert [seed.path for seed in seeds] == ["src/app/api/webhook/route.ts"]
+
+
+# --------------------------------------------------------------------------- #
+# Multi-entity test scaffolding.
+# --------------------------------------------------------------------------- #
+
+
+def test_extract_entity_nouns_collects_multiple_entities() -> None:
+    assert _extract_entity_nouns("Add Playwright tests covering login and signup") == [
+        "login",
+        "signup",
+    ]
+    assert _extract_entity_noun("Add Playwright tests covering login and signup") == "login"
+
+
+def test_test_scaffold_seed_multi_entity_playwright(tmp_path: Path) -> None:
+    task = TaskInput(
+        id="tests",
+        prompt="Add Playwright e2e tests covering login and signup",
+        hints=TaskInputHints(touches=["tests"]),
+    )
+    paths = {seed.path for seed in _test_scaffold_seed(task, tmp_path)}
+    assert "tests/e2e/login.spec.ts" in paths
+    assert "tests/e2e/signup.spec.ts" in paths
+
+
+# --------------------------------------------------------------------------- #
+# Demo trace regression.
+# --------------------------------------------------------------------------- #
+
+
+def test_demo_env_regression_predicts_oauth_and_billing_env_example(tmp_path: Path) -> None:
+    (tmp_path / "next.config.js").write_text("const config = {};\nmodule.exports = config;\n")
+    graph = {
+        "language": "typescript",
+        "files": [
+            {"path": ".env.example"},
+            {"path": "prisma/schema.prisma"},
+            {"path": "src/app/api/auth/[...nextauth]/route.ts"},
+            {"path": "src/app/api/health/route.ts"},
+            {"path": "src/components/Sidebar.tsx"},
+            {"path": "src/server/auth/config.ts"},
+            {"path": "src/server/auth/index.ts"},
+        ],
+        "symbols_index": {},
+        "hotspots": ["prisma/schema.prisma", "src/components/Sidebar.tsx"],
+    }
+    tasks = [
+        TaskInput(
+            id="oauth",
+            prompt="Add Google OAuth login. Use NextAuth. Update Prisma schema with required fields.",
+            hints=TaskInputHints(touches=["auth", "prisma"]),
+        ),
+        TaskInput(
+            id="billing",
+            prompt=(
+                "Add a billing dashboard tab at /dashboard/billing with Stripe integration. "
+                "Add a sidebar entry. Update Prisma with subscription model."
+            ),
+            hints=TaskInputHints(touches=["billing", "prisma", "navigation"]),
+        ),
+    ]
+    llm = StubLLM(json.dumps({"writes": []}))
+
+    for task in tasks:
+        paths = {write.path for write in predict_writes(task, graph, llm, repo_root=tmp_path)}
+        assert ".env.example" in paths
+
+
+def test_predict_writes_composes_env_sibling_and_multi_entity_seeds(tmp_path: Path) -> None:
+    task = TaskInput(
+        id="tests",
+        prompt=(
+            "Add Playwright e2e tests covering login and signup, then create Stripe API route "
+            "with provider credentials."
+        ),
+        hints=TaskInputHints(touches=["tests"]),
+    )
+    graph = {
+        "files": [
+            {"path": "src/app/api/auth/route.ts"},
+            {"path": "src/app/api/health/route.ts"},
+        ],
+        "symbols_index": {},
+    }
+    writes = predict_writes(task, graph, StubLLM(json.dumps({"writes": []})), repo_root=tmp_path)
+    paths = {write.path for write in writes}
+    assert ".env.example" in paths
+    assert "src/app/api/stripe/route.ts" in paths
+    assert "tests/e2e/login.spec.ts" in paths
+    assert "tests/e2e/signup.spec.ts" in paths

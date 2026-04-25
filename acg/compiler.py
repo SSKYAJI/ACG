@@ -30,6 +30,7 @@ from .solver import build_dag, detect_conflicts, topological_groups
 # and don't accidentally cover sibling feature areas (``src/server/auth/**``).
 GLOB_BROADENING_MIN_SEGMENTS = 4
 GLOB_BROADENING_MIN_CONFIDENCE = 0.7
+TEST_DIR_PREFIXES = ("tests/", "__tests__/", "cypress/", "e2e/", "spec/")
 TEST_HINT_KEYWORDS = {"tests", "test", "e2e", "playwright"}
 
 
@@ -41,9 +42,11 @@ def _to_allowed_path(write: PredictedWrite) -> str:
     low-confidence paths stay exact.
     """
     parts = write.path.split("/")
+    is_test_path = any(write.path.startswith(prefix) for prefix in TEST_DIR_PREFIXES)
+    min_segments = 3 if is_test_path else GLOB_BROADENING_MIN_SEGMENTS
     if (
         write.confidence >= GLOB_BROADENING_MIN_CONFIDENCE
-        and len(parts) >= GLOB_BROADENING_MIN_SEGMENTS
+        and len(parts) >= min_segments
     ):
         return "/".join(parts[:-1]) + "/**"
     return write.path
