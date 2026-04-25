@@ -11,8 +11,8 @@ import pytest
 from acg.predictor import (
     _detect_test_layout,
     _env_seed,
-    _extract_entity_nouns,
     _extract_entity_noun,
+    _extract_entity_nouns,
     _looks_like_test_task,
     _sibling_pattern_seed,
     _test_scaffold_seed,
