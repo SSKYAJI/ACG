@@ -1,4 +1,4 @@
-.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse
+.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse headtohead-greenhouse headtohead-greenhouse-gemma
 
 # Override these on the command line if your ASUS hostname / port differ:
 #   make compile-gemma GEMMA_HOST=100.x.y.z GEMMA_PORT=8080
@@ -92,3 +92,17 @@ compile-greenhouse: setup-greenhouse
 	  --repo experiments/greenhouse/checkout \
 	  --language java \
 	  --out experiments/greenhouse/agent_lock.json
+
+headtohead-greenhouse: compile-greenhouse
+	./.venv/bin/python experiments/greenhouse/headtohead.py \
+	  --lock experiments/greenhouse/agent_lock.json \
+	  --repo experiments/greenhouse/checkout \
+	  --out experiments/greenhouse/headtohead.json \
+	  --mock
+
+# Live GX10 variant (orchestrator+sub-agents on the asus box).
+headtohead-greenhouse-gemma: compile-greenhouse
+	$(GEMMA_ENV) $(GEMMA_ORCH_ENV) ./.venv/bin/python experiments/greenhouse/headtohead.py \
+	  --lock experiments/greenhouse/agent_lock.json \
+	  --repo experiments/greenhouse/checkout \
+	  --out experiments/greenhouse/headtohead.json
