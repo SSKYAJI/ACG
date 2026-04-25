@@ -61,11 +61,6 @@ export default function App() {
   return (
     <div className="app">
       <Toolbar
-        generatedAt={lock.generated_at}
-        model={lock.generator.model}
-        numTasks={lock.tasks.length}
-        numGroups={lock.execution_plan.groups.length}
-        numConflicts={lock.conflicts_detected.length}
         isPlaying={isPlaying}
         onPlay={handlePlay}
         onPause={handlePause}
