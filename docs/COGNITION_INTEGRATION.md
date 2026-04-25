@@ -37,7 +37,7 @@ The coordinator reads the lockfile and:
 4. Repeats per group until the DAG is exhausted.
 5. For every write a child Devin attempts, calls `acg validate_writes(lock, task_id, path)` (post-hoc on Devin sessions, pre-empted on Cascade) to confirm the write is in the task's `allowed_paths`.
 
-## MCP tool surface (roadmap)
+## MCP tool surface (shipped)
 
 ```python
 analyze_repo(path: str) -> dict
@@ -46,11 +46,10 @@ compile_lockfile(repo: str, tasks: dict) -> dict
 validate_writes(lockfile: dict, task_id: str, attempted_path: str) -> dict
 ```
 
-These mirror the four CLI commands one-to-one. A FastMCP wrapper that exposes them over stdio is staged for a follow-up release; the substantive logic already lives in `acg/{compiler,predictor,enforce}.py` and is called directly by the CLI today. Devin Manage Devins, Claude Code, Cursor, and OpenCode can all consume the four tools via the same MCP transport once the wrapper lands. An Agentverse submission via `uagents-adapter` MCPServerAdapter is a thin shim on top of that.
+These mirror the four CLI commands one-to-one. The FastMCP stdio wrapper ships in [`acg/mcp/`](../acg/mcp/) — install with `pip install -e '.[mcp]'` and run `acg mcp`. See [`docs/MCP_SERVER.md`](MCP_SERVER.md) for tool schemas and a Devin worked example. An Agentverse submission via `uagents-adapter` MCPServerAdapter is a thin shim on top of the same surface.
 
 ## What we explicitly did **not** build (v1)
 
-- **MCP wrapper itself.** Roadmap. The four primitives are stable; only the FastMCP transport binding is missing.
 - **Cascade `pre_write_code` runtime hook.** Deferred to a separate stretch plan; v1 ships the validator as a CLI exit-code contract that the hook can `subprocess` straight into.
 - **CRDT runtime layer.** CodeCRDT covers character-level merge resolution. We cite it; we do not duplicate it.
 - **Live Devin sessions in the demo.** Devin platform availability is too volatile for hackathon timing. The benchmark chart in `docs/benchmark.png` is simulator-derived; if Devin sessions become available before submission, we re-run with real session metadata.

@@ -106,9 +106,10 @@ acg explain          --lock FILE
 acg validate-write   --lock FILE --task ID --path PATH
 acg report           --naive FILE --planned FILE --out FILE
 acg run-benchmark    --mode {naive,planned} --repo PATH --tasks FILE --out FILE
+acg mcp              [--transport stdio]    # MCP server (requires .[mcp] extra)
 ```
 
-The same four primitives are designed to land as MCP tools (`analyze_repo`, `predict_writes`, `compile_lockfile`, `validate_writes`) for Devin / Claude Code / Cursor consumption. The MCP wrapper is on the roadmap; see [`docs/COGNITION_INTEGRATION.md`](docs/COGNITION_INTEGRATION.md#mcp-tool-surface-roadmap).
+The same four primitives are exposed as MCP tools — see [`docs/MCP_SERVER.md`](docs/MCP_SERVER.md). Compatible with Devin Manage Devins, Claude Code, Cursor, and OpenCode.
 
 ## Architecture
 
