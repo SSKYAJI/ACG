@@ -67,21 +67,23 @@ def _is_test_task(task: TaskInput) -> bool:
     return bool(needles & TEST_HINT_KEYWORDS)
 
 
-def _resolve_dependencies(tasks_input: list[TaskInput]) -> dict[str, list[str]]:
-    """Return ``{task_id: depends_on}`` after applying heuristics.
+def _explicit_dependencies(tasks_input: list[TaskInput]) -> dict[str, list[str]]:
+    """User-declared ``depends_on`` only. Cycles among these must be raised."""
+    return {t.id: list(t.depends_on) for t in tasks_input}
 
-    The user's explicit ``depends_on`` declarations are preserved verbatim;
-    test-flagged tasks additionally depend on every non-test task. The result
-    is acyclic by construction: tests can only depend on non-tests.
+
+def _heuristic_dependencies(tasks_input: list[TaskInput]) -> dict[str, list[str]]:
+    """Test-after-everything heuristic: tests depend on every non-test task.
+
+    These edges are *defeasible* — when they would create a cycle alongside
+    conflict-derived edges (because a test task's predicted writes overlap a
+    feature task's), the solver may collapse the cycle into a serial chain
+    instead of raising. Cycles formed purely by user-declared
+    :func:`_explicit_dependencies` always raise.
     """
-    deps: dict[str, list[str]] = {t.id: list(t.depends_on) for t in tasks_input}
     test_ids = {t.id for t in tasks_input if _is_test_task(t)}
     non_test_ids = [t.id for t in tasks_input if t.id not in test_ids]
-    for tid in test_ids:
-        for other in non_test_ids:
-            if other not in deps[tid]:
-                deps[tid].append(other)
-    return deps
+    return {tid: list(non_test_ids) for tid in test_ids}
 
 
 def _detect_languages(repo_graph: dict[str, Any]) -> list[str]:
@@ -120,7 +122,8 @@ def compile_lockfile(
     # Late import to keep the schema module dependency-free at import time.
     from .predictor import predict_writes
 
-    deps_by_id = _resolve_dependencies(tasks_input.tasks)
+    explicit_deps = _explicit_dependencies(tasks_input.tasks)
+    heuristic_deps = _heuristic_dependencies(tasks_input.tasks)
     tasks: list[Task] = []
     for ti in tasks_input.tasks:
         writes = predict_writes(ti, repo_graph, llm, repo_root=repo_path)
@@ -131,12 +134,12 @@ def compile_lockfile(
                 prompt=ti.prompt,
                 predicted_writes=writes,
                 allowed_paths=allowed_paths,
-                depends_on=deps_by_id.get(ti.id, []),
+                depends_on=explicit_deps.get(ti.id, []),
             )
         )
 
     conflicts = detect_conflicts(tasks)
-    dag = build_dag(tasks)
+    dag = build_dag(tasks, heuristic_deps=heuristic_deps)
     groups = topological_groups(dag)
 
     # Stamp parallel_group onto each task for human readability.

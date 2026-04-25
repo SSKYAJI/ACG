@@ -13,12 +13,13 @@ from acg.predictor import (
     _env_seed,
     _extract_entity_noun,
     _extract_entity_nouns,
+    _index_seed,
     _looks_like_test_task,
     _sibling_pattern_seed,
     _test_scaffold_seed,
     predict_writes,
 )
-from acg.schema import TaskInput, TaskInputHints
+from acg.schema import PredictedWrite, TaskInput, TaskInputHints
 
 
 class StubLLM:
@@ -462,3 +463,95 @@ def test_predict_writes_composes_env_sibling_and_multi_entity_seeds(tmp_path: Pa
     assert "src/app/api/stripe/route.ts" in paths
     assert "tests/e2e/login.spec.ts" in paths
     assert "tests/e2e/signup.spec.ts" in paths
+
+
+# --------------------------------------------------------------------------- #
+# Index aggregator seed (acg.index.aggregate wired into predict_writes).
+# --------------------------------------------------------------------------- #
+
+
+def test_index_seed_passes_through_aggregator_predictions(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Aggregator predictions above the floor surface in predict_writes output."""
+    fake_predictions = [
+        PredictedWrite(
+            path="src/lib/cross-indexer-hit.ts",
+            confidence=0.7,
+            reason="framework + bm25 fusion",
+        ),
+        PredictedWrite(
+            path="src/lib/below-floor.ts",
+            confidence=0.3,
+            reason="weak co-change signal",
+        ),
+    ]
+
+    def fake_aggregate(*_args: Any, **_kwargs: Any) -> list[PredictedWrite]:
+        return fake_predictions
+
+    monkeypatch.setattr("acg.index.aggregate", fake_aggregate)
+
+    task = TaskInput(id="x", prompt="Add a feature.")
+    writes = predict_writes(
+        task, {}, StubLLM(json.dumps({"writes": []})), repo_root=tmp_path
+    )
+    paths = {write.path for write in writes}
+
+    assert "src/lib/cross-indexer-hit.ts" in paths
+    assert "src/lib/below-floor.ts" not in paths
+
+
+def test_index_seed_skipped_without_repo_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When repo_root is None the aggregator is never invoked."""
+    calls: list[Any] = []
+
+    def tally(*args: Any, **kwargs: Any) -> list[PredictedWrite]:
+        calls.append((args, kwargs))
+        return []
+
+    monkeypatch.setattr("acg.index.aggregate", tally)
+
+    task = TaskInput(id="readme", prompt="Update README.md.")
+    writes = predict_writes(task, {}, StubLLM(json.dumps({"writes": []})))
+
+    assert calls == []
+    assert any(write.path == "README.md" for write in writes)
+
+
+def test_index_seed_swallows_aggregator_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """If aggregate raises, predict_writes still returns existing seed paths."""
+
+    def boom(*_args: Any, **_kwargs: Any) -> list[PredictedWrite]:
+        raise RuntimeError("synthetic indexer failure")
+
+    monkeypatch.setattr("acg.index.aggregate", boom)
+
+    task = TaskInput(id="readme", prompt="Update README.md.")
+    writes = predict_writes(
+        task, {}, StubLLM(json.dumps({"writes": []})), repo_root=tmp_path
+    )
+    paths = {write.path for write in writes}
+
+    assert "README.md" in paths
+
+
+def test_index_seed_unit_filters_below_floor(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """_index_seed itself drops any prediction below SEED_INDEX_CONFIDENCE_FLOOR."""
+    monkeypatch.setattr(
+        "acg.index.aggregate",
+        lambda *_a, **_k: [
+            PredictedWrite(path="keep.ts", confidence=0.9, reason="strong"),
+            PredictedWrite(path="drop.ts", confidence=0.49, reason="weak"),
+        ],
+    )
+    task = TaskInput(id="x", prompt="Add a feature.")
+    seeds = _index_seed(task, tmp_path, {})
+    paths = {seed.path for seed in seeds}
+    assert paths == {"keep.ts"}

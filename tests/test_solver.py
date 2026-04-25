@@ -87,6 +87,42 @@ def test_cycle_raises_value_error() -> None:
         build_dag([a, b])
 
 
+def test_mutual_conflict_clique_collapses_to_serial_chain() -> None:
+    """Three tasks all conflicting on different shared files form a cycle under
+    the lighter-first heuristic; the solver must collapse the SCC into a
+    deterministic input-order chain instead of erroring."""
+    # a/b share x.ts, b/c share y.ts, a/c share z.ts.  Each task has 2 conflicts,
+    # so the ``(count, idx)`` tie-break otherwise produces a 3-cycle.
+    tasks = [
+        _task("a", ["x.ts", "z.ts"]),
+        _task("b", ["x.ts", "y.ts"]),
+        _task("c", ["y.ts", "z.ts"]),
+    ]
+    dag = build_dag(tasks)
+    groups = topological_groups(dag)
+    # Three serial groups, one per task, in input-list order.
+    assert [g.tasks for g in groups] == [["a"], ["b"], ["c"]]
+    assert [g.type for g in groups] == ["parallel", "serial", "serial"]
+
+
+def test_mutual_clique_keeps_disjoint_task_in_parallel_group() -> None:
+    """A 3-clique alongside a fully disjoint task: clique serializes, the
+    disjoint task joins the first parallel level."""
+    tasks = [
+        _task("a", ["x.ts", "z.ts"]),
+        _task("b", ["x.ts", "y.ts"]),
+        _task("c", ["y.ts", "z.ts"]),
+        _task("solo", ["unrelated.md"]),
+    ]
+    dag = build_dag(tasks)
+    groups = topological_groups(dag)
+    # Level 0 holds {a, solo}; b and c follow at deeper levels.
+    assert set(groups[0].tasks) == {"a", "solo"}
+    assert groups[0].type == "parallel"
+    assert groups[1].tasks == ["b"]
+    assert groups[2].tasks == ["c"]
+
+
 def test_unknown_dependency_raises_value_error() -> None:
     with pytest.raises(ValueError):
         build_dag([_task("a", ["x.ts"], depends_on=["ghost"])])

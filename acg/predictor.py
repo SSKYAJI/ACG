@@ -1,11 +1,23 @@
 """Task → write-set predictor.
 
-For each :class:`~acg.schema.TaskInput`, the predictor combines three static
-seed strategies with one LLM re-rank pass to produce a list of
-:class:`~acg.schema.PredictedWrite`. The seeds give us a defensible baseline
-even when the LLM is offline; the re-rank lets the model add task-implied
-files that the seeds cannot infer (e.g. a ``components/sidebar.tsx`` for an
-"add a sidebar entry" task).
+For each :class:`~acg.schema.TaskInput`, the predictor fuses **seven
+deterministic seed strategies** with one LLM re-rank pass to produce a
+list of :class:`~acg.schema.PredictedWrite`.
+
+The seed layer:
+
+1. ``_static_seed`` — verbatim file mentions in the prompt
+2. ``_symbol_seed`` — camelCase tokens resolved via the repo graph
+3. ``_topical_seed`` — ``hints.touches`` substring match against paths
+4. ``_test_scaffold_seed`` — framework convention + entity extraction
+5. ``_env_seed`` — credential/provider triggers → ``.env.*`` files
+6. ``_sibling_pattern_seed`` — analogical reasoning over existing API trees
+7. ``_index_seed`` — :func:`acg.index.aggregate` (framework / PageRank /
+   BM25 / git co-change), available whenever ``repo_root`` is set
+
+The seeds give us a defensible baseline even when the LLM is offline; the
+re-rank lets the model add task-implied files that the seeds cannot infer
+(e.g. a ``components/sidebar.tsx`` for an "add a sidebar entry" task).
 """
 
 from __future__ import annotations
@@ -27,6 +39,13 @@ SEED_ENV_CONFIDENCE = 0.8
 SEED_ENV_LOCAL_CONFIDENCE = 0.65
 SEED_SIBLING_PATTERN_PRIMARY_CONFIDENCE = 0.75
 SEED_SIBLING_PATTERN_SECONDARY_CONFIDENCE = 0.65
+SEED_INDEX_CONFIDENCE_FLOOR = 0.5
+# Cap how many index-aggregator predictions feed into the seed pipeline per
+# task. The aggregator's PageRank component is biased toward repo-wide
+# hotspots and will happily propose the same auth/db files for every task,
+# which over-serializes the lockfile. Three signals per task keeps the
+# strongest hits while leaving room for task-specific seeds to dominate.
+SEED_INDEX_TOP_N = 3
 TOP_GRAPH_FILES_FOR_LLM = 50
 MAX_PREDICTIONS = 8
 
@@ -246,6 +265,39 @@ def _sibling_pattern_seed(task: TaskInput, repo_graph: dict[str, Any]) -> list[P
         if len(seeds) >= 2:
             break
     return seeds
+
+
+def _index_seed(
+    task: TaskInput, repo_root: Path | None, repo_graph: dict[str, Any]
+) -> list[PredictedWrite]:
+    """Run the deterministic indexer aggregator (framework + PageRank + BM25 + co-change).
+
+    Wraps :func:`acg.index.aggregate` with three layers of safety so the
+    existing seed pipeline never regresses:
+
+    * ``repo_root=None`` short-circuits — pagerank/cochange need a real
+      filesystem and git history.
+    * Any exception inside the aggregator (missing tree-sitter binding,
+      unreadable git log, malformed cache pickle) is swallowed and ``[]``
+      is returned.
+    * Outputs below :data:`SEED_INDEX_CONFIDENCE_FLOOR` are dropped to
+      keep noisy long-tail entries out of the LLM rerank context.
+    """
+    if repo_root is None:
+        return []
+    try:
+        from acg.index import aggregate as index_aggregate
+    except Exception:
+        return []
+    try:
+        candidates = index_aggregate(
+            task, repo_root, repo_graph, top_n=SEED_INDEX_TOP_N
+        )
+    except Exception:
+        return []
+    return [
+        pw for pw in candidates if pw.confidence >= SEED_INDEX_CONFIDENCE_FLOOR
+    ]
 
 
 def _read_testdir_from_js_config(path: Path) -> str | None:
@@ -599,6 +651,7 @@ def predict_writes(
     seeds += _test_scaffold_seed(task, repo_root)
     seeds += _env_seed(task, repo_root)
     seeds += _sibling_pattern_seed(task, repo_graph)
+    seeds += _index_seed(task, repo_root, repo_graph)
     # Deduplicate seeds, keeping the highest-confidence variant per path.
     by_path: dict[str, PredictedWrite] = {}
     for pw in seeds:

@@ -84,24 +84,45 @@ def _conflict_pairs_by_index(tasks: list[Task]) -> list[tuple[int, int]]:
     return out
 
 
-def build_dag(tasks: list[Task]) -> nx.DiGraph:
+def build_dag(
+    tasks: list[Task],
+    heuristic_deps: dict[str, list[str]] | None = None,
+) -> nx.DiGraph:
     """Build the directed dependency graph.
+
+    Edges are added in three layers, ordered by *defeasibility*:
+
+    1. **Conflict-derived** — lighter task (fewer conflicts) runs first;
+       tie-break by input-list index. Defeasible by the SCC pass below.
+    2. **Heuristic** — caller-supplied ``heuristic_deps`` (e.g. the
+       compiler's "tests run last" rule). Also defeasible.
+    3. **Explicit user-declared** — each ``task.depends_on`` entry. *Not*
+       defeasible: a cycle here always raises ``ValueError``.
+
+    Between steps 2 and 3 a strongly-connected-component pass collapses any
+    cycle formed by defeasible edges into a deterministic input-order chain.
+    This lets the index-aggregator surface real overlaps (test tasks
+    legitimately touch shared utilities) without erroring.
 
     Args:
         tasks: Tasks with populated ``predicted_writes`` and optional
-            ``depends_on``.
+            ``depends_on`` (treated as user-explicit, non-defeasible).
+        heuristic_deps: Optional ``{task_id: [predecessor_ids]}`` map of
+            defeasible heuristic edges.
 
     Returns:
         A :class:`networkx.DiGraph` whose nodes are task ids and whose edges
         encode predecessor → successor relationships.
 
     Raises:
-        ValueError: if the resulting graph has a cycle (e.g. user-declared
-            ``depends_on`` chains conflict with conflict-derived edges).
+        ValueError: if user-declared ``depends_on`` chains form a cycle, or
+            reference an unknown task id.
     """
     graph: nx.DiGraph = nx.DiGraph()
     for task in tasks:
         graph.add_node(task.id)
+
+    known_ids = {task.id for task in tasks}
 
     pair_idx = _conflict_pairs_by_index(tasks)
     conflict_count: dict[int, int] = defaultdict(int)
@@ -109,8 +130,7 @@ def build_dag(tasks: list[Task]) -> nx.DiGraph:
         conflict_count[i] += 1
         conflict_count[j] += 1
 
-    # Conflict-derived edges: lighter task (fewer conflicts) runs first; tie-break
-    # by input-list order so the result is deterministic.
+    # 1) Conflict-derived edges (defeasible).
     for i, j in pair_idx:
         key_i = (conflict_count[i], i)
         key_j = (conflict_count[j], j)
@@ -119,8 +139,32 @@ def build_dag(tasks: list[Task]) -> nx.DiGraph:
         else:
             graph.add_edge(tasks[j].id, tasks[i].id)
 
-    # Explicit user-declared dependencies stack on top.
-    known_ids = {task.id for task in tasks}
+    # 2) Heuristic edges supplied by the caller (defeasible).
+    if heuristic_deps:
+        for tid, preds in heuristic_deps.items():
+            if tid not in known_ids:
+                continue
+            for dep in preds:
+                if dep in known_ids and dep != tid:
+                    graph.add_edge(dep, tid)
+
+    # SCC collapse: defeat any cycles formed by the two defeasible layers
+    # above by replacing each non-trivial SCC's internal edges with a strict
+    # input-order chain.
+    if not nx.is_directed_acyclic_graph(graph):
+        id_to_idx = {task.id: idx for idx, task in enumerate(tasks)}
+        for component in nx.strongly_connected_components(graph):
+            if len(component) <= 1:
+                continue
+            ordered = sorted(component, key=lambda tid: id_to_idx[tid])
+            for u in component:
+                for v in component:
+                    if u != v and graph.has_edge(u, v):
+                        graph.remove_edge(u, v)
+            for u, v in zip(ordered, ordered[1:], strict=False):
+                graph.add_edge(u, v)
+
+    # 3) Explicit user-declared dependencies (non-defeasible).
     for task in tasks:
         for dep in task.depends_on:
             if dep not in known_ids:

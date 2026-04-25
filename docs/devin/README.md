@@ -14,7 +14,7 @@ body into Devin's UI verbatim.
 - **Track A (test-scaffold seed in `acg/predictor.py`)** — shipped, 9 new
   tests. Demo trace = 10 ALLOWED / 4 BLOCKED.
 - **Tests/lint/build:** `pytest -q` → 51 passed; `ruff check acg/ tests/
-  benchmark/` → clean; `cd viz && npx tsc --noEmit && npm run build` → clean.
+benchmark/` → clean; `cd viz && npx tsc --noEmit && npm run build` → clean.
 
 **Before launching Devin:** commit the unstaged Track A changes so Devin
 branches from a clean tree:
@@ -27,15 +27,20 @@ git commit -m "predictor: add deterministic test-scaffold seed (Track A)"
 git push
 ```
 
-## The three PRs
+## The PRs
 
-| PR | Prompt file | Branch | Touches | Estimated Devin compute |
-|----|-------------|--------|---------|-------------------------|
-| 1  | [`pr1-track-b-scaffolding.md`](pr1-track-b-scaffolding.md) | `track-b-index-scaffolding` | new files only (`acg/index/`, `benchmark/predictor_eval.py`, `docs/plans/acg-index-rewrite.md`) | ~1 day |
-| 2  | [`pr2-predictor-coverage.md`](pr2-predictor-coverage.md) | `predictor-coverage-extensions` | `acg/predictor.py`, `acg/compiler.py`, `tests/test_predictor.py` | ~½ day |
-| 3  | [`pr3-housekeeping.md`](pr3-housekeeping.md) | `housekeeping-ci-docs` | `.github/workflows/`, `HANDOFF.md`, `README.md`, `scripts/diagnostics/`, `schema/*.schema.json` | ~2 hours |
+PRs 1, 2, 3 are MERGED into local `main` as of 2026-04-25. PR 4 is the
+new addition for the Java head-to-head hackathon demo and depends on
+local `main` being pushed to origin.
 
-PR 1 and PR 2 both *eventually* want to be wired into `acg/predictor.py`, but
+| PR  | Prompt file                                                | Branch                          | Touches                                                                                         | Status             |
+| --- | ---------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------ |
+| 1   | [`pr1-track-b-scaffolding.md`](pr1-track-b-scaffolding.md) | `track-b-index-scaffolding`     | new files only (`acg/index/`, `benchmark/predictor_eval.py`)                                    | ✅ merged          |
+| 2   | [`pr2-predictor-coverage.md`](pr2-predictor-coverage.md)   | `predictor-coverage-extensions` | `acg/predictor.py`, `acg/compiler.py`, `tests/`                                                 | ✅ merged          |
+| 3   | [`pr3-housekeeping.md`](pr3-housekeeping.md)               | `housekeeping-ci-docs`          | `.github/workflows/`, `HANDOFF.md`, `README.md`, `scripts/diagnostics/`, `schema/*.schema.json` | ✅ merged          |
+| 4   | [`pr4-java-scanner.md`](pr4-java-scanner.md)               | `java-scanner-greenhouse-seed`  | `graph_builder/scan_java.py`, `experiments/greenhouse/`, `tests/test_scan_java.py`, `Makefile`  | 🚀 ready to launch |
+
+PR 1 and PR 2 both _eventually_ want to be wired into `acg/predictor.py`, but
 only PR 2 modifies that file directly. PR 1 leaves its aggregator un-wired
 behind a public `acg.index.aggregate()` callable so the human author can
 integrate it post-demo without merge surprises.
@@ -48,7 +53,7 @@ integrate it post-demo without merge surprises.
 - `demo-app/agent_lock.json` and `demo-app/.acg/run_trace.json` — frozen demo
   artefacts; do not regenerate
 - `acg/predictor.py::_test_scaffold_seed` and its helpers — Track A;
-  PR 2 may *extend* the file with new seeds but must not alter the existing
+  PR 2 may _extend_ the file with new seeds but must not alter the existing
   test-scaffold seed's behaviour or break its 9 tests
 
 ## Acceptance gates (every PR must pass these)

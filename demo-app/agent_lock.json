@@ -1,10 +1,10 @@
 {
   "version": "1.0",
-  "generated_at": "2026-04-25T19:05:25.217032Z",
+  "generated_at": "2026-04-25T21:27:55.284161Z",
   "generator": {
     "tool": "acg",
     "version": "0.1.0",
-    "model": "gemma"
+    "model": "mock-llm-canned"
   },
   "repo": {
     "root": "demo-app",
@@ -20,27 +20,39 @@
       "prompt": "Add Google OAuth login. Use NextAuth. Update Prisma schema with required fields.",
       "predicted_writes": [
         {
-          "path": "prisma/schema.prisma",
-          "confidence": 1.0,
-          "reason": "Task explicitly requires updating Prisma schema with required fields for OAuth."
+          "path": "src/server/auth/config.ts",
+          "confidence": 0.95,
+          "reason": "NextAuth options home in the T3 layout"
         },
         {
-          "path": "src/server/auth/config.ts",
+          "path": "prisma/schema.prisma",
           "confidence": 0.9,
-          "reason": "Adding a new provider (Google) involves updating the NextAuth configuration."
+          "reason": "NextAuth + Prisma adapter requires schema additions"
         },
         {
           "path": "src/server/auth/index.ts",
-          "confidence": 0.8,
-          "reason": "This file likely handles the main auth setup and exports auth functions."
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #2, top symbol matches: auth, { auth: uncachedAuth, handlers, signIn, signOut }.; BM25 lexical match over path, identifiers, imports, docstrings (score 3.92)."
         },
         {
           "path": "src/app/api/auth/[...nextauth]/route.ts",
-          "confidence": 0.7,
-          "reason": "This is the NextAuth API route handler that needs to be connected to the auth configuration."
+          "confidence": 0.85,
+          "reason": "NextAuth route handler for OAuth callbacks"
+        },
+        {
+          "path": ".env.example",
+          "confidence": 0.8,
+          "reason": "Env-var seed: prompt mentions credentials/providers; agents typically extend `.env.example`."
+        },
+        {
+          "path": ".env.local",
+          "confidence": 0.65,
+          "reason": "Next.js project: `.env.local` is the conventional secrets file."
         }
       ],
       "allowed_paths": [
+        ".env.example",
+        ".env.local",
         "prisma/schema.prisma",
         "src/app/api/auth/[...nextauth]/**",
         "src/server/auth/**"
@@ -54,25 +66,55 @@
       "prompt": "Add a billing dashboard tab at /dashboard/billing with Stripe integration. Add a sidebar entry. Update Prisma with subscription model.",
       "predicted_writes": [
         {
-          "path": "prisma/schema.prisma",
-          "confidence": 1.0,
-          "reason": "Task explicitly requires updating Prisma with a subscription model."
-        },
-        {
-          "path": "src/components/Sidebar.tsx",
-          "confidence": 0.9,
-          "reason": "Task requires adding a new sidebar entry."
+          "path": "src/app/dashboard/page.tsx",
+          "confidence": 0.9685387914988963,
+          "reason": "personalized PageRank rank #4, top symbol matches: DashboardPage.; BM25 lexical match over path, identifiers, imports, docstrings (score 10.34)."
         },
         {
           "path": "src/app/dashboard/billing/page.tsx",
+          "confidence": 0.95,
+          "reason": "Billing dashboard route"
+        },
+        {
+          "path": "prisma/schema.prisma",
+          "confidence": 0.9,
+          "reason": "Subscription model fields"
+        },
+        {
+          "path": "src/server/db.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #1, top symbol matches: createPrismaClient, globalForPrisma.; BM25 lexical match over path, identifiers, imports, docstrings (score 5.79)."
+        },
+        {
+          "path": "src/components/Sidebar.tsx",
+          "confidence": 0.85,
+          "reason": "New sidebar entry for billing"
+        },
+        {
+          "path": "src/server/stripe.ts",
+          "confidence": 0.85,
+          "reason": "Stripe client module"
+        },
+        {
+          "path": ".env.example",
           "confidence": 0.8,
-          "reason": "Task requires adding a new billing dashboard tab at /dashboard/billing."
+          "reason": "Env-var seed: prompt mentions credentials/providers; agents typically extend `.env.example`."
+        },
+        {
+          "path": "src/app/api/billing/route.ts",
+          "confidence": 0.75,
+          "reason": "Sibling-pattern seed: existing API routes follow src/app/api/*/route.ts; substitute task entity 'billing'."
         }
       ],
       "allowed_paths": [
+        ".env.example",
         "prisma/schema.prisma",
+        "src/app/api/billing/**",
+        "src/app/dashboard/**",
         "src/app/dashboard/billing/**",
-        "src/components/Sidebar.tsx"
+        "src/components/Sidebar.tsx",
+        "src/server/db.ts",
+        "src/server/stripe.ts"
       ],
       "depends_on": [],
       "parallel_group": 2,
@@ -84,16 +126,22 @@
       "predicted_writes": [
         {
           "path": "src/app/settings/page.tsx",
+          "confidence": 0.95,
+          "reason": "Settings page route"
+        },
+        {
+          "path": "src/app/dashboard/page.tsx",
           "confidence": 0.9,
-          "reason": "The task explicitly requires redesigning the user settings page at /settings."
+          "reason": "personalized PageRank rank #3, top symbol matches: DashboardPage.; BM25 lexical match over path, identifiers, imports, docstrings (score 4.32)."
         },
         {
           "path": "src/components/Sidebar.tsx",
-          "confidence": 0.8,
-          "reason": "The task requires updating the sidebar entry styling."
+          "confidence": 0.85,
+          "reason": "Sidebar entry styling"
         }
       ],
       "allowed_paths": [
+        "src/app/dashboard/**",
         "src/app/settings/**",
         "src/components/Sidebar.tsx"
       ],
@@ -106,25 +154,39 @@
       "prompt": "Write end-to-end Playwright tests for the checkout flow.",
       "predicted_writes": [
         {
+          "path": "tests/e2e/checkout.spec.ts",
+          "confidence": 0.95,
+          "reason": "Playwright spec for checkout"
+        },
+        {
+          "path": "src/server/db.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #1, top symbol matches: globalForPrisma.; BM25 lexical match over path, identifiers, imports, docstrings (score 1.81)."
+        },
+        {
           "path": "playwright.config.ts",
           "confidence": 0.85,
           "reason": "playwright config file inferred from task prompt (project does not declare one yet)."
         },
         {
-          "path": "tests/e2e/checkout.spec.ts",
+          "path": "src/app/api/checkout/route.ts",
           "confidence": 0.85,
-          "reason": "playwright convention: tests/ with .spec.ts extension, entity 'checkout' from task prompt."
+          "reason": "next_app_router convention for api task."
+        },
+        {
+          "path": ".env.example",
+          "confidence": 0.7977838148620512,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 5.46)."
         }
       ],
       "allowed_paths": [
+        ".env.example",
         "playwright.config.ts",
-        "tests/e2e/checkout.spec.ts"
+        "src/app/api/checkout/**",
+        "src/server/db.ts",
+        "tests/e2e/**"
       ],
-      "depends_on": [
-        "oauth",
-        "billing",
-        "settings"
-      ],
+      "depends_on": [],
       "parallel_group": 3,
       "rationale": null
     }
@@ -165,23 +227,46 @@
   "conflicts_detected": [
     {
       "files": [
+        ".env.example",
         "prisma/schema.prisma"
       ],
       "between_tasks": [
         "oauth",
         "billing"
       ],
-      "resolution": "Serialize billing after oauth; both modify prisma/schema.prisma"
+      "resolution": "Serialize billing after oauth; both modify .env.example, prisma/schema.prisma"
     },
     {
       "files": [
+        ".env.example"
+      ],
+      "between_tasks": [
+        "oauth",
+        "tests"
+      ],
+      "resolution": "Serialize tests after oauth; both modify .env.example"
+    },
+    {
+      "files": [
+        "src/app/dashboard/page.tsx",
         "src/components/Sidebar.tsx"
       ],
       "between_tasks": [
         "settings",
         "billing"
       ],
-      "resolution": "Serialize billing after settings; both modify src/components/Sidebar.tsx"
+      "resolution": "Serialize billing after settings; both modify src/app/dashboard/page.tsx, src/components/Sidebar.tsx"
+    },
+    {
+      "files": [
+        ".env.example",
+        "src/server/db.ts"
+      ],
+      "between_tasks": [
+        "tests",
+        "billing"
+      ],
+      "resolution": "Serialize billing after tests; both modify .env.example, src/server/db.ts"
     }
   ]
 }
