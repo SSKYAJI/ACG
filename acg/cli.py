@@ -55,8 +55,37 @@ def cmd_compile(
         Path, typer.Option(exists=True, dir_okay=False, help="Path to tasks.json.")
     ],
     out: Annotated[Path, typer.Option(help="Where to write agent_lock.json.")],
+    language: Annotated[
+        str,
+        typer.Option(
+            "--language",
+            help=(
+                "Source language of the target repo. "
+                "'typescript' (default) expects an existing context graph from "
+                "graph_builder/scan.ts; 'java' runs the in-process tree-sitter "
+                "scanner before compiling."
+            ),
+        ),
+    ] = "typescript",
 ) -> None:
     """Compile ``tasks.json`` + repo graph into ``agent_lock.json``."""
+    language_normalized = language.strip().lower()
+    if language_normalized == "java":
+        from graph_builder import scan_java
+
+        graph_path = repo / ".acg" / "context_graph.json"
+        scan_java.write_graph(repo, graph_path)
+        _console.print(
+            f"[dim]scanned Java repo → {graph_path} "
+            f"(language=java)[/]"
+        )
+    elif language_normalized not in ("typescript", "javascript", "ts", "js"):
+        _err_console.print(
+            f"[red]unsupported --language {language!r}; "
+            "expected one of: typescript, javascript, java[/]"
+        )
+        raise typer.Exit(code=EXIT_USER_ERROR)
+
     tasks_input = _load_tasks(tasks)
     repo_graph = _load_repo_graph(repo)
     if not repo_graph:
