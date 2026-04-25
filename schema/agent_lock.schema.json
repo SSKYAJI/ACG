@@ -16,7 +16,7 @@
       "description": "UTC timestamp when the compiler emitted this lockfile."
     },
     "generator": {
-      "type": "object",
+      "type": ["object", "null"],
       "description": "Provenance metadata describing the tool and model that produced the lockfile.",
       "properties": {
         "tool": {
@@ -28,7 +28,7 @@
           "description": "Semantic version of the generating tool."
         },
         "model": {
-          "type": "string",
+          "type": ["string", "null"],
           "description": "Identifier of the LLM used for predictor reranking, if any."
         }
       }
@@ -43,11 +43,11 @@
           "description": "Absolute or repo-relative path to the repository root."
         },
         "git_url": {
-          "type": "string",
+          "type": ["string", "null"],
           "description": "Optional remote URL of the repository for cross-machine reference."
         },
         "commit": {
-          "type": "string",
+          "type": ["string", "null"],
           "description": "Git commit SHA the lockfile was compiled against."
         },
         "languages": {
@@ -120,12 +120,12 @@
           }
         },
         "parallel_group": {
-          "type": "integer",
+          "type": ["integer", "null"],
           "minimum": 1,
           "description": "DAG level this task belongs to; same group ids may run in parallel."
         },
         "rationale": {
-          "type": "string",
+          "type": ["string", "null"],
           "description": "Optional human-facing note explaining the task's scope or risk."
         }
       }

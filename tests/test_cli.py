@@ -33,6 +33,22 @@ def test_validate_lockfile_ok(
     assert "OK" in result.output
 
 
+def test_validate_lockfile_accepts_generated_demo_lockfile(schema_path: Path) -> None:
+    demo_lockfile = schema_path.parent.parent / "demo-app" / "agent_lock.json"
+    result = runner.invoke(
+        app,
+        [
+            "validate-lockfile",
+            "--lock",
+            str(demo_lockfile),
+            "--schema",
+            str(schema_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "OK" in result.output
+
+
 def test_validate_lockfile_rejects_invalid(
     tmp_path: Path, example_dag_lockfile_path: Path, schema_path: Path
 ) -> None:
