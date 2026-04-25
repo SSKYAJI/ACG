@@ -312,6 +312,30 @@ def cmd_run_benchmark(
     _console.print(f"[green]wrote[/] {out}")
 
 
+@app.command("mcp")
+def cmd_mcp(
+    transport: Annotated[
+        str,
+        typer.Option(help="MCP transport. Only 'stdio' is supported today."),
+    ] = "stdio",
+) -> None:
+    """Run the ACG MCP server (requires the `mcp` extra: pip install -e .[mcp])."""
+    if transport != "stdio":
+        _err_console.print(f"[red]unsupported --transport {transport!r}; expected 'stdio'[/]")
+        raise typer.Exit(code=EXIT_USER_ERROR)
+    try:
+        import fastmcp  # noqa: F401
+
+        from acg.mcp import run_stdio
+    except ImportError as exc:
+        _err_console.print(
+            r"[red]MCP extra not installed.[/] Run: "
+            r"[bold]pip install -e '.\[mcp]'[/]"
+        )
+        raise typer.Exit(code=EXIT_USER_ERROR) from exc
+    run_stdio()
+
+
 def main() -> None:  # pragma: no cover - convenience entry-point.
     try:
         app()
