@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from acg.index import aggregate
-from acg.schema import TaskInput, TaskInputHints
+from acg.index import aggregate  # noqa: E402
+from acg.schema import TaskInput, TaskInputHints  # noqa: E402
 
 FIXTURE_DIR = ROOT / "benchmark" / "fixtures"
 RESULTS_PATH = ROOT / "benchmark" / "results.json"
