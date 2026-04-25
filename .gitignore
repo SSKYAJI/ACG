@@ -16,6 +16,7 @@ dist/
 # (git's gitignore rules say a re-include like `!demo-app/.acg/foo.json` cannot
 # resurrect a file if its *parent directory* is already excluded).
 /.acg/
+**/.acg/cache/
 demo-app/.next/
 demo-app/node_modules/
 demo-app/.acg/*
