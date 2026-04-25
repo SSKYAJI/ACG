@@ -30,8 +30,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0,<9.0", "ruff>=0.5,<1.0"]
-# MCP server (FastMCP) and Agentverse (uagents-adapter) wrappers are roadmap
-# items; see docs/COGNITION_INTEGRATION.md for the planned tool surface.
+mcp = ["fastmcp>=2.0,<3.0"]
+# MCP server (FastMCP) is shipped under the `mcp` extra; see `docs/MCP_SERVER.md`.
+# Agentverse (uagents-adapter) wrapper remains a roadmap item.
 
 [project.scripts]
 acg = "acg.cli:app"
