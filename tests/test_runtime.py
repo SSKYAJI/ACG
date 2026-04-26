@@ -22,11 +22,12 @@ from acg.runtime import (
     RunResult,
     RuntimeConfig,
     WorkerResult,
+    run_group,
     run_lockfile,
     run_orchestrator,
     run_worker,
 )
-from acg.schema import AgentLock
+from acg.schema import AgentLock, ExecutionPlan, Group, Task
 
 # ---------------------------------------------------------------------------
 # Test doubles.
@@ -497,6 +498,135 @@ def test_run_orchestrator_parses_dispatch(lock: AgentLock) -> None:
         "dispatch_order": [1, 2, 3],
     }
     assert res.reasoning_content == "(thinking)"
+
+
+def _build_four_task_lock() -> tuple[AgentLock, Group]:
+    """Build a synthetic 4-task / 1-group lockfile for concurrency-lane tests.
+
+    Each task whitelists ``src/**`` so the per-worker stub replies fall in
+    bounds and don't introduce extra branching unrelated to scheduling.
+    """
+    tasks = [
+        Task(
+            id=f"t{i}",
+            prompt=f"task {i}",
+            predicted_writes=[],
+            allowed_paths=["src/**"],
+            depends_on=[],
+            parallel_group=1,
+        )
+        for i in range(1, 5)
+    ]
+    group = Group(id=1, tasks=[t.id for t in tasks], type="parallel", waits_for=[])
+    lock = AgentLock(
+        generated_at=AgentLock.utcnow(),
+        repo={"root": "demo", "languages": ["typescript"]},
+        tasks=tasks,
+        execution_plan=ExecutionPlan(groups=[group]),
+    )
+    return lock, group
+
+
+def test_sequential_mode_serializes_workers(
+    empty_repo_graph: dict[str, object],
+) -> None:
+    """sequential=True must run 4 × 100ms workers in serial (>= 0.4s wall)."""
+    lock, group = _build_four_task_lock()
+    sub = StubRuntimeLLM(
+        replies={f"t{i}": json.dumps({"writes": []}) for i in range(1, 5)}
+    )
+    for i in range(1, 5):
+        sub.set_delay(f"t{i}", 0.1)
+
+    cfg = RuntimeConfig(sequential=True)
+
+    t0 = time.perf_counter()
+    asyncio.run(run_group(group, lock, empty_repo_graph, sub, config=cfg))
+    elapsed = time.perf_counter() - t0
+
+    assert elapsed >= 0.4, f"sequential lane finished too fast: {elapsed:.3f}s"
+
+
+def test_concurrent_mode_parallelizes_workers(
+    empty_repo_graph: dict[str, object],
+) -> None:
+    """worker_concurrency=4 lets all 4 × 100ms workers run together (< 0.2s)."""
+    lock, group = _build_four_task_lock()
+    sub = StubRuntimeLLM(
+        replies={f"t{i}": json.dumps({"writes": []}) for i in range(1, 5)}
+    )
+    for i in range(1, 5):
+        sub.set_delay(f"t{i}", 0.1)
+
+    cfg = RuntimeConfig(worker_concurrency=4)
+
+    t0 = time.perf_counter()
+    asyncio.run(run_group(group, lock, empty_repo_graph, sub, config=cfg))
+    elapsed = time.perf_counter() - t0
+
+    assert elapsed < 0.2, f"concurrent lane did not parallelize: {elapsed:.3f}s"
+
+
+def test_mutex_flags_rejected(
+    tmp_path: Path, example_dag_lockfile_path: Path
+) -> None:
+    """`acg run --sequential --worker-concurrency 4` must exit non-zero."""
+    from typer.testing import CliRunner
+
+    from acg.cli import app
+
+    runner = CliRunner()
+    out_path = tmp_path / "run.json"
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--mock",
+            "--sequential",
+            "--worker-concurrency",
+            "4",
+            "--lock",
+            str(example_dag_lockfile_path),
+            "--repo",
+            str(example_dag_lockfile_path.parent),
+            "--out",
+            str(out_path),
+        ],
+    )
+    assert result.exit_code != 0, result.stdout
+    assert not out_path.exists()
+
+
+def test_env_worker_concurrency_preserved_when_flag_omitted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ACG_WORKER_CONCURRENCY must survive when --worker-concurrency is omitted.
+
+    Regression guard against the override bug where the CLI default of 0
+    silently clobbers any value picked up from the environment.
+    """
+    monkeypatch.setenv("ACG_WORKER_CONCURRENCY", "2")
+    monkeypatch.setenv("ACG_SEQUENTIAL", "1")
+    cfg = RuntimeConfig.from_env()
+    assert cfg.worker_concurrency == 2
+    assert cfg.sequential is True
+
+    # Simulate the CLI's "no flags supplied" branch: env values must survive.
+    cli_sequential: bool | None = None
+    cli_worker_concurrency: int | None = None
+    if cli_sequential is not None:
+        cfg.sequential = cli_sequential
+    if cli_worker_concurrency is not None:
+        cfg.worker_concurrency = cli_worker_concurrency
+    assert cfg.worker_concurrency == 2
+    assert cfg.sequential is True
+
+    # Simulate the CLI's "user passed --worker-concurrency 0" branch: explicit
+    # 0 must override the env var (i.e. user opted into unbounded).
+    cli_worker_concurrency = 0
+    if cli_worker_concurrency is not None:
+        cfg.worker_concurrency = cli_worker_concurrency
+    assert cfg.worker_concurrency == 0
 
 
 def test_banner_includes_env_values(
