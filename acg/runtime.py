@@ -696,6 +696,7 @@ def _build_worker_prompt(
 
 
 _console = Console()
+_console_err = Console(stderr=True, no_color=False)
 
 
 def _now_iso() -> str:
@@ -918,6 +919,37 @@ async def run_lockfile(
 ) -> RunResult:
     """Top-level entrypoint: orchestrator pass then sequential group execution."""
     cfg = config or RuntimeConfig.from_env()
+
+    # -- engine receipts banner ------------------------------------------
+    _p = cfg.perf_public()
+    _task_count = len(lock.tasks)
+    if cfg.worker_concurrency == 1:
+        _mode = "sequential"
+    elif cfg.worker_concurrency > 1:
+        _mode = f"concurrent x{cfg.worker_concurrency}"
+    else:
+        _mode = "concurrent unbounded"
+    _console_err.print(
+        f"[acg] engine={_p['engine']} dtype={_p['dtype']} "
+        f"parallel={_p['parallel']} kv-quant={_p['kv_cache_quant']} "
+        f"flash-attn={_p['flash_attn']}",
+        markup=False,
+        highlight=False,
+    )
+    _console_err.print(
+        f"[acg] backend {_p['model_id']} ctx={cfg.sub_max_tokens} "
+        f"worker-concurrency={_p['worker_concurrency']} "
+        f"grace-overlap={_p['grace_overlap']}",
+        markup=False,
+        highlight=False,
+    )
+    _console_err.print(
+        f"[acg] starting {_task_count} tasks ({_mode})",
+        markup=False,
+        highlight=False,
+    )
+    # --------------------------------------------------------------------
+
     started_at = _now_iso()
     t0 = time.perf_counter()
     if perf:

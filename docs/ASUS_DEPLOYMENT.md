@@ -70,6 +70,65 @@ The chart in `docs/benchmark.png` is generated using whichever model is currentl
 
 > ACG runs locally on ASUS GX10. The repository graph, the task list, the predicted writes, and the lockfile never leave the device. The same Python client we used to call Groq during development calls vLLM on the GX10 in production — with only `ACG_LLM_URL` changing. Customers who cannot legally ship source code to a cloud LLM can still adopt the pre-flight artifact pattern.
 
+## Receipts contract
+
+The runtime prints a 3-line configuration banner to stderr at startup so
+operators can verify exactly which knobs were active for a given run.
+
+### Environment variables
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `ACG_LLM_ENGINE` | Inference engine identifier (e.g. `llama.cpp`, `vllm`) | `unknown` |
+| `ACG_LLM_DTYPE` | Model data-type / quantisation (e.g. `Q4_K_M`) | `unknown` |
+| `ACG_LLM_PARALLEL` | Number of parallel decode slots on the server | `0` |
+| `ACG_LLM_KV_QUANT` | KV-cache quantisation type (e.g. `q8_0`) | `unknown` |
+| `ACG_LLM_FLASH_ATTN` | Enable flash-attention (`1` / `true`) | `false` |
+| `ACG_WORKER_CONCURRENCY` | Max concurrent ACG workers per group | `1` |
+| `ACG_GRACE_OVERLAP` | Allow grace-period overlap between groups (`1` / `true`) | `false` |
+| `ACG_LLM_MODEL_SHA` | Git SHA or hash of the model weights artifact | _(empty)_ |
+
+### Canonical `llama-server` invocations
+
+**Baseline (port 8080)**
+
+```bash
+llama-server \
+  --model models/llama-3.3-70b-instruct-Q4_K_M.gguf \
+  --host 0.0.0.0 --port 8080 \
+  --ctx-size 8192 --parallel 4
+```
+
+```bash
+ACG_LLM_ENGINE=llama.cpp \
+ACG_LLM_DTYPE=Q4_K_M \
+ACG_LLM_PARALLEL=4 \
+ACG_LLM_KV_QUANT=none \
+ACG_LLM_FLASH_ATTN=0 \
+ACG_LLM_URL=http://localhost:8080/v1 \
+./.venv/bin/acg run --lock demo-app/agent_lock.json --repo demo-app --out /tmp/run.json
+```
+
+**Optimized (port 8082)**
+
+```bash
+llama-server \
+  --model models/llama-3.3-70b-instruct-Q4_K_M.gguf \
+  --host 0.0.0.0 --port 8082 \
+  --ctx-size 8192 --parallel 4 \
+  --flash-attn --cache-type-k q8_0 --cache-type-v q8_0
+```
+
+```bash
+ACG_LLM_ENGINE=llama.cpp \
+ACG_LLM_DTYPE=Q4_K_M \
+ACG_LLM_PARALLEL=4 \
+ACG_LLM_KV_QUANT=q8_0 \
+ACG_LLM_FLASH_ATTN=1 \
+ACG_LLM_URL=http://localhost:8082/v1 \
+./.venv/bin/acg run --lock demo-app/agent_lock.json --repo demo-app --out /tmp/run.json
+```
+
 ## What ACG does *not* claim about ASUS
 
 - We do not claim that running the model locally improves prediction quality. Same model weights, same prompt, same output up to sampling noise.
