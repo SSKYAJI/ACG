@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -38,7 +39,16 @@ def _merge_into(
 
 
 def _default_indexers() -> list[Indexer]:
-    return [FrameworkIndexer(), PageRankIndexer(), BM25Indexer()]
+    indexers: list[Indexer] = [FrameworkIndexer(), PageRankIndexer(), BM25Indexer()]
+    if os.environ.get("ACG_INDEX_EMBEDDINGS") == "1":
+        try:
+            from .embeddings import EmbeddingsIndexer
+
+            indexers.append(EmbeddingsIndexer())
+        except ImportError:
+            # sentence-transformers not installed -- silently skip.
+            pass
+    return indexers
 
 
 def aggregate(
