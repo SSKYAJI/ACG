@@ -10,6 +10,9 @@
 - **PR 2 — Predictor coverage**: env-file / sibling-pattern / multi-entity test seeds + compiler glob-broadening
 - **PR 3 — Housekeeping**: GitHub Actions CI (pytest + ruff + tsc + viz build), refreshed README/HANDOFF, diagnostics moved to `scripts/diagnostics/`, `acg validate-lockfile` CLI, schema field-level descriptions
 - **Index aggregator wired into the live predictor** (this session): `_index_seed` calls `acg.index.aggregate(top_n=3)` as a 7th seed; solver hardened with SCC-collapse + explicit/heuristic edge separation so test-task heuristic cycles defeat without breaking user-declared cycle detection
+- **PR 6 — MCP server wrapper**: `acg.mcp` package + `acg mcp` CLI +
+  `docs/MCP_SERVER.md`. Exposes `analyze_repo`, `predict_writes`,
+  `compile_lockfile`, `validate_writes` over FastMCP stdio.
 
 ## In flight
 

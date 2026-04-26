@@ -42,13 +42,13 @@ for the runtime's prompt construction and validation pipeline.
 
 Same 4 tasks (`oauth`, `billing`, `settings`, `tests`) on the same `demo-app`, two strategies:
 
-| Metric | Naive parallel | ACG-planned |
-| --- | --- | --- |
-| Overlapping writes | 4 | 1 |
-| Blocked bad writes | 0 | 2 |
-| Manual merge steps | 4 | 0 |
-| Tests pass first run | no | yes |
-| Wall time (min) | 20 | 13 |
+| Metric               | Naive parallel | ACG-planned |
+| -------------------- | -------------- | ----------- |
+| Overlapping writes   | 4              | 1           |
+| Blocked bad writes   | 0              | 2           |
+| Manual merge steps   | 4              | 0           |
+| Tests pass first run | no             | yes         |
+| Wall time (min)      | 20             | 13          |
 
 The `oauth` and `settings` tasks are write-disjoint — ACG runs them in parallel.
 `billing` overlaps with both (`prisma/schema.prisma` with `oauth`, `src/components/Sidebar.tsx` with `settings`) — ACG serializes it after group 1.
@@ -106,9 +106,10 @@ acg explain          --lock FILE
 acg validate-write   --lock FILE --task ID --path PATH
 acg report           --naive FILE --planned FILE --out FILE
 acg run-benchmark    --mode {naive,planned} --repo PATH --tasks FILE --out FILE
+acg mcp              [--transport stdio]    # MCP server (requires .[mcp] extra)
 ```
 
-The same four primitives are designed to land as MCP tools (`analyze_repo`, `predict_writes`, `compile_lockfile`, `validate_writes`) for Devin / Claude Code / Cursor consumption. The MCP wrapper is on the roadmap; see [`docs/COGNITION_INTEGRATION.md`](docs/COGNITION_INTEGRATION.md#mcp-tool-surface-roadmap).
+The same four primitives are exposed as MCP tools — see [`docs/MCP_SERVER.md`](docs/MCP_SERVER.md). Compatible with Devin Manage Devins, Claude Code, Cursor, and OpenCode.
 
 ## Architecture
 
@@ -136,6 +137,12 @@ Long form in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 - **Cognition** — Devin Manage Devins coordinates child Devins but doesn't publish how it resolves conflicts. ACG is the pre-flight artifact the coordinator can consume before fanning out. See [`docs/COGNITION_INTEGRATION.md`](docs/COGNITION_INTEGRATION.md).
 - **ASUS GX10** — Local-first AI infrastructure for compliance-heavy enterprises that cannot ship code to cloud LLMs. The same OpenAI-compatible client that talks to Groq talks to vLLM on the GX10. See [`docs/ASUS_DEPLOYMENT.md`](docs/ASUS_DEPLOYMENT.md).
 
+## Cascade integration
+
+ACG's validator runs inside Windsurf via the `pre_write_code` hook —
+out-of-bounds writes are blocked at the IDE layer before the diff
+lands. See [`docs/CASCADE_INTEGRATION.md`](docs/CASCADE_INTEGRATION.md).
+
 ## Honesty box (non-negotiable)
 
 1. **n=5 single-trial.** Directional evidence only. Not a benchmark paper.
@@ -152,8 +159,6 @@ See [`docs/CITATIONS.md`](docs/CITATIONS.md) for verbatim quotes and links.
 
 ## Limitations and roadmap
 
-- **MCP server wrapper.** The four CLI primitives are designed for MCP; the FastMCP wrapper is staged for a follow-up. See [`docs/COGNITION_INTEGRATION.md`](docs/COGNITION_INTEGRATION.md#mcp-tool-surface-roadmap).
-- **Cascade `pre_write_code` hook.** Deferred to a separate stretch plan; the CLI exit-code contract is the integration point.
 - **CRDT runtime layer.** Explicitly out of scope (CodeCRDT covers it).
 - **Live Devin sessions.** Deferred to post-hackathon; benchmark numbers are simulator-derived.
 - **Multi-language support beyond TS/JS** limited by our parser pin.
