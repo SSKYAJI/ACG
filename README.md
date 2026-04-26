@@ -42,6 +42,8 @@ NestJS microservice benchmark, are in
 
 ![Agent coordination tax — naive vs ACG-planned](docs/benchmark.png)
 
+> Live interactive version: run `cd demo-app && npm run dev` and visit http://localhost:3000/benchmark
+
 Same 4 tasks (`oauth`, `billing`, `settings`, `tests`) on the same `demo-app`, two strategies:
 
 | Metric               | Naive parallel | ACG-planned |
