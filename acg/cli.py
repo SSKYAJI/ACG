@@ -221,25 +221,26 @@ def cmd_run(
         typer.Option("--perf-trace", help="Optional path to write perf_trace.json."),
     ] = None,
     sequential: Annotated[
-        bool,
+        bool | None,
         typer.Option(
-            "--sequential",
+            "--sequential/--no-sequential",
             help=(
                 "Baseline lane: execute workers strictly serially. "
-                "Mutually exclusive with --worker-concurrency > 1."
+                "Mutually exclusive with --worker-concurrency > 1. "
+                "If omitted, ACG_SEQUENTIAL is honored."
             ),
         ),
-    ] = False,
+    ] = None,
     worker_concurrency: Annotated[
-        int,
+        int | None,
         typer.Option(
             "--worker-concurrency",
             help=(
                 "Optimized lane: cap on concurrent in-flight workers per group. "
-                "0 (default) means unbounded."
+                "0 means unbounded. If omitted, ACG_WORKER_CONCURRENCY is honored."
             ),
         ),
-    ] = 0,
+    ] = None,
 ) -> None:
     """Execute the lockfile under runtime enforcement; emit a run trace JSON."""
     import asyncio
@@ -248,7 +249,7 @@ def cmd_run(
     from .perf import PerfRecorder
     from .runtime import MockRuntimeLLM, RuntimeConfig, RuntimeLLM, run_lockfile
 
-    if sequential and worker_concurrency > 1:
+    if sequential and worker_concurrency is not None and worker_concurrency > 1:
         raise typer.BadParameter(
             "--sequential cannot be combined with --worker-concurrency > 1; "
             "pick a baseline (--sequential) or optimized lane (--worker-concurrency N).",
@@ -258,8 +259,10 @@ def cmd_run(
     lockfile = AgentLock.model_validate_json(lock.read_text())
     repo_graph = _load_repo_graph(repo)
     cfg = RuntimeConfig.from_env()
-    cfg.sequential = sequential
-    cfg.worker_concurrency = worker_concurrency
+    if sequential is not None:
+        cfg.sequential = sequential
+    if worker_concurrency is not None:
+        cfg.worker_concurrency = worker_concurrency
     if perf_trace is not None:
         cfg.perf_trace_path = perf_trace
     use_mock = mock or os.environ.get("ACG_MOCK_LLM") == "1"
