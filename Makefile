@@ -1,4 +1,4 @@
-.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse mcp-serve
+.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse mcp-serve cascade-hook-test
 
 # Override these on the command line if your ASUS hostname / port differ:
 #   make compile-gemma GEMMA_HOST=100.x.y.z GEMMA_PORT=8080
@@ -95,3 +95,7 @@ compile-greenhouse: setup-greenhouse
 
 mcp-serve:
 	./.venv/bin/acg mcp --transport stdio
+
+# Quick smoke test of the Cascade hook script (exercises ALLOWED + BLOCKED).
+cascade-hook-test:
+	./.venv/bin/python -m pytest tests/test_precheck_write_script.py -v

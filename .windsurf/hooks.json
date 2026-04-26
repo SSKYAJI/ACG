@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "pre_write_code": [
+      {
+        "command": "./scripts/precheck_write.sh",
+        "show_output": true
+      }
+    ]
+  }
+}
