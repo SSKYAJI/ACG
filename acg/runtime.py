@@ -47,8 +47,9 @@ import httpx
 from rich.console import Console
 from rich.markup import escape as _rich_escape
 
-from .enforce import validate_write
+from . import enforce
 from .perf import PerfRecorder
+from .repo_graph import scan_context_graph
 from .schema import AgentLock, Group, Task
 
 # ---------------------------------------------------------------------------
@@ -742,9 +743,11 @@ async def run_worker(
     group_id: int,
     *,
     max_tokens: int = SUB_MAX_TOKENS,
+    config: RuntimeConfig | None = None,
     perf: PerfRecorder | None = None,
 ) -> WorkerResult:
     """Run a single sub-agent and validate every proposed write."""
+    cfg = config or RuntimeConfig.from_env()
     _console.print(f"[blue][worker {task.id}][/] starting (group {group_id})")
     messages = _build_worker_prompt(task, repo_graph)
     error: str | None = None
@@ -792,8 +795,18 @@ async def run_worker(
     proposals: list[Proposal] = []
     allowed_count = 0
     blocked_count = 0
-    for raw in raw_proposals:
-        allowed, reason = validate_write(lock, task.id, raw["file"])
+    if cfg.grace_overlap and raw_proposals:
+        validation_results = await asyncio.gather(
+            *(
+                asyncio.to_thread(enforce.validate_write, lock, task.id, raw["file"])
+                for raw in raw_proposals
+            )
+        )
+    else:
+        validation_results = [
+            enforce.validate_write(lock, task.id, raw["file"]) for raw in raw_proposals
+        ]
+    for raw, (allowed, reason) in zip(raw_proposals, validation_results, strict=True):
         proposals.append(
             Proposal(
                 file=raw["file"],
@@ -837,6 +850,7 @@ async def run_group(
     repo_graph: dict[str, Any],
     sub_llm: RuntimeLLMProtocol,
     *,
+    config: RuntimeConfig | None = None,
     perf: PerfRecorder | None = None,
 ) -> tuple[GroupResult, list[WorkerResult]]:
     """Run all workers in a group via :func:`asyncio.gather`."""
@@ -849,7 +863,15 @@ async def run_group(
 
     tasks_by_id = {t.id: t for t in lock.tasks}
     coroutines = [
-        run_worker(tasks_by_id[task_id], lock, repo_graph, sub_llm, group.id, perf=perf)
+        run_worker(
+            tasks_by_id[task_id],
+            lock,
+            repo_graph,
+            sub_llm,
+            group.id,
+            config=config,
+            perf=perf,
+        )
         for task_id in group.tasks
         if task_id in tasks_by_id
     ]
@@ -877,6 +899,8 @@ async def run_lockfile(
     sub: RuntimeLLMProtocol,
     *,
     lockfile_path: str = "demo-app/agent_lock.json",
+    repo_root: str | Path = "demo-app",
+    language: str = "ts",
     config: RuntimeConfig | None = None,
     perf: PerfRecorder | None = None,
 ) -> RunResult:
@@ -922,11 +946,25 @@ async def run_lockfile(
 
     workers: list[WorkerResult] = []
     groups_executed: list[GroupResult] = []
+    groups = sorted(lock.execution_plan.groups, key=lambda g: g.id)
     try:
-        for group in sorted(lock.execution_plan.groups, key=lambda g: g.id):
-            group_result, group_workers = await run_group(group, lock, repo_graph, sub, perf=perf)
+        for idx, group in enumerate(groups):
+            group_result, group_workers = await run_group(
+                group, lock, repo_graph, sub, config=cfg, perf=perf
+            )
             groups_executed.append(group_result)
             workers.extend(group_workers)
+            if cfg.grace_overlap and idx < len(groups) - 1:
+
+                async def _rescan() -> None:
+                    try:
+                        await asyncio.to_thread(
+                            scan_context_graph, Path(repo_root), language=language
+                        )
+                    except Exception as exc:
+                        _console.print(f"[yellow]grace-overlap rescan failed: {exc}[/]")
+
+                asyncio.create_task(_rescan())
     finally:
         if perf:
             perf.stop()

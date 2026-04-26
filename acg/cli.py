@@ -220,6 +220,13 @@ def cmd_run(
         Path | None,
         typer.Option("--perf-trace", help="Optional path to write perf_trace.json."),
     ] = None,
+    grace_overlap: Annotated[
+        bool,
+        typer.Option(
+            "--grace-overlap/--no-grace-overlap",
+            help="Overlap Grace CPU validation/rescans with GPU inference.",
+        ),
+    ] = False,
 ) -> None:
     """Execute the lockfile under runtime enforcement; emit a run trace JSON."""
     import asyncio
@@ -231,6 +238,7 @@ def cmd_run(
     lockfile = AgentLock.model_validate_json(lock.read_text())
     repo_graph = _load_repo_graph(repo)
     cfg = RuntimeConfig.from_env()
+    cfg.grace_overlap = grace_overlap
     if perf_trace is not None:
         cfg.perf_trace_path = perf_trace
     use_mock = mock or os.environ.get("ACG_MOCK_LLM") == "1"
@@ -259,6 +267,7 @@ def cmd_run(
                 orch_llm,
                 sub_llm,
                 lockfile_path=str(lock),
+                repo_root=repo,
                 config=cfg,
                 perf=perf,
             )
