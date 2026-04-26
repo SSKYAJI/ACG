@@ -99,9 +99,10 @@ class RuntimeConfig:
     parallel: int = 0
     kv_cache_quant: str = "unknown"
     flash_attn: bool = False
-    worker_concurrency: int = 1
+    worker_concurrency: int = 0
     grace_overlap: bool = False
     model_sha: str = ""
+    sequential: bool = False
 
     @classmethod
     def from_env(cls) -> RuntimeConfig:
@@ -119,9 +120,10 @@ class RuntimeConfig:
             parallel=_env_int("ACG_LLM_PARALLEL", 0),
             kv_cache_quant=os.environ.get("ACG_LLM_KV_QUANT", "unknown"),
             flash_attn=_env_bool("ACG_LLM_FLASH_ATTN", False),
-            worker_concurrency=_env_int("ACG_WORKER_CONCURRENCY", 1),
+            worker_concurrency=_env_int("ACG_WORKER_CONCURRENCY", 0),
             grace_overlap=_env_bool("ACG_GRACE_OVERLAP", False),
             model_sha=os.environ.get("ACG_LLM_MODEL_SHA", ""),
+            sequential=_env_bool("ACG_SEQUENTIAL", False),
         )
 
     def public(self) -> dict[str, str]:
@@ -836,9 +838,23 @@ async def run_group(
     repo_graph: dict[str, Any],
     sub_llm: RuntimeLLMProtocol,
     *,
+    config: RuntimeConfig | None = None,
     perf: PerfRecorder | None = None,
 ) -> tuple[GroupResult, list[WorkerResult]]:
-    """Run all workers in a group via :func:`asyncio.gather`."""
+    """Run all workers in a group respecting the configured concurrency lane.
+
+    Three modes are supported, controlled by ``config``:
+
+    * ``sequential=True`` — workers run strictly one after another via
+      ``await``. This is the *baseline* lane used to characterize end-to-end
+      latency without any parallel speed-up.
+    * ``worker_concurrency > 0`` — workers run inside ``asyncio.gather`` but
+      are gated by an :class:`asyncio.Semaphore` so at most N execute
+      concurrently. This is the *optimized* lane.
+    * Otherwise (``worker_concurrency == 0``) — preserve the historical
+      unbounded ``asyncio.gather`` behavior.
+    """
+    cfg = config or RuntimeConfig.from_env()
     _console.print(
         f"[bold magenta][group {group.id}][/] starting "
         f"({group.type}: {', '.join(group.tasks)})"
@@ -847,12 +863,33 @@ async def run_group(
     t0 = time.perf_counter()
 
     tasks_by_id = {t.id: t for t in lock.tasks}
-    coroutines = [
-        run_worker(tasks_by_id[task_id], lock, repo_graph, sub_llm, group.id, perf=perf)
-        for task_id in group.tasks
-        if task_id in tasks_by_id
-    ]
-    workers = await asyncio.gather(*coroutines)
+    eligible = [tid for tid in group.tasks if tid in tasks_by_id]
+
+    workers: list[WorkerResult]
+    if cfg.sequential:
+        workers = []
+        for task_id in eligible:
+            workers.append(
+                await run_worker(
+                    tasks_by_id[task_id], lock, repo_graph, sub_llm, group.id, perf=perf
+                )
+            )
+    elif cfg.worker_concurrency > 0:
+        semaphore = asyncio.Semaphore(cfg.worker_concurrency)
+
+        async def _bounded(task_id: str) -> WorkerResult:
+            async with semaphore:
+                return await run_worker(
+                    tasks_by_id[task_id], lock, repo_graph, sub_llm, group.id, perf=perf
+                )
+
+        workers = list(await asyncio.gather(*(_bounded(tid) for tid in eligible)))
+    else:
+        coroutines = [
+            run_worker(tasks_by_id[task_id], lock, repo_graph, sub_llm, group.id, perf=perf)
+            for task_id in eligible
+        ]
+        workers = list(await asyncio.gather(*coroutines))
     wall_s = time.perf_counter() - t0
     _console.print(
         f"[bold magenta][group {group.id}][/] done in {wall_s:.2f}s"
@@ -892,7 +929,9 @@ async def run_lockfile(
     groups_executed: list[GroupResult] = []
     try:
         for group in sorted(lock.execution_plan.groups, key=lambda g: g.id):
-            group_result, group_workers = await run_group(group, lock, repo_graph, sub, perf=perf)
+            group_result, group_workers = await run_group(
+                group, lock, repo_graph, sub, config=cfg, perf=perf
+            )
             groups_executed.append(group_result)
             workers.extend(group_workers)
     finally:
