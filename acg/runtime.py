@@ -124,21 +124,13 @@ class RuntimeConfig:
             model_sha=os.environ.get("ACG_LLM_MODEL_SHA", ""),
         )
 
-    def public(self) -> dict[str, Any]:
+    def public(self) -> dict[str, str]:
         """Return a secret-free dict suitable for embedding in the run trace."""
         return {
             "orch_url": self.orch_url,
             "orch_model": self.orch_model,
             "sub_url": self.sub_url,
             "sub_model": self.sub_model,
-            "engine": self.engine,
-            "dtype": self.dtype,
-            "parallel": self.parallel,
-            "kv_cache_quant": self.kv_cache_quant,
-            "flash_attn": self.flash_attn,
-            "worker_concurrency": self.worker_concurrency,
-            "grace_overlap": self.grace_overlap,
-            "model_sha": self.model_sha,
         }
 
     def perf_public(self) -> dict[str, Any]:
