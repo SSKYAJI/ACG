@@ -241,6 +241,13 @@ def cmd_run(
             ),
         ),
     ] = None,
+    grace_overlap: Annotated[
+        bool,
+        typer.Option(
+            "--grace-overlap/--no-grace-overlap",
+            help="Overlap Grace CPU validation/rescans with GPU inference.",
+        ),
+    ] = False,
 ) -> None:
     """Execute the lockfile under runtime enforcement; emit a run trace JSON."""
     import asyncio
@@ -249,13 +256,6 @@ def cmd_run(
     from .perf import PerfRecorder
     from .runtime import MockRuntimeLLM, RuntimeConfig, RuntimeLLM, run_lockfile
 
-    if sequential and worker_concurrency is not None and worker_concurrency > 1:
-        raise typer.BadParameter(
-            "--sequential cannot be combined with --worker-concurrency > 1; "
-            "pick a baseline (--sequential) or optimized lane (--worker-concurrency N).",
-            param_hint="--sequential / --worker-concurrency",
-        )
-
     lockfile = AgentLock.model_validate_json(lock.read_text())
     repo_graph = _load_repo_graph(repo)
     cfg = RuntimeConfig.from_env()
@@ -263,8 +263,16 @@ def cmd_run(
         cfg.sequential = sequential
     if worker_concurrency is not None:
         cfg.worker_concurrency = worker_concurrency
+    cfg.grace_overlap = grace_overlap
     if perf_trace is not None:
         cfg.perf_trace_path = perf_trace
+
+    if cfg.sequential and cfg.worker_concurrency > 1:
+        raise typer.BadParameter(
+            "sequential mode cannot be combined with worker_concurrency > 1; "
+            "pick a baseline (--sequential) or optimized lane (--worker-concurrency N).",
+            param_hint="--sequential / --worker-concurrency",
+        )
     use_mock = mock or os.environ.get("ACG_MOCK_LLM") == "1"
 
     orch_llm = (
@@ -291,6 +299,7 @@ def cmd_run(
                 orch_llm,
                 sub_llm,
                 lockfile_path=str(lock),
+                repo_root=repo,
                 config=cfg,
                 perf=perf,
             )

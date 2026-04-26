@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import asdict
@@ -127,6 +128,19 @@ def empty_repo_graph() -> dict[str, object]:
     return {"language": "typescript", "files": [], "hotspots": []}
 
 
+def _worker_replies(paths: list[str]) -> dict[str, str]:
+    return {
+        "oauth": json.dumps(
+            {
+                "writes": [
+                    {"file": path, "description": f"write {idx}"}
+                    for idx, path in enumerate(paths)
+                ]
+            }
+        )
+    }
+
+
 # ---------------------------------------------------------------------------
 # Tests — minimum 4 per HANDOFF_NEXT.
 # ---------------------------------------------------------------------------
@@ -237,6 +251,123 @@ def test_runtime_allows_writes_within_allowed_paths(
     for proposal in oauth_worker.proposals:
         assert proposal.allowed
         assert proposal.reason is None
+
+
+def test_grace_overlap_uses_thread_pool(
+    lock: AgentLock, empty_repo_graph: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    main_thread_id = threading.get_ident()
+    recorded_thread_ids: list[int] = []
+
+    def spy_validate_write(
+        lockfile: AgentLock, task_id: str, write_path: str
+    ) -> tuple[bool, str | None]:
+        del lockfile, task_id, write_path
+        recorded_thread_ids.append(threading.get_ident())
+        return True, None
+
+    monkeypatch.setattr("acg.enforce.validate_write", spy_validate_write)
+    sub = StubRuntimeLLM(
+        replies=_worker_replies(
+            ["src/server/auth/config.ts", "src/server/auth/index.ts"]
+        )
+    )
+    oauth_task = next(t for t in lock.tasks if t.id == "oauth")
+
+    worker = asyncio.run(
+        run_worker(
+            oauth_task,
+            lock,
+            empty_repo_graph,
+            sub,
+            group_id=1,
+            config=RuntimeConfig(grace_overlap=True),
+        )
+    )
+
+    assert len(recorded_thread_ids) == 2
+    assert all(thread_id != main_thread_id for thread_id in recorded_thread_ids)
+    assert [p.file for p in worker.proposals] == [
+        "src/server/auth/config.ts",
+        "src/server/auth/index.ts",
+    ]
+
+
+def test_grace_overlap_off_runs_synchronously(
+    lock: AgentLock, empty_repo_graph: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    main_thread_id = threading.get_ident()
+    recorded_thread_ids: list[int] = []
+
+    def spy_validate_write(
+        lockfile: AgentLock, task_id: str, write_path: str
+    ) -> tuple[bool, str | None]:
+        del lockfile, task_id, write_path
+        recorded_thread_ids.append(threading.get_ident())
+        return True, None
+
+    monkeypatch.setattr("acg.enforce.validate_write", spy_validate_write)
+    sub = StubRuntimeLLM(
+        replies=_worker_replies(
+            ["src/server/auth/config.ts", "src/server/auth/index.ts"]
+        )
+    )
+    oauth_task = next(t for t in lock.tasks if t.id == "oauth")
+
+    worker = asyncio.run(
+        run_worker(
+            oauth_task,
+            lock,
+            empty_repo_graph,
+            sub,
+            group_id=1,
+            config=RuntimeConfig(grace_overlap=False),
+        )
+    )
+
+    assert len(recorded_thread_ids) == 2
+    assert recorded_thread_ids == [main_thread_id, main_thread_id]
+    assert [p.file for p in worker.proposals] == [
+        "src/server/auth/config.ts",
+        "src/server/auth/index.ts",
+    ]
+
+
+def test_grace_overlap_preserves_proposal_order(
+    lock: AgentLock, empty_repo_graph: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = [
+        "src/server/auth/config.ts",
+        "prisma/schema.prisma",
+        "src/app/api/auth/[...nextauth]/route.ts",
+        "src/server/auth/index.ts",
+        "src/server/auth/session.ts",
+    ]
+    delays = dict(zip(paths, [0.05, 0.04, 0.03, 0.02, 0.01], strict=True))
+
+    def spy_validate_write(
+        lockfile: AgentLock, task_id: str, write_path: str
+    ) -> tuple[bool, str | None]:
+        del lockfile, task_id
+        time.sleep(delays[write_path])
+        return True, None
+
+    monkeypatch.setattr("acg.enforce.validate_write", spy_validate_write)
+    oauth_task = next(t for t in lock.tasks if t.id == "oauth")
+
+    for grace_overlap in (False, True):
+        sub = StubRuntimeLLM(replies=_worker_replies(paths))
+        worker = asyncio.run(
+            run_worker(
+                oauth_task,
+                lock,
+                empty_repo_graph,
+                sub,
+                group_id=1,
+                config=RuntimeConfig(grace_overlap=grace_overlap),
+            )
+        )
+        assert [proposal.file for proposal in worker.proposals] == paths
 
 
 def test_runtime_handles_malformed_worker_reply(
@@ -464,6 +595,38 @@ def test_mutex_flags_rejected(
     )
     assert result.exit_code != 0, result.stdout
     assert not out_path.exists()
+
+
+def test_env_worker_concurrency_preserved_when_flag_omitted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ACG_WORKER_CONCURRENCY must survive when --worker-concurrency is omitted.
+
+    Regression guard against the override bug where the CLI default of 0
+    silently clobbers any value picked up from the environment.
+    """
+    monkeypatch.setenv("ACG_WORKER_CONCURRENCY", "2")
+    monkeypatch.setenv("ACG_SEQUENTIAL", "1")
+    cfg = RuntimeConfig.from_env()
+    assert cfg.worker_concurrency == 2
+    assert cfg.sequential is True
+
+    # Simulate the CLI's "no flags supplied" branch: env values must survive.
+    cli_sequential: bool | None = None
+    cli_worker_concurrency: int | None = None
+    if cli_sequential is not None:
+        cfg.sequential = cli_sequential
+    if cli_worker_concurrency is not None:
+        cfg.worker_concurrency = cli_worker_concurrency
+    assert cfg.worker_concurrency == 2
+    assert cfg.sequential is True
+
+    # Simulate the CLI's "user passed --worker-concurrency 0" branch: explicit
+    # 0 must override the env var (i.e. user opted into unbounded).
+    cli_worker_concurrency = 0
+    if cli_worker_concurrency is not None:
+        cfg.worker_concurrency = cli_worker_concurrency
+    assert cfg.worker_concurrency == 0
 
 
 def test_banner_includes_env_values(
