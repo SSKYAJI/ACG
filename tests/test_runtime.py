@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import asdict
@@ -19,6 +20,7 @@ from acg.runtime import (
     LLMReply,
     OrchestratorResult,
     RunResult,
+    RuntimeConfig,
     WorkerResult,
     run_lockfile,
     run_orchestrator,
@@ -123,6 +125,19 @@ def lock(example_dag_lockfile_path: Path) -> AgentLock:
 @pytest.fixture
 def empty_repo_graph() -> dict[str, object]:
     return {"language": "typescript", "files": [], "hotspots": []}
+
+
+def _worker_replies(paths: list[str]) -> dict[str, str]:
+    return {
+        "oauth": json.dumps(
+            {
+                "writes": [
+                    {"file": path, "description": f"write {idx}"}
+                    for idx, path in enumerate(paths)
+                ]
+            }
+        )
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -235,6 +250,123 @@ def test_runtime_allows_writes_within_allowed_paths(
     for proposal in oauth_worker.proposals:
         assert proposal.allowed
         assert proposal.reason is None
+
+
+def test_grace_overlap_uses_thread_pool(
+    lock: AgentLock, empty_repo_graph: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    main_thread_id = threading.get_ident()
+    recorded_thread_ids: list[int] = []
+
+    def spy_validate_write(
+        lockfile: AgentLock, task_id: str, write_path: str
+    ) -> tuple[bool, str | None]:
+        del lockfile, task_id, write_path
+        recorded_thread_ids.append(threading.get_ident())
+        return True, None
+
+    monkeypatch.setattr("acg.enforce.validate_write", spy_validate_write)
+    sub = StubRuntimeLLM(
+        replies=_worker_replies(
+            ["src/server/auth/config.ts", "src/server/auth/index.ts"]
+        )
+    )
+    oauth_task = next(t for t in lock.tasks if t.id == "oauth")
+
+    worker = asyncio.run(
+        run_worker(
+            oauth_task,
+            lock,
+            empty_repo_graph,
+            sub,
+            group_id=1,
+            config=RuntimeConfig(grace_overlap=True),
+        )
+    )
+
+    assert len(recorded_thread_ids) == 2
+    assert all(thread_id != main_thread_id for thread_id in recorded_thread_ids)
+    assert [p.file for p in worker.proposals] == [
+        "src/server/auth/config.ts",
+        "src/server/auth/index.ts",
+    ]
+
+
+def test_grace_overlap_off_runs_synchronously(
+    lock: AgentLock, empty_repo_graph: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    main_thread_id = threading.get_ident()
+    recorded_thread_ids: list[int] = []
+
+    def spy_validate_write(
+        lockfile: AgentLock, task_id: str, write_path: str
+    ) -> tuple[bool, str | None]:
+        del lockfile, task_id, write_path
+        recorded_thread_ids.append(threading.get_ident())
+        return True, None
+
+    monkeypatch.setattr("acg.enforce.validate_write", spy_validate_write)
+    sub = StubRuntimeLLM(
+        replies=_worker_replies(
+            ["src/server/auth/config.ts", "src/server/auth/index.ts"]
+        )
+    )
+    oauth_task = next(t for t in lock.tasks if t.id == "oauth")
+
+    worker = asyncio.run(
+        run_worker(
+            oauth_task,
+            lock,
+            empty_repo_graph,
+            sub,
+            group_id=1,
+            config=RuntimeConfig(grace_overlap=False),
+        )
+    )
+
+    assert len(recorded_thread_ids) == 2
+    assert recorded_thread_ids == [main_thread_id, main_thread_id]
+    assert [p.file for p in worker.proposals] == [
+        "src/server/auth/config.ts",
+        "src/server/auth/index.ts",
+    ]
+
+
+def test_grace_overlap_preserves_proposal_order(
+    lock: AgentLock, empty_repo_graph: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths = [
+        "src/server/auth/config.ts",
+        "prisma/schema.prisma",
+        "src/app/api/auth/[...nextauth]/route.ts",
+        "src/server/auth/index.ts",
+        "src/server/auth/session.ts",
+    ]
+    delays = dict(zip(paths, [0.05, 0.04, 0.03, 0.02, 0.01], strict=True))
+
+    def spy_validate_write(
+        lockfile: AgentLock, task_id: str, write_path: str
+    ) -> tuple[bool, str | None]:
+        del lockfile, task_id
+        time.sleep(delays[write_path])
+        return True, None
+
+    monkeypatch.setattr("acg.enforce.validate_write", spy_validate_write)
+    oauth_task = next(t for t in lock.tasks if t.id == "oauth")
+
+    for grace_overlap in (False, True):
+        sub = StubRuntimeLLM(replies=_worker_replies(paths))
+        worker = asyncio.run(
+            run_worker(
+                oauth_task,
+                lock,
+                empty_repo_graph,
+                sub,
+                group_id=1,
+                config=RuntimeConfig(grace_overlap=grace_overlap),
+            )
+        )
+        assert [proposal.file for proposal in worker.proposals] == paths
 
 
 def test_runtime_handles_malformed_worker_reply(
