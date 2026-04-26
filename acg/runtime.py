@@ -27,6 +27,7 @@ Environment variables (read by :meth:`RuntimeConfig.from_env`):
 ``ACG_LLM_MODEL``             Sub-agent model id
 ``ACG_LLM_API_KEY``           Sub-agent bearer token
 ``ACG_MOCK_LLM``              ``1`` ⇒ short-circuit to :class:`MockRuntimeLLM`
+``ACG_PERF_TRACE``            Optional path for a GX10 perf trace JSON
 ============================  ==================================================
 """
 
@@ -39,6 +40,7 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Protocol
 
 import httpx
@@ -46,6 +48,7 @@ from rich.console import Console
 from rich.markup import escape as _rich_escape
 
 from .enforce import validate_write
+from .perf import PerfRecorder
 from .schema import AgentLock, Group, Task
 
 # ---------------------------------------------------------------------------
@@ -90,6 +93,15 @@ class RuntimeConfig:
     orch_max_tokens: int = ORCH_MAX_TOKENS
     sub_max_tokens: int = SUB_MAX_TOKENS
     request_timeout_s: float = DEFAULT_TIMEOUT_S
+    perf_trace_path: Path | None = None
+    engine: str = "unknown"
+    dtype: str = "unknown"
+    parallel: int = 0
+    kv_cache_quant: str = "unknown"
+    flash_attn: bool = False
+    worker_concurrency: int = 1
+    grace_overlap: bool = False
+    model_sha: str = ""
 
     @classmethod
     def from_env(cls) -> RuntimeConfig:
@@ -101,6 +113,15 @@ class RuntimeConfig:
             sub_url=os.environ.get("ACG_LLM_URL", DEFAULT_SUB_URL),
             sub_model=os.environ.get("ACG_LLM_MODEL", DEFAULT_MODEL),
             sub_api_key=os.environ.get("ACG_LLM_API_KEY", ""),
+            perf_trace_path=_env_path("ACG_PERF_TRACE"),
+            engine=os.environ.get("ACG_LLM_ENGINE", "unknown"),
+            dtype=os.environ.get("ACG_LLM_DTYPE", "unknown"),
+            parallel=_env_int("ACG_LLM_PARALLEL", 0),
+            kv_cache_quant=os.environ.get("ACG_LLM_KV_QUANT", "unknown"),
+            flash_attn=_env_bool("ACG_LLM_FLASH_ATTN", False),
+            worker_concurrency=_env_int("ACG_WORKER_CONCURRENCY", 1),
+            grace_overlap=_env_bool("ACG_GRACE_OVERLAP", False),
+            model_sha=os.environ.get("ACG_LLM_MODEL_SHA", ""),
         )
 
     def public(self) -> dict[str, str]:
@@ -111,6 +132,44 @@ class RuntimeConfig:
             "sub_url": self.sub_url,
             "sub_model": self.sub_model,
         }
+
+    def perf_public(self) -> dict[str, Any]:
+        """Return the config subset required by perf_trace.schema.json."""
+        return {
+            "engine": self.engine,
+            "dtype": self.dtype,
+            "parallel": self.parallel,
+            "kv_cache_quant": self.kv_cache_quant,
+            "flash_attn": self.flash_attn,
+            "worker_concurrency": self.worker_concurrency,
+            "grace_overlap": self.grace_overlap,
+            "model_id": self.sub_model,
+            "model_sha": self.model_sha,
+        }
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return default
+
+
+def _env_path(name: str) -> Path | None:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return None
+    return Path(raw)
 
 
 # ---------------------------------------------------------------------------
@@ -642,6 +701,11 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _task_input_tokens(task: Task, repo_graph: dict[str, Any]) -> int:
+    prompt = _build_worker_prompt(task, repo_graph)
+    return sum(len(message.get("content", "")) // 4 for message in prompt)
+
+
 async def run_orchestrator(
     lock: AgentLock,
     llm: RuntimeLLMProtocol,
@@ -677,17 +741,26 @@ async def run_worker(
     group_id: int,
     *,
     max_tokens: int = SUB_MAX_TOKENS,
+    perf: PerfRecorder | None = None,
 ) -> WorkerResult:
     """Run a single sub-agent and validate every proposed write."""
     _console.print(f"[blue][worker {task.id}][/] starting (group {group_id})")
     messages = _build_worker_prompt(task, repo_graph)
     error: str | None = None
+    if perf:
+        perf.mark_task_start(task.id, group_id)
     try:
         reply = await llm.complete(messages, max_tokens=max_tokens)
+        if perf:
+            perf.mark_first_token(task.id)
     except RuntimeLLMError as exc:
         # Failing closed: a worker that errored out contributes zero proposals.
         error = str(exc)
         _console.print(f"[red][worker {task.id}][/] LLM error: {exc}")
+        if perf:
+            perf.mark_task_end(
+                task.id, input_tokens=_task_input_tokens(task, repo_graph), output_tokens=0
+            )
         return WorkerResult(
             task_id=task.id,
             group_id=group_id,
@@ -704,6 +777,12 @@ async def run_worker(
         )
 
     raw_proposals = _parse_writes(reply.content)
+    if perf:
+        perf.mark_task_end(
+            task.id,
+            input_tokens=_task_input_tokens(task, repo_graph),
+            output_tokens=reply.completion_tokens,
+        )
     _console.print(
         f"[blue][worker {task.id}][/] proposed {len(raw_proposals)} writes "
         f"({reply.wall_s:.2f}s, {reply.completion_tokens} tokens)"
@@ -756,6 +835,8 @@ async def run_group(
     lock: AgentLock,
     repo_graph: dict[str, Any],
     sub_llm: RuntimeLLMProtocol,
+    *,
+    perf: PerfRecorder | None = None,
 ) -> tuple[GroupResult, list[WorkerResult]]:
     """Run all workers in a group via :func:`asyncio.gather`."""
     _console.print(
@@ -767,7 +848,7 @@ async def run_group(
 
     tasks_by_id = {t.id: t for t in lock.tasks}
     coroutines = [
-        run_worker(tasks_by_id[task_id], lock, repo_graph, sub_llm, group.id)
+        run_worker(tasks_by_id[task_id], lock, repo_graph, sub_llm, group.id, perf=perf)
         for task_id in group.tasks
         if task_id in tasks_by_id
     ]
@@ -796,23 +877,31 @@ async def run_lockfile(
     *,
     lockfile_path: str = "demo-app/agent_lock.json",
     config: RuntimeConfig | None = None,
+    perf: PerfRecorder | None = None,
 ) -> RunResult:
     """Top-level entrypoint: orchestrator pass then sequential group execution."""
+    cfg = config or RuntimeConfig.from_env()
     started_at = _now_iso()
     t0 = time.perf_counter()
+    if perf:
+        perf.start()
 
     orch_result = await run_orchestrator(lock, orch)
 
     workers: list[WorkerResult] = []
     groups_executed: list[GroupResult] = []
-    for group in sorted(lock.execution_plan.groups, key=lambda g: g.id):
-        group_result, group_workers = await run_group(group, lock, repo_graph, sub)
-        groups_executed.append(group_result)
-        workers.extend(group_workers)
+    try:
+        for group in sorted(lock.execution_plan.groups, key=lambda g: g.id):
+            group_result, group_workers = await run_group(group, lock, repo_graph, sub, perf=perf)
+            groups_executed.append(group_result)
+            workers.extend(group_workers)
+    finally:
+        if perf:
+            perf.stop()
 
     finished_at = _now_iso()
     total = time.perf_counter() - t0
-    cfg_public = (config or RuntimeConfig.from_env()).public()
+    cfg_public = cfg.public()
     # Override URL/model with the actual values the LLMs reported (covers mock case).
     cfg_public.update(
         orch_url=orch.url,
@@ -827,6 +916,9 @@ async def run_lockfile(
         f"{sum(w.blocked_count for w in workers)} blocked, "
         f"{total:.2f}s wall"
     )
+
+    if perf and cfg.perf_trace_path:
+        perf.dump(cfg.perf_trace_path)
 
     return RunResult(
         version="1.0",

@@ -216,16 +216,23 @@ def cmd_run(
             "--mock", help="Use the deterministic offline runtime LLM instead of live servers."
         ),
     ] = False,
+    perf_trace: Annotated[
+        Path | None,
+        typer.Option("--perf-trace", help="Optional path to write perf_trace.json."),
+    ] = None,
 ) -> None:
     """Execute the lockfile under runtime enforcement; emit a run trace JSON."""
     import asyncio
     from dataclasses import asdict
 
+    from .perf import PerfRecorder
     from .runtime import MockRuntimeLLM, RuntimeConfig, RuntimeLLM, run_lockfile
 
     lockfile = AgentLock.model_validate_json(lock.read_text())
     repo_graph = _load_repo_graph(repo)
     cfg = RuntimeConfig.from_env()
+    if perf_trace is not None:
+        cfg.perf_trace_path = perf_trace
     use_mock = mock or os.environ.get("ACG_MOCK_LLM") == "1"
 
     orch_llm = (
@@ -240,6 +247,9 @@ def cmd_run(
         if use_mock
         else RuntimeLLM(cfg.sub_url, cfg.sub_model, cfg.sub_api_key, timeout=cfg.request_timeout_s)
     )
+    perf = (
+        PerfRecorder(config=cfg.perf_public(), lockfile=str(lock)) if cfg.perf_trace_path else None
+    )
 
     async def _run() -> object:
         try:
@@ -250,6 +260,7 @@ def cmd_run(
                 sub_llm,
                 lockfile_path=str(lock),
                 config=cfg,
+                perf=perf,
             )
         finally:
             await orch_llm.aclose()
@@ -259,6 +270,8 @@ def cmd_run(
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(asdict(result), indent=2, default=str) + "\n")
     _console.print(f"[green]wrote[/] {out}")
+    if cfg.perf_trace_path:
+        _console.print(f"[green]wrote[/] {cfg.perf_trace_path}")
 
 
 @app.command("report")
