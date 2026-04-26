@@ -1,4 +1,4 @@
-.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse mcp-serve cascade-hook-test
+.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse eval-greenhouse-mock eval-greenhouse-local eval-greenhouse-devin-manual eval-greenhouse-devin-api eval-greenhouse-report mcp-serve cascade-hook-test
 
 # Override these on the command line if your ASUS hostname / port differ:
 #   make compile-gemma GEMMA_HOST=100.x.y.z GEMMA_PORT=8080
@@ -92,6 +92,71 @@ compile-greenhouse: setup-greenhouse
 	  --repo experiments/greenhouse/checkout \
 	  --language java \
 	  --out experiments/greenhouse/agent_lock.json
+
+# ----- Greenhouse head-to-head eval (megaplan v0.1) -----
+# Mock backend: deterministic, runs in <2s, CI-friendly. Writes
+# experiments/greenhouse/runs/eval_run_naive.json + eval_run_acg.json.
+eval-greenhouse-mock: compile-greenhouse
+	./.venv/bin/python -m experiments.greenhouse.headtohead \
+	  --lock experiments/greenhouse/agent_lock.json \
+	  --tasks experiments/greenhouse/tasks.json \
+	  --repo experiments/greenhouse/checkout \
+	  --backend mock \
+	  --strategy both \
+	  --out-dir experiments/greenhouse/runs
+
+# Live local LLM (GX10) — same harness, real worker calls.
+eval-greenhouse-local: compile-greenhouse
+	$(GEMMA_ENV) $(GEMMA_ORCH_ENV) ./.venv/bin/python -m experiments.greenhouse.headtohead \
+	  --lock experiments/greenhouse/agent_lock.json \
+	  --tasks experiments/greenhouse/tasks.json \
+	  --repo experiments/greenhouse/checkout \
+	  --backend local \
+	  --strategy both \
+	  --out-dir experiments/greenhouse/runs
+
+# Live Devin v3 API — submits real sessions against your Devin org. Reads
+# DEVIN_API_KEY + DEVIN_ORG_ID from .env (or the shell). Set
+# DEVIN_GITHUB_REPO_URL to the fork you connected to your Devin org.
+DEVIN_GITHUB_REPO_URL ?= https://github.com/SSKYAJI/greenhouse.git
+DEVIN_BASE_BRANCH     ?= master
+DEVIN_MAX_ACU_LIMIT   ?= 50
+eval-greenhouse-devin-api: compile-greenhouse
+	./.venv/bin/python -m experiments.greenhouse.headtohead \
+	  --lock experiments/greenhouse/agent_lock.json \
+	  --tasks experiments/greenhouse/tasks.json \
+	  --repo experiments/greenhouse/checkout \
+	  --backend devin-api \
+	  --strategy both \
+	  --repo-url $(DEVIN_GITHUB_REPO_URL) \
+	  --base-branch $(DEVIN_BASE_BRANCH) \
+	  --max-acu-limit $(DEVIN_MAX_ACU_LIMIT) \
+	  --out-dir experiments/greenhouse/runs
+
+# Manual Devin sidecar — DEVIN_RESULTS_NAIVE / DEVIN_RESULTS_ACG point at
+# JSON files exported (manually or programmatically) from Devin sessions.
+DEVIN_RESULTS_NAIVE ?= experiments/greenhouse/runs/devin_naive_raw.json
+DEVIN_RESULTS_ACG   ?= experiments/greenhouse/runs/devin_acg_raw.json
+eval-greenhouse-devin-manual: compile-greenhouse
+	./.venv/bin/python -m experiments.greenhouse.headtohead \
+	  --lock experiments/greenhouse/agent_lock.json \
+	  --tasks experiments/greenhouse/tasks.json \
+	  --backend devin-manual --strategy naive_parallel \
+	  --devin-results $(DEVIN_RESULTS_NAIVE) \
+	  --out experiments/greenhouse/runs/eval_run_devin_naive.json
+	./.venv/bin/python -m experiments.greenhouse.headtohead \
+	  --lock experiments/greenhouse/agent_lock.json \
+	  --tasks experiments/greenhouse/tasks.json \
+	  --backend devin-manual --strategy acg_planned \
+	  --devin-results $(DEVIN_RESULTS_ACG) \
+	  --out experiments/greenhouse/runs/eval_run_devin_acg.json
+
+# Render the markdown table + PNG chart for whatever eval_run files exist.
+eval-greenhouse-report:
+	./.venv/bin/python -m experiments.greenhouse.report \
+	  experiments/greenhouse/runs/eval_run_naive.json \
+	  experiments/greenhouse/runs/eval_run_acg.json \
+	  --chart docs/greenhouse_benchmark.png
 
 mcp-serve:
 	./.venv/bin/acg mcp --transport stdio

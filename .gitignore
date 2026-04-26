@@ -28,6 +28,11 @@ demo-app/.acg/*
 # Greenhouse experiment: the upstream Java repo is cloned at runtime.
 experiments/greenhouse/checkout/
 experiments/greenhouse/agent_lock.json
+# Per-run eval artifacts. Promote individual files into docs/ when worth pinning.
+experiments/greenhouse/runs/
+# Devin probe traces contain session ids and may include bearer-token-flavored
+# auth headers; never commit them.
+scripts/diagnostics/devin_probe_output*.json
 
 # OS
 .DS_Store

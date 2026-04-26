@@ -312,6 +312,106 @@ def cmd_run_benchmark(
     _console.print(f"[green]wrote[/] {out}")
 
 
+@app.command("analyze-runs")
+def cmd_analyze_runs(
+    inputs: Annotated[
+        list[Path],
+        typer.Argument(
+            exists=True,
+            help=(
+                "One or more eval_run.json files (or directories containing them). "
+                "Combined files with strategies.{naive_parallel,acg_planned} are "
+                "flattened automatically."
+            ),
+        ),
+    ],
+    out: Annotated[
+        Path | None,
+        typer.Option(
+            help=(
+                "Where to write the Markdown report. Defaults to stdout."
+            ),
+        ),
+    ] = None,
+    json_out: Annotated[
+        Path | None,
+        typer.Option(
+            "--json-out",
+            help=(
+                "Optional path to also write the structured analysis as JSON, "
+                "for downstream tooling."
+            ),
+        ),
+    ] = None,
+) -> None:
+    """Aggregate eval_run artifacts into a predictor-accuracy + scope report.
+
+    Implements the megaplan's "learn from mistakes" loop: compares each
+    lockfile's ``predicted_writes`` against the agent's
+    ``actual_changed_files`` and surfaces refinement suggestions.
+    """
+    from .analyze import analyze_paths, collect_suggestions, format_markdown
+
+    report = analyze_paths(inputs)
+    md = format_markdown(report)
+    if out:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(md)
+        _console.print(f"[green]wrote[/] {out}")
+    else:
+        sys.stdout.write(md)
+
+    if json_out:
+        suggestions = collect_suggestions(report)
+        payload = {
+            "runs": [
+                {
+                    "source_path": r.source_path,
+                    "strategy": r.strategy,
+                    "backend": r.backend,
+                    "suite_name": r.suite_name,
+                    "tasks_total": r.tasks_total,
+                    "tasks_completed": r.tasks_completed,
+                    "overlapping_write_pairs": r.overlapping_write_pairs,
+                    "out_of_bounds_write_count": r.out_of_bounds_write_count,
+                    "blocked_invalid_write_count": r.blocked_invalid_write_count,
+                    "tokens_prompt_total": r.tokens_prompt_total,
+                    "tokens_orchestrator_overhead": r.tokens_orchestrator_overhead,
+                }
+                for r in report.runs
+            ],
+            "tasks": {
+                tid: {
+                    "task_id": t.task_id,
+                    "runs_seen": t.runs_seen,
+                    "predicted_files": sorted(t.predicted_files),
+                    "actual_files_seen": sorted(t.actual_files_seen),
+                    "out_of_bounds_files": t.out_of_bounds_files,
+                    "blocked_events_total": t.blocked_events_total,
+                    "allowed_glob_count": t.allowed_glob_count,
+                    "true_positives": t.true_positives,
+                    "false_positives": t.false_positives,
+                    "false_negatives": t.false_negatives,
+                    "precision": round(t.precision, 4),
+                    "recall": round(t.recall, 4),
+                    "f1": round(t.f1, 4),
+                    "suggestions": suggestions.get(tid, []),
+                }
+                for tid, t in report.tasks.items()
+            },
+            "overall": {
+                "precision": round(report.overall_precision, 4),
+                "recall": round(report.overall_recall, 4),
+                "f1": round(report.overall_f1, 4),
+                "total_blocks": report.total_blocks,
+                "total_oob": report.total_oob,
+            },
+        }
+        json_out.parent.mkdir(parents=True, exist_ok=True)
+        json_out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        _console.print(f"[green]wrote[/] {json_out}")
+
+
 @app.command("mcp")
 def cmd_mcp(
     transport: Annotated[
