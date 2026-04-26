@@ -367,6 +367,69 @@ def test_run_orchestrator_parses_dispatch(lock: AgentLock) -> None:
     assert res.reasoning_content == "(thinking)"
 
 
+def test_banner_includes_env_values(
+    lock: AgentLock,
+    empty_repo_graph: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Setting ACG_LLM_* env vars must surface their values in the stderr banner."""
+    monkeypatch.setenv("ACG_LLM_ENGINE", "llama.cpp")
+    monkeypatch.setenv("ACG_LLM_DTYPE", "Q4_K_M")
+    monkeypatch.setenv("ACG_LLM_PARALLEL", "4")
+    monkeypatch.setenv("ACG_LLM_KV_QUANT", "q8_0")
+    monkeypatch.setenv("ACG_LLM_FLASH_ATTN", "1")
+    monkeypatch.setenv("ACG_WORKER_CONCURRENCY", "2")
+    monkeypatch.setenv("ACG_GRACE_OVERLAP", "1")
+
+    sub = StubRuntimeLLM(
+        replies={tid: json.dumps({"writes": []}) for tid in ["oauth", "settings", "billing", "tests"]}
+    )
+    orch = StubRuntimeLLM()
+    asyncio.run(
+        run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json")
+    )
+
+    err = capsys.readouterr().err
+    assert "engine=llama.cpp" in err
+    assert "dtype=Q4_K_M" in err
+    assert "parallel=4" in err
+    assert "kv-quant=q8_0" in err
+    assert "flash-attn=True" in err
+    assert "worker-concurrency=2" in err
+    assert "grace-overlap=True" in err
+
+
+def test_banner_falls_back_to_unknown(
+    lock: AgentLock,
+    empty_repo_graph: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Without ACG_LLM_* env vars the banner must show ``unknown`` defaults."""
+    for var in [
+        "ACG_LLM_ENGINE",
+        "ACG_LLM_DTYPE",
+        "ACG_LLM_KV_QUANT",
+        "ACG_LLM_FLASH_ATTN",
+        "ACG_LLM_PARALLEL",
+    ]:
+        monkeypatch.delenv(var, raising=False)
+
+    sub = StubRuntimeLLM(
+        replies={tid: json.dumps({"writes": []}) for tid in ["oauth", "settings", "billing", "tests"]}
+    )
+    orch = StubRuntimeLLM()
+    asyncio.run(
+        run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json")
+    )
+
+    err = capsys.readouterr().err
+    assert "engine=unknown" in err
+    assert "dtype=unknown" in err
+    assert "kv-quant=unknown" in err
+
+
 def test_run_worker_handles_directory_predicted_write(
     lock: AgentLock, empty_repo_graph: dict[str, object]
 ) -> None:
