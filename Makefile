@@ -1,4 +1,4 @@
-.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse eval-greenhouse-mock eval-greenhouse-local eval-greenhouse-devin-manual eval-greenhouse-devin-api eval-greenhouse-report mcp-serve cascade-hook-test
+.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse eval-greenhouse-mock eval-greenhouse-local eval-greenhouse-devin-manual eval-greenhouse-devin-api eval-greenhouse-tight-mock eval-greenhouse-report mcp-serve cascade-hook-test
 
 # Override these on the command line if your ASUS hostname / port differ:
 #   make compile-gemma GEMMA_HOST=100.x.y.z GEMMA_PORT=8080
@@ -150,6 +150,20 @@ eval-greenhouse-devin-manual: compile-greenhouse
 	  --backend devin-manual --strategy acg_planned \
 	  --devin-results $(DEVIN_RESULTS_ACG) \
 	  --out experiments/greenhouse/runs/eval_run_devin_acg.json
+
+# Tightened-scope eval: hand-edited lockfile with allowed_paths shrunk to
+# the exact ground-truth files. The mock LockfileEchoMockLLM still echoes
+# the original predicted_writes (which are wider than the ground truth),
+# so the validator visibly fires and ``blocked_write_events`` is non-empty
+# — the negative-control fixture the v2 megaplan calls for.
+eval-greenhouse-tight-mock: setup-greenhouse
+	./.venv/bin/python -m experiments.greenhouse.headtohead \
+	  --lock experiments/greenhouse/agent_lock_tight.json \
+	  --tasks experiments/greenhouse/tasks.json \
+	  --repo experiments/greenhouse/checkout \
+	  --backend mock \
+	  --strategy both \
+	  --out-dir experiments/greenhouse/runs/tight
 
 # Render the markdown table + PNG chart for whatever eval_run files exist.
 eval-greenhouse-report:

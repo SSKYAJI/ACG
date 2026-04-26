@@ -154,10 +154,10 @@ def _append_entity(entities: list[str], entity: str, *, stopwords: set[str]) -> 
 def _extract_entity_nouns(prompt: str) -> list[str]:
     """Pull up to four one-word domain nouns out of a test-task prompt.
 
-    >>> _extract_entity_noun("Write end-to-end Playwright tests for the checkout flow.")
-    'checkout'
-    >>> _extract_entity_noun("Add unit tests for the auth helper.")
-    'auth'
+    >>> _extract_entity_nouns("Write end-to-end Playwright tests for the checkout flow.")
+    ['checkout']
+    >>> _extract_entity_nouns("Add unit tests for the auth helper.")
+    ['auth']
     """
     entities: list[str] = []
     for pattern in (_ENTITY_AFTER_TESTS_RE, _ENTITY_BEFORE_ROLE_RE):

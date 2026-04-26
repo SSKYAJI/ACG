@@ -19,19 +19,20 @@ A pre-flight, DAG-shaped disjointness compiler for multi-agent code agents, expo
 
 > **"Anthropic says agents should talk. Cognition says they shouldn't. We say: if the lockfile proves writes are disjoint, they don't need to."**
 
-Sub-thesis (when more time): *ACG closes the static-analysis gap CodeCRDT (Oct 2025) named as future work, and ships the file-lock primitive OpenCode users requested in Issue #4278 (Nov 2025), as a Cognition-native MCP server.*
+Sub-thesis (when more time): _ACG closes the static-analysis gap CodeCRDT (Oct 2025) named as future work, and ships the file-lock primitive OpenCode users requested in Issue #4278 (Nov 2025), as a Cognition-native MCP server._
 
 ---
 
 ## 3. Evidence base — the three smoking guns
 
-| Source | Quote / Fact | Why it matters |
-|---|---|---|
-| **CodeCRDT paper (arXiv:2510.18893, Oct 2025)** | *"Future work should use static analysis (data-flow graphs, shared variable access patterns) for objective coupling measurement."* Reports 5–10% semantic conflicts that CRDT cannot resolve. | We are explicitly building the future-work paragraph from a 6-month-old paper. Clean academic positioning. |
-| **OpenCode Issue #4278 (Nov 2025, closed "completed" but unimplemented)** | *"Multiple OpenCode clients and/or agents don't stomp on each other's changes… Running multiple agents/tools in parallel that all use OpenCode can easily end up overwriting each other's changes."* | Real users asking for our exact thing in writing on a Cognition-affiliated repo. Demand is documented. |
-| **Cognition docs + Walden Yan (Jason Liu blog, Sep 2025)** | Devin Manage Devins coordinator "resolves conflicts" with **zero documented mechanism**. Yan: *"With any agentic system, lots of actions carry these implicit decisions… you almost always have to make sure this decision is shared with everyone else, or else you might just get these conflicting decisions."* | The pain is acknowledged at the highest level; the fix is not. We ship the fix. |
+| Source                                                                    | Quote / Fact                                                                                                                                                                                                                                                                                                       | Why it matters                                                                                             |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| **CodeCRDT paper (arXiv:2510.18893, Oct 2025)**                           | _"Future work should use static analysis (data-flow graphs, shared variable access patterns) for objective coupling measurement."_ Reports 5–10% semantic conflicts that CRDT cannot resolve.                                                                                                                      | We are explicitly building the future-work paragraph from a 6-month-old paper. Clean academic positioning. |
+| **OpenCode Issue #4278 (Nov 2025, closed "completed" but unimplemented)** | _"Multiple OpenCode clients and/or agents don't stomp on each other's changes… Running multiple agents/tools in parallel that all use OpenCode can easily end up overwriting each other's changes."_                                                                                                               | Real users asking for our exact thing in writing on a Cognition-affiliated repo. Demand is documented.     |
+| **Cognition docs + Walden Yan (Jason Liu blog, Sep 2025)**                | Devin Manage Devins coordinator "resolves conflicts" with **zero documented mechanism**. Yan: _"With any agentic system, lots of actions carry these implicit decisions… you almost always have to make sure this decision is shared with everyone else, or else you might just get these conflicting decisions."_ | The pain is acknowledged at the highest level; the fix is not. We ship the fix.                            |
 
 **Supporting (not lead) evidence:**
+
 - Cognition engineer's verbal pain: 9-agent Java upgrade migrations create cascading dependent PRs requiring manual approval. Public evidence is thin — treat as field validation, not headline.
 - Agint (arXiv:2511.19635, Nov 2025) — runtime DAG compiler for SE agents. Adjacent but distinct: theirs runs DAGs, ours statically verifies disjointness before dispatch.
 
@@ -41,12 +42,12 @@ Sub-thesis (when more time): *ACG closes the static-analysis gap CodeCRDT (Oct 2
 
 ### Primary: Cognition track
 
-| | Value |
-|---|---|
-| 1st | $3,000 + 1,000 ACUs + Windsurf Pro 1yr + eng convo |
-| 2nd | $2,000 + 1,000 ACUs + Windsurf Pro 1yr + eng convo |
-| 3rd | $1,000 + 1,000 ACUs + Windsurf Pro 1yr + eng convo |
-| Honorable Mention | Cognition Swag Pack |
+|                   | Value                                              |
+| ----------------- | -------------------------------------------------- |
+| 1st               | $3,000 + 1,000 ACUs + Windsurf Pro 1yr + eng convo |
+| 2nd               | $2,000 + 1,000 ACUs + Windsurf Pro 1yr + eng convo |
+| 3rd               | $1,000 + 1,000 ACUs + Windsurf Pro 1yr + eng convo |
+| Honorable Mention | Cognition Swag Pack                                |
 
 **Submission requirements:** Devpost page, public GitHub repo, **2–3 minute demo video** (recorded, not live), project description naming the track. No mandatory Devin/Windsurf use clause. No license requirement.
 
@@ -117,6 +118,7 @@ For a typical migration:
 The lockfile becomes a **single committable plan for the entire migration**, not a sequence of human-approved PRs. Devin Manage Devins reads it, fans out within each stage, blocks between stages, and only requests human review at the explicit checkpoints we declare in the lockfile.
 
 This is the differentiation against:
+
 - **CodeCRDT** — runtime, character-level, no static planning
 - **Agint** — runtime DAG generation; we statically verify a human-supplied or LLM-generated DAG before any agent runs
 - **OpenCode locks** — per-file advisory; no task graph, no serial reasoning
@@ -189,6 +191,7 @@ This is the differentiation against:
 ```
 
 **MCP tool surface (final):**
+
 - `analyze_repo(path)` → graph summary + hotspots
 - `predict_writes(task, graph)` → predicted file set + confidence
 - `compile_lockfile(repo, tasks)` → `agent_lock.json` DAG
@@ -198,11 +201,11 @@ This is the differentiation against:
 
 ## 8. Demo target split
 
-| Purpose | Repo | Tasks | Sessions |
-|---|---|---|---|
-| **Primary benchmark (the money chart)** | Medium Next.js + Prisma starter | 5 hand-picked tasks (2 parallel-safe, 2 densely coupled, 1 borderline) | 5 × 3 modes = 15 Devin sessions |
-| **Showcase narrative (Issue #4278)** | OpenCode (anomalyco/opencode) | 1–2 tasks aligned with the file-locks issue (e.g., "add per-file lock subsystem") | 3–5 sessions |
-| **Total Devin spend** | | | ~18–20 sessions |
+| Purpose                                 | Repo                            | Tasks                                                                             | Sessions                        |
+| --------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------- | ------------------------------- |
+| **Primary benchmark (the money chart)** | Medium Next.js + Prisma starter | 5 hand-picked tasks (2 parallel-safe, 2 densely coupled, 1 borderline)            | 5 × 3 modes = 15 Devin sessions |
+| **Showcase narrative (Issue #4278)**    | OpenCode (anomalyco/opencode)   | 1–2 tasks aligned with the file-locks issue (e.g., "add per-file lock subsystem") | 3–5 sessions                    |
+| **Total Devin spend**                   |                                 |                                                                                   | ~18–20 sessions                 |
 
 Estimated ACU spend: ~100–250 ACUs depending on task size. Within sponsor credit budget.
 
@@ -212,16 +215,16 @@ Estimated ACU spend: ~100–250 ACUs depending on task size. Within sponsor cred
 
 ## 9. Risk register with kill-criteria
 
-| Risk | Likelihood | Impact | Mitigation | Kill-criteria (when to pivot) |
-|---|---|---|---|---|
-| Merge-tax delta is small (<2×) on chosen repo | Medium | High | Run hour-3 pilot on 1 task before full harness | If pilot shows <1.5× delta, switch repo or reframe to "reviewable artifact" angle |
-| Tree-sitter graph is too thin (misses dynamic imports, DI, config coupling) | High | Medium | Be honest in honesty box; static + LLM re-rank for prediction | Acknowledge in demo; do not overclaim "proves disjointness" |
-| Devin session wall-clock exceeds budget (15 sessions × 30 min = 7.5 hr) | High | Medium | Start sessions hour 6–8 in parallel, not sequentially | If at hour 18 we have <6 completed sessions, cut to n=3 and label as preliminary |
-| Cascade `pre_write_code` hook doesn't behave as docs suggest | Medium | Medium | Validate hook with dummy script in hour 1 | If hook is non-functional, ship audit-only enforcement (post-hoc validator) |
-| Task→file prediction LLM is unreliable | Medium | High | Hand-label predicted file sets; report precision/recall openly | If precision < 0.7, gate on user confirmation rather than full automation |
-| Agentverse adapter fails to wrap our MCP | Low | Low | Build with FastMCP from day one; only Agentverse-specific shim is `uagents-adapter` | Skip Agentverse submission; no project impact |
-| OpenCode showcase task fails entirely | Medium | Low | Showcase is narrative-only; primary benchmark is on Next.js | Drop showcase if not working by hour 28; lead with Next.js numbers |
-| Judges interpret as "yet another multi-agent" | Medium | High | Lead-pitch language is "we make multi-agent unnecessary by proving disjointness"; never say "team," "swarm," "coordinator" | Refine pitch script before demo recording |
+| Risk                                                                        | Likelihood | Impact | Mitigation                                                                                                                 | Kill-criteria (when to pivot)                                                     |
+| --------------------------------------------------------------------------- | ---------- | ------ | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Merge-tax delta is small (<2×) on chosen repo                               | Medium     | High   | Run hour-3 pilot on 1 task before full harness                                                                             | If pilot shows <1.5× delta, switch repo or reframe to "reviewable artifact" angle |
+| Tree-sitter graph is too thin (misses dynamic imports, DI, config coupling) | High       | Medium | Be honest in honesty box; static + LLM re-rank for prediction                                                              | Acknowledge in demo; do not overclaim "proves disjointness"                       |
+| Devin session wall-clock exceeds budget (15 sessions × 30 min = 7.5 hr)     | High       | Medium | Start sessions hour 6–8 in parallel, not sequentially                                                                      | If at hour 18 we have <6 completed sessions, cut to n=3 and label as preliminary  |
+| Cascade `pre_write_code` hook doesn't behave as docs suggest                | Medium     | Medium | Validate hook with dummy script in hour 1                                                                                  | If hook is non-functional, ship audit-only enforcement (post-hoc validator)       |
+| Task→file prediction LLM is unreliable                                      | Medium     | High   | Hand-label predicted file sets; report precision/recall openly                                                             | If precision < 0.7, gate on user confirmation rather than full automation         |
+| Agentverse adapter fails to wrap our MCP                                    | Low        | Low    | Build with FastMCP from day one; only Agentverse-specific shim is `uagents-adapter`                                        | Skip Agentverse submission; no project impact                                     |
+| OpenCode showcase task fails entirely                                       | Medium     | Low    | Showcase is narrative-only; primary benchmark is on Next.js                                                                | Drop showcase if not working by hour 28; lead with Next.js numbers                |
+| Judges interpret as "yet another multi-agent"                               | Medium     | High   | Lead-pitch language is "we make multi-agent unnecessary by proving disjointness"; never say "team," "swarm," "coordinator" | Refine pitch script before demo recording                                         |
 
 ---
 
@@ -266,18 +269,18 @@ Estimated ACU spend: ~100–250 ACUs depending on task size. Within sponsor cred
 
 ## 11. Decision gates
 
-| Hour | Gate | Pass criteria | Fail action |
-|---|---|---|---|
-| **H+1** | Cascade `pre_write_code` hook validates | Hook fires on dummy script, blocks/allows correctly | Drop runtime enforcement; ship audit-only validator |
-| **H+3** | Pilot merge-tax measurement | Single vs naive shows ≥2× delta on 1 task on Next.js starter | Switch repo or reframe pitch to "reviewable artifact" before building harness |
-| **H+8** | Tree-sitter graph + write-set predictor working | Generates correct write-set for ≥3 of 5 hand-labeled tasks | Cut graph builder; use LLM-only prediction with caveats |
-| **H+12** | First lockfile generated | `agent_lock.json` produces valid DAG with both parallel and serial edges | Drop DAG, ship flat lockfile only |
-| **H+16** | First end-to-end Devin session run via harness | Token counts and ACU spend recorded | Drop comparison, ship lockfile-only with theoretical chart |
-| **H+24** | All 15 primary benchmark sessions complete | Chart populated with real data | Cut to n=3, label "preliminary" |
-| **H+28** | OpenCode showcase task complete | At least 1 Issue #4278-aligned task shows correct DAG | Drop showcase from video, mention only in Devpost |
-| **H+30** | Frontend deployed, README complete | Public URLs all live | Cut frontend; submit just GitHub + Devpost |
-| **H+32** | Demo video recorded | 2–3 min cut, all 6 segments present | Re-record only the failing segment |
-| **H+35** | Final Devpost submission | All assets uploaded, dual-submission decided | Submit Cognition only, skip Agentverse |
+| Hour     | Gate                                            | Pass criteria                                                            | Fail action                                                                   |
+| -------- | ----------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| **H+1**  | Cascade `pre_write_code` hook validates         | Hook fires on dummy script, blocks/allows correctly                      | Drop runtime enforcement; ship audit-only validator                           |
+| **H+3**  | Pilot merge-tax measurement                     | Single vs naive shows ≥2× delta on 1 task on Next.js starter             | Switch repo or reframe pitch to "reviewable artifact" before building harness |
+| **H+8**  | Tree-sitter graph + write-set predictor working | Generates correct write-set for ≥3 of 5 hand-labeled tasks               | Cut graph builder; use LLM-only prediction with caveats                       |
+| **H+12** | First lockfile generated                        | `agent_lock.json` produces valid DAG with both parallel and serial edges | Drop DAG, ship flat lockfile only                                             |
+| **H+16** | First end-to-end Devin session run via harness  | Token counts and ACU spend recorded                                      | Drop comparison, ship lockfile-only with theoretical chart                    |
+| **H+24** | All 15 primary benchmark sessions complete      | Chart populated with real data                                           | Cut to n=3, label "preliminary"                                               |
+| **H+28** | OpenCode showcase task complete                 | At least 1 Issue #4278-aligned task shows correct DAG                    | Drop showcase from video, mention only in Devpost                             |
+| **H+30** | Frontend deployed, README complete              | Public URLs all live                                                     | Cut frontend; submit just GitHub + Devpost                                    |
+| **H+32** | Demo video recorded                             | 2–3 min cut, all 6 segments present                                      | Re-record only the failing segment                                            |
+| **H+35** | Final Devpost submission                        | All assets uploaded, dual-submission decided                             | Submit Cognition only, skip Agentverse                                        |
 
 ---
 
@@ -291,7 +294,7 @@ These statements appear verbatim in Devpost, README, and demo video:
 4. **Cascade hook enforcement is Windsurf-specific.** Devin sessions are validated post-hoc, not pre-empted at write time.
 5. **Task→file prediction precision/recall are reported openly** on the hand-labeled set.
 6. **The merge-tax metric is novel and self-defined.** We argue it matters; we don't claim industry consensus.
-7. **CodeCRDT, Agint, LangGraph, OpenCode locks are cited as related work.** We do not claim to be the first to think about multi-agent coordination — only the first to ship pre-flight static disjointness as an MCP-exposed lockfile.
+7. **CodeCRDT, Agint, LangGraph, OpenCode locks are cited as related work.** We do not claim to be the first to think about multi-agent coordination; ACG's contribution is a pre-flight static disjointness lockfile exposed through CLI/MCP surfaces.
 
 ---
 
@@ -299,7 +302,7 @@ These statements appear verbatim in Devpost, README, and demo video:
 
 Cognition rubric: **Product Value | Engineering Quality | Process | Bonus**
 
-- **Product Value:** Closes a documented gap (Issue #4278), implements named future work (CodeCRDT), addresses a Walden-acknowledged problem. Real ACU savings demonstrated empirically. Real users asking for it in writing.
+- **Product Value:** Closes a documented gap (Issue #4278), moves toward CodeCRDT's static-analysis / semantic-conflict-detection future-work direction, addresses a Walden-acknowledged problem. Live Devin smoke tests and real ACU telemetry are captured; ACU savings are not claimed.
 - **Engineering Quality:** Static graph + LLM re-rank with reported precision/recall; DAG solver with topological sort; MCP server with 4 clean tools; Cascade hook with documented exit codes; honest limitations documented.
 - **Process:** Use ACG to plan our own build (dogfooding). Tag every Devin session as `acg-self-build`. Show the self-build lockfile in the demo. Devpost includes a "We used Devin and Windsurf to build this" section enumerating which Devin sessions did what.
 - **Bonus (Devin/Windsurf value):** Direct answer. Devin Manage Devins is the consumer of our MCP. Windsurf Cascade is the runtime enforcer via hooks. Codemaps is a graph fallback input. We use the entire Cognition stack on its own terms.

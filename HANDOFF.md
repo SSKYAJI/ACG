@@ -52,7 +52,7 @@ make viz                  # opens http://localhost:5174
 
 ## Test surface
 
-- 97 tests, all green (`./.venv/bin/python -m pytest tests/ -q`)
+- 178 tests, all green (`./.venv/bin/python -m pytest tests/ -q`)
 - Lint clean (`./.venv/bin/ruff check acg/ tests/ benchmark/`)
 - Viz typecheck clean (`cd viz && npx tsc --noEmit`)
 

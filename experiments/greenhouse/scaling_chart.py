@@ -1,21 +1,15 @@
-"""Scaling extrapolation chart — when does ACG win on total tokens?
+"""Scaling extrapolation chart for worker prompt-token savings.
 
-ACG's planned strategy carries a fixed orchestrator overhead (one thinking
-pass per run) and saves per-task tokens by scoping each worker's repo
-context to its lockfile ``allowed_paths``. We measured both numbers
-empirically on two codebases:
-
-* Greenhouse (Java, Spring repo, broad scopes):  ~80 tokens/task saved,
-  ~1240 tokens orchestrator overhead.
-* demo-app (TypeScript, T3 stack, narrow scopes): ~96 tokens/task saved,
-  ~880 tokens orchestrator overhead.
-
-Breakeven N (where planned ties naive on total tokens) is
-``orchestrator_overhead / per_task_savings``. Beyond that, planned wins.
+Both real strategies normally have a lead/coordinator that assigns work to
+agents. ACG should not be charged for a second ACG-only thinking pass by
+default; its unique contribution is the static lockfile schedule and scoped
+worker context. This chart therefore compares worker prompts directly, while
+still honoring any optional ``tokens_orchestrator_overhead`` present in older
+or plan-review artifacts.
 
 This script reads ``eval_run_combined.json`` artifacts for each codebase,
-computes the per-task delta and the orchestrator overhead, and produces a
-PNG showing total tokens vs N for both strategies side-by-side.
+computes the per-task delta plus any optional review overhead, and produces
+a PNG showing worker prompt tokens vs N for both strategies side-by-side.
 
 Run::
 
@@ -53,6 +47,8 @@ class CodebasePoint:
 
     @property
     def breakeven_n(self) -> float:
+        if self.orchestrator_overhead <= 0:
+            return 0.0
         if self.per_task_savings <= 0:
             return float("inf")
         return self.orchestrator_overhead / self.per_task_savings
@@ -106,15 +102,14 @@ def render_chart(points: list[CodebasePoint], out_path: Path, *, max_n: int = 40
         ax.set_title(
             f"{point.label}\n"
             f"per-task save: {point.per_task_savings:.0f} tok | "
-            f"orch overhead: {point.orchestrator_overhead:.0f} tok"
+            f"extra review: {point.orchestrator_overhead:.0f} tok"
         )
         ax.set_xlabel("Number of tasks (N)")
         ax.set_ylabel("Total prompt tokens")
         ax.legend(loc="upper left")
         ax.grid(alpha=0.25)
     fig.suptitle(
-        "ACG planned vs naive: total prompt tokens scale linearly; orchestrator "
-        "overhead is one-time fixed",
+        "ACG planned vs naive: worker prompt tokens; shared main coordinator excluded",
         fontsize=11,
     )
     fig.tight_layout(rect=(0, 0, 1, 0.95))
@@ -163,10 +158,15 @@ def main(argv: list[str] | None = None) -> int:
     render_chart(points, args.out, max_n=args.max_n)
 
     for p in points:
+        win_text = (
+            "worker-token win=immediate"
+            if p.orchestrator_overhead <= 0
+            else f"breakeven N={p.breakeven_n:5.1f}"
+        )
         print(
             f"  {p.label:>18s}: naive {p.naive_per_task:6.1f} tok/task | "
-            f"planned {p.planned_per_task:6.1f} tok/task + {p.orchestrator_overhead:5.0f} orch | "
-            f"breakeven N={p.breakeven_n:5.1f}"
+            f"planned {p.planned_per_task:6.1f} tok/task + {p.orchestrator_overhead:5.0f} review | "
+            f"{win_text}"
         )
     print(f"wrote {args.out}")
     return 0

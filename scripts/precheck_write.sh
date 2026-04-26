@@ -23,17 +23,24 @@ set -euo pipefail
 WRITE_PATH="${1:-}"
 
 # When invoked by Cascade, the file path arrives via JSON on stdin.
-# Parse it out without taking a dependency on jq/python — the hook
-# runs on every write and Python startup alone would blow the Cascade
-# timeout budget on cold disks.
+# Prefer ``jq`` when it's on PATH (handles escaped quotes, nested objects,
+# and array tool_info correctly); fall back to a sed regex when it's not
+# (which is fragile on file paths containing escaped quotes — see the
+# ``precheck_write.sh stdin parser`` line in docs/CASCADE_INTEGRATION.md).
+# Avoid python here: cold-start eats the Cascade hook timeout budget.
 if [[ -z "${WRITE_PATH}" && ! -t 0 ]]; then
   STDIN_PAYLOAD="$(cat)"
   if [[ -n "${STDIN_PAYLOAD}" ]]; then
-    WRITE_PATH="$(
-      printf '%s' "${STDIN_PAYLOAD}" \
-        | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-        | head -n1
-    )"
+    if command -v jq >/dev/null 2>&1; then
+      WRITE_PATH="$(printf '%s' "${STDIN_PAYLOAD}" | jq -r '.tool_info.file_path // empty' 2>/dev/null)"
+    fi
+    if [[ -z "${WRITE_PATH}" ]]; then
+      WRITE_PATH="$(
+        printf '%s' "${STDIN_PAYLOAD}" \
+          | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+          | head -n1
+      )"
+    fi
   fi
 fi
 

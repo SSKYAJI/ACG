@@ -123,6 +123,13 @@ class EvalRepo:
 
 
 @dataclass
+class EvalModel:
+    provider: str | None = None
+    model: str | None = None
+    url: str | None = None
+
+
+@dataclass
 class SummaryMetrics:
     tasks_total: int = 0
     tasks_completed: int = 0
@@ -148,9 +155,9 @@ class SummaryMetrics:
     # Sum of per-task ``tokens_completion`` (real output tokens reported by
     # the OpenAI-compatible ``usage`` block on the local backend).
     tokens_completion_total: int | None = None
-    # Tokens spent on the ACG orchestrator's pre-flight thinking pass.
-    # Only the ``acg_planned`` strategy pays this overhead; ``None`` for
-    # naive_parallel and Devin runs.
+    # Tokens spent on optional LLM coordination / plan-review calls outside
+    # per-task worker prompts. Default local/mock ACG planned execution walks
+    # the compiled lockfile directly, so this is normally ``None``.
     tokens_orchestrator_overhead: int | None = None
 
 
@@ -164,6 +171,7 @@ class EvalRun:
     suite_name: str = SUITE_NAME
     strategy: str = "naive_parallel"
     backend: str = "mock"
+    model: EvalModel = field(default_factory=EvalModel)
     repo: EvalRepo = field(default_factory=EvalRepo)
     lockfile: str = ""
     tasks: list[EvalTask] = field(default_factory=list)
@@ -299,9 +307,8 @@ def compute_summary_metrics(
             ``successful_parallel_speedup`` when supplied and positive.
         merge_conflicts: Count of API/git-reported merge conflicts (caller
             tallies these from backend output).
-        tokens_orchestrator_overhead: Estimated input tokens consumed by the
-            ACG orchestrator's pre-flight thinking pass. Only ``acg_planned``
-            pays this; pass ``None`` for naive runs.
+        tokens_orchestrator_overhead: Estimated input tokens consumed by optional
+            coordination / plan-review calls outside per-task worker prompts.
     """
     total = len(tasks)
     completed = sum(1 for t in tasks if _is_completed(t))
@@ -380,6 +387,7 @@ __all__ = [
     "EvalRepo",
     "EvalRun",
     "EvalTask",
+    "EvalModel",
     "GREENHOUSE_PINNED_COMMIT",
     "GREENHOUSE_REPO_URL",
     "SECONDS_PER_HOUR",

@@ -60,6 +60,7 @@ from typing import Any
 from acg.schema import AgentLock
 
 from .eval_schema import (
+    EvalModel,
     EvalRun,
     EvalTask,
     annotate_overlaps,
@@ -195,6 +196,7 @@ def run_devin_manual(
         created_at=now_iso(),
         strategy=strategy,
         backend="devin-manual",
+        model=EvalModel(provider="devin", model="manual-sidecar"),
         lockfile=lockfile_path,
         tasks=eval_tasks,
         summary_metrics=summary,
@@ -461,11 +463,17 @@ async def _devin_api_run_async(
         wall_time_seconds=overall_wall,
         sequential_wall_time_seconds=sequential_wall_time_seconds,
     )
+    agent = (devin_extra_body or {}).get("agent") or "default"
     return EvalRun(
         run_id=run_id,
         created_at=now_iso(),
         strategy=strategy,
         backend="devin-api",
+        model=EvalModel(
+            provider="devin",
+            model=str(agent),
+            url=getattr(client, "base_url", None),
+        ),
         lockfile=lockfile_path,
         tasks=eval_tasks,
         summary_metrics=summary,

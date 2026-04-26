@@ -9,6 +9,7 @@ A self-contained implementation manual for Agent Context Graph (ACG) that anothe
 You are a fresh Cascade conversation. Build the codebase below in tier order. Do not skip ahead. After each tier, run the acceptance check listed; only proceed if it passes. Code quality matters — judges will read it. Write tests for solver, schema validation, and predictor (with mock LLM).
 
 If anything in this document conflicts with what the user (Shashank) tells you in chat, the user wins. Ask the user when:
+
 - A library version pin in `pyproject.toml` fails to resolve
 - The Windsurf docs disagree with this plan about hook behavior
 - A demo-app starter you pick is not what the user expected
@@ -21,7 +22,7 @@ Do not ask the user about: file naming, formatting choices, test coverage thresh
 
 ACG is a pre-flight compiler for multi-agent code workflows. Input: a code repo + a list of agent tasks in plain English. Output: a committable `agent_lock.json` that declares (a) which files each task is allowed to write, and (b) a DAG of execution groups — tasks with disjoint write-sets are parallelizable; tasks with overlapping write-sets are serialized.
 
-Pitch sentence: *"It's `package-lock.json` for parallel coding agents."*
+Pitch sentence: _"It's `package-lock.json` for parallel coding agents."_
 
 Target sponsor track 1: **Cognition** at LA Hacks 2026 (Devin Manage Devins narrative — the pre-flight artifact the coordinator consumes before fanning out child Devins).
 
@@ -35,22 +36,22 @@ Demo flow (2:40 video): naive parallel agents collide → ACG compile → lockfi
 
 ## Locked decisions
 
-| Decision | Choice | Why |
-|---|---|---|
-| Primary language | Python 3.11+ | CLI, predictor, solver, MCP, benchmark all in Python |
-| Parser tooling | ts-morph (Node) + tree-sitter-python | Polyglot; ts-morph is gold-standard for TS/JS |
-| LLM client | OpenAI-compatible HTTP via httpx | Provider-agnostic; works with Groq, vLLM, Anthropic |
-| LLM dev provider | Groq free tier (Llama 3.3-70B Versatile) | No credits needed; ~250 tok/s |
-| LLM demo provider | vLLM on ASUS GX10 (Llama 3.3-70B Q4) | ASUS narrative; ~25-40 tok/s; same client code |
-| CLI framework | Typer | Type-hinted, modern, terse |
-| Schema models | Pydantic v2 | Strict validation; serde to JSON |
-| DAG ops | networkx | Topological sort, cycle detection, path enumeration |
-| Charts | matplotlib (single file out) | One chart, write to PNG |
-| Tests | pytest | Standard |
-| Lint/format | ruff | Single tool, fast |
-| Cascade hook | Out of v1 (separate stretch plan) | Risk too high for critical path |
-| Frontend | None in v1 | Single PNG chart is enough |
-| MCP server | Tier 7, stretch | Build CLI first, wrap last |
+| Decision          | Choice                                   | Why                                                  |
+| ----------------- | ---------------------------------------- | ---------------------------------------------------- |
+| Primary language  | Python 3.11+                             | CLI, predictor, solver, MCP, benchmark all in Python |
+| Parser tooling    | ts-morph (Node) + tree-sitter-python     | Polyglot; ts-morph is gold-standard for TS/JS        |
+| LLM client        | OpenAI-compatible HTTP via httpx         | Provider-agnostic; works with Groq, vLLM, Anthropic  |
+| LLM dev provider  | Groq free tier (Llama 3.3-70B Versatile) | No credits needed; ~250 tok/s                        |
+| LLM demo provider | vLLM on ASUS GX10 (Llama 3.3-70B Q4)     | ASUS narrative; ~25-40 tok/s; same client code       |
+| CLI framework     | Typer                                    | Type-hinted, modern, terse                           |
+| Schema models     | Pydantic v2                              | Strict validation; serde to JSON                     |
+| DAG ops           | networkx                                 | Topological sort, cycle detection, path enumeration  |
+| Charts            | matplotlib (single file out)             | One chart, write to PNG                              |
+| Tests             | pytest                                   | Standard                                             |
+| Lint/format       | ruff                                     | Single tool, fast                                    |
+| Cascade hook      | Out of v1 (separate stretch plan)        | Risk too high for critical path                      |
+| Frontend          | None in v1                               | Single PNG chart is enough                           |
+| MCP server        | Tier 7, stretch                          | Build CLI first, wrap last                           |
 
 ---
 
@@ -229,7 +230,13 @@ cognition/
   "$defs": {
     "Task": {
       "type": "object",
-      "required": ["id", "prompt", "predicted_writes", "allowed_paths", "depends_on"],
+      "required": [
+        "id",
+        "prompt",
+        "predicted_writes",
+        "allowed_paths",
+        "depends_on"
+      ],
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z0-9_-]+$" },
         "prompt": { "type": "string" },
@@ -375,6 +382,7 @@ Build the lockfile for the `tasks.example.json` above. Required structure:
 ### Tier 1 acceptance gate
 
 Run:
+
 ```bash
 python -c "import json, jsonschema; \
   schema = json.load(open('schema/agent_lock.schema.json')); \
@@ -404,6 +412,7 @@ __version__ = "0.1.0"
 **Purpose:** Pydantic v2 models that mirror the JSON Schema. Used by every other module.
 
 **Public API:**
+
 - `class TaskInput(BaseModel)` — input task from `tasks.json`
 - `class TasksInput(BaseModel)` — root of `tasks.json`
 - `class PredictedWrite(BaseModel)` — `path: str`, `confidence: float`, `reason: str`
@@ -424,11 +433,13 @@ __version__ = "0.1.0"
 **Purpose:** provider-agnostic OpenAI-compatible client. Reads `ACG_LLM_URL`, `ACG_LLM_MODEL`, `ACG_LLM_API_KEY` from env.
 
 **Public API:**
+
 - `class LLMClient` with `__init__(base_url, model, api_key, timeout)`
 - `LLMClient.complete(messages: list[dict], response_format: dict | None) -> str`
 - `LLMClient.from_env() -> LLMClient` (factory)
 
 **Implementation notes:**
+
 - Use `httpx.Client` with `timeout=120.0`
 - POST to `{base_url}/chat/completions`
 - Default base_url: `https://api.groq.com/openai/v1`
@@ -446,18 +457,28 @@ __version__ = "0.1.0"
 **Purpose:** given a list of tasks with predicted_writes, build the DAG and emit execution groups. Pure function, no LLM, no IO. Tested rigorously.
 
 **Public API:**
+
 - `def detect_conflicts(tasks: list[Task]) -> list[Conflict]` — returns pairs of tasks with overlapping predicted_writes
 - `def build_dag(tasks: list[Task]) -> nx.DiGraph` — nodes = task IDs, edges = serial dependencies
 - `def topological_groups(dag: nx.DiGraph) -> list[Group]` — group IDs, ordered, with waits_for
 
 **Algorithm:**
+
 1. For each pair of tasks (i, j), compute write-set intersection on `path` field
 2. If non-empty, mark as conflict; add directed edge i → j (alphabetical first) to enforce order
 3. Honor explicit `depends_on` declared by user
 4. Topo-sort the DAG; nodes at the same topological level with no edges between them go in the same parallel group
 5. Each subsequent level becomes a serial group with `waits_for` pointing back to its prerequisite group(s)
 
+> ⚠️ **Superseded.** Step 2's "alphabetical first" rule is **not** what
+> shipped. The shipped solver uses a deterministic conflict-count-then-input-index
+> tie-break to keep lighter-conflict tasks earlier; see
+> `acg/solver.py:14-19` for the live rule and
+> `docs/ARCHITECTURE.md:113-124` for the rationale. This megaplan section
+> is kept as historical record.
+
 **Acceptance:** `tests/test_solver.py` covers:
+
 - 2 disjoint tasks → 1 parallel group
 - 4 tasks per the dag.example → 3 groups in known order
 - A cycle in declared depends_on → raises `ValueError("cycle detected")`
@@ -470,9 +491,11 @@ __version__ = "0.1.0"
 **Purpose:** given a repo graph (from `graph_builder/scan.ts` JSON output) + a task prompt, predict which files the task will write.
 
 **Public API:**
+
 - `def predict_writes(task: TaskInput, repo_graph: dict, llm: LLMClient) -> list[PredictedWrite]`
 
 **Implementation:**
+
 1. **Static seed:** scan task prompt for explicit file mentions (regex `[\w/]+\.(ts|tsx|js|jsx|py|prisma|sql|md|json)`). Add as confidence 0.95.
 2. **Symbol seed:** scan task prompt for symbol names (camelCase tokens >5 chars). Look up in `repo_graph.symbols` → file. Add as confidence 0.85.
 3. **Topical seed:** for each task hint (`auth`, `billing`, etc.), find files with matching path components or content keywords. Add as confidence 0.7.
@@ -510,9 +533,11 @@ Output JSON only, no prose.
 **Purpose:** orchestrate predictor + solver into a full lockfile.
 
 **Public API:**
+
 - `def compile_lockfile(repo_path: Path, tasks_input: TasksInput, repo_graph: dict, llm: LLMClient) -> AgentLock`
 
 **Steps:**
+
 1. For each task, call `predict_writes(task, repo_graph, llm)`
 2. Convert `predicted_writes` into `allowed_paths` glob list (path → glob via parent dir wildcards if confidence ≥ 0.7; exact path otherwise)
 3. Call `solver.detect_conflicts(tasks)`
@@ -529,10 +554,12 @@ Output JSON only, no prose.
 **Purpose:** terminal-friendly DAG visualization. ASCII art, no graphviz dependency.
 
 **Public API:**
+
 - `def render_dag(lock: AgentLock) -> str` — ASCII tree
 - `def render_summary(lock: AgentLock) -> str` — bullet list of groups, conflicts, key tasks
 
 **Output sample (target):**
+
 ```
 Execution plan:
   Group 1 (parallel): oauth, settings
@@ -558,10 +585,12 @@ ASCII DAG:
 **Purpose:** the demo's enforcement layer. Wraps a write attempt, validates against the lockfile.
 
 **Public API:**
+
 - `def validate_write(lock: AgentLock, task_id: str, write_path: str) -> tuple[bool, str | None]` — returns (allowed, reason_if_blocked)
 - `def cli_validate(lockfile_path, task_id, write_path) -> int` — CLI exit-code wrapper (0 = allowed, 2 = blocked)
 
 **Algorithm:**
+
 1. Find task by id; raise if not found
 2. Match `write_path` against any glob in `task.allowed_paths` (use `pathlib.PurePath.match` or `fnmatch`)
 3. If matched: return (True, None)
@@ -576,9 +605,11 @@ ASCII DAG:
 **Purpose:** the benchmark chart. Reads two JSON result files, writes a PNG.
 
 **Public API:**
+
 - `def build_chart(naive_path, planned_path, out_path) -> None`
 
 **Chart contents (5 grouped bar pairs):**
+
 - Overlapping writes
 - Blocked bad writes
 - Manual merge steps
@@ -586,6 +617,7 @@ ASCII DAG:
 - Wall time (minutes)
 
 **Style:**
+
 - matplotlib, no seaborn
 - Title: "Agent coordination tax — naive vs ACG-planned"
 - X-axis: metrics
@@ -602,6 +634,7 @@ ASCII DAG:
 **Purpose:** the Typer CLI. All commands route to functions in other modules.
 
 **Commands:**
+
 - `acg compile --repo PATH --tasks FILE --out FILE` → calls compiler
 - `acg explain --lock FILE` → calls explain
 - `acg validate-write --lock FILE --task ID --path PATH [--quiet]` → calls enforce
@@ -609,6 +642,7 @@ ASCII DAG:
 - `acg run-benchmark --mode {naive,planned} --repo PATH --tasks FILE --out FILE` → calls benchmark.runner
 
 **Style:**
+
 - Typer with type hints
 - Rich for stylized output (color, but auto-disable when `--quiet` or non-tty)
 - Each command has a 1-line `help=` string
@@ -654,6 +688,7 @@ All commands succeed; all tests pass. Do not proceed to Tier 3 until this passes
 **Purpose:** scan a TS/JS repo with ts-morph, output a JSON graph that the predictor consumes.
 
 **Behavior:**
+
 - Reads `--repo PATH --out PATH.json` from argv
 - Uses `Project` from ts-morph to load all `.ts`, `.tsx`, `.js`, `.jsx` files (skip `node_modules`, `.next`, `dist`)
 - For each source file: collect `imports[]`, `exports[]`, `default_export` symbol, top-level declarations
@@ -731,14 +766,17 @@ acg validate-write --lock agent_lock.json --task settings --path components/side
 **Purpose:** simulate (or actually run, if Devin/Aider available) the two execution modes and emit a JSON metrics file.
 
 **Public API (called via `acg run-benchmark`):**
+
 - `def run_naive(repo_path, tasks_input) -> dict` — simulates parallel agents writing without coordination; counts overlaps, blocked writes, etc.
 - `def run_planned(repo_path, lockfile_path) -> dict` — simulates serialized execution per the lockfile; counts the same metrics
 
 **Simulation strategy (v1, no real agents):**
+
 - For naive: assume each task writes its predicted_writes; count overlap pairs, count "manual merge steps" as overlap-pairs-times-2, "tests passing first run" = false (because last task likely sees broken state), wall time = max(individual durations) + overlap penalty
 - For planned: same files written, but in DAG order; "manual merge steps" = 0; "tests passing first run" = true; wall time = sum of group max durations
 
 **Metric output JSON:**
+
 ```json
 {
   "mode": "naive",
@@ -779,6 +817,7 @@ PNG exists, has 5 metric pairs, planned-mode shows clearly fewer conflicts. Numb
 **Purpose:** wrap the CLI commands as MCP tools so Devin/Claude Code/Cursor can call ACG natively.
 
 **Tools exposed:**
+
 - `analyze_repo(path: str) -> dict` — calls graph_builder, returns graph summary + hotspots
 - `predict_writes(task: dict, repo_graph: dict) -> list[dict]` — calls predictor
 - `compile_lockfile(repo: str, tasks: dict) -> dict` — calls compiler, returns AgentLock as dict

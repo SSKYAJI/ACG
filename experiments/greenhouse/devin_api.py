@@ -34,6 +34,7 @@ import asyncio
 import json
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -408,7 +409,7 @@ class DevinClient:
         *,
         poll_interval_s: float = DEFAULT_POLL_INTERVAL_S,
         max_wait_s: float = DEFAULT_MAX_WAIT_S,
-        on_poll: callable | None = None,
+        on_poll: Callable[[DevinSessionDetail], None] | None = None,
     ) -> DevinSessionDetail:
         """Poll ``get_session`` until the session reaches a terminal state.
 

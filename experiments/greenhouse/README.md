@@ -43,14 +43,14 @@ make setup-greenhouse compile-greenhouse
 Three refactor tasks, each replacing an anonymous-inner-class with a
 Java 8 lambda:
 
-- `lambda-event-comparator` — `Comparator<Event>` → `Comparator.comparing(...)`
-- `lambda-rowmapper-account` — `RowMapper<Account>` → lambda
+- `lambda-rowmapper-account` — `RowMapper<PasswordProtectedAccount>` → lambda
 - `lambda-rowmapper-invite` — `RowMapper<Invite>` → lambda
+- `lambda-rowmapper-app` — four `RowMapper` inner classes in `JdbcAppRepository.java` → lambdas
 
-Each task carries `"config"` in `hints.touches` so the topical seed picks
-up `DatabaseConfig.java` alongside the per-task service file. The solver
-should detect the shared file overlap and serialize at least one task
-behind the others, while leaving the remaining tasks parallelizable.
+Each task carries `"pom.xml"` in `hints.touches` so the topical seed picks
+up the shared build file alongside the per-task service file. The solver
+detects the `pom.xml` overlap across all three tasks and serializes them,
+producing three serial groups in the lockfile.
 
 The lockfile's `predicted_writes` should contain at least the per-service
 file plus `DatabaseConfig.java` for each task, matching the predictor's
@@ -138,6 +138,10 @@ count toward `summary_metrics.tasks_completed`.
   surfaces 3 overlap pairs and ACG always serializes them. Add tasks
   that modernize independent surfaces (see the megaplan candidate list)
   only after the core artifact pipeline is stable.
-- `devin-api` is a stub. Fill `devin_adapter.devin_api_run()` once
-  endpoint/auth are confirmed; until then, capture sessions manually and
-  feed them through `--backend devin-manual`.
+- `devin-api` is **live**. Implementation in
+  `experiments/greenhouse/devin_api.py` + `devin_adapter.py` against the
+  v3 organization-scoped surface, exercised by `tests/test_devin_api.py`
+  (17 cases). 6 live Devin PRs from `make eval-greenhouse-devin-api` are
+  cited in `RESULTS.md` and `docs/COGNITION_INTEGRATION.md`. The manual
+  sidecar path remains available as a fallback when API quota is
+  exhausted.

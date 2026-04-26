@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import os
-import pickle
+import pickle  # noqa: S403  TODO(security): replace with numpy.savez(allow_pickle=False)
 import re
 import time
 from dataclasses import dataclass
@@ -171,10 +171,19 @@ class EmbeddingsIndexer:
         return self._model
 
     def _signature(self, documents: list[_Document]) -> str:
+        # Hash path + full document text (already in memory from
+        # ``_build_documents``) so that equal-length content edits — variable
+        # renames, swapped lines, equal-length string-literal swaps — invalidate
+        # the cache. Previously the signature only included ``len(doc.text)``,
+        # which silently reused stale vectors after refactor-only edits and
+        # could violate the PR7 acceptance gate (Δrecall@5 ≥ 0).
         digest = hashlib.sha256()
         digest.update(self._model_name.encode())
         for doc in documents:
-            digest.update(f"{doc.path}:{len(doc.text)}\n".encode())
+            digest.update(doc.path.encode())
+            digest.update(b"\x00")
+            digest.update(doc.text.encode())
+            digest.update(b"\n")
         return digest.hexdigest()[:24]
 
     def _cache_path(self, repo_root: Path | None, signature: str) -> Path | None:

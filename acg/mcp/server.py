@@ -95,7 +95,7 @@ def build_server() -> FastMCP:
         """
         repo = Path(repo_path).resolve()
         tasks_input = TasksInput.model_validate(tasks)
-        graph = scan_context_graph(repo, language)
+        graph = load_context_graph(repo) or scan_context_graph(repo, language)
         llm = LLMClient.from_env()
         lock = _compile_lockfile(repo, tasks_input, graph, llm)
         return lock.model_dump(mode="json")

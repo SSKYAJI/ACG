@@ -24,13 +24,13 @@ from acg.runtime import (
     RuntimeLLM,
     RuntimeLLMProtocol,
     WorkerResult,
-    run_orchestrator,
     run_worker,
 )
 from acg.schema import AgentLock, Task
 
 from .eval_schema import (
     BlockedWriteEvent,
+    EvalModel,
     EvalRun,
     EvalTask,
     annotate_overlaps,
@@ -68,8 +68,8 @@ def _extract_task_id(messages: list[dict[str, str]]) -> str | None:
     """Recover the worker's task id from a ``Task id: <id>`` line in the prompt.
 
     Mirrors the line :func:`acg.runtime._build_worker_prompt` always emits.
-    Returns ``None`` for orchestrator prompts (which lack the marker), so the
-    caller can attribute their tokens to overhead instead of any single task.
+    Returns ``None`` for non-worker prompts, so the caller can attribute their
+    tokens to shared coordination/review overhead instead of any single task.
     """
     for m in messages:
         content = m.get("content", "") or ""
@@ -115,8 +115,8 @@ class _PromptCountingLLM:
     counts and convert to a token estimate via :func:`estimate_prompt_tokens`.
     The estimate is attributed to a task id when the prompt contains the
     ``Task id:`` marker (always emitted by :func:`acg.runtime._build_worker_prompt`),
-    otherwise it lands in :attr:`orchestrator_tokens` so we can report the
-    pre-flight thinking-pass overhead separately.
+    otherwise it lands in :attr:`orchestrator_tokens` for optional plan-review
+    or shared coordination calls.
 
     The wrapper is a pure observer — it never mutates the prompt or the
     inner LLM's reply, so behavior on either backend is unchanged.
@@ -307,12 +307,33 @@ def _proposals_to_planned_eval_task(
 # ---------------------------------------------------------------------------
 
 
+async def _gather_capped(
+    coros: list, cap_parallelism: int | None
+) -> list:
+    """asyncio.gather variant that bounds in-flight concurrency to ``cap``.
+
+    ``cap_parallelism`` of ``None`` or ``<= 0`` is treated as "uncapped" and
+    falls through to a plain :func:`asyncio.gather` so existing call-sites
+    keep their original semantics.
+    """
+    if cap_parallelism is None or cap_parallelism <= 0:
+        return await asyncio.gather(*coros)
+    sem = asyncio.Semaphore(cap_parallelism)
+
+    async def _bounded(coro):
+        async with sem:
+            return await coro
+
+    return await asyncio.gather(*[_bounded(c) for c in coros])
+
+
 async def _run_naive_parallel(
     lock: AgentLock,
     repo_graph: dict[str, Any],
     sub_factory: Callable[[], RuntimeLLMProtocol],
     *,
     prompts_by_task: dict[str, str] | None = None,
+    cap_parallelism: int | None = None,
 ) -> tuple[list[EvalTask], float]:
     """Fan all lockfile tasks out concurrently with no coordination.
 
@@ -330,11 +351,12 @@ async def _run_naive_parallel(
     started = now_iso()
     t0 = time.perf_counter()
     try:
-        worker_results = await asyncio.gather(
-            *[
+        worker_results = await _gather_capped(
+            [
                 run_worker(task, lock, repo_graph, counting_sub, group_id=0)
                 for task in lock.tasks
-            ]
+            ],
+            cap_parallelism,
         )
     finally:
         await counting_sub.aclose()
@@ -366,33 +388,30 @@ async def _run_naive_parallel(
 async def _run_acg_planned(
     lock: AgentLock,
     repo_graph: dict[str, Any],
-    orch_factory: Callable[[], RuntimeLLMProtocol],
     sub_factory: Callable[[], RuntimeLLMProtocol],
     *,
     lockfile_path: str,
     prompts_by_task: dict[str, str] | None = None,
-) -> tuple[list[EvalTask], float, int]:
+    cap_parallelism: int | None = None,
+) -> tuple[list[EvalTask], float]:
     """Walk ``execution_plan.groups`` with per-task scoped repo graphs.
 
     Replaces a previous :func:`acg.runtime.run_lockfile` call so we can
     inject a different ``repo_graph`` per worker invocation — the planned
     strategy's value is precisely that each worker only sees files inside
-    its task's ``allowed_paths``. The orchestrator's pre-flight thinking
-    pass still runs (matching ``run_lockfile`` semantics) and its tokens
-    are returned separately so the caller can surface them as planning
-    overhead in :class:`SummaryMetrics.tokens_orchestrator_overhead`.
+    its task's ``allowed_paths``. A normal lead/coordinator exists for both
+    naive and planned strategies; this runner does not charge ACG for a
+    second LLM plan-review pass by default.
 
     ``lockfile_path`` is accepted for signature parity with previous
     callers; the lockfile object is the source of truth so the path is
     only used in narrative output upstream.
 
-    Returns ``(tasks, wall_time_seconds, orchestrator_tokens_estimated)``.
+    Returns ``(tasks, wall_time_seconds)``.
     """
     del lockfile_path  # narrative-only; the AgentLock object IS the contract
 
-    orch_inner = orch_factory()
     sub_inner = sub_factory()
-    counting_orch = _PromptCountingLLM(orch_inner)
     counting_sub = _PromptCountingLLM(sub_inner)
 
     tasks_by_id = {t.id: t for t in lock.tasks}
@@ -400,17 +419,14 @@ async def _run_acg_planned(
     started = now_iso()
     t0 = time.perf_counter()
     try:
-        # Pre-flight thinking pass (planned strategy's planning overhead).
-        await run_orchestrator(lock, counting_orch)
-
         # Walk execution_plan groups in dispatch order, dispatching every
         # task in a group concurrently with its own scoped repo graph.
         for group in sorted(lock.execution_plan.groups, key=lambda g: g.id):
             group_tasks = [tasks_by_id[tid] for tid in group.tasks if tid in tasks_by_id]
             if not group_tasks:
                 continue
-            results = await asyncio.gather(
-                *[
+            results = await _gather_capped(
+                [
                     run_worker(
                         t,
                         lock,
@@ -419,11 +435,11 @@ async def _run_acg_planned(
                         group.id,
                     )
                     for t in group_tasks
-                ]
+                ],
+                cap_parallelism,
             )
             worker_results.extend(results)
     finally:
-        await counting_orch.aclose()
         await counting_sub.aclose()
     wall_s = time.perf_counter() - t0
     finished = now_iso()
@@ -442,7 +458,7 @@ async def _run_acg_planned(
         et.metrics.tokens_prompt = counting_sub.tokens_by_task.get(wr.task_id)
         tasks.append(et)
     annotate_overlaps(tasks)
-    return tasks, wall_s, counting_orch.orchestrator_tokens
+    return tasks, wall_s
 
 
 # ---------------------------------------------------------------------------
@@ -450,39 +466,19 @@ async def _run_acg_planned(
 # ---------------------------------------------------------------------------
 
 
-def _mock_factories(
-    lock: AgentLock,
-) -> tuple[
-    Callable[[], RuntimeLLMProtocol],
-    Callable[[], RuntimeLLMProtocol],
-]:
-    """Build (orchestrator, worker) factories for the mock backend."""
-
-    def orch_factory() -> RuntimeLLMProtocol:
-        return LockfileEchoMockLLM(lock, role="orchestrator")
-
+def _mock_factory(lock: AgentLock) -> tuple[Callable[[], RuntimeLLMProtocol], EvalModel]:
+    """Build a worker factory for the mock backend."""
     def sub_factory() -> RuntimeLLMProtocol:
         return LockfileEchoMockLLM(lock, role="worker")
 
-    return orch_factory, sub_factory
+    return sub_factory, EvalModel(provider="mock", model="lockfile-echo", url="mock://local")
 
 
-def _local_factories() -> tuple[
-    Callable[[], RuntimeLLMProtocol],
-    Callable[[], RuntimeLLMProtocol],
-]:
-    """Build live :class:`RuntimeLLM` factories from ``ACG_*`` env vars."""
+def _local_factory() -> tuple[Callable[[], RuntimeLLMProtocol], EvalModel]:
+    """Build a live :class:`RuntimeLLM` worker factory from ``ACG_*`` env vars."""
     from acg.runtime import RuntimeConfig
 
     cfg = RuntimeConfig.from_env()
-
-    def orch_factory() -> RuntimeLLMProtocol:
-        return RuntimeLLM(
-            cfg.orch_url,
-            cfg.orch_model,
-            cfg.orch_api_key,
-            timeout=cfg.request_timeout_s,
-        )
 
     def sub_factory() -> RuntimeLLMProtocol:
         return RuntimeLLM(
@@ -492,7 +488,11 @@ def _local_factories() -> tuple[
             timeout=cfg.request_timeout_s,
         )
 
-    return orch_factory, sub_factory
+    return sub_factory, EvalModel(
+        provider="openai-compatible",
+        model=cfg.sub_model,
+        url=cfg.sub_url,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -509,6 +509,7 @@ def run_strategy(
     lockfile_path: str,
     prompts_by_task: dict[str, str] | None = None,
     sequential_wall_time_seconds: float | None = None,
+    cap_parallelism: int | None = None,
 ) -> EvalRun:
     """Execute one (strategy, backend) pair and return the populated :class:`EvalRun`.
 
@@ -526,9 +527,9 @@ def run_strategy(
         )
 
     if backend == "mock":
-        orch_factory, sub_factory = _mock_factories(lock)
+        sub_factory, model = _mock_factory(lock)
     else:
-        orch_factory, sub_factory = _local_factories()
+        sub_factory, model = _local_factory()
 
     orch_overhead: int | None
     if strategy == "naive_parallel":
@@ -538,21 +539,22 @@ def run_strategy(
                 repo_graph,
                 sub_factory,
                 prompts_by_task=prompts_by_task,
+                cap_parallelism=cap_parallelism,
             )
         )
         orch_overhead = None
     else:
-        tasks, wall_s, orch_tokens = asyncio.run(
+        tasks, wall_s = asyncio.run(
             _run_acg_planned(
                 lock,
                 repo_graph,
-                orch_factory,
                 sub_factory,
                 lockfile_path=lockfile_path,
                 prompts_by_task=prompts_by_task,
+                cap_parallelism=cap_parallelism,
             )
         )
-        orch_overhead = orch_tokens or None
+        orch_overhead = None
 
     summary = compute_summary_metrics(
         tasks,
@@ -565,6 +567,7 @@ def run_strategy(
         created_at=now_iso(),
         strategy=strategy,
         backend=backend,
+        model=model,
         lockfile=lockfile_path,
         tasks=tasks,
         summary_metrics=summary,

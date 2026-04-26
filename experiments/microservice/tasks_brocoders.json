@@ -1,0 +1,54 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "products-domain",
+      "prompt": "Add a products domain to the NestJS API. Create src/products/products.module.ts, src/products/products.controller.ts, src/products/products.service.ts, src/products/domain/product.ts, src/products/dto/create-product.dto.ts, src/products/dto/update-product.dto.ts, src/products/infrastructure/persistence/product.repository.ts, src/products/infrastructure/persistence/relational/entities/product.entity.ts, and src/products/infrastructure/persistence/relational/repositories/product.repository.ts. Register ProductsModule in src/app.module.ts and add a TypeORM migration under src/database/migrations.",
+      "hints": {
+        "touches": ["products", "app.module", "migration", "typeorm"]
+      }
+    },
+    {
+      "id": "api-key-auth",
+      "prompt": "Add API key authentication for service-to-service requests. Create src/auth-api-key/auth-api-key.module.ts, src/auth-api-key/auth-api-key.guard.ts, src/auth-api-key/auth-api-key.service.ts, src/auth-api-key/config/api-key.config.ts, and src/auth-api-key/config/api-key-config.type.ts. Register the config in src/app.module.ts and document API_KEY in .env.example.",
+      "hints": {
+        "touches": ["auth-api-key", "app.module", "config", "env"]
+      }
+    },
+    {
+      "id": "users-search",
+      "prompt": "Add search and email-domain filtering to the users list endpoint. Update src/users/users.controller.ts, src/users/users.service.ts, src/users/dto/query-user.dto.ts, and src/users/infrastructure/persistence/relational/repositories/user.repository.ts. Do not change app.module.ts.",
+      "hints": {
+        "touches": ["users", "query-user", "user.repository", "search"]
+      }
+    },
+    {
+      "id": "files-e2e-tests",
+      "prompt": "Add e2e coverage for file upload configuration and authorization. Create test/files.e2e-spec.ts and update test/jest-e2e.json only if needed. Do not touch src/app.module.ts or database files.",
+      "hints": {
+        "touches": ["files", "test", "e2e", "jest"]
+      }
+    },
+    {
+      "id": "registration-email-job",
+      "prompt": "Add a Bull-backed background job for post-registration emails. Create src/jobs/jobs.module.ts, src/jobs/registration-email.processor.ts, and src/jobs/registration-email.service.ts. Wire it into src/auth/auth.service.ts and src/mail/mail.module.ts, register JobsModule in src/app.module.ts, and document REDIS_URL in .env.example and docker-compose.yml.",
+      "hints": {
+        "touches": ["jobs", "bull", "auth", "mail", "app.module", "redis", "env", "docker-compose"]
+      }
+    },
+    {
+      "id": "notifications-webhook",
+      "prompt": "Add a notifications webhook endpoint. Create src/notifications/notifications.module.ts, src/notifications/notifications.controller.ts, src/notifications/notifications.service.ts, and src/notifications/dto/notification-webhook.dto.ts. Register NotificationsModule in src/app.module.ts. Do not change users or files modules.",
+      "hints": {
+        "touches": ["notifications", "webhook", "app.module"]
+      }
+    },
+    {
+      "id": "deployment-config",
+      "prompt": "Harden local deployment configuration. Update .env.example, docker-compose.yml, src/config/app.config.ts, src/config/app-config.type.ts, src/database/config/database.config.ts, and src/database/config/database-config.type.ts with REDIS_URL, API_KEY, and HEALTHCHECK_TIMEOUT_MS settings. Do not change feature controllers.",
+      "hints": {
+        "touches": ["env", "docker-compose", "config", "database config", "redis", "api key"]
+      }
+    }
+  ]
+}

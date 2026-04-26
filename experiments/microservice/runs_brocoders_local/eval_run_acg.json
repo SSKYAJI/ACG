@@ -1,0 +1,454 @@
+{
+  "backend": "local",
+  "created_at": "2026-04-26T08:50:50Z",
+  "lockfile": "experiments/microservice/agent_lock_brocoders.json",
+  "model": {
+    "model": "gemma",
+    "provider": "openai-compatible",
+    "url": "http://gx10-f2c9:8080/v1"
+  },
+  "repo": {
+    "commit": "174c1c320875a66447deb2a15d04fc86afd07f60",
+    "local_path": "experiments/greenhouse/checkout",
+    "url": "https://github.com/spring-attic/greenhouse.git"
+  },
+  "run_id": "greenhouse-local-acg_planned-20260426-085050",
+  "strategy": "acg_planned",
+  "suite_name": "greenhouse-java6-modernization",
+  "summary_metrics": {
+    "acus_consumed_total": null,
+    "blocked_invalid_write_count": 0,
+    "first_run_pass_rate": 0.0,
+    "human_interventions": 0,
+    "merge_conflicts": 0,
+    "out_of_bounds_write_count": 0,
+    "overlapping_write_pairs": 0,
+    "successful_parallel_speedup": null,
+    "task_completion_rate": 1.0,
+    "tasks_completed": 7,
+    "tasks_completed_per_hour": 338.3911,
+    "tasks_total": 7,
+    "tokens_completion_total": 4775,
+    "tokens_orchestrator_overhead": null,
+    "tokens_prompt_total": 1700,
+    "wall_time_seconds": 74.47
+  },
+  "tasks": [
+    {
+      "actual_changed_files": [],
+      "allowed_write_globs": [
+        "commitlint.config.js",
+        "docker-compose.yml",
+        "src/config/app-config.type.ts",
+        "src/config/app.config.ts",
+        "src/database/config/**",
+        "src/roles/domain/**",
+        "src/statuses/domain/**"
+      ],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 700,
+        "tokens_prompt": 224,
+        "wall_time_seconds": 22.5426
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "predicted_write_files": [
+        "src/database/config/database-config.type.ts",
+        "src/roles/domain/role.ts",
+        "src/statuses/domain/status.ts",
+        "docker-compose.yml",
+        "src/config/app-config.type.ts",
+        "src/config/app.config.ts",
+        "src/database/config/database.config.ts",
+        "commitlint.config.js"
+      ],
+      "prompt": "Harden local deployment configuration. Update .env.example, docker-compose.yml, src/config/app.config.ts, src/config/app-config.type.ts, src/database/config/database.config.ts, and src/database/config/database-config.type.ts with REDIS_URL, API_KEY, and HEALTHCHECK_TIMEOUT_MS settings. Do not change feature controllers.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "deployment-config",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-04-26T08:50:50Z",
+        "started_at": "2026-04-26T08:49:35Z"
+      }
+    },
+    {
+      "actual_changed_files": [],
+      "allowed_write_globs": [
+        "src/app.module.ts",
+        "src/database/migrations/**",
+        "src/files/infrastructure/persistence/relational/**",
+        "src/products/domain/**",
+        "src/products/dto/**",
+        "src/products/infrastructure/persistence/**",
+        "src/session/infrastructure/persistence/relational/**"
+      ],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 700,
+        "tokens_prompt": 417,
+        "wall_time_seconds": 22.5417
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "predicted_write_files": [
+        "src/database/migrations/1715028537217-CreateUser.ts",
+        "src/files/infrastructure/persistence/relational/relational-persistence.module.ts",
+        "src/session/infrastructure/persistence/relational/relational-persistence.module.ts",
+        "src/app.module.ts",
+        "src/products/domain/product.ts",
+        "src/products/dto/create-product.dto.ts",
+        "src/products/dto/update-product.dto.ts",
+        "src/products/infrastructure/persistence/product.repository.ts"
+      ],
+      "prompt": "Add a products domain to the NestJS API. Create src/products/products.module.ts, src/products/products.controller.ts, src/products/products.service.ts, src/products/domain/product.ts, src/products/dto/create-product.dto.ts, src/products/dto/update-product.dto.ts, src/products/infrastructure/persistence/product.repository.ts, src/products/infrastructure/persistence/relational/entities/product.entity.ts, and src/products/infrastructure/persistence/relational/repositories/product.repository.ts. Register ProductsModule in src/app.module.ts and add a TypeORM migration under src/database/migrations.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "products-domain",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-04-26T08:50:50Z",
+        "started_at": "2026-04-26T08:49:35Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "src/users/dto/query-user.dto.ts",
+        "src/users/infrastructure/persistence/relational/repositories/user.repository.ts",
+        "src/users/users.controller.ts",
+        "src/users/users.service.ts"
+      ],
+      "allowed_write_globs": [
+        "app.module.ts",
+        "src/users/domain/**",
+        "src/users/dto/**",
+        "src/users/infrastructure/persistence/document/repositories/**",
+        "src/users/infrastructure/persistence/relational/repositories/**",
+        "src/users/users.controller.ts",
+        "src/users/users.service.ts"
+      ],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 575,
+        "tokens_prompt": 251,
+        "wall_time_seconds": 17.1152
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "predicted_write_files": [
+        "src/users/infrastructure/persistence/relational/repositories/user.repository.ts",
+        "src/users/infrastructure/persistence/document/repositories/user.repository.ts",
+        "src/users/users.controller.ts",
+        "app.module.ts",
+        "src/users/dto/query-user.dto.ts",
+        "src/users/users.service.ts",
+        "src/users/domain/user.ts",
+        "src/users/dto/create-user.dto.ts"
+      ],
+      "prompt": "Add search and email-domain filtering to the users list endpoint. Update src/users/users.controller.ts, src/users/users.service.ts, src/users/dto/query-user.dto.ts, and src/users/infrastructure/persistence/relational/repositories/user.repository.ts. Do not change app.module.ts.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "users-search",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-04-26T08:50:50Z",
+        "started_at": "2026-04-26T08:49:35Z"
+      }
+    },
+    {
+      "actual_changed_files": [],
+      "allowed_write_globs": [
+        "src/app.module.ts",
+        "src/auth-api-key/auth-api-key.guard.ts",
+        "src/auth-api-key/auth-api-key.module.ts",
+        "src/auth-api-key/auth-api-key.service.ts",
+        "src/auth-api-key/config/**",
+        "src/auth-apple/auth-apple.controller.ts",
+        "src/auth-apple/dto/**",
+        "src/auth-facebook/auth-facebook.controller.ts"
+      ],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 700,
+        "tokens_prompt": 213,
+        "wall_time_seconds": 13.0929
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "predicted_write_files": [
+        "src/auth-apple/auth-apple.controller.ts",
+        "src/auth-apple/dto/auth-apple-login.dto.ts",
+        "src/auth-facebook/auth-facebook.controller.ts",
+        "src/app.module.ts",
+        "src/auth-api-key/auth-api-key.guard.ts",
+        "src/auth-api-key/auth-api-key.module.ts",
+        "src/auth-api-key/auth-api-key.service.ts",
+        "src/auth-api-key/config/api-key-config.type.ts"
+      ],
+      "prompt": "Add API key authentication for service-to-service requests. Create src/auth-api-key/auth-api-key.module.ts, src/auth-api-key/auth-api-key.guard.ts, src/auth-api-key/auth-api-key.service.ts, src/auth-api-key/config/api-key.config.ts, and src/auth-api-key/config/api-key-config.type.ts. Register the config in src/app.module.ts and document API_KEY in .env.example.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "api-key-auth",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-04-26T08:50:50Z",
+        "started_at": "2026-04-26T08:49:35Z"
+      }
+    },
+    {
+      "actual_changed_files": [],
+      "allowed_write_globs": [
+        "__tests__/authorization.test.ts",
+        "__tests__/configuration.test.ts",
+        "src/app.module.ts",
+        "test/admin/auth.e2e-spec.ts",
+        "test/admin/users.e2e-spec.ts",
+        "test/files.e2e-spec.ts",
+        "test/jest-e2e.js",
+        "test/user/auth.e2e-spec.ts"
+      ],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 700,
+        "tokens_prompt": 160,
+        "wall_time_seconds": 12.8876
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "predicted_write_files": [
+        "test/admin/auth.e2e-spec.ts",
+        "test/user/auth.e2e-spec.ts",
+        "test/admin/users.e2e-spec.ts",
+        "src/app.module.ts",
+        "test/files.e2e-spec.ts",
+        "test/jest-e2e.js",
+        "__tests__/authorization.test.ts",
+        "__tests__/configuration.test.ts"
+      ],
+      "prompt": "Add e2e coverage for file upload configuration and authorization. Create test/files.e2e-spec.ts and update test/jest-e2e.json only if needed. Do not touch src/app.module.ts or database files.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "files-e2e-tests",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-04-26T08:50:50Z",
+        "started_at": "2026-04-26T08:49:35Z"
+      }
+    },
+    {
+      "actual_changed_files": [],
+      "allowed_write_globs": [
+        "docker-compose.yml",
+        "src/app.module.ts",
+        "src/auth/auth.service.ts",
+        "src/jobs/jobs.module.ts",
+        "src/jobs/registration-email.processor.ts",
+        "src/jobs/registration-email.service.ts",
+        "src/mail/mail.module.ts",
+        "test/utils/constants.ts"
+      ],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 700,
+        "tokens_prompt": 199,
+        "wall_time_seconds": 12.993
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "predicted_write_files": [
+        "test/utils/constants.ts",
+        "src/mail/mail.module.ts",
+        "src/app.module.ts",
+        "docker-compose.yml",
+        "src/auth/auth.service.ts",
+        "src/jobs/jobs.module.ts",
+        "src/jobs/registration-email.processor.ts",
+        "src/jobs/registration-email.service.ts"
+      ],
+      "prompt": "Add a Bull-backed background job for post-registration emails. Create src/jobs/jobs.module.ts, src/jobs/registration-email.processor.ts, and src/jobs/registration-email.service.ts. Wire it into src/auth/auth.service.ts and src/mail/mail.module.ts, register JobsModule in src/app.module.ts, and document REDIS_URL in .env.example and docker-compose.yml.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "registration-email-job",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-04-26T08:50:50Z",
+        "started_at": "2026-04-26T08:49:35Z"
+      }
+    },
+    {
+      "actual_changed_files": [],
+      "allowed_write_globs": [
+        "src/app.module.ts",
+        "src/database/seeds/document/**",
+        "src/home/home.module.ts",
+        "src/notifications/dto/**",
+        "src/notifications/notifications.controller.ts",
+        "src/notifications/notifications.module.ts",
+        "src/notifications/notifications.service.ts",
+        "src/users/users.module.ts"
+      ],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 700,
+        "tokens_prompt": 236,
+        "wall_time_seconds": 12.9422
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "predicted_write_files": [
+        "src/users/users.module.ts",
+        "src/database/seeds/document/seed.module.ts",
+        "src/home/home.module.ts",
+        "src/app.module.ts",
+        "src/notifications/dto/notification-webhook.dto.ts",
+        "src/notifications/notifications.controller.ts",
+        "src/notifications/notifications.module.ts",
+        "src/notifications/notifications.service.ts"
+      ],
+      "prompt": "Add a notifications webhook endpoint. Create src/notifications/notifications.module.ts, src/notifications/notifications.controller.ts, src/notifications/notifications.service.ts, and src/notifications/dto/notification-webhook.dto.ts. Register NotificationsModule in src/app.module.ts. Do not change users or files modules.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "notifications-webhook",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-04-26T08:50:50Z",
+        "started_at": "2026-04-26T08:49:35Z"
+      }
+    }
+  ],
+  "version": "0.1"
+}

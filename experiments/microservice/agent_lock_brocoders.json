@@ -1,0 +1,595 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-04-26T04:53:14.094217Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "mock-llm-canned"
+  },
+  "repo": {
+    "root": "experiments/microservice/nestjs-boilerplate",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "products-domain",
+      "prompt": "Add a products domain to the NestJS API. Create src/products/products.module.ts, src/products/products.controller.ts, src/products/products.service.ts, src/products/domain/product.ts, src/products/dto/create-product.dto.ts, src/products/dto/update-product.dto.ts, src/products/infrastructure/persistence/product.repository.ts, src/products/infrastructure/persistence/relational/entities/product.entity.ts, and src/products/infrastructure/persistence/relational/repositories/product.repository.ts. Register ProductsModule in src/app.module.ts and add a TypeORM migration under src/database/migrations.",
+      "predicted_writes": [
+        {
+          "path": "src/database/migrations/1715028537217-CreateUser.ts",
+          "confidence": 0.9999999999866518,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 64.33)."
+        },
+        {
+          "path": "src/files/infrastructure/persistence/relational/relational-persistence.module.ts",
+          "confidence": 0.9999999999293329,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 60.17)."
+        },
+        {
+          "path": "src/session/infrastructure/persistence/relational/relational-persistence.module.ts",
+          "confidence": 0.9999999999293329,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 60.17)."
+        },
+        {
+          "path": "src/app.module.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/products/domain/product.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/products/dto/create-product.dto.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/products/dto/update-product.dto.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/products/infrastructure/persistence/product.repository.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        }
+      ],
+      "allowed_paths": [
+        "src/app.module.ts",
+        "src/database/migrations/**",
+        "src/files/infrastructure/persistence/relational/**",
+        "src/products/domain/**",
+        "src/products/dto/**",
+        "src/products/infrastructure/persistence/**",
+        "src/session/infrastructure/persistence/relational/**"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    },
+    {
+      "id": "api-key-auth",
+      "prompt": "Add API key authentication for service-to-service requests. Create src/auth-api-key/auth-api-key.module.ts, src/auth-api-key/auth-api-key.guard.ts, src/auth-api-key/auth-api-key.service.ts, src/auth-api-key/config/api-key.config.ts, and src/auth-api-key/config/api-key-config.type.ts. Register the config in src/app.module.ts and document API_KEY in .env.example.",
+      "predicted_writes": [
+        {
+          "path": "src/auth-apple/auth-apple.controller.ts",
+          "confidence": 1.0,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 98.55)."
+        },
+        {
+          "path": "src/auth-apple/dto/auth-apple-login.dto.ts",
+          "confidence": 1.0,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 102.89)."
+        },
+        {
+          "path": "src/auth-facebook/auth-facebook.controller.ts",
+          "confidence": 1.0,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 98.55)."
+        },
+        {
+          "path": "src/app.module.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/auth-api-key/auth-api-key.guard.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/auth-api-key/auth-api-key.module.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/auth-api-key/auth-api-key.service.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/auth-api-key/config/api-key-config.type.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        }
+      ],
+      "allowed_paths": [
+        "src/app.module.ts",
+        "src/auth-api-key/auth-api-key.guard.ts",
+        "src/auth-api-key/auth-api-key.module.ts",
+        "src/auth-api-key/auth-api-key.service.ts",
+        "src/auth-api-key/config/**",
+        "src/auth-apple/auth-apple.controller.ts",
+        "src/auth-apple/dto/**",
+        "src/auth-facebook/auth-facebook.controller.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 2,
+      "rationale": null
+    },
+    {
+      "id": "users-search",
+      "prompt": "Add search and email-domain filtering to the users list endpoint. Update src/users/users.controller.ts, src/users/users.service.ts, src/users/dto/query-user.dto.ts, and src/users/infrastructure/persistence/relational/repositories/user.repository.ts. Do not change app.module.ts.",
+      "predicted_writes": [
+        {
+          "path": "src/users/infrastructure/persistence/relational/repositories/user.repository.ts",
+          "confidence": 0.9999999996060251,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 55.87)."
+        },
+        {
+          "path": "src/users/infrastructure/persistence/document/repositories/user.repository.ts",
+          "confidence": 0.9999999994063018,
+          "reason": "personalized PageRank rank #8, top symbol matches: UsersDocumentRepository, createdUser, findByEmail.; BM25 lexical match over path, identifiers, imports, docstrings (score 54.84)."
+        },
+        {
+          "path": "src/users/users.controller.ts",
+          "confidence": 0.999999999299865,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 54.43)."
+        },
+        {
+          "path": "app.module.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/users/dto/query-user.dto.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/users/users.service.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/users/domain/user.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'users' matches path component."
+        },
+        {
+          "path": "src/users/dto/create-user.dto.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'users' matches path component."
+        }
+      ],
+      "allowed_paths": [
+        "app.module.ts",
+        "src/users/domain/**",
+        "src/users/dto/**",
+        "src/users/infrastructure/persistence/document/repositories/**",
+        "src/users/infrastructure/persistence/relational/repositories/**",
+        "src/users/users.controller.ts",
+        "src/users/users.service.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    },
+    {
+      "id": "files-e2e-tests",
+      "prompt": "Add e2e coverage for file upload configuration and authorization. Create test/files.e2e-spec.ts and update test/jest-e2e.json only if needed. Do not touch src/app.module.ts or database files.",
+      "predicted_writes": [
+        {
+          "path": "test/admin/auth.e2e-spec.ts",
+          "confidence": 0.9999999983660977,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 52.31)."
+        },
+        {
+          "path": "test/user/auth.e2e-spec.ts",
+          "confidence": 0.9999999982247806,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 52.11)."
+        },
+        {
+          "path": "test/admin/users.e2e-spec.ts",
+          "confidence": 0.9999999432529961,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 43.44)."
+        },
+        {
+          "path": "src/app.module.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "test/files.e2e-spec.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "test/jest-e2e.js",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "__tests__/authorization.test.ts",
+          "confidence": 0.85,
+          "reason": "jest convention: __tests__/ with .test.ts extension, entity 'authorization' from task prompt."
+        },
+        {
+          "path": "__tests__/configuration.test.ts",
+          "confidence": 0.85,
+          "reason": "jest convention: __tests__/ with .test.ts extension, entity 'configuration' from task prompt."
+        }
+      ],
+      "allowed_paths": [
+        "__tests__/authorization.test.ts",
+        "__tests__/configuration.test.ts",
+        "src/app.module.ts",
+        "test/admin/auth.e2e-spec.ts",
+        "test/admin/users.e2e-spec.ts",
+        "test/files.e2e-spec.ts",
+        "test/jest-e2e.js",
+        "test/user/auth.e2e-spec.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 3,
+      "rationale": null
+    },
+    {
+      "id": "registration-email-job",
+      "prompt": "Add a Bull-backed background job for post-registration emails. Create src/jobs/jobs.module.ts, src/jobs/registration-email.processor.ts, and src/jobs/registration-email.service.ts. Wire it into src/auth/auth.service.ts and src/mail/mail.module.ts, register JobsModule in src/app.module.ts, and document REDIS_URL in .env.example and docker-compose.yml.",
+      "predicted_writes": [
+        {
+          "path": "test/utils/constants.ts",
+          "confidence": 0.9999999984452657,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 52.44)."
+        },
+        {
+          "path": "src/mail/mail.module.ts",
+          "confidence": 0.9999999860396676,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 46.95)."
+        },
+        {
+          "path": "src/app.module.ts",
+          "confidence": 0.9999999521052391,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 43.87)."
+        },
+        {
+          "path": "docker-compose.yml",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/auth/auth.service.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/jobs/jobs.module.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/jobs/registration-email.processor.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/jobs/registration-email.service.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        }
+      ],
+      "allowed_paths": [
+        "docker-compose.yml",
+        "src/app.module.ts",
+        "src/auth/auth.service.ts",
+        "src/jobs/jobs.module.ts",
+        "src/jobs/registration-email.processor.ts",
+        "src/jobs/registration-email.service.ts",
+        "src/mail/mail.module.ts",
+        "test/utils/constants.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 4,
+      "rationale": null
+    },
+    {
+      "id": "notifications-webhook",
+      "prompt": "Add a notifications webhook endpoint. Create src/notifications/notifications.module.ts, src/notifications/notifications.controller.ts, src/notifications/notifications.service.ts, and src/notifications/dto/notification-webhook.dto.ts. Register NotificationsModule in src/app.module.ts. Do not change users or files modules.",
+      "predicted_writes": [
+        {
+          "path": "src/users/users.module.ts",
+          "confidence": 0.9999865964786795,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 29.78)."
+        },
+        {
+          "path": "src/database/seeds/document/seed.module.ts",
+          "confidence": 0.9999764970427146,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 28.38)."
+        },
+        {
+          "path": "src/home/home.module.ts",
+          "confidence": 0.9999575675212935,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 26.90)."
+        },
+        {
+          "path": "src/app.module.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/notifications/dto/notification-webhook.dto.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/notifications/notifications.controller.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/notifications/notifications.module.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/notifications/notifications.service.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        }
+      ],
+      "allowed_paths": [
+        "src/app.module.ts",
+        "src/database/seeds/document/**",
+        "src/home/home.module.ts",
+        "src/notifications/dto/**",
+        "src/notifications/notifications.controller.ts",
+        "src/notifications/notifications.module.ts",
+        "src/notifications/notifications.service.ts",
+        "src/users/users.module.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 5,
+      "rationale": null
+    },
+    {
+      "id": "deployment-config",
+      "prompt": "Harden local deployment configuration. Update .env.example, docker-compose.yml, src/config/app.config.ts, src/config/app-config.type.ts, src/database/config/database.config.ts, and src/database/config/database-config.type.ts with REDIS_URL, API_KEY, and HEALTHCHECK_TIMEOUT_MS settings. Do not change feature controllers.",
+      "predicted_writes": [
+        {
+          "path": "src/database/config/database-config.type.ts",
+          "confidence": 0.9999999817162057,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 46.28)."
+        },
+        {
+          "path": "src/roles/domain/role.ts",
+          "confidence": 0.9999999771757534,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 45.72)."
+        },
+        {
+          "path": "src/statuses/domain/status.ts",
+          "confidence": 0.9999999771757534,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 45.72)."
+        },
+        {
+          "path": "docker-compose.yml",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/config/app-config.type.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/config/app.config.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/database/config/database.config.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "commitlint.config.js",
+          "confidence": 0.7,
+          "reason": "Hint 'config' matches path component."
+        }
+      ],
+      "allowed_paths": [
+        "commitlint.config.js",
+        "docker-compose.yml",
+        "src/config/app-config.type.ts",
+        "src/config/app.config.ts",
+        "src/database/config/**",
+        "src/roles/domain/**",
+        "src/statuses/domain/**"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "deployment-config",
+          "products-domain",
+          "users-search"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      },
+      {
+        "id": 2,
+        "tasks": [
+          "api-key-auth"
+        ],
+        "type": "serial",
+        "waits_for": [
+          1
+        ]
+      },
+      {
+        "id": 3,
+        "tasks": [
+          "files-e2e-tests"
+        ],
+        "type": "serial",
+        "waits_for": [
+          2
+        ]
+      },
+      {
+        "id": 4,
+        "tasks": [
+          "registration-email-job"
+        ],
+        "type": "serial",
+        "waits_for": [
+          3
+        ]
+      },
+      {
+        "id": 5,
+        "tasks": [
+          "notifications-webhook"
+        ],
+        "type": "serial",
+        "waits_for": [
+          4
+        ]
+      }
+    ]
+  },
+  "conflicts_detected": [
+    {
+      "files": [
+        "src/app.module.ts"
+      ],
+      "between_tasks": [
+        "products-domain",
+        "api-key-auth"
+      ],
+      "resolution": "Serialize api-key-auth after products-domain; both modify src/app.module.ts"
+    },
+    {
+      "files": [
+        "src/app.module.ts"
+      ],
+      "between_tasks": [
+        "products-domain",
+        "files-e2e-tests"
+      ],
+      "resolution": "Serialize files-e2e-tests after products-domain; both modify src/app.module.ts"
+    },
+    {
+      "files": [
+        "src/app.module.ts"
+      ],
+      "between_tasks": [
+        "products-domain",
+        "registration-email-job"
+      ],
+      "resolution": "Serialize registration-email-job after products-domain; both modify src/app.module.ts"
+    },
+    {
+      "files": [
+        "src/app.module.ts"
+      ],
+      "between_tasks": [
+        "products-domain",
+        "notifications-webhook"
+      ],
+      "resolution": "Serialize notifications-webhook after products-domain; both modify src/app.module.ts"
+    },
+    {
+      "files": [
+        "src/app.module.ts"
+      ],
+      "between_tasks": [
+        "api-key-auth",
+        "files-e2e-tests"
+      ],
+      "resolution": "Serialize files-e2e-tests after api-key-auth; both modify src/app.module.ts"
+    },
+    {
+      "files": [
+        "src/app.module.ts"
+      ],
+      "between_tasks": [
+        "api-key-auth",
+        "registration-email-job"
+      ],
+      "resolution": "Serialize registration-email-job after api-key-auth; both modify src/app.module.ts"
+    },
+    {
+      "files": [
+        "src/app.module.ts"
+      ],
+      "between_tasks": [
+        "api-key-auth",
+        "notifications-webhook"
+      ],
+      "resolution": "Serialize notifications-webhook after api-key-auth; both modify src/app.module.ts"
+    },
+    {
+      "files": [
+        "src/app.module.ts"
+      ],
+      "between_tasks": [
+        "files-e2e-tests",
+        "registration-email-job"
+      ],
+      "resolution": "Serialize registration-email-job after files-e2e-tests; both modify src/app.module.ts"
+    },
+    {
+      "files": [
+        "src/app.module.ts"
+      ],
+      "between_tasks": [
+        "files-e2e-tests",
+        "notifications-webhook"
+      ],
+      "resolution": "Serialize notifications-webhook after files-e2e-tests; both modify src/app.module.ts"
+    },
+    {
+      "files": [
+        "src/app.module.ts"
+      ],
+      "between_tasks": [
+        "notifications-webhook",
+        "registration-email-job"
+      ],
+      "resolution": "Serialize registration-email-job after notifications-webhook; both modify src/app.module.ts"
+    },
+    {
+      "files": [
+        "docker-compose.yml"
+      ],
+      "between_tasks": [
+        "deployment-config",
+        "registration-email-job"
+      ],
+      "resolution": "Serialize registration-email-job after deployment-config; both modify docker-compose.yml"
+    }
+  ]
+}

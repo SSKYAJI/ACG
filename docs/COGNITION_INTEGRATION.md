@@ -6,7 +6,7 @@ Cognition's stated direction is "Devin Manage Devins": a coordinator Devin that 
 
 Three pieces of public evidence shaped this design:
 
-1. **CodeCRDT (arXiv:2510.18893, Oct 2025)** explicitly names static disjointness analysis as future work and reports 5–10% semantic conflicts that runtime CRDTs can't resolve. ACG is that future-work paragraph, shipped as a tool.
+1. **CodeCRDT (arXiv:2510.18893, Oct 2025)** reports that task coupling determines whether parallel agents speed up or slow down, notes that coupling was measured post-hoc, and lists static analysis plus semantic-conflict detection as future work. ACG is a static pre-flight write-contract approach in that direction.
 2. **OpenCode Issue #4278 (Nov 2025)** is real OpenCode users asking for a per-file lock subsystem so multiple agents stop overwriting each other's changes. The issue closed "completed" without an implementation. We supply the missing primitive.
 3. **Walden Yan's interview (jxnl.co, Sep 11 2025)** acknowledges the implicit-decision problem in agentic systems: each action carries a decision, and conflicting decisions corrupt downstream work. ACG makes the write-set decision explicit, reviewable, and committable.
 
@@ -35,7 +35,7 @@ The coordinator reads the lockfile and:
 2. Awaits their completion.
 3. Spawns the children in **group 2** only after group 1 settles.
 4. Repeats per group until the DAG is exhausted.
-5. For every write a child Devin attempts, calls `acg validate_writes(lock, task_id, path)` (post-hoc on Devin sessions, pre-empted on Cascade) to confirm the write is in the task's `allowed_paths`.
+5. For every write a child Devin attempts, calls `acg validate_writes(lock, task_id, path)` post-hoc on Devin PR diffs to confirm the write is in the task's `allowed_paths`.
 
 ## MCP tool surface (shipped)
 
@@ -50,25 +50,25 @@ These mirror the four CLI commands one-to-one. The FastMCP stdio wrapper ships i
 
 ## What we explicitly did **not** build (v1)
 
-- **Cascade `pre_write_code` runtime hook.** Deferred to a separate stretch plan; v1 ships the validator as a CLI exit-code contract that the hook can `subprocess` straight into.
+- **Provider-native pre-emption for Devin.** Devin sessions are validated post-hoc from PR diffs. The Cascade hook script can pre-empt writes in Windsurf once registered, but Devin itself is not pre-empted at write time.
 - **CRDT runtime layer.** CodeCRDT covers character-level merge resolution. We cite it; we do not duplicate it.
-- **Live Devin sessions in the demo.** Devin platform availability is too volatile for hackathon timing. The benchmark chart in `docs/benchmark.png` is simulator-derived; if Devin sessions become available before submission, we re-run with real session metadata.
+- **Large-N benchmark.** We ran live Devin smoke tests for Greenhouse and local/mock tests for the broader harness, but the artifact set is still small-N directional evidence rather than a benchmark paper.
 
 ## Cognition rubric mapping
 
-| Rubric column | What ACG delivers |
-| --- | --- |
-| **Product Value** | Closes a documented gap (Issue #4278), implements named future work (CodeCRDT), addresses a Walden-acknowledged problem. The lockfile is a real reviewable artifact, not a screenshot. |
-| **Engineering Quality** | ts-morph + LLM re-rank with seed fallback; networkx DAG with conflict-count ordering; Pydantic v2 schema; 22-test pytest suite; ruff-clean codebase; module-size cap enforced. |
-| **Process** | We dogfood ACG on multi-task work via the same `agent_lock.json` we generate for the demo-app; every Tier acceptance gate is run before the next tier starts. |
-| **Bonus (Cognition stack)** | Devin Manage Devins is the consumer of our MCP. Windsurf hooks are the runtime enforcer (stretch). DeepWiki / Codemaps are graph fallback inputs. We use the entire stack on its own terms. |
+| Rubric column               | What ACG delivers                                                                                                                                                                                                                            |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Product Value**           | Closes a documented gap (Issue #4278), moves toward CodeCRDT's static-analysis and semantic-conflict-detection future-work direction, addresses a Walden-acknowledged problem. The lockfile is a real reviewable artifact, not a screenshot. |
+| **Engineering Quality**     | ts-morph + LLM re-rank with seed fallback; networkx DAG with conflict-count ordering; Pydantic v2 schema; 178-test pytest suite; ruff-clean codebase.                                                                                        |
+| **Process**                 | We dogfood ACG on multi-task work via the same `agent_lock.json` we generate for the demo-app; every Tier acceptance gate is run before the next tier starts.                                                                                |
+| **Bonus (Cognition stack)** | Devin Manage Devins is the consumer of our MCP. Windsurf hooks are a local enforcement path once configured. DeepWiki / Codemaps are graph fallback inputs. We use the stack on its own terms.                                               |
 
-## Devin sessions (placeholder until run)
+## Devin sessions
 
-Once Devin platform availability allows it, paste session links here:
+Live Greenhouse smoke-test PRs opened by Devin:
 
-- `acg-bench-demo-app-oauth-naive` — link
-- `acg-bench-demo-app-oauth-planned` — link
-- `acg-bench-demo-app-billing-naive` — link
-- `acg-bench-demo-app-billing-planned` — link
-- `acg-bench-demo-app-tests-planned` — link
+- Naive strategy: <https://github.com/SSKYAJI/greenhouse/pull/1>, <https://github.com/SSKYAJI/greenhouse/pull/2>, <https://github.com/SSKYAJI/greenhouse/pull/3>
+- ACG-planned strategy: <https://github.com/SSKYAJI/greenhouse/pull/4>, <https://github.com/SSKYAJI/greenhouse/pull/5>, <https://github.com/SSKYAJI/greenhouse/pull/6>
+
+Artifacts: `experiments/greenhouse/runs/eval_run_devin_api_naive_smoke.json`
+and `experiments/greenhouse/runs/eval_run_devin_api_acg_smoke.json`.

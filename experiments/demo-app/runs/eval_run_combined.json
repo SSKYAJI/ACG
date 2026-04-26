@@ -2,14 +2,19 @@
   "strategies": {
     "acg_planned": {
       "backend": "mock",
-      "created_at": "2026-04-26T04:15:02Z",
+      "created_at": "2026-04-26T08:51:05Z",
       "lockfile": "demo-app/agent_lock.json",
+      "model": {
+        "model": "lockfile-echo",
+        "provider": "mock",
+        "url": "mock://local"
+      },
       "repo": {
         "commit": "174c1c320875a66447deb2a15d04fc86afd07f60",
         "local_path": "experiments/greenhouse/checkout",
         "url": "https://github.com/spring-attic/greenhouse.git"
       },
-      "run_id": "greenhouse-mock-acg_planned-20260426-041502",
+      "run_id": "greenhouse-mock-acg_planned-20260426-085105",
       "strategy": "acg_planned",
       "suite_name": "greenhouse-java6-modernization",
       "summary_metrics": {
@@ -23,12 +28,12 @@
         "successful_parallel_speedup": null,
         "task_completion_rate": 1.0,
         "tasks_completed": 4,
-        "tasks_completed_per_hour": 2466439.726,
+        "tasks_completed_per_hour": 2959106.9677,
         "tasks_total": 4,
         "tokens_completion_total": 88,
-        "tokens_orchestrator_overhead": 881,
+        "tokens_orchestrator_overhead": null,
         "tokens_prompt_total": 513,
-        "wall_time_seconds": 0.0058
+        "wall_time_seconds": 0.0049
       },
       "tasks": [
         {
@@ -91,8 +96,8 @@
             "ran": false
           },
           "timestamps": {
-            "finished_at": "2026-04-26T04:15:02Z",
-            "started_at": "2026-04-26T04:15:02Z"
+            "finished_at": "2026-04-26T08:51:05Z",
+            "started_at": "2026-04-26T08:51:05Z"
           }
         },
         {
@@ -146,8 +151,8 @@
             "ran": false
           },
           "timestamps": {
-            "finished_at": "2026-04-26T04:15:02Z",
-            "started_at": "2026-04-26T04:15:02Z"
+            "finished_at": "2026-04-26T08:51:05Z",
+            "started_at": "2026-04-26T08:51:05Z"
           }
         },
         {
@@ -218,8 +223,8 @@
             "ran": false
           },
           "timestamps": {
-            "finished_at": "2026-04-26T04:15:02Z",
-            "started_at": "2026-04-26T04:15:02Z"
+            "finished_at": "2026-04-26T08:51:05Z",
+            "started_at": "2026-04-26T08:51:05Z"
           }
         },
         {
@@ -280,8 +285,8 @@
             "ran": false
           },
           "timestamps": {
-            "finished_at": "2026-04-26T04:15:02Z",
-            "started_at": "2026-04-26T04:15:02Z"
+            "finished_at": "2026-04-26T08:51:05Z",
+            "started_at": "2026-04-26T08:51:05Z"
           }
         }
       ],
@@ -289,14 +294,19 @@
     },
     "naive_parallel": {
       "backend": "mock",
-      "created_at": "2026-04-26T04:15:02Z",
+      "created_at": "2026-04-26T08:51:05Z",
       "lockfile": "demo-app/agent_lock.json",
+      "model": {
+        "model": "lockfile-echo",
+        "provider": "mock",
+        "url": "mock://local"
+      },
       "repo": {
         "commit": "174c1c320875a66447deb2a15d04fc86afd07f60",
         "local_path": "experiments/greenhouse/checkout",
         "url": "https://github.com/spring-attic/greenhouse.git"
       },
-      "run_id": "greenhouse-mock-naive_parallel-20260426-041502",
+      "run_id": "greenhouse-mock-naive_parallel-20260426-085105",
       "strategy": "naive_parallel",
       "suite_name": "greenhouse-java6-modernization",
       "summary_metrics": {
@@ -310,12 +320,12 @@
         "successful_parallel_speedup": null,
         "task_completion_rate": 1.0,
         "tasks_completed": 4,
-        "tasks_completed_per_hour": 1905192.3417,
+        "tasks_completed_per_hour": 2256434.367,
         "tasks_total": 4,
         "tokens_completion_total": 88,
         "tokens_orchestrator_overhead": null,
         "tokens_prompt_total": 897,
-        "wall_time_seconds": 0.0076
+        "wall_time_seconds": 0.0064
       },
       "tasks": [
         {
@@ -378,8 +388,8 @@
             "ran": false
           },
           "timestamps": {
-            "finished_at": "2026-04-26T04:15:02Z",
-            "started_at": "2026-04-26T04:15:02Z"
+            "finished_at": "2026-04-26T08:51:05Z",
+            "started_at": "2026-04-26T08:51:05Z"
           }
         },
         {
@@ -450,8 +460,8 @@
             "ran": false
           },
           "timestamps": {
-            "finished_at": "2026-04-26T04:15:02Z",
-            "started_at": "2026-04-26T04:15:02Z"
+            "finished_at": "2026-04-26T08:51:05Z",
+            "started_at": "2026-04-26T08:51:05Z"
           }
         },
         {
@@ -505,8 +515,8 @@
             "ran": false
           },
           "timestamps": {
-            "finished_at": "2026-04-26T04:15:02Z",
-            "started_at": "2026-04-26T04:15:02Z"
+            "finished_at": "2026-04-26T08:51:05Z",
+            "started_at": "2026-04-26T08:51:05Z"
           }
         },
         {
@@ -567,8 +577,8 @@
             "ran": false
           },
           "timestamps": {
-            "finished_at": "2026-04-26T04:15:02Z",
-            "started_at": "2026-04-26T04:15:02Z"
+            "finished_at": "2026-04-26T08:51:05Z",
+            "started_at": "2026-04-26T08:51:05Z"
           }
         }
       ],

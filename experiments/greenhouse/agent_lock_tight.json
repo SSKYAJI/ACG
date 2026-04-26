@@ -1,0 +1,242 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-04-25T23:15:00.000000Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "hand-tightened-from-agent_lock.json"
+  },
+  "repo": {
+    "root": "experiments/greenhouse/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "java"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "lambda-rowmapper-account",
+      "prompt": "In src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java, replace the anonymous RowMapper<PasswordProtectedAccount> inner class (around line 110) with a Java 8 lambda. The mapping logic must remain identical. Bump <java-version> in pom.xml from 1.6 to 1.8 so the lambda compiles. Update imports as needed.",
+      "predicted_writes": [
+        {
+          "path": "src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java",
+          "confidence": 0.9999999900208358,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 47.79)."
+        },
+        {
+          "path": "src/main/java/com/springsource/greenhouse/members/JdbcProfileRepository.java",
+          "confidence": 0.999999987973771,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 47.32)."
+        },
+        {
+          "path": "src/main/java/com/springsource/greenhouse/invite/JdbcInviteRepository.java",
+          "confidence": 0.9999999878977764,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 47.31)."
+        },
+        {
+          "path": "pom.xml",
+          "confidence": 0.7,
+          "reason": "Hint 'pom.xml' matches path component."
+        },
+        {
+          "path": "src/main/java/com/springsource/greenhouse/account/Account.java",
+          "confidence": 0.7,
+          "reason": "Hint 'account' matches path component."
+        },
+        {
+          "path": "src/main/java/com/springsource/greenhouse/account/AccountException.java",
+          "confidence": 0.7,
+          "reason": "Hint 'account' matches path component."
+        },
+        {
+          "path": "src/main/java/com/springsource/greenhouse/account/AccountMapper.java",
+          "confidence": 0.7,
+          "reason": "Hint 'account' matches path component."
+        },
+        {
+          "path": "src/main/java/com/springsource/greenhouse/account/AccountRepository.java",
+          "confidence": 0.7,
+          "reason": "Hint 'account' matches path component."
+        }
+      ],
+      "allowed_paths": [
+        "pom.xml",
+        "src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": "Hand-tightened: allowed_paths shrunk to ground-truth files only so the validator visibly fires when the agent (or LockfileEchoMockLLM) tries to write the predictor's over-eager false positives."
+    },
+    {
+      "id": "lambda-rowmapper-invite",
+      "prompt": "In src/main/java/com/springsource/greenhouse/invite/JdbcInviteRepository.java, replace the anonymous RowMapper<Invite> inner class (around line 87) with a Java 8 lambda. The mapping logic must remain identical. Bump <java-version> in pom.xml from 1.6 to 1.8 so the lambda compiles.",
+      "predicted_writes": [
+        {
+          "path": "src/main/java/com/springsource/greenhouse/invite/JdbcInviteRepository.java",
+          "confidence": 0.9999999999924253,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 65.75)."
+        },
+        {
+          "path": "src/main/java/com/springsource/greenhouse/invite/mail/MailInviteService.java",
+          "confidence": 0.999999999733045,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 56.84)."
+        },
+        {
+          "path": "src/main/java/com/springsource/greenhouse/invite/InviteRepository.java",
+          "confidence": 0.9999999995121985,
+          "reason": "personalized PageRank rank #2, top symbol matches: InviteRepository, alreadyInvited, findInvite.; BM25 lexical match over path, identifiers, imports, docstrings (score 55.34)."
+        },
+        {
+          "path": "src/test/java/com/springsource/greenhouse/database/GreenhouseTestDatabaseBuilder.java",
+          "confidence": 0.85,
+          "reason": "Symbol 'invite' referenced in prompt; defined in src/test/java/com/springsource/greenhouse/database/GreenhouseTestDatabaseBuilder.java."
+        },
+        {
+          "path": "pom.xml",
+          "confidence": 0.7,
+          "reason": "Hint 'pom.xml' matches path component."
+        },
+        {
+          "path": "src/main/java/com/springsource/greenhouse/invite/FacebookInviteController.java",
+          "confidence": 0.7,
+          "reason": "Hint 'invite' matches path component."
+        },
+        {
+          "path": "src/main/java/com/springsource/greenhouse/invite/Invite.java",
+          "confidence": 0.7,
+          "reason": "Hint 'invite' matches path component."
+        },
+        {
+          "path": "src/main/java/com/springsource/greenhouse/invite/InviteAcceptAction.java",
+          "confidence": 0.7,
+          "reason": "Hint 'invite' matches path component."
+        }
+      ],
+      "allowed_paths": [
+        "pom.xml",
+        "src/main/java/com/springsource/greenhouse/invite/JdbcInviteRepository.java"
+      ],
+      "depends_on": [],
+      "parallel_group": 2,
+      "rationale": "Hand-tightened: allowed_paths shrunk to ground-truth files only."
+    },
+    {
+      "id": "lambda-rowmapper-app",
+      "prompt": "In src/main/java/com/springsource/greenhouse/develop/JdbcAppRepository.java, replace the four anonymous RowMapper inner classes (around lines 113, 158, 166, 172) with Java 8 lambdas. Mapping logic must remain identical. Bump <java-version> in pom.xml from 1.6 to 1.8 so the lambdas compile.",
+      "predicted_writes": [
+        {
+          "path": "src/main/java/com/springsource/greenhouse/develop/JdbcAppRepository.java",
+          "confidence": 0.9999999976114671,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 51.36)."
+        },
+        {
+          "path": "src/main/java/com/springsource/greenhouse/develop/AppRepository.java",
+          "confidence": 0.9999999645291011,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 44.62)."
+        },
+        {
+          "path": "src/main/java/com/springsource/greenhouse/develop/App.java",
+          "confidence": 0.9999998513733722,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 41.04)."
+        },
+        {
+          "path": "pom.xml",
+          "confidence": 0.7,
+          "reason": "Hint 'pom.xml' matches path component."
+        },
+        {
+          "path": "src/main/java/com/springsource/greenhouse/develop/AppConnection.java",
+          "confidence": 0.7,
+          "reason": "Hint 'develop' matches path component."
+        },
+        {
+          "path": "src/main/java/com/springsource/greenhouse/develop/AppController.java",
+          "confidence": 0.7,
+          "reason": "Hint 'develop' matches path component."
+        },
+        {
+          "path": "src/main/java/com/springsource/greenhouse/develop/AppForm.java",
+          "confidence": 0.7,
+          "reason": "Hint 'develop' matches path component."
+        },
+        {
+          "path": "src/main/java/com/springsource/greenhouse/develop/AppSummary.java",
+          "confidence": 0.7,
+          "reason": "Hint 'develop' matches path component."
+        }
+      ],
+      "allowed_paths": [
+        "pom.xml",
+        "src/main/java/com/springsource/greenhouse/develop/JdbcAppRepository.java"
+      ],
+      "depends_on": [],
+      "parallel_group": 3,
+      "rationale": "Hand-tightened: allowed_paths shrunk to ground-truth files only."
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "lambda-rowmapper-account"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      },
+      {
+        "id": 2,
+        "tasks": [
+          "lambda-rowmapper-invite"
+        ],
+        "type": "serial",
+        "waits_for": [
+          1
+        ]
+      },
+      {
+        "id": 3,
+        "tasks": [
+          "lambda-rowmapper-app"
+        ],
+        "type": "serial",
+        "waits_for": [
+          2
+        ]
+      }
+    ]
+  },
+  "conflicts_detected": [
+    {
+      "files": [
+        "pom.xml"
+      ],
+      "between_tasks": [
+        "lambda-rowmapper-account",
+        "lambda-rowmapper-invite"
+      ],
+      "resolution": "Serialize lambda-rowmapper-invite after lambda-rowmapper-account; both modify pom.xml"
+    },
+    {
+      "files": [
+        "pom.xml"
+      ],
+      "between_tasks": [
+        "lambda-rowmapper-account",
+        "lambda-rowmapper-app"
+      ],
+      "resolution": "Serialize lambda-rowmapper-app after lambda-rowmapper-account; both modify pom.xml"
+    },
+    {
+      "files": [
+        "pom.xml"
+      ],
+      "between_tasks": [
+        "lambda-rowmapper-invite",
+        "lambda-rowmapper-app"
+      ],
+      "resolution": "Serialize lambda-rowmapper-app after lambda-rowmapper-invite; both modify pom.xml"
+    }
+  ]
+}

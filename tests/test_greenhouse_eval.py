@@ -183,6 +183,7 @@ def test_eval_run_serializes_with_required_top_level_keys(tmp_path: Path) -> Non
         "suite_name",
         "strategy",
         "backend",
+        "model",
         "repo",
         "lockfile",
         "tasks",
@@ -190,6 +191,7 @@ def test_eval_run_serializes_with_required_top_level_keys(tmp_path: Path) -> Non
     }
     assert required.issubset(payload.keys())
     assert payload["version"] == EVAL_VERSION
+    assert "provider" in payload["model"]
     assert payload["repo"]["commit"]  # Greenhouse pin always present.
     assert payload["tasks"][0]["task_id"] == "t1"
     # JSON must be sort_keys=True for stable diffs.
@@ -358,6 +360,8 @@ def test_naive_strategy_records_overlap_on_pom_xml(tmp_path: Path) -> None:
     )
     assert run.summary_metrics.tasks_total == 3
     assert run.summary_metrics.overlapping_write_pairs == 3
+    assert run.model.provider == "mock"
+    assert run.model.model == "lockfile-echo"
     # Every task's actual_changed_files contains pom.xml because naive does
     # not enforce; validate_write also does not flag in-bounds writes since
     # pom.xml is allowed for every task.
@@ -556,8 +560,8 @@ def test_planned_uses_fewer_prompt_tokens_than_naive_on_mock(tmp_path: Path) -> 
     )
 
 
-def test_planned_records_orchestrator_overhead_naive_does_not(tmp_path: Path) -> None:
-    """Planned pays for one extra orchestrator pass; naive pays nothing."""
+def test_planned_uses_static_lockfile_without_extra_orchestrator_tax(tmp_path: Path) -> None:
+    """Default planned execution walks the compiled lockfile directly."""
     lock = _build_lock(serialized=True)
     lock_path = tmp_path / "agent_lock.json"
     lock_path.write_text(lock.model_dump_json(indent=2))
@@ -579,8 +583,7 @@ def test_planned_records_orchestrator_overhead_naive_does_not(tmp_path: Path) ->
     )
 
     assert naive.summary_metrics.tokens_orchestrator_overhead is None
-    assert planned.summary_metrics.tokens_orchestrator_overhead is not None
-    assert planned.summary_metrics.tokens_orchestrator_overhead > 0
+    assert planned.summary_metrics.tokens_orchestrator_overhead is None
 
 
 # ---------------------------------------------------------------------------
@@ -849,3 +852,79 @@ def test_eval_task_default_metrics_independent_per_instance() -> None:
     assert a.metrics is not b.metrics
     # Same protection on TaskMetrics directly.
     assert TaskMetrics() is not TaskMetrics()
+
+
+# ---------------------------------------------------------------------------
+# Tightened-Greenhouse fixture: validator must visibly fire.
+# ---------------------------------------------------------------------------
+
+
+def test_tightened_greenhouse_lockfile_fires_validator(tmp_path: Path) -> None:
+    """The hand-tightened ``agent_lock_tight.json`` must produce blocks.
+
+    This is the v2 megaplan's negative-control fixture: ``allowed_paths``
+    is hand-shrunk to the exact ground-truth files per task, while
+    ``predicted_writes`` is left at the original (wider) size. The
+    ``LockfileEchoMockLLM`` echoes ``predicted_writes`` so the worker
+    proposes paths outside the tightened allowed_paths — and
+    ``acg.enforce.validate_write`` records each as a
+    :class:`BlockedWriteEvent`.
+
+    Without this test, the project's safety claim is unfalsifiable
+    (RESULTS.md §9): no committed artifact has ever shown the validator
+    actually firing. With this test, ``blocked_invalid_write_count >= 1``
+    is enforced in CI.
+    """
+    repo_root = Path(__file__).resolve().parent.parent
+    tight_lock_path = (
+        repo_root / "experiments" / "greenhouse" / "agent_lock_tight.json"
+    )
+    assert tight_lock_path.exists(), (
+        f"tightened lockfile missing at {tight_lock_path}"
+    )
+    lock = AgentLock.model_validate_json(tight_lock_path.read_text())
+
+    # ground-truth tightening: each task's allowed_paths is exactly
+    # {pom.xml, <single-service-file>}.
+    for task in lock.tasks:
+        assert len(task.allowed_paths) == 2, (
+            f"{task.id}: expected exactly 2 allowed paths in the tight "
+            f"fixture, got {task.allowed_paths!r}"
+        )
+        assert "pom.xml" in task.allowed_paths
+        assert all("**" not in p for p in task.allowed_paths), (
+            f"{task.id}: tightened fixture must use exact paths, not globs"
+        )
+
+    run = run_strategy(
+        strategy="acg_planned",
+        backend="mock",
+        lock=lock,
+        repo_graph={},
+        lockfile_path=str(tight_lock_path),
+    )
+
+    # The headline assertion: at least one blocked write event in total.
+    assert run.summary_metrics.blocked_invalid_write_count >= 1, (
+        "tightened lockfile produced zero blocked_write_events; "
+        "the negative-control fixture is not actually firing the validator"
+    )
+
+    # And per-task: every task should block at least its predictor's
+    # over-eager false positives. Three tasks × ≥1 block each.
+    blocked_per_task = {
+        t.task_id: len(t.blocked_write_events) for t in run.tasks
+    }
+    assert all(count >= 1 for count in blocked_per_task.values()), (
+        f"every task should produce blocked events; got {blocked_per_task!r}"
+    )
+
+    # And the in-bounds writes should still land — pom.xml is allowed for
+    # every task and JdbcAccountRepository.java is allowed for the account
+    # task — so ``actual_changed_files`` is non-empty.
+    actual_per_task = {
+        t.task_id: t.actual_changed_files for t in run.tasks
+    }
+    assert all(len(files) >= 1 for files in actual_per_task.values()), (
+        f"in-bounds proposals must still land; got {actual_per_task!r}"
+    )

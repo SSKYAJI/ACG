@@ -66,6 +66,16 @@ def cmd_compile(
             ),
         ),
     ] = "typescript",
+    use_cached_graph: Annotated[
+        bool,
+        typer.Option(
+            "--use-cached-graph/--rescan-graph",
+            help=(
+                "Reuse <repo>/.acg/context_graph.json when present (default). "
+                "Pass --rescan-graph to force a fresh ts-morph / tree-sitter scan."
+            ),
+        ),
+    ] = True,
 ) -> None:
     """Compile ``tasks.json`` + repo graph into ``agent_lock.json``."""
     language_normalized = language.strip().lower()
@@ -77,15 +87,20 @@ def cmd_compile(
         raise typer.Exit(code=EXIT_USER_ERROR)
 
     tasks_input = _load_tasks(tasks)
-    try:
-        repo_graph = scan_context_graph(repo, language_normalized)
-    except (GraphScanError, ValueError) as exc:
-        _err_console.print(f"[red]graph scan failed:[/] {exc}")
-        raise typer.Exit(code=EXIT_USER_ERROR) from exc
-    _console.print(
-        f"[dim]scanned {repo_graph.get('language', 'unknown')} repo → {context_graph_path(repo)}[/]"
-    )
-    repo_graph = _load_repo_graph(repo)
+    graph_file = context_graph_path(repo)
+    if use_cached_graph and graph_file.exists():
+        repo_graph = _load_repo_graph(repo)
+        _console.print(f"[dim]reusing cached context graph at {graph_file}[/]")
+    else:
+        try:
+            scan_context_graph(repo, language_normalized)
+        except (GraphScanError, ValueError) as exc:
+            _err_console.print(f"[red]graph scan failed:[/] {exc}")
+            raise typer.Exit(code=EXIT_USER_ERROR) from exc
+        repo_graph = _load_repo_graph(repo)
+        _console.print(
+            f"[dim]scanned {repo_graph.get('language', 'unknown')} repo → {graph_file}[/]"
+        )
     if not repo_graph:
         _err_console.print("[red]graph scan did not produce a readable context graph[/]")
         raise typer.Exit(code=EXIT_USER_ERROR)

@@ -1,10 +1,8 @@
 # Agent Context Graph (ACG)
 
-![ci](https://github.com/<org>/cognition/actions/workflows/ci.yml/badge.svg)
-
 > **It's `package-lock.json` for parallel coding agents.**
 
-Parallel coding agents are powerful, but they collide on shared files. Devin now manages teams of Devins, but public docs only say the coordinator resolves conflicts after the fact. **ACG moves that work before execution.** It scans the repo, predicts each task's write-set, emits a committable `agent_lock.json`, and enforces it with a write-validator (and a Windsurf hook in the stretch plan). In our demo, naive parallel agents collide on auth, Prisma, and navigation files. With ACG, safe tasks run in parallel, risky tasks serialize, and illegal writes are blocked before they corrupt the diff.
+Parallel coding agents are powerful, but they collide on shared files. Devin now manages teams of Devins, but public docs only say the coordinator resolves conflicts after the fact. **ACG moves that work before execution.** It scans the repo, predicts each task's write-set, emits a committable `agent_lock.json`, and validates writes against that contract. In local/Cascade-style execution, the validator can block illegal writes before they corrupt the diff; for black-box Devin, the same contract is injected up front and audited post-hoc from PR diffs.
 
 LA Hacks 2026 — Cognition track (primary) · ASUS track (secondary).
 
@@ -36,6 +34,10 @@ make run-mock && make viz
 See `viz/README.md` for the visualizer architecture and `acg/runtime.py`
 for the runtime's prompt construction and validation pipeline.
 
+Full multi-codebase results, including live Devin PRs and the Brocoders
+NestJS microservice benchmark, are in
+[`experiments/greenhouse/RESULTS.md`](experiments/greenhouse/RESULTS.md).
+
 ## Demo
 
 ![Agent coordination tax — naive vs ACG-planned](docs/benchmark.png)
@@ -58,7 +60,7 @@ The `oauth` and `settings` tasks are write-disjoint — ACG runs them in paralle
 
 ```bash
 git clone <this repo>
-cd "Cognition Winning project"
+cd cognition
 
 make install           # creates .venv, pip installs ACG, npm installs ts-morph
 cp .env.example .env   # then put your Groq key in ACG_LLM_API_KEY (or leave blank for offline mock)
@@ -139,19 +141,19 @@ Long form in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Cascade integration
 
-ACG's validator runs inside Windsurf via the `pre_write_code` hook —
-out-of-bounds writes are blocked at the IDE layer before the diff
-lands. See [`docs/CASCADE_INTEGRATION.md`](docs/CASCADE_INTEGRATION.md).
+ACG includes a Windsurf `pre_write_code` hook script that can block
+out-of-bounds Cascade writes before the diff lands once `.windsurf/hooks.json`
+is configured. See [`docs/CASCADE_INTEGRATION.md`](docs/CASCADE_INTEGRATION.md).
 
 ## Honesty box (non-negotiable)
 
-1. **n=5 single-trial.** Directional evidence only. Not a benchmark paper.
-2. **File-level disjointness only.** Semantic drift across disjoint files is out of scope and is CodeCRDT's domain.
-3. **JavaScript / TypeScript and Python only.** Other languages would need their own parsers and write-set heuristics.
+1. **Small-N single-trial evidence.** Directional evidence only. Not a benchmark paper.
+2. **File-level disjointness only.** Semantic drift across disjoint files is out of scope; import/export risk analysis is future work.
+3. **Java, JavaScript / TypeScript, and Python coverage today.** Other languages would need their own parsers and write-set heuristics.
 4. **Cascade hook enforcement is Windsurf-specific.** Devin sessions are validated post-hoc, not pre-empted at write time.
 5. **Task → file prediction precision/recall are reported openly** on the hand-labelled set when available.
 6. **The merge-tax metric is novel and self-defined.** We argue it matters; we don't claim industry consensus.
-7. **CodeCRDT, Agint, LangGraph, and OpenCode locks are cited as related work.** We do not claim to be the first to think about multi-agent coordination — only the first to ship pre-flight static disjointness as an MCP-exposed lockfile.
+7. **CodeCRDT, Agint, LangGraph, and OpenCode locks are cited as related work.** We do not claim to be the first to think about multi-agent coordination; ACG's contribution is a pre-flight static disjointness lockfile exposed through CLI/MCP surfaces.
 
 ## Citations
 
@@ -160,8 +162,8 @@ See [`docs/CITATIONS.md`](docs/CITATIONS.md) for verbatim quotes and links.
 ## Limitations and roadmap
 
 - **CRDT runtime layer.** Explicitly out of scope (CodeCRDT covers it).
-- **Live Devin sessions.** Deferred to post-hackathon; benchmark numbers are simulator-derived.
-- **Multi-language support beyond TS/JS** limited by our parser pin.
+- **Live Devin sessions.** Implemented for the Greenhouse smoke test; see `experiments/greenhouse/RESULTS.md`. Broader benchmark numbers remain small-N and should be treated as directional.
+- **Multi-language support beyond Java / TS / Python** still requires language-specific parsers and write-set heuristics.
 
 ## License
 
