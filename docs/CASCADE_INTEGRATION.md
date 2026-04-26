@@ -74,6 +74,23 @@ recording shows Cascade itself blocking the out-of-bounds write
 inline — see the segment notes in
 [`docs/plans/cascade-hook-stretch-308cc2.md`](plans/cascade-hook-stretch-308cc2.md).
 
+## Cascade hook messages
+
+With `show_output: true` in `.windsurf/hooks.json`, both hooks surface
+messages directly in Cascade's UI:
+
+| Hook              | Message                                                        |
+| ----------------- | -------------------------------------------------------------- |
+| `pre_write_code`  | `[acg-hook] ALLOWED: <path> validated via Cascade pre_write_code hook (task=<id>)` |
+| `pre_write_code`  | `[acg-hook] BLOCKED: <path> is outside task <id>'s allowed_paths` |
+| `post_write_code` | `[acg-hook] write receipt: <path> landed (task=<id>, hook=post_write_code)` |
+
+The `pre_write_code` hook validates and optionally blocks the write;
+the `post_write_code` hook fires after the write lands and emits a
+receipt confirming the Cascade hook integration is active. Together
+they provide end-to-end visibility into ACG enforcement through
+Cascade's native hook system.
+
 ## Limitations
 
 - macOS / Linux only (the hook script is `bash`). Windows users should

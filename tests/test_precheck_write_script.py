@@ -84,7 +84,7 @@ def test_allows_internal_write_paths(tmp_path: Path) -> None:
 
 
 def test_allows_in_path_write(tmp_path: Path, example_dag_lockfile_path: Path) -> None:
-    """Write inside the task's allowed_paths glob → exit 0."""
+    """Write inside the task's allowed_paths glob → exit 0 + ALLOWED banner."""
     lock_copy = tmp_path / "agent_lock.json"
     shutil.copy(example_dag_lockfile_path, lock_copy)
     proc = _run(
@@ -93,6 +93,8 @@ def test_allows_in_path_write(tmp_path: Path, example_dag_lockfile_path: Path) -
         cwd=REPO_ROOT,
     )
     assert proc.returncode == 0, proc.stderr
+    assert "ALLOWED" in proc.stdout
+    assert "Cascade pre_write_code hook" in proc.stdout
 
 
 def test_blocks_out_of_path_write(tmp_path: Path, example_dag_lockfile_path: Path) -> None:
