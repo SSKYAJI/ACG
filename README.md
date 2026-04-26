@@ -141,9 +141,12 @@ Long form in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Cascade integration
 
-ACG includes a Windsurf `pre_write_code` hook script that can block
-out-of-bounds Cascade writes before the diff lands once `.windsurf/hooks.json`
-is configured. See [`docs/CASCADE_INTEGRATION.md`](docs/CASCADE_INTEGRATION.md).
+ACG ships with Windsurf Cascade `pre_write_code` and `post_write_code`
+hook scripts (`.windsurf/hooks.json`). The pre-hook validates each write
+against the lockfile and blocks out-of-bounds edits before they land;
+the post-hook emits a write receipt confirming the Cascade hook
+integration is active. Both messages surface directly in the Cascade UI.
+See [`docs/CASCADE_INTEGRATION.md`](docs/CASCADE_INTEGRATION.md).
 
 ## Honesty box (non-negotiable)
 
