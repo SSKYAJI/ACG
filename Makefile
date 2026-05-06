@@ -1,4 +1,4 @@
-.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse eval-greenhouse-mock eval-greenhouse-local eval-greenhouse-devin-manual eval-greenhouse-devin-api eval-greenhouse-tight-mock eval-greenhouse-report mcp-serve cascade-hook-test setup-realworld compile-realworld compile-realworld-blind eval-realworld-local eval-realworld-blind-local eval-realworld-blind-openrouter-ablation eval-realworld-mock analyze-realworld analyze-realworld-blind analyze-realworld-blind-openrouter
+.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse eval-greenhouse-mock eval-greenhouse-local eval-greenhouse-devin-manual eval-greenhouse-devin-api eval-greenhouse-tight-mock eval-greenhouse-report mcp-serve cascade-hook-test setup-realworld compile-realworld compile-realworld-blind setup-python-fastapi compile-python-fastapi eval-python-fastapi-mock analyze-python-fastapi-mock eval-realworld-local eval-realworld-blind-local eval-realworld-blind-openrouter-ablation eval-realworld-mock analyze-realworld analyze-realworld-blind analyze-realworld-blind-openrouter
 
 # Override these on the command line if your ASUS hostname / port differ:
 #   make compile-gemma GEMMA_HOST=100.x.y.z GEMMA_PORT=8080
@@ -198,6 +198,33 @@ compile-realworld-blind: setup-realworld
 	  --tasks experiments/realworld/tasks_blind.json \
 	  --language typescript \
 	  --out experiments/realworld/agent_lock_blind.json
+
+# --- Python FastAPI benchmark ---
+setup-python-fastapi:
+	bash experiments/python_fastapi/setup.sh
+
+compile-python-fastapi: setup-python-fastapi
+	./.venv/bin/acg compile \
+	  --repo experiments/python_fastapi/checkout \
+	  --tasks experiments/python_fastapi/tasks.json \
+	  --language python \
+	  --out experiments/python_fastapi/agent_lock.json
+
+eval-python-fastapi-mock: compile-python-fastapi
+	./.venv/bin/python -m experiments.greenhouse.headtohead \
+	  --lock experiments/python_fastapi/agent_lock.json \
+	  --tasks experiments/python_fastapi/tasks.json \
+	  --repo experiments/python_fastapi/checkout \
+	  --backend mock \
+	  --strategy both \
+	  --suite-name python-fastapi-template \
+	  --out-dir experiments/python_fastapi/runs_mock
+
+analyze-python-fastapi-mock:
+	./.venv/bin/acg analyze-runs \
+	  experiments/python_fastapi/runs_mock/eval_run_combined.json \
+	  --out experiments/python_fastapi/runs_mock/analysis_report.md \
+	  --json-out experiments/python_fastapi/runs_mock/analysis_report.json
 
 eval-realworld-local:
 	set -a && . ./.env && set +a && \

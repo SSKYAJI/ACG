@@ -1,0 +1,207 @@
+{
+  "overall": {
+    "f1": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "total_blocks": 0,
+    "total_oob": 0
+  },
+  "runs": [
+    {
+      "backend": "mock",
+      "blocked_invalid_write_count": 0,
+      "out_of_bounds_write_count": 0,
+      "overlapping_write_pairs": 10,
+      "source_path": "experiments/python_fastapi/runs_mock/eval_run_combined.json",
+      "strategy": "acg_planned",
+      "suite_name": "python-fastapi-template",
+      "tasks_completed": 5,
+      "tasks_total": 5,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_total": 1684
+    },
+    {
+      "backend": "mock",
+      "blocked_invalid_write_count": 0,
+      "out_of_bounds_write_count": 0,
+      "overlapping_write_pairs": 10,
+      "source_path": "experiments/python_fastapi/runs_mock/eval_run_combined.json",
+      "strategy": "naive_parallel",
+      "suite_name": "python-fastapi-template",
+      "tasks_completed": 5,
+      "tasks_total": 5,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_total": 2257
+    }
+  ],
+  "tasks": {
+    "admin-audit-route": {
+      "actual_files_seen": [
+        "backend/app/alembic/versions/9c0a54914c78_add_max_length_for_string_varchar_.py",
+        "backend/app/api/main.py",
+        "backend/app/api/routes/items.py",
+        "backend/app/main.py",
+        "backend/tests/api/routes/test_admin_audit.py",
+        "tests/test_add.py",
+        "tests/test_audit.py",
+        "tests/test_log.py"
+      ],
+      "allowed_glob_count": 8,
+      "blocked_events_total": 0,
+      "f1": 1.0,
+      "false_negatives": 0,
+      "false_positives": 0,
+      "out_of_bounds_files": [],
+      "precision": 1.0,
+      "predicted_files": [
+        "backend/app/alembic/versions/9c0a54914c78_add_max_length_for_string_varchar_.py",
+        "backend/app/api/main.py",
+        "backend/app/api/routes/items.py",
+        "backend/app/main.py",
+        "backend/tests/api/routes/test_admin_audit.py",
+        "tests/test_add.py",
+        "tests/test_audit.py",
+        "tests/test_log.py"
+      ],
+      "recall": 1.0,
+      "runs_seen": 2,
+      "suggestions": [],
+      "task_id": "admin-audit-route",
+      "true_positives": 8
+    },
+    "health-route": {
+      "actual_files_seen": [
+        "backend/app/api/main.py",
+        "backend/app/api/routes/items.py",
+        "backend/app/api/routes/utils.py",
+        "backend/app/main.py",
+        "backend/tests/api/routes/test_health.py",
+        "tests/test_add.py",
+        "tests/test_existing.py",
+        "tests/test_health.py"
+      ],
+      "allowed_glob_count": 7,
+      "blocked_events_total": 0,
+      "f1": 1.0,
+      "false_negatives": 0,
+      "false_positives": 0,
+      "out_of_bounds_files": [],
+      "precision": 1.0,
+      "predicted_files": [
+        "backend/app/api/main.py",
+        "backend/app/api/routes/items.py",
+        "backend/app/api/routes/utils.py",
+        "backend/app/main.py",
+        "backend/tests/api/routes/test_health.py",
+        "tests/test_add.py",
+        "tests/test_existing.py",
+        "tests/test_health.py"
+      ],
+      "recall": 1.0,
+      "runs_seen": 2,
+      "suggestions": [],
+      "task_id": "health-route",
+      "true_positives": 8
+    },
+    "oauth-callback-route": {
+      "actual_files_seen": [
+        "backend/app/api/main.py",
+        "backend/app/api/routes/items.py",
+        "backend/app/main.py",
+        "backend/tests/api/routes/test_oauth_callback.py",
+        "prisma/schema.prisma",
+        "scripts/add_latest_release_date.py",
+        "src/app/api/auth/[...nextauth]/route.ts",
+        "src/server/auth/config.ts"
+      ],
+      "allowed_glob_count": 8,
+      "blocked_events_total": 0,
+      "f1": 1.0,
+      "false_negatives": 0,
+      "false_positives": 0,
+      "out_of_bounds_files": [],
+      "precision": 1.0,
+      "predicted_files": [
+        "backend/app/api/main.py",
+        "backend/app/api/routes/items.py",
+        "backend/app/main.py",
+        "backend/tests/api/routes/test_oauth_callback.py",
+        "prisma/schema.prisma",
+        "scripts/add_latest_release_date.py",
+        "src/app/api/auth/[...nextauth]/route.ts",
+        "src/server/auth/config.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 2,
+      "suggestions": [],
+      "task_id": "oauth-callback-route",
+      "true_positives": 8
+    },
+    "request-logging-config": {
+      "actual_files_seen": [
+        "backend/app/alembic/env.py",
+        "backend/app/api/main.py",
+        "backend/app/backend_pre_start.py",
+        "backend/app/core/__init__.py",
+        "backend/app/core/config.py",
+        "backend/app/core/db.py",
+        "backend/app/initial_data.py",
+        "backend/app/main.py"
+      ],
+      "allowed_glob_count": 6,
+      "blocked_events_total": 0,
+      "f1": 1.0,
+      "false_negatives": 0,
+      "false_positives": 0,
+      "out_of_bounds_files": [],
+      "precision": 1.0,
+      "predicted_files": [
+        "backend/app/alembic/env.py",
+        "backend/app/api/main.py",
+        "backend/app/backend_pre_start.py",
+        "backend/app/core/__init__.py",
+        "backend/app/core/config.py",
+        "backend/app/core/db.py",
+        "backend/app/initial_data.py",
+        "backend/app/main.py"
+      ],
+      "recall": 1.0,
+      "runs_seen": 2,
+      "suggestions": [],
+      "task_id": "request-logging-config",
+      "true_positives": 8
+    },
+    "smtp-timeout-config": {
+      "actual_files_seen": [
+        "backend/app/alembic/env.py",
+        "backend/app/core/__init__.py",
+        "backend/app/core/config.py",
+        "backend/app/core/db.py",
+        "backend/app/core/security.py",
+        "backend/app/main.py",
+        "scripts/add_latest_release_date.py"
+      ],
+      "allowed_glob_count": 4,
+      "blocked_events_total": 0,
+      "f1": 1.0,
+      "false_negatives": 0,
+      "false_positives": 0,
+      "out_of_bounds_files": [],
+      "precision": 1.0,
+      "predicted_files": [
+        "backend/app/alembic/env.py",
+        "backend/app/core/__init__.py",
+        "backend/app/core/config.py",
+        "backend/app/core/db.py",
+        "backend/app/core/security.py",
+        "backend/app/main.py",
+        "scripts/add_latest_release_date.py"
+      ],
+      "recall": 1.0,
+      "runs_seen": 2,
+      "suggestions": [],
+      "task_id": "smtp-timeout-config",
+      "true_positives": 7
+    }
+  }
+}

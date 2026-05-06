@@ -1,0 +1,471 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-06T05:05:39.598300Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "mock-llm-canned"
+  },
+  "repo": {
+    "root": "experiments/python_fastapi/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "python"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "health-route",
+      "prompt": "Add a health endpoint for the FastAPI backend by creating a route module under backend/app/api/routes/ and wiring it into the existing API router. Register the new router in backend/app/api/main.py. Add route coverage in backend/tests/api/routes/test_health.py that exercises the health endpoint through the FastAPI app.",
+      "predicted_writes": [
+        {
+          "path": "backend/app/api/routes/utils.py",
+          "confidence": 0.9999999999991023,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 71.08)."
+        },
+        {
+          "path": "backend/app/main.py",
+          "confidence": 0.9999999969661157,
+          "reason": "personalized PageRank rank #6, top symbol matches: app.; BM25 lexical match over path, identifiers, imports, docstrings (score 50.77)."
+        },
+        {
+          "path": "backend/app/api/main.py",
+          "confidence": 0.9999999838461116,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 46.59)."
+        },
+        {
+          "path": "backend/tests/api/routes/test_health.py",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "backend/app/api/routes/items.py",
+          "confidence": 0.85,
+          "reason": "Symbol 'router' referenced in prompt; defined in backend/app/api/routes/items.py."
+        },
+        {
+          "path": "tests/test_add.py",
+          "confidence": 0.85,
+          "reason": "pytest convention: tests/ with .py extension, entity 'add' from task prompt."
+        },
+        {
+          "path": "tests/test_existing.py",
+          "confidence": 0.85,
+          "reason": "pytest convention: tests/ with .py extension, entity 'existing' from task prompt."
+        },
+        {
+          "path": "tests/test_health.py",
+          "confidence": 0.85,
+          "reason": "pytest convention: tests/ with .py extension, entity 'health' from task prompt."
+        }
+      ],
+      "allowed_paths": [
+        "backend/app/api/**",
+        "backend/app/api/routes/**",
+        "backend/app/main.py",
+        "backend/tests/api/routes/**",
+        "tests/test_add.py",
+        "tests/test_existing.py",
+        "tests/test_health.py"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    },
+    {
+      "id": "admin-audit-route",
+      "prompt": "Add an admin audit log endpoint for the FastAPI backend by creating a route module under backend/app/api/routes/ for audit access. Register the new router in backend/app/api/main.py. Add route coverage in backend/tests/api/routes/test_admin_audit.py for the admin audit endpoint.",
+      "predicted_writes": [
+        {
+          "path": "backend/app/api/main.py",
+          "confidence": 0.9999996951289618,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 39.24)."
+        },
+        {
+          "path": "backend/app/main.py",
+          "confidence": 0.9999996045260939,
+          "reason": "personalized PageRank rank #6, top symbol matches: app.; BM25 lexical match over path, identifiers, imports, docstrings (score 38.59)."
+        },
+        {
+          "path": "backend/app/alembic/versions/9c0a54914c78_add_max_length_for_string_varchar_.py",
+          "confidence": 0.9999992046222024,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 36.84)."
+        },
+        {
+          "path": "backend/tests/api/routes/test_admin_audit.py",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "backend/app/api/routes/items.py",
+          "confidence": 0.85,
+          "reason": "Symbol 'router' referenced in prompt; defined in backend/app/api/routes/items.py."
+        },
+        {
+          "path": "tests/test_add.py",
+          "confidence": 0.85,
+          "reason": "pytest convention: tests/ with .py extension, entity 'add' from task prompt."
+        },
+        {
+          "path": "tests/test_audit.py",
+          "confidence": 0.85,
+          "reason": "pytest convention: tests/ with .py extension, entity 'audit' from task prompt."
+        },
+        {
+          "path": "tests/test_log.py",
+          "confidence": 0.85,
+          "reason": "pytest convention: tests/ with .py extension, entity 'log' from task prompt."
+        }
+      ],
+      "allowed_paths": [
+        "backend/app/alembic/versions/**",
+        "backend/app/api/**",
+        "backend/app/api/routes/**",
+        "backend/app/main.py",
+        "backend/tests/api/routes/**",
+        "tests/test_add.py",
+        "tests/test_audit.py",
+        "tests/test_log.py"
+      ],
+      "depends_on": [],
+      "parallel_group": 2,
+      "rationale": null
+    },
+    {
+      "id": "oauth-callback-route",
+      "prompt": "Add an OAuth callback endpoint for the FastAPI backend by creating a route module under backend/app/api/routes/ to handle the callback flow. Register the new router in backend/app/api/main.py. Add route coverage in backend/tests/api/routes/test_oauth_callback.py for the OAuth callback endpoint.",
+      "predicted_writes": [
+        {
+          "path": "backend/app/api/main.py",
+          "confidence": 0.9999996951289618,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 39.24)."
+        },
+        {
+          "path": "backend/app/main.py",
+          "confidence": 0.9999996045260939,
+          "reason": "personalized PageRank rank #6, top symbol matches: app.; BM25 lexical match over path, identifiers, imports, docstrings (score 38.59)."
+        },
+        {
+          "path": "scripts/add_latest_release_date.py",
+          "confidence": 0.9999990196114541,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 36.32)."
+        },
+        {
+          "path": "backend/tests/api/routes/test_oauth_callback.py",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/server/auth/config.ts",
+          "confidence": 0.95,
+          "reason": "NextAuth options home in the T3 layout"
+        },
+        {
+          "path": "prisma/schema.prisma",
+          "confidence": 0.9,
+          "reason": "NextAuth + Prisma adapter requires schema additions"
+        },
+        {
+          "path": "backend/app/api/routes/items.py",
+          "confidence": 0.85,
+          "reason": "Symbol 'router' referenced in prompt; defined in backend/app/api/routes/items.py."
+        },
+        {
+          "path": "src/app/api/auth/[...nextauth]/route.ts",
+          "confidence": 0.85,
+          "reason": "NextAuth route handler for OAuth callbacks"
+        }
+      ],
+      "allowed_paths": [
+        "backend/app/api/**",
+        "backend/app/api/routes/**",
+        "backend/app/main.py",
+        "backend/tests/api/routes/**",
+        "prisma/schema.prisma",
+        "scripts/add_latest_release_date.py",
+        "src/app/api/auth/[...nextauth]/**",
+        "src/server/auth/**"
+      ],
+      "depends_on": [],
+      "parallel_group": 3,
+      "rationale": null
+    },
+    {
+      "id": "smtp-timeout-config",
+      "prompt": "Extend backend/app/core/config.py with SMTP timeout and TLS-related settings for the FastAPI service configuration. Keep the change scoped to backend/app/core/config.py and make the new settings available through the existing settings model.",
+      "predicted_writes": [
+        {
+          "path": "backend/app/alembic/env.py",
+          "confidence": 0.9999918101908059,
+          "reason": "personalized PageRank rank #7, top symbol matches: config.; BM25 lexical match over path, identifiers, imports, docstrings (score 31.01)."
+        },
+        {
+          "path": "scripts/add_latest_release_date.py",
+          "confidence": 0.9998929033252711,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 24.59)."
+        },
+        {
+          "path": "backend/app/main.py",
+          "confidence": 0.9997749098543924,
+          "reason": "personalized PageRank rank #5, top symbol matches: app.; BM25 lexical match over path, identifiers, imports, docstrings (score 22.73)."
+        },
+        {
+          "path": "backend/app/core/config.py",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "backend/app/core/__init__.py",
+          "confidence": 0.7,
+          "reason": "Hint 'core' matches path component."
+        },
+        {
+          "path": "backend/app/core/db.py",
+          "confidence": 0.7,
+          "reason": "Hint 'core' matches path component."
+        },
+        {
+          "path": "backend/app/core/security.py",
+          "confidence": 0.7,
+          "reason": "Hint 'core' matches path component."
+        }
+      ],
+      "allowed_paths": [
+        "backend/app/alembic/**",
+        "backend/app/core/**",
+        "backend/app/main.py",
+        "scripts/add_latest_release_date.py"
+      ],
+      "depends_on": [],
+      "parallel_group": 4,
+      "rationale": null
+    },
+    {
+      "id": "request-logging-config",
+      "prompt": "Add a request-logging toggle to backend/app/core/config.py and wire that setting through backend/app/main.py so application startup can use it. Keep the configuration change anchored in backend/app/core/config.py and the app wiring change in backend/app/main.py.",
+      "predicted_writes": [
+        {
+          "path": "backend/app/alembic/env.py",
+          "confidence": 0.999999968944067,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 44.95)."
+        },
+        {
+          "path": "backend/app/initial_data.py",
+          "confidence": 0.9999999507557452,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 43.80)."
+        },
+        {
+          "path": "backend/app/backend_pre_start.py",
+          "confidence": 0.9999996395128922,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 38.82)."
+        },
+        {
+          "path": "backend/app/core/config.py",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "backend/app/main.py",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "backend/app/api/main.py",
+          "confidence": 0.7,
+          "reason": "Hint 'main' matches path component."
+        },
+        {
+          "path": "backend/app/core/__init__.py",
+          "confidence": 0.7,
+          "reason": "Hint 'core' matches path component."
+        },
+        {
+          "path": "backend/app/core/db.py",
+          "confidence": 0.7,
+          "reason": "Hint 'core' matches path component."
+        }
+      ],
+      "allowed_paths": [
+        "backend/app/alembic/**",
+        "backend/app/api/**",
+        "backend/app/backend_pre_start.py",
+        "backend/app/core/**",
+        "backend/app/initial_data.py",
+        "backend/app/main.py"
+      ],
+      "depends_on": [],
+      "parallel_group": 5,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "health-route"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      },
+      {
+        "id": 2,
+        "tasks": [
+          "admin-audit-route"
+        ],
+        "type": "serial",
+        "waits_for": [
+          1
+        ]
+      },
+      {
+        "id": 3,
+        "tasks": [
+          "oauth-callback-route"
+        ],
+        "type": "serial",
+        "waits_for": [
+          2
+        ]
+      },
+      {
+        "id": 4,
+        "tasks": [
+          "smtp-timeout-config"
+        ],
+        "type": "serial",
+        "waits_for": [
+          3
+        ]
+      },
+      {
+        "id": 5,
+        "tasks": [
+          "request-logging-config"
+        ],
+        "type": "serial",
+        "waits_for": [
+          4
+        ]
+      }
+    ]
+  },
+  "conflicts_detected": [
+    {
+      "files": [
+        "backend/app/api/main.py",
+        "backend/app/api/routes/items.py",
+        "backend/app/main.py",
+        "tests/test_add.py"
+      ],
+      "between_tasks": [
+        "health-route",
+        "admin-audit-route"
+      ],
+      "resolution": "Serialize admin-audit-route after health-route; both modify backend/app/api/main.py, backend/app/api/routes/items.py, backend/app/main.py, tests/test_add.py"
+    },
+    {
+      "files": [
+        "backend/app/api/main.py",
+        "backend/app/api/routes/items.py",
+        "backend/app/main.py"
+      ],
+      "between_tasks": [
+        "health-route",
+        "oauth-callback-route"
+      ],
+      "resolution": "Serialize oauth-callback-route after health-route; both modify backend/app/api/main.py, backend/app/api/routes/items.py, backend/app/main.py"
+    },
+    {
+      "files": [
+        "backend/app/main.py"
+      ],
+      "between_tasks": [
+        "health-route",
+        "smtp-timeout-config"
+      ],
+      "resolution": "Serialize smtp-timeout-config after health-route; both modify backend/app/main.py"
+    },
+    {
+      "files": [
+        "backend/app/api/main.py",
+        "backend/app/main.py"
+      ],
+      "between_tasks": [
+        "health-route",
+        "request-logging-config"
+      ],
+      "resolution": "Serialize request-logging-config after health-route; both modify backend/app/api/main.py, backend/app/main.py"
+    },
+    {
+      "files": [
+        "backend/app/api/main.py",
+        "backend/app/api/routes/items.py",
+        "backend/app/main.py"
+      ],
+      "between_tasks": [
+        "admin-audit-route",
+        "oauth-callback-route"
+      ],
+      "resolution": "Serialize oauth-callback-route after admin-audit-route; both modify backend/app/api/main.py, backend/app/api/routes/items.py, backend/app/main.py"
+    },
+    {
+      "files": [
+        "backend/app/main.py"
+      ],
+      "between_tasks": [
+        "admin-audit-route",
+        "smtp-timeout-config"
+      ],
+      "resolution": "Serialize smtp-timeout-config after admin-audit-route; both modify backend/app/main.py"
+    },
+    {
+      "files": [
+        "backend/app/api/main.py",
+        "backend/app/main.py"
+      ],
+      "between_tasks": [
+        "admin-audit-route",
+        "request-logging-config"
+      ],
+      "resolution": "Serialize request-logging-config after admin-audit-route; both modify backend/app/api/main.py, backend/app/main.py"
+    },
+    {
+      "files": [
+        "backend/app/main.py",
+        "scripts/add_latest_release_date.py"
+      ],
+      "between_tasks": [
+        "oauth-callback-route",
+        "smtp-timeout-config"
+      ],
+      "resolution": "Serialize smtp-timeout-config after oauth-callback-route; both modify backend/app/main.py, scripts/add_latest_release_date.py"
+    },
+    {
+      "files": [
+        "backend/app/api/main.py",
+        "backend/app/main.py"
+      ],
+      "between_tasks": [
+        "oauth-callback-route",
+        "request-logging-config"
+      ],
+      "resolution": "Serialize request-logging-config after oauth-callback-route; both modify backend/app/api/main.py, backend/app/main.py"
+    },
+    {
+      "files": [
+        "backend/app/alembic/env.py",
+        "backend/app/core/__init__.py",
+        "backend/app/core/config.py",
+        "backend/app/core/db.py",
+        "backend/app/main.py"
+      ],
+      "between_tasks": [
+        "smtp-timeout-config",
+        "request-logging-config"
+      ],
+      "resolution": "Serialize request-logging-config after smtp-timeout-config; both modify backend/app/alembic/env.py, backend/app/core/__init__.py, backend/app/core/config.py, backend/app/core/db.py, backend/app/main.py"
+    }
+  ]
+}

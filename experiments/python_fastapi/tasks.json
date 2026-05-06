@@ -1,0 +1,76 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "health-route",
+      "prompt": "Add a health endpoint for the FastAPI backend by creating a route module under backend/app/api/routes/ and wiring it into the existing API router. Register the new router in backend/app/api/main.py. Add route coverage in backend/tests/api/routes/test_health.py that exercises the health endpoint through the FastAPI app.",
+      "hints": {
+        "touches": [
+          "health",
+          "route",
+          "api",
+          "main",
+          "backend/app/api/main.py",
+          "backend/tests/api/routes/test_health.py"
+        ]
+      }
+    },
+    {
+      "id": "admin-audit-route",
+      "prompt": "Add an admin audit log endpoint for the FastAPI backend by creating a route module under backend/app/api/routes/ for audit access. Register the new router in backend/app/api/main.py. Add route coverage in backend/tests/api/routes/test_admin_audit.py for the admin audit endpoint.",
+      "hints": {
+        "touches": [
+          "admin",
+          "audit",
+          "api",
+          "main",
+          "backend/app/api/main.py",
+          "backend/tests/api/routes/test_admin_audit.py"
+        ]
+      }
+    },
+    {
+      "id": "oauth-callback-route",
+      "prompt": "Add an OAuth callback endpoint for the FastAPI backend by creating a route module under backend/app/api/routes/ to handle the callback flow. Register the new router in backend/app/api/main.py. Add route coverage in backend/tests/api/routes/test_oauth_callback.py for the OAuth callback endpoint.",
+      "hints": {
+        "touches": [
+          "oauth",
+          "callback",
+          "api",
+          "main",
+          "backend/app/api/main.py",
+          "backend/tests/api/routes/test_oauth_callback.py"
+        ]
+      }
+    },
+    {
+      "id": "smtp-timeout-config",
+      "prompt": "Extend backend/app/core/config.py with SMTP timeout and TLS-related settings for the FastAPI service configuration. Keep the change scoped to backend/app/core/config.py and make the new settings available through the existing settings model.",
+      "hints": {
+        "touches": [
+          "smtp",
+          "timeout",
+          "tls",
+          "core",
+          "config",
+          "backend/app/core/config.py"
+        ]
+      }
+    },
+    {
+      "id": "request-logging-config",
+      "prompt": "Add a request-logging toggle to backend/app/core/config.py and wire that setting through backend/app/main.py so application startup can use it. Keep the configuration change anchored in backend/app/core/config.py and the app wiring change in backend/app/main.py.",
+      "hints": {
+        "touches": [
+          "request",
+          "logging",
+          "core",
+          "config",
+          "main",
+          "backend/app/core/config.py",
+          "backend/app/main.py"
+        ]
+      }
+    }
+  ]
+}
