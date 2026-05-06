@@ -59,10 +59,28 @@ from .devin_adapter import (
     devin_api_run,
     run_devin_manual,
 )
-from .eval_schema import EvalRun, write_eval_run
-from .strategies import run_strategy
+from .eval_schema import EvalRepo, EvalRun, repo_from_path, suite_name_from_lock, write_eval_run
+from .strategies import (
+    ACG_PLANNED_FULL_CONTEXT_STRATEGY,
+    ACG_PLANNED_STRATEGY,
+    NAIVE_STRATEGY,
+    run_strategy,
+)
 
-VALID_STRATEGIES = ("naive_parallel", "acg_planned", "both")
+STRATEGY_GROUPS = {
+    "both": [NAIVE_STRATEGY, ACG_PLANNED_STRATEGY],
+    "ablation": [
+        NAIVE_STRATEGY,
+        ACG_PLANNED_FULL_CONTEXT_STRATEGY,
+        ACG_PLANNED_STRATEGY,
+    ],
+}
+VALID_STRATEGIES = (
+    NAIVE_STRATEGY,
+    ACG_PLANNED_STRATEGY,
+    ACG_PLANNED_FULL_CONTEXT_STRATEGY,
+    *STRATEGY_GROUPS.keys(),
+)
 VALID_BACKENDS = ("mock", "local", "devin-manual", "devin-api")
 EXIT_OK = 0
 EXIT_USER_ERROR = 1
@@ -121,8 +139,21 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         "--repo-url",
         default=None,
         help=(
-            "GitHub URL of the repo Devin should clone (required for --backend devin-api). "
-            "Pre-link this repo to your Devin org via the Devin admin UI first."
+            "Repo URL metadata override, and the GitHub URL Devin should clone for "
+            "--backend devin-api. Pre-link this repo to your Devin org first."
+        ),
+    )
+    parser.add_argument(
+        "--repo-commit",
+        default=None,
+        help="Repo commit metadata override. Defaults to `git -C <repo> rev-parse HEAD`.",
+    )
+    parser.add_argument(
+        "--suite-name",
+        default=None,
+        help=(
+            "Evaluation suite name to embed in artifacts. Defaults to Greenhouse for "
+            "Greenhouse checkouts, otherwise '<repo-name>-eval'."
         ),
     )
     parser.add_argument(
@@ -160,7 +191,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         default=None,
         help=(
             "Single output path for one-strategy runs. Ignored when --strategy both "
-            "(use --out-dir)."
+            "or --strategy ablation (use --out-dir)."
         ),
     )
     parser.add_argument(
@@ -169,7 +200,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         default=None,
         help=(
             "Directory to write multiple eval_run files into "
-            "(eval_run_naive.json + eval_run_acg.json). Required for --strategy both."
+            "(eval_run_naive.json + eval_run_acg.json, plus ablation files when "
+            "requested). Required for multi-strategy runs."
         ),
     )
     parser.add_argument(
@@ -221,12 +253,23 @@ def _resolve_outputs(
         return {strategies[0]: out}
 
     if args.out_dir is None:
-        raise SystemExit("--strategy both requires --out-dir")
+        raise SystemExit("multi-strategy runs require --out-dir")
     return {strat: args.out_dir / f"eval_run_{_short_name(strat)}.json" for strat in strategies}
 
 
 def _short_name(strategy: str) -> str:
-    return {"naive_parallel": "naive", "acg_planned": "acg"}.get(strategy, strategy)
+    return {
+        NAIVE_STRATEGY: "naive",
+        ACG_PLANNED_STRATEGY: "acg",
+        ACG_PLANNED_FULL_CONTEXT_STRATEGY: "acg_full_context",
+    }.get(strategy, strategy)
+
+
+def _selected_strategies(selection: str) -> list[str]:
+    """Expand a CLI strategy or strategy group into concrete strategy names."""
+    if selection in STRATEGY_GROUPS:
+        return list(STRATEGY_GROUPS[selection])
+    return [selection]
 
 
 def _run_one(
@@ -239,6 +282,8 @@ def _run_one(
     prompts_by_task: dict[str, str],
     sequential_wall_time_seconds: float | None,
     devin_results: Path | None,
+    suite_name: str,
+    repo: EvalRepo,
     devin_api_kwargs: dict | None = None,
 ) -> EvalRun:
     devin_api_kwargs = devin_api_kwargs or {}
@@ -251,6 +296,13 @@ def _run_one(
             lockfile_path=lockfile_path,
             prompts_by_task=prompts_by_task,
             sequential_wall_time_seconds=sequential_wall_time_seconds,
+            suite_name=suite_name,
+            repo=repo,
+        )
+    if strategy == ACG_PLANNED_FULL_CONTEXT_STRATEGY:
+        raise SystemExit(
+            "acg_planned_full_context is only supported by mock/local proposal "
+            "backends"
         )
     if backend == "devin-manual":
         if devin_results is None:
@@ -262,6 +314,8 @@ def _run_one(
             devin_results_path=devin_results,
             prompts_by_task=prompts_by_task,
             sequential_wall_time_seconds=sequential_wall_time_seconds,
+            suite_name=suite_name,
+            repo=repo,
         )
     if backend == "devin-api":
         if not devin_api_kwargs.get("repo_url"):
@@ -271,6 +325,8 @@ def _run_one(
             lock=lock,
             lockfile_path=lockfile_path,
             sequential_wall_time_seconds=sequential_wall_time_seconds,
+            suite_name=suite_name,
+            repo=repo,
             **devin_api_kwargs,
         )
     raise SystemExit(f"unsupported backend {backend!r}")
@@ -291,11 +347,13 @@ def main(argv: list[str] | None = None) -> int:
     lock = _load_lockfile(args.lock)
     prompts = _load_prompts(args.tasks)
     repo_graph = _load_repo_graph(args.repo)
-    strategies = (
-        [args.strategy]
-        if args.strategy in ("naive_parallel", "acg_planned")
-        else ["naive_parallel", "acg_planned"]
+    suite_name = suite_name_from_lock(lock, args.suite_name)
+    repo_meta = repo_from_path(
+        args.repo,
+        repo_url=args.repo_url,
+        repo_commit=args.repo_commit,
     )
+    strategies = _selected_strategies(args.strategy)
     outputs = _resolve_outputs(args, strategies)
 
     written: list[Path] = []
@@ -310,6 +368,8 @@ def main(argv: list[str] | None = None) -> int:
                 prompts_by_task=prompts,
                 sequential_wall_time_seconds=args.sequential_wall_time_seconds,
                 devin_results=args.devin_results,
+                suite_name=suite_name,
+                repo=repo_meta,
                 devin_api_kwargs={
                     "repo_url": args.repo_url,
                     "base_branch": args.base_branch,
@@ -338,9 +398,9 @@ def main(argv: list[str] | None = None) -> int:
             f"wall={summary.wall_time_seconds:.3f}s"
         )
 
-    # Convenience: when both strategies land in the same dir, also drop a
-    # combined sidecar with both summary blocks for quick chart consumption.
-    if len(strategies) == 2 and args.out_dir is not None:
+    # Convenience: when multiple strategies land in the same dir, also drop a
+    # combined sidecar with all summary blocks for quick chart consumption.
+    if len(strategies) > 1 and args.out_dir is not None:
         combined = {
             "version": "0.1",
             "strategies": {

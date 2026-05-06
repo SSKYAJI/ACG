@@ -1,0 +1,455 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-05T22:30:01.970254Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "qwen/qwen3-coder-30b-a3b-instruct"
+  },
+  "repo": {
+    "root": "experiments/realworld/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "add-rate-limiting",
+      "prompt": "Add global rate limiting using @nestjs/throttler. Install the package and update package.json. Register ThrottlerModule in src/app.module.ts with default ttl=60 and limit=100. Add ThrottlerGuard as a global APP_GUARD provider in src/app.module.ts. Create src/shared/throttle.config.ts with the rate-limit configuration constants.",
+      "predicted_writes": [
+        {
+          "path": "src/main.ts",
+          "confidence": 0.9999890105538379,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 30.28)."
+        },
+        {
+          "path": "src/app.module.ts",
+          "confidence": 0.9999881520382716,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 30.09)."
+        },
+        {
+          "path": "package.js",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "package.json",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/shared/throttle.config.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": ".env.example",
+          "confidence": 0.8,
+          "reason": "Env-var seed: prompt mentions credentials/providers; agents typically extend `.env.example`."
+        },
+        {
+          "path": "src/shared/base.controller.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'shared' matches path component."
+        },
+        {
+          "path": "src/shared/pipes/validation.pipe.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'shared' matches path component."
+        }
+      ],
+      "allowed_paths": [
+        ".env.example",
+        "package.js",
+        "package.json",
+        "src/app.module.ts",
+        "src/main.ts",
+        "src/shared/base.controller.ts",
+        "src/shared/pipes/**",
+        "src/shared/throttle.config.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    },
+    {
+      "id": "add-user-roles",
+      "prompt": "Add role-based access control. Add a 'role' column (enum: 'user', 'admin') to src/user/user.entity.ts with default 'user'. Create src/user/roles.guard.ts implementing CanActivate that checks user.role. Create src/user/roles.decorator.ts with a @Roles() decorator. Register the guard in src/app.module.ts as a global provider. Update src/user/user.interface.ts to include the role field.",
+      "predicted_writes": [
+        {
+          "path": "src/user/user.decorator.ts",
+          "confidence": 0.9999974597096242,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 33.94)."
+        },
+        {
+          "path": "src/article/article.entity.ts",
+          "confidence": 0.9999919507952336,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 31.06)."
+        },
+        {
+          "path": "src/app.module.ts",
+          "confidence": 0.9999827315704276,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 29.15)."
+        },
+        {
+          "path": "src/user/roles.decorator.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt as requiring a @Roles() decorator."
+        },
+        {
+          "path": "src/user/roles.guard.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt as requiring implementation of CanActivate guard."
+        },
+        {
+          "path": "src/user/user.entity.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt as requiring a 'role' column."
+        },
+        {
+          "path": "src/user/user.interface.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt as requiring update to include the role field."
+        },
+        {
+          "path": ".env.example",
+          "confidence": 0.8,
+          "reason": "Env-var seed: prompt mentions credentials/providers; agents typically extend `.env.example`."
+        }
+      ],
+      "allowed_paths": [
+        ".env.example",
+        "src/app.module.ts",
+        "src/article/article.entity.ts",
+        "src/user/roles.decorator.ts",
+        "src/user/roles.guard.ts",
+        "src/user/user.decorator.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 3,
+      "rationale": null
+    },
+    {
+      "id": "add-article-bookmarks",
+      "prompt": "Add a bookmarking feature (save-for-later, separate from favorites). Create src/article/bookmark.entity.ts as a join entity with userId and articleId columns plus @ManyToOne relations to UserEntity and ArticleEntity. Add a @OneToMany bookmarks relation on src/user/user.entity.ts pointing to the BookmarkEntity. Add POST /api/articles/:slug/bookmark and DELETE /api/articles/:slug/bookmark endpoints in src/article/article.controller.ts. Add bookmarkArticle and unbookmarkArticle methods in src/article/article.service.ts. Register BookmarkEntity in src/article/article.module.ts TypeORM imports.",
+      "predicted_writes": [
+        {
+          "path": "src/article/article.entity.ts",
+          "confidence": 0.999999999999538,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 72.74)."
+        },
+        {
+          "path": "src/user/user.entity.ts",
+          "confidence": 0.9999999999977539,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 68.79)."
+        },
+        {
+          "path": "src/article/comment.entity.ts",
+          "confidence": 0.999999999951297,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 61.10)."
+        },
+        {
+          "path": "src/article/article.controller.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/article/article.module.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/article/article.service.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/article/bookmark.entity.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        }
+      ],
+      "allowed_paths": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/article/bookmark.entity.ts",
+        "src/article/comment.entity.ts",
+        "src/user/user.entity.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    },
+    {
+      "id": "extend-tag-crud",
+      "prompt": "Extend the tag module with create and delete operations. The existing src/tag/tag.controller.ts only has GET /tags. Add POST /tags and DELETE /tags/:id endpoints to src/tag/tag.controller.ts. Add corresponding create and delete methods in src/tag/tag.service.ts. Add CreateTagDto in src/tag/dto/create-tag.dto.ts for validation.",
+      "predicted_writes": [
+        {
+          "path": "src/tag/tag.controller.spec.ts",
+          "confidence": 0.9999999999681748,
+          "reason": "personalized PageRank rank #8, top symbol matches: createTag, module, tag.; BM25 lexical match over path, identifiers, imports, docstrings (score 62.16)."
+        },
+        {
+          "path": "src/tag/tag.module.ts",
+          "confidence": 0.9999999999611854,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 61.66)."
+        },
+        {
+          "path": "src/tag/dto/create-tag.dto.ts",
+          "confidence": 0.99,
+          "reason": "Task explicitly requires adding CreateTagDto to this file."
+        },
+        {
+          "path": "src/tag/tag.controller.ts",
+          "confidence": 0.99,
+          "reason": "Task explicitly requires adding POST and DELETE endpoints to this file."
+        },
+        {
+          "path": "src/tag/tag.service.ts",
+          "confidence": 0.99,
+          "reason": "Task explicitly requires adding create and delete methods to this file."
+        },
+        {
+          "path": "src/article/dto/create-article.dto.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'dto' matches path component."
+        },
+        {
+          "path": "src/article/dto/create-comment.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'dto' matches path component."
+        },
+        {
+          "path": "src/article/dto/index.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'dto' matches path component."
+        }
+      ],
+      "allowed_paths": [
+        "src/article/dto/**",
+        "src/tag/dto/**",
+        "src/tag/tag.controller.spec.ts",
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.module.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    },
+    {
+      "id": "add-article-search",
+      "prompt": "Add full-text search to articles. The existing findAll method in src/article/article.service.ts only filters by tag, author, and favorited - it has no text search on title or body. Add a searchArticles method in src/article/article.service.ts using TypeORM QueryBuilder with LIKE on title and body fields. Add a GET /api/articles/search?q=query endpoint in src/article/article.controller.ts. Create src/article/dto/search-query.dto.ts for query validation.",
+      "predicted_writes": [
+        {
+          "path": "src/article/article.interface.ts",
+          "confidence": 0.9999986791617497,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 35.58)."
+        },
+        {
+          "path": "src/article/dto/create-article.dto.ts",
+          "confidence": 0.9999973957100624,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 33.88)."
+        },
+        {
+          "path": "src/article/article.controller.ts",
+          "confidence": 0.95,
+          "reason": "Task explicitly mentions adding a GET /api/articles/search endpoint to this file."
+        },
+        {
+          "path": "src/article/article.service.ts",
+          "confidence": 0.95,
+          "reason": "Task explicitly mentions adding a searchArticles method to this file."
+        },
+        {
+          "path": "src/article/dto/search-query.dto.ts",
+          "confidence": 0.95,
+          "reason": "Task explicitly mentions creating this DTO file for query validation."
+        },
+        {
+          "path": "src/article/dto/create-comment.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'dto' matches path component."
+        },
+        {
+          "path": "src/article/dto/index.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'dto' matches path component."
+        },
+        {
+          "path": "src/user/dto/create-user.dto.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'dto' matches path component."
+        }
+      ],
+      "allowed_paths": [
+        "src/article/article.controller.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.service.ts",
+        "src/article/dto/**",
+        "src/user/dto/**"
+      ],
+      "depends_on": [],
+      "parallel_group": 2,
+      "rationale": null
+    },
+    {
+      "id": "add-health-check",
+      "prompt": "Add a health check endpoint using @nestjs/terminus. Install the package and update package.json. Create src/health/health.module.ts and src/health/health.controller.ts with a GET /health endpoint that checks TypeORM database connectivity via TypeOrmHealthIndicator. Register HealthModule in src/app.module.ts imports.",
+      "predicted_writes": [
+        {
+          "path": "src/app.module.ts",
+          "confidence": 0.9999791438532347,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 28.68)."
+        },
+        {
+          "path": "src/main.ts",
+          "confidence": 0.9997838389706106,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 22.83)."
+        },
+        {
+          "path": "package.js",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "package.json",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/health/health.controller.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        },
+        {
+          "path": "src/health/health.module.ts",
+          "confidence": 0.95,
+          "reason": "Path mentioned verbatim in task prompt."
+        }
+      ],
+      "allowed_paths": [
+        "package.js",
+        "package.json",
+        "src/app.module.ts",
+        "src/health/health.controller.ts",
+        "src/health/health.module.ts",
+        "src/main.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 2,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "add-article-bookmarks",
+          "add-rate-limiting",
+          "extend-tag-crud"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      },
+      {
+        "id": 2,
+        "tasks": [
+          "add-article-search",
+          "add-health-check"
+        ],
+        "type": "parallel",
+        "waits_for": [
+          1
+        ]
+      },
+      {
+        "id": 3,
+        "tasks": [
+          "add-user-roles"
+        ],
+        "type": "serial",
+        "waits_for": [
+          2
+        ]
+      }
+    ]
+  },
+  "conflicts_detected": [
+    {
+      "files": [
+        ".env.example",
+        "src/app.module.ts"
+      ],
+      "between_tasks": [
+        "add-rate-limiting",
+        "add-user-roles"
+      ],
+      "resolution": "Serialize add-user-roles after add-rate-limiting; both modify .env.example, src/app.module.ts"
+    },
+    {
+      "files": [
+        "package.js",
+        "package.json",
+        "src/app.module.ts",
+        "src/main.ts"
+      ],
+      "between_tasks": [
+        "add-rate-limiting",
+        "add-health-check"
+      ],
+      "resolution": "Serialize add-health-check after add-rate-limiting; both modify package.js, package.json, src/app.module.ts, src/main.ts"
+    },
+    {
+      "files": [
+        "src/article/article.entity.ts",
+        "src/user/user.entity.ts"
+      ],
+      "between_tasks": [
+        "add-article-bookmarks",
+        "add-user-roles"
+      ],
+      "resolution": "Serialize add-user-roles after add-article-bookmarks; both modify src/article/article.entity.ts, src/user/user.entity.ts"
+    },
+    {
+      "files": [
+        "src/app.module.ts"
+      ],
+      "between_tasks": [
+        "add-health-check",
+        "add-user-roles"
+      ],
+      "resolution": "Serialize add-user-roles after add-health-check; both modify src/app.module.ts"
+    },
+    {
+      "files": [
+        "src/article/article.controller.ts",
+        "src/article/article.service.ts"
+      ],
+      "between_tasks": [
+        "add-article-bookmarks",
+        "add-article-search"
+      ],
+      "resolution": "Serialize add-article-search after add-article-bookmarks; both modify src/article/article.controller.ts, src/article/article.service.ts"
+    },
+    {
+      "files": [
+        "src/article/dto/create-article.dto.ts",
+        "src/article/dto/create-comment.ts",
+        "src/article/dto/index.ts"
+      ],
+      "between_tasks": [
+        "extend-tag-crud",
+        "add-article-search"
+      ],
+      "resolution": "Serialize add-article-search after extend-tag-crud; both modify src/article/dto/create-article.dto.ts, src/article/dto/create-comment.ts, src/article/dto/index.ts"
+    }
+  ]
+}

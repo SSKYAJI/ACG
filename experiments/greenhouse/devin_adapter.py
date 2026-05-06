@@ -61,12 +61,15 @@ from acg.schema import AgentLock
 
 from .eval_schema import (
     EvalModel,
+    EvalRepo,
     EvalRun,
     EvalTask,
     annotate_overlaps,
     compute_summary_metrics,
     make_run_id,
     now_iso,
+    repo_from_path,
+    suite_name_from_lock,
     task_from_lock,
     validate_actual_files,
 )
@@ -110,6 +113,7 @@ def _task_from_manual_entry(
     eval_task = task_from_lock(
         lock_task, prompt=(prompts_by_task or {}).get(task_id, lock_task.prompt)
     )
+    eval_task.actual_changed_files_kind = "applied_diff"
     eval_task.session_id = entry.get("session_id")
     eval_task.actual_changed_files = sorted(set(entry.get("actual_changed_files") or []))
     eval_task.timestamps.started_at = entry.get("started_at")
@@ -166,6 +170,8 @@ def run_devin_manual(
     devin_results_path: Path,
     prompts_by_task: dict[str, str] | None = None,
     sequential_wall_time_seconds: float | None = None,
+    suite_name: str | None = None,
+    repo: EvalRepo | None = None,
 ) -> EvalRun:
     """Build an :class:`EvalRun` from a human-collected Devin sidecar JSON."""
     payload = _load_manual(devin_results_path)
@@ -194,9 +200,18 @@ def run_devin_manual(
     return EvalRun(
         run_id=make_run_id(strategy, "devin-manual"),
         created_at=now_iso(),
+        suite_name=suite_name or suite_name_from_lock(lock),
         strategy=strategy,
         backend="devin-manual",
+        execution_mode="manual_diff",
+        evidence_kind="applied_diff",
         model=EvalModel(provider="devin", model="manual-sidecar"),
+        repo=repo
+        or repo_from_path(
+            Path(lock.repo.root) if lock.repo.root else None,
+            repo_url=lock.repo.git_url,
+            repo_commit=lock.repo.commit,
+        ),
         lockfile=lockfile_path,
         tasks=eval_tasks,
         summary_metrics=summary,
@@ -233,6 +248,8 @@ def devin_api_run(
     devin_extra_body: dict[str, Any] | None = None,
     sequential_wall_time_seconds: float | None = None,
     client: Any = None,
+    suite_name: str | None = None,
+    repo: EvalRepo | None = None,
 ) -> EvalRun:
     """Run all tasks against the live Devin v3 API and build an :class:`EvalRun`.
 
@@ -304,6 +321,8 @@ def devin_api_run(
                 max_acu_limit=max_acu_limit,
                 devin_extra_body=devin_extra_body,
                 sequential_wall_time_seconds=sequential_wall_time_seconds,
+                suite_name=suite_name,
+                repo=repo,
             )
         finally:
             if owns_client:
@@ -327,6 +346,8 @@ async def _devin_api_run_async(
     max_acu_limit: int | None,
     devin_extra_body: dict[str, Any] | None,
     sequential_wall_time_seconds: float | None,
+    suite_name: str | None,
+    repo: EvalRepo | None,
 ) -> EvalRun:
     """Async core for :func:`devin_api_run`. Pure orchestration."""
     import asyncio
@@ -343,6 +364,8 @@ async def _devin_api_run_async(
 
     run_id = run_id_hint or make_run_id(strategy, "devin-api")
     eval_tasks_by_id: dict[str, EvalTask] = {task.id: task_from_lock(task) for task in lock.tasks}
+    for eval_task in eval_tasks_by_id.values():
+        eval_task.actual_changed_files_kind = "applied_diff"
 
     sem = asyncio.Semaphore(max(1, max_parallelism))
 
@@ -467,12 +490,21 @@ async def _devin_api_run_async(
     return EvalRun(
         run_id=run_id,
         created_at=now_iso(),
+        suite_name=suite_name or suite_name_from_lock(lock),
         strategy=strategy,
         backend="devin-api",
+        execution_mode="devin_diff",
+        evidence_kind="applied_diff",
         model=EvalModel(
             provider="devin",
             model=str(agent),
             url=getattr(client, "base_url", None),
+        ),
+        repo=repo
+        or repo_from_path(
+            Path(lock.repo.root) if lock.repo.root else None,
+            repo_url=lock.repo.git_url,
+            repo_commit=lock.repo.commit,
         ),
         lockfile=lockfile_path,
         tasks=eval_tasks,

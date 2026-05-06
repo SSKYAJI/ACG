@@ -439,13 +439,21 @@ def cmd_analyze_runs(
                     "strategy": r.strategy,
                     "backend": r.backend,
                     "suite_name": r.suite_name,
+                    "execution_mode": r.execution_mode,
+                    "evidence_kind": r.evidence_kind,
                     "tasks_total": r.tasks_total,
                     "tasks_completed": r.tasks_completed,
+                    "tests_ran_count": r.tests_ran_count,
+                    "tested_tasks_completed": r.tested_tasks_completed,
                     "overlapping_write_pairs": r.overlapping_write_pairs,
                     "out_of_bounds_write_count": r.out_of_bounds_write_count,
                     "blocked_invalid_write_count": r.blocked_invalid_write_count,
                     "tokens_prompt_total": r.tokens_prompt_total,
+                    "tokens_prompt_method": r.tokens_prompt_method,
                     "tokens_orchestrator_overhead": r.tokens_orchestrator_overhead,
+                    "cost_usd_total": r.cost_usd_total,
+                    "cost_method": r.cost_method,
+                    "cost_source": r.cost_source,
                 }
                 for r in report.runs
             ],
@@ -474,6 +482,8 @@ def cmd_analyze_runs(
                 "f1": round(report.overall_f1, 4),
                 "total_blocks": report.total_blocks,
                 "total_oob": report.total_oob,
+                "total_proposal_oob": report.total_proposal_oob,
+                "total_posthoc_oob": report.total_posthoc_oob,
             },
         }
         json_out.parent.mkdir(parents=True, exist_ok=True)

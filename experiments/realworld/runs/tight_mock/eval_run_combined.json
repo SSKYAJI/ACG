@@ -1,0 +1,992 @@
+{
+  "strategies": {
+    "acg_planned": {
+      "backend": "mock",
+      "created_at": "2026-05-05T22:35:35Z",
+      "lockfile": "experiments/realworld/agent_lock_tight.json",
+      "model": {
+        "model": "lockfile-echo",
+        "provider": "mock",
+        "url": "mock://local"
+      },
+      "repo": {
+        "commit": "174c1c320875a66447deb2a15d04fc86afd07f60",
+        "local_path": "experiments/greenhouse/checkout",
+        "url": "https://github.com/spring-attic/greenhouse.git"
+      },
+      "run_id": "greenhouse-mock-acg_planned-20260505-223535",
+      "strategy": "acg_planned",
+      "suite_name": "greenhouse-java6-modernization",
+      "summary_metrics": {
+        "acus_consumed_total": null,
+        "blocked_invalid_write_count": 22,
+        "first_run_pass_rate": 0.0,
+        "human_interventions": 0,
+        "merge_conflicts": 0,
+        "out_of_bounds_write_count": 0,
+        "overlapping_write_pairs": 5,
+        "successful_parallel_speedup": null,
+        "task_completion_rate": 1.0,
+        "tasks_completed": 6,
+        "tasks_completed_per_hour": 1456048.96,
+        "tasks_total": 6,
+        "tokens_completion_total": 180,
+        "tokens_orchestrator_overhead": null,
+        "tokens_prompt_total": 1208,
+        "wall_time_seconds": 0.0148
+      },
+      "tasks": [
+        {
+          "actual_changed_files": [
+            "src/article/article.controller.ts",
+            "src/article/article.module.ts",
+            "src/article/article.service.ts",
+            "src/article/bookmark.entity.ts",
+            "src/user/user.entity.ts"
+          ],
+          "allowed_write_globs": [
+            "src/article/article.controller.ts",
+            "src/article/article.module.ts",
+            "src/article/article.service.ts",
+            "src/article/bookmark.entity.ts",
+            "src/user/user.entity.ts"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [
+            {
+              "description": "BM25 lexical match over path, identifiers, imports, docstrings (score 72.74).",
+              "file": "src/article/article.entity.ts",
+              "reason": "path 'src/article/article.entity.ts' is outside task 'add-article-bookmarks''s allowed_paths (src/article/article.controller.ts, src/article/article.module.ts, src/article/article.service.ts, src/article/bookmark.entity.ts, src/user/user.entity.ts)"
+            },
+            {
+              "description": "BM25 lexical match over path, identifiers, imports, docstrings (score 61.10).",
+              "file": "src/article/comment.entity.ts",
+              "reason": "path 'src/article/comment.entity.ts' is outside task 'add-article-bookmarks''s allowed_paths (src/article/article.controller.ts, src/article/article.module.ts, src/article/article.service.ts, src/article/bookmark.entity.ts, src/user/user.entity.ts)"
+            }
+          ],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 28,
+            "tokens_prompt": 267,
+            "wall_time_seconds": 0.0
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [
+            "add-article-search",
+            "add-user-roles"
+          ],
+          "predicted_write_files": [
+            "src/article/article.entity.ts",
+            "src/user/user.entity.ts",
+            "src/article/comment.entity.ts",
+            "src/article/article.controller.ts",
+            "src/article/article.module.ts",
+            "src/article/article.service.ts",
+            "src/article/bookmark.entity.ts"
+          ],
+          "prompt": "Add a bookmarking feature (save-for-later, separate from favorites). Create src/article/bookmark.entity.ts as a join entity with userId and articleId columns plus @ManyToOne relations to UserEntity and ArticleEntity. Add a @OneToMany bookmarks relation on src/user/user.entity.ts pointing to the BookmarkEntity. Add POST /api/articles/:slug/bookmark and DELETE /api/articles/:slug/bookmark endpoints in src/article/article.controller.ts. Add bookmarkArticle and unbookmarkArticle methods in src/article/article.service.ts. Register BookmarkEntity in src/article/article.module.ts TypeORM imports.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "add-article-bookmarks",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-05T22:35:35Z",
+            "started_at": "2026-05-05T22:35:35Z"
+          }
+        },
+        {
+          "actual_changed_files": [
+            "package.json",
+            "src/app.module.ts",
+            "src/shared/throttle.config.ts"
+          ],
+          "allowed_write_globs": [
+            "package.json",
+            "src/app.module.ts",
+            "src/shared/throttle.config.ts"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [
+            {
+              "description": "BM25 lexical match over path, identifiers, imports, docstrings (score 30.28).",
+              "file": "src/main.ts",
+              "reason": "path 'src/main.ts' is outside task 'add-rate-limiting''s allowed_paths (package.json, src/app.module.ts, src/shared/throttle.config.ts)"
+            },
+            {
+              "description": "Path mentioned verbatim in task prompt.",
+              "file": "package.js",
+              "reason": "path 'package.js' is outside task 'add-rate-limiting''s allowed_paths (package.json, src/app.module.ts, src/shared/throttle.config.ts)"
+            },
+            {
+              "description": "Env-var seed: prompt mentions credentials/providers; agents typically extend `.env.example`.",
+              "file": ".env.example",
+              "reason": "path '.env.example' is outside task 'add-rate-limiting''s allowed_paths (package.json, src/app.module.ts, src/shared/throttle.config.ts)"
+            },
+            {
+              "description": "Hint 'shared' matches path component.",
+              "file": "src/shared/base.controller.ts",
+              "reason": "path 'src/shared/base.controller.ts' is outside task 'add-rate-limiting''s allowed_paths (package.json, src/app.module.ts, src/shared/throttle.config.ts)"
+            },
+            {
+              "description": "Hint 'shared' matches path component.",
+              "file": "src/shared/pipes/validation.pipe.ts",
+              "reason": "path 'src/shared/pipes/validation.pipe.ts' is outside task 'add-rate-limiting''s allowed_paths (package.json, src/app.module.ts, src/shared/throttle.config.ts)"
+            }
+          ],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 32,
+            "tokens_prompt": 175,
+            "wall_time_seconds": 0.0
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [
+            "add-health-check",
+            "add-user-roles"
+          ],
+          "predicted_write_files": [
+            "src/main.ts",
+            "src/app.module.ts",
+            "package.js",
+            "package.json",
+            "src/shared/throttle.config.ts",
+            ".env.example",
+            "src/shared/base.controller.ts",
+            "src/shared/pipes/validation.pipe.ts"
+          ],
+          "prompt": "Add global rate limiting using @nestjs/throttler. Install the package and update package.json. Register ThrottlerModule in src/app.module.ts with default ttl=60 and limit=100. Add ThrottlerGuard as a global APP_GUARD provider in src/app.module.ts. Create src/shared/throttle.config.ts with the rate-limit configuration constants.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "add-rate-limiting",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-05T22:35:35Z",
+            "started_at": "2026-05-05T22:35:35Z"
+          }
+        },
+        {
+          "actual_changed_files": [
+            "src/tag/dto/create-tag.dto.ts",
+            "src/tag/tag.controller.ts",
+            "src/tag/tag.service.ts"
+          ],
+          "allowed_write_globs": [
+            "src/tag/dto/create-tag.dto.ts",
+            "src/tag/tag.controller.ts",
+            "src/tag/tag.service.ts"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [
+            {
+              "description": "personalized PageRank rank #8, top symbol matches: createTag, module, tag.; BM25 lexical match over path, identifiers, imports, docstrings (score 62.16).",
+              "file": "src/tag/tag.controller.spec.ts",
+              "reason": "path 'src/tag/tag.controller.spec.ts' is outside task 'extend-tag-crud''s allowed_paths (src/tag/dto/create-tag.dto.ts, src/tag/tag.controller.ts, src/tag/tag.service.ts)"
+            },
+            {
+              "description": "BM25 lexical match over path, identifiers, imports, docstrings (score 61.66).",
+              "file": "src/tag/tag.module.ts",
+              "reason": "path 'src/tag/tag.module.ts' is outside task 'extend-tag-crud''s allowed_paths (src/tag/dto/create-tag.dto.ts, src/tag/tag.controller.ts, src/tag/tag.service.ts)"
+            },
+            {
+              "description": "Hint 'dto' matches path component.",
+              "file": "src/article/dto/create-article.dto.ts",
+              "reason": "path 'src/article/dto/create-article.dto.ts' is outside task 'extend-tag-crud''s allowed_paths (src/tag/dto/create-tag.dto.ts, src/tag/tag.controller.ts, src/tag/tag.service.ts)"
+            },
+            {
+              "description": "Hint 'dto' matches path component.",
+              "file": "src/article/dto/create-comment.ts",
+              "reason": "path 'src/article/dto/create-comment.ts' is outside task 'extend-tag-crud''s allowed_paths (src/tag/dto/create-tag.dto.ts, src/tag/tag.controller.ts, src/tag/tag.service.ts)"
+            },
+            {
+              "description": "Hint 'dto' matches path component.",
+              "file": "src/article/dto/index.ts",
+              "reason": "path 'src/article/dto/index.ts' is outside task 'extend-tag-crud''s allowed_paths (src/tag/dto/create-tag.dto.ts, src/tag/tag.controller.ts, src/tag/tag.service.ts)"
+            }
+          ],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 32,
+            "tokens_prompt": 179,
+            "wall_time_seconds": 0.0
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [],
+          "predicted_write_files": [
+            "src/tag/tag.controller.spec.ts",
+            "src/tag/tag.module.ts",
+            "src/tag/dto/create-tag.dto.ts",
+            "src/tag/tag.controller.ts",
+            "src/tag/tag.service.ts",
+            "src/article/dto/create-article.dto.ts",
+            "src/article/dto/create-comment.ts",
+            "src/article/dto/index.ts"
+          ],
+          "prompt": "Extend the tag module with create and delete operations. The existing src/tag/tag.controller.ts only has GET /tags. Add POST /tags and DELETE /tags/:id endpoints to src/tag/tag.controller.ts. Add corresponding create and delete methods in src/tag/tag.service.ts. Add CreateTagDto in src/tag/dto/create-tag.dto.ts for validation.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "extend-tag-crud",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-05T22:35:35Z",
+            "started_at": "2026-05-05T22:35:35Z"
+          }
+        },
+        {
+          "actual_changed_files": [
+            "src/article/article.controller.ts",
+            "src/article/article.service.ts",
+            "src/article/dto/search-query.dto.ts"
+          ],
+          "allowed_write_globs": [
+            "src/article/article.controller.ts",
+            "src/article/article.service.ts",
+            "src/article/dto/search-query.dto.ts"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [
+            {
+              "description": "BM25 lexical match over path, identifiers, imports, docstrings (score 35.58).",
+              "file": "src/article/article.interface.ts",
+              "reason": "path 'src/article/article.interface.ts' is outside task 'add-article-search''s allowed_paths (src/article/article.controller.ts, src/article/article.service.ts, src/article/dto/search-query.dto.ts)"
+            },
+            {
+              "description": "BM25 lexical match over path, identifiers, imports, docstrings (score 33.88).",
+              "file": "src/article/dto/create-article.dto.ts",
+              "reason": "path 'src/article/dto/create-article.dto.ts' is outside task 'add-article-search''s allowed_paths (src/article/article.controller.ts, src/article/article.service.ts, src/article/dto/search-query.dto.ts)"
+            },
+            {
+              "description": "Hint 'dto' matches path component.",
+              "file": "src/article/dto/create-comment.ts",
+              "reason": "path 'src/article/dto/create-comment.ts' is outside task 'add-article-search''s allowed_paths (src/article/article.controller.ts, src/article/article.service.ts, src/article/dto/search-query.dto.ts)"
+            },
+            {
+              "description": "Hint 'dto' matches path component.",
+              "file": "src/article/dto/index.ts",
+              "reason": "path 'src/article/dto/index.ts' is outside task 'add-article-search''s allowed_paths (src/article/article.controller.ts, src/article/article.service.ts, src/article/dto/search-query.dto.ts)"
+            },
+            {
+              "description": "Hint 'dto' matches path component.",
+              "file": "src/user/dto/create-user.dto.ts",
+              "reason": "path 'src/user/dto/create-user.dto.ts' is outside task 'add-article-search''s allowed_paths (src/article/article.controller.ts, src/article/article.service.ts, src/article/dto/search-query.dto.ts)"
+            }
+          ],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 32,
+            "tokens_prompt": 216,
+            "wall_time_seconds": 0.0
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [
+            "add-article-bookmarks"
+          ],
+          "predicted_write_files": [
+            "src/article/article.interface.ts",
+            "src/article/dto/create-article.dto.ts",
+            "src/article/article.controller.ts",
+            "src/article/article.service.ts",
+            "src/article/dto/search-query.dto.ts",
+            "src/article/dto/create-comment.ts",
+            "src/article/dto/index.ts",
+            "src/user/dto/create-user.dto.ts"
+          ],
+          "prompt": "Add full-text search to articles. The existing findAll method in src/article/article.service.ts only filters by tag, author, and favorited - it has no text search on title or body. Add a searchArticles method in src/article/article.service.ts using TypeORM QueryBuilder with LIKE on title and body fields. Add a GET /api/articles/search?q=query endpoint in src/article/article.controller.ts. Create src/article/dto/search-query.dto.ts for query validation.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "add-article-search",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-05T22:35:35Z",
+            "started_at": "2026-05-05T22:35:35Z"
+          }
+        },
+        {
+          "actual_changed_files": [
+            "package.json",
+            "src/app.module.ts",
+            "src/health/health.controller.ts",
+            "src/health/health.module.ts"
+          ],
+          "allowed_write_globs": [
+            "package.json",
+            "src/app.module.ts",
+            "src/health/health.controller.ts",
+            "src/health/health.module.ts"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [
+            {
+              "description": "BM25 lexical match over path, identifiers, imports, docstrings (score 22.83).",
+              "file": "src/main.ts",
+              "reason": "path 'src/main.ts' is outside task 'add-health-check''s allowed_paths (package.json, src/app.module.ts, src/health/health.controller.ts, src/health/health.module.ts)"
+            },
+            {
+              "description": "Path mentioned verbatim in task prompt.",
+              "file": "package.js",
+              "reason": "path 'package.js' is outside task 'add-health-check''s allowed_paths (package.json, src/app.module.ts, src/health/health.controller.ts, src/health/health.module.ts)"
+            }
+          ],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 24,
+            "tokens_prompt": 172,
+            "wall_time_seconds": 0.0
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [
+            "add-rate-limiting",
+            "add-user-roles"
+          ],
+          "predicted_write_files": [
+            "src/app.module.ts",
+            "src/main.ts",
+            "package.js",
+            "package.json",
+            "src/health/health.controller.ts",
+            "src/health/health.module.ts"
+          ],
+          "prompt": "Add a health check endpoint using @nestjs/terminus. Install the package and update package.json. Create src/health/health.module.ts and src/health/health.controller.ts with a GET /health endpoint that checks TypeORM database connectivity via TypeOrmHealthIndicator. Register HealthModule in src/app.module.ts imports.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "add-health-check",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-05T22:35:35Z",
+            "started_at": "2026-05-05T22:35:35Z"
+          }
+        },
+        {
+          "actual_changed_files": [
+            "src/app.module.ts",
+            "src/user/roles.decorator.ts",
+            "src/user/roles.guard.ts",
+            "src/user/user.entity.ts",
+            "src/user/user.interface.ts"
+          ],
+          "allowed_write_globs": [
+            "src/app.module.ts",
+            "src/user/roles.decorator.ts",
+            "src/user/roles.guard.ts",
+            "src/user/user.entity.ts",
+            "src/user/user.interface.ts"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [
+            {
+              "description": "BM25 lexical match over path, identifiers, imports, docstrings (score 33.94).",
+              "file": "src/user/user.decorator.ts",
+              "reason": "path 'src/user/user.decorator.ts' is outside task 'add-user-roles''s allowed_paths (src/app.module.ts, src/user/roles.decorator.ts, src/user/roles.guard.ts, src/user/user.entity.ts, src/user/user.interface.ts)"
+            },
+            {
+              "description": "BM25 lexical match over path, identifiers, imports, docstrings (score 31.06).",
+              "file": "src/article/article.entity.ts",
+              "reason": "path 'src/article/article.entity.ts' is outside task 'add-user-roles''s allowed_paths (src/app.module.ts, src/user/roles.decorator.ts, src/user/roles.guard.ts, src/user/user.entity.ts, src/user/user.interface.ts)"
+            },
+            {
+              "description": "Env-var seed: prompt mentions credentials/providers; agents typically extend `.env.example`.",
+              "file": ".env.example",
+              "reason": "path '.env.example' is outside task 'add-user-roles''s allowed_paths (src/app.module.ts, src/user/roles.decorator.ts, src/user/roles.guard.ts, src/user/user.entity.ts, src/user/user.interface.ts)"
+            }
+          ],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 32,
+            "tokens_prompt": 199,
+            "wall_time_seconds": 0.0
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [
+            "add-article-bookmarks",
+            "add-health-check",
+            "add-rate-limiting"
+          ],
+          "predicted_write_files": [
+            "src/user/user.decorator.ts",
+            "src/article/article.entity.ts",
+            "src/app.module.ts",
+            "src/user/roles.decorator.ts",
+            "src/user/roles.guard.ts",
+            "src/user/user.entity.ts",
+            "src/user/user.interface.ts",
+            ".env.example"
+          ],
+          "prompt": "Add role-based access control. Add a 'role' column (enum: 'user', 'admin') to src/user/user.entity.ts with default 'user'. Create src/user/roles.guard.ts implementing CanActivate that checks user.role. Create src/user/roles.decorator.ts with a @Roles() decorator. Register the guard in src/app.module.ts as a global provider. Update src/user/user.interface.ts to include the role field.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "add-user-roles",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-05T22:35:35Z",
+            "started_at": "2026-05-05T22:35:35Z"
+          }
+        }
+      ],
+      "version": "0.1"
+    },
+    "naive_parallel": {
+      "backend": "mock",
+      "created_at": "2026-05-05T22:35:35Z",
+      "lockfile": "experiments/realworld/agent_lock_tight.json",
+      "model": {
+        "model": "lockfile-echo",
+        "provider": "mock",
+        "url": "mock://local"
+      },
+      "repo": {
+        "commit": "174c1c320875a66447deb2a15d04fc86afd07f60",
+        "local_path": "experiments/greenhouse/checkout",
+        "url": "https://github.com/spring-attic/greenhouse.git"
+      },
+      "run_id": "greenhouse-mock-naive_parallel-20260505-223535",
+      "strategy": "naive_parallel",
+      "suite_name": "greenhouse-java6-modernization",
+      "summary_metrics": {
+        "acus_consumed_total": null,
+        "blocked_invalid_write_count": 0,
+        "first_run_pass_rate": 0.0,
+        "human_interventions": 0,
+        "merge_conflicts": 0,
+        "out_of_bounds_write_count": 22,
+        "overlapping_write_pairs": 6,
+        "successful_parallel_speedup": null,
+        "task_completion_rate": 0.0,
+        "tasks_completed": 0,
+        "tasks_completed_per_hour": 0.0,
+        "tasks_total": 6,
+        "tokens_completion_total": 180,
+        "tokens_orchestrator_overhead": null,
+        "tokens_prompt_total": 2451,
+        "wall_time_seconds": 0.0171
+      },
+      "tasks": [
+        {
+          "actual_changed_files": [
+            ".env.example",
+            "package.js",
+            "package.json",
+            "src/app.module.ts",
+            "src/main.ts",
+            "src/shared/base.controller.ts",
+            "src/shared/pipes/validation.pipe.ts",
+            "src/shared/throttle.config.ts"
+          ],
+          "allowed_write_globs": [
+            "package.json",
+            "src/app.module.ts",
+            "src/shared/throttle.config.ts"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 32,
+            "tokens_prompt": 390,
+            "wall_time_seconds": 0.0
+          },
+          "out_of_bounds_files": [
+            ".env.example",
+            "package.js",
+            "src/main.ts",
+            "src/shared/base.controller.ts",
+            "src/shared/pipes/validation.pipe.ts"
+          ],
+          "overlaps_with": [
+            "add-health-check",
+            "add-user-roles"
+          ],
+          "predicted_write_files": [
+            "src/main.ts",
+            "src/app.module.ts",
+            "package.js",
+            "package.json",
+            "src/shared/throttle.config.ts",
+            ".env.example",
+            "src/shared/base.controller.ts",
+            "src/shared/pipes/validation.pipe.ts"
+          ],
+          "prompt": "Add global rate limiting using @nestjs/throttler. Install the package and update package.json. Register ThrottlerModule in src/app.module.ts with default ttl=60 and limit=100. Add ThrottlerGuard as a global APP_GUARD provider in src/app.module.ts. Create src/shared/throttle.config.ts with the rate-limit configuration constants.",
+          "session_id": null,
+          "status": "completed_unsafe",
+          "task_id": "add-rate-limiting",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-05T22:35:35Z",
+            "started_at": "2026-05-05T22:35:35Z"
+          }
+        },
+        {
+          "actual_changed_files": [
+            ".env.example",
+            "src/app.module.ts",
+            "src/article/article.entity.ts",
+            "src/user/roles.decorator.ts",
+            "src/user/roles.guard.ts",
+            "src/user/user.decorator.ts",
+            "src/user/user.entity.ts",
+            "src/user/user.interface.ts"
+          ],
+          "allowed_write_globs": [
+            "src/app.module.ts",
+            "src/user/roles.decorator.ts",
+            "src/user/roles.guard.ts",
+            "src/user/user.entity.ts",
+            "src/user/user.interface.ts"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 32,
+            "tokens_prompt": 404,
+            "wall_time_seconds": 0.0
+          },
+          "out_of_bounds_files": [
+            ".env.example",
+            "src/article/article.entity.ts",
+            "src/user/user.decorator.ts"
+          ],
+          "overlaps_with": [
+            "add-article-bookmarks",
+            "add-health-check",
+            "add-rate-limiting"
+          ],
+          "predicted_write_files": [
+            "src/user/user.decorator.ts",
+            "src/article/article.entity.ts",
+            "src/app.module.ts",
+            "src/user/roles.decorator.ts",
+            "src/user/roles.guard.ts",
+            "src/user/user.entity.ts",
+            "src/user/user.interface.ts",
+            ".env.example"
+          ],
+          "prompt": "Add role-based access control. Add a 'role' column (enum: 'user', 'admin') to src/user/user.entity.ts with default 'user'. Create src/user/roles.guard.ts implementing CanActivate that checks user.role. Create src/user/roles.decorator.ts with a @Roles() decorator. Register the guard in src/app.module.ts as a global provider. Update src/user/user.interface.ts to include the role field.",
+          "session_id": null,
+          "status": "completed_unsafe",
+          "task_id": "add-user-roles",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-05T22:35:35Z",
+            "started_at": "2026-05-05T22:35:35Z"
+          }
+        },
+        {
+          "actual_changed_files": [
+            "src/article/article.controller.ts",
+            "src/article/article.entity.ts",
+            "src/article/article.module.ts",
+            "src/article/article.service.ts",
+            "src/article/bookmark.entity.ts",
+            "src/article/comment.entity.ts",
+            "src/user/user.entity.ts"
+          ],
+          "allowed_write_globs": [
+            "src/article/article.controller.ts",
+            "src/article/article.module.ts",
+            "src/article/article.service.ts",
+            "src/article/bookmark.entity.ts",
+            "src/user/user.entity.ts"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 28,
+            "tokens_prompt": 458,
+            "wall_time_seconds": 0.0
+          },
+          "out_of_bounds_files": [
+            "src/article/article.entity.ts",
+            "src/article/comment.entity.ts"
+          ],
+          "overlaps_with": [
+            "add-article-search",
+            "add-user-roles"
+          ],
+          "predicted_write_files": [
+            "src/article/article.entity.ts",
+            "src/user/user.entity.ts",
+            "src/article/comment.entity.ts",
+            "src/article/article.controller.ts",
+            "src/article/article.module.ts",
+            "src/article/article.service.ts",
+            "src/article/bookmark.entity.ts"
+          ],
+          "prompt": "Add a bookmarking feature (save-for-later, separate from favorites). Create src/article/bookmark.entity.ts as a join entity with userId and articleId columns plus @ManyToOne relations to UserEntity and ArticleEntity. Add a @OneToMany bookmarks relation on src/user/user.entity.ts pointing to the BookmarkEntity. Add POST /api/articles/:slug/bookmark and DELETE /api/articles/:slug/bookmark endpoints in src/article/article.controller.ts. Add bookmarkArticle and unbookmarkArticle methods in src/article/article.service.ts. Register BookmarkEntity in src/article/article.module.ts TypeORM imports.",
+          "session_id": null,
+          "status": "completed_unsafe",
+          "task_id": "add-article-bookmarks",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-05T22:35:35Z",
+            "started_at": "2026-05-05T22:35:35Z"
+          }
+        },
+        {
+          "actual_changed_files": [
+            "src/article/dto/create-article.dto.ts",
+            "src/article/dto/create-comment.ts",
+            "src/article/dto/index.ts",
+            "src/tag/dto/create-tag.dto.ts",
+            "src/tag/tag.controller.spec.ts",
+            "src/tag/tag.controller.ts",
+            "src/tag/tag.module.ts",
+            "src/tag/tag.service.ts"
+          ],
+          "allowed_write_globs": [
+            "src/tag/dto/create-tag.dto.ts",
+            "src/tag/tag.controller.ts",
+            "src/tag/tag.service.ts"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 32,
+            "tokens_prompt": 390,
+            "wall_time_seconds": 0.0
+          },
+          "out_of_bounds_files": [
+            "src/article/dto/create-article.dto.ts",
+            "src/article/dto/create-comment.ts",
+            "src/article/dto/index.ts",
+            "src/tag/tag.controller.spec.ts",
+            "src/tag/tag.module.ts"
+          ],
+          "overlaps_with": [
+            "add-article-search"
+          ],
+          "predicted_write_files": [
+            "src/tag/tag.controller.spec.ts",
+            "src/tag/tag.module.ts",
+            "src/tag/dto/create-tag.dto.ts",
+            "src/tag/tag.controller.ts",
+            "src/tag/tag.service.ts",
+            "src/article/dto/create-article.dto.ts",
+            "src/article/dto/create-comment.ts",
+            "src/article/dto/index.ts"
+          ],
+          "prompt": "Extend the tag module with create and delete operations. The existing src/tag/tag.controller.ts only has GET /tags. Add POST /tags and DELETE /tags/:id endpoints to src/tag/tag.controller.ts. Add corresponding create and delete methods in src/tag/tag.service.ts. Add CreateTagDto in src/tag/dto/create-tag.dto.ts for validation.",
+          "session_id": null,
+          "status": "completed_unsafe",
+          "task_id": "extend-tag-crud",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-05T22:35:35Z",
+            "started_at": "2026-05-05T22:35:35Z"
+          }
+        },
+        {
+          "actual_changed_files": [
+            "src/article/article.controller.ts",
+            "src/article/article.interface.ts",
+            "src/article/article.service.ts",
+            "src/article/dto/create-article.dto.ts",
+            "src/article/dto/create-comment.ts",
+            "src/article/dto/index.ts",
+            "src/article/dto/search-query.dto.ts",
+            "src/user/dto/create-user.dto.ts"
+          ],
+          "allowed_write_globs": [
+            "src/article/article.controller.ts",
+            "src/article/article.service.ts",
+            "src/article/dto/search-query.dto.ts"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 32,
+            "tokens_prompt": 422,
+            "wall_time_seconds": 0.0
+          },
+          "out_of_bounds_files": [
+            "src/article/article.interface.ts",
+            "src/article/dto/create-article.dto.ts",
+            "src/article/dto/create-comment.ts",
+            "src/article/dto/index.ts",
+            "src/user/dto/create-user.dto.ts"
+          ],
+          "overlaps_with": [
+            "add-article-bookmarks",
+            "extend-tag-crud"
+          ],
+          "predicted_write_files": [
+            "src/article/article.interface.ts",
+            "src/article/dto/create-article.dto.ts",
+            "src/article/article.controller.ts",
+            "src/article/article.service.ts",
+            "src/article/dto/search-query.dto.ts",
+            "src/article/dto/create-comment.ts",
+            "src/article/dto/index.ts",
+            "src/user/dto/create-user.dto.ts"
+          ],
+          "prompt": "Add full-text search to articles. The existing findAll method in src/article/article.service.ts only filters by tag, author, and favorited - it has no text search on title or body. Add a searchArticles method in src/article/article.service.ts using TypeORM QueryBuilder with LIKE on title and body fields. Add a GET /api/articles/search?q=query endpoint in src/article/article.controller.ts. Create src/article/dto/search-query.dto.ts for query validation.",
+          "session_id": null,
+          "status": "completed_unsafe",
+          "task_id": "add-article-search",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-05T22:35:35Z",
+            "started_at": "2026-05-05T22:35:35Z"
+          }
+        },
+        {
+          "actual_changed_files": [
+            "package.js",
+            "package.json",
+            "src/app.module.ts",
+            "src/health/health.controller.ts",
+            "src/health/health.module.ts",
+            "src/main.ts"
+          ],
+          "allowed_write_globs": [
+            "package.json",
+            "src/app.module.ts",
+            "src/health/health.controller.ts",
+            "src/health/health.module.ts"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 24,
+            "tokens_prompt": 387,
+            "wall_time_seconds": 0.0
+          },
+          "out_of_bounds_files": [
+            "package.js",
+            "src/main.ts"
+          ],
+          "overlaps_with": [
+            "add-rate-limiting",
+            "add-user-roles"
+          ],
+          "predicted_write_files": [
+            "src/app.module.ts",
+            "src/main.ts",
+            "package.js",
+            "package.json",
+            "src/health/health.controller.ts",
+            "src/health/health.module.ts"
+          ],
+          "prompt": "Add a health check endpoint using @nestjs/terminus. Install the package and update package.json. Create src/health/health.module.ts and src/health/health.controller.ts with a GET /health endpoint that checks TypeORM database connectivity via TypeOrmHealthIndicator. Register HealthModule in src/app.module.ts imports.",
+          "session_id": null,
+          "status": "completed_unsafe",
+          "task_id": "add-health-check",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-05T22:35:35Z",
+            "started_at": "2026-05-05T22:35:35Z"
+          }
+        }
+      ],
+      "version": "0.1"
+    }
+  },
+  "version": "0.1"
+}

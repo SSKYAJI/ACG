@@ -1,0 +1,482 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-05T22:30:23.092636Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "qwen/qwen3-coder-30b-a3b-instruct"
+  },
+  "repo": {
+    "root": "experiments/realworld/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "add-rate-limiting",
+      "prompt": "Add global API rate limiting to the application. Use a NestJS-compatible throttling library. Configure a default of 100 requests per 60 seconds. Apply it globally so all endpoints are protected.",
+      "predicted_writes": [
+        {
+          "path": "src/article/article.controller.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #6, top symbol matches: findAll."
+        },
+        {
+          "path": "src/article/article.service.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #1, top symbol matches: addComment, findAll, toUpdate."
+        },
+        {
+          "path": "src/main.ts",
+          "confidence": 0.9,
+          "reason": "Needs modification to apply global throttling middleware."
+        },
+        {
+          "path": "src/profile/profile.service.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #3, top symbol matches: findAll, followerUser, followingUser."
+        },
+        {
+          "path": "src/app.module.ts",
+          "confidence": 0.8,
+          "reason": "May need to import and configure throttling module."
+        },
+        {
+          "path": "tsconfig.json",
+          "confidence": 0.7,
+          "reason": "Hint 'config' matches path component."
+        }
+      ],
+      "allowed_paths": [
+        "src/app.module.ts",
+        "src/article/article.controller.ts",
+        "src/article/article.service.ts",
+        "src/main.ts",
+        "src/profile/profile.service.ts",
+        "tsconfig.json"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    },
+    {
+      "id": "add-user-roles",
+      "prompt": "Add role-based access control to the application. Users should have a role field (user or admin). Create a guard that checks the current user's role against a required role. Register it so endpoints can be decorated with a role requirement.",
+      "predicted_writes": [
+        {
+          "path": "src/app.module.ts",
+          "confidence": 0.905684661182523,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 7.51)."
+        },
+        {
+          "path": "src/article/article.entity.ts",
+          "confidence": 0.9028133954527117,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 7.44)."
+        },
+        {
+          "path": "src/user/user.entity.ts",
+          "confidence": 0.9,
+          "reason": "Task requires adding a role field to users, and user.entity.ts defines the user model."
+        },
+        {
+          "path": "src/user/user.interface.ts",
+          "confidence": 0.9,
+          "reason": "Task involves role-based access control; user.interface.ts defines the user data structure."
+        },
+        {
+          "path": "src/user/auth.middleware.ts",
+          "confidence": 0.8,
+          "reason": "Authentication middleware handles user authentication; role checks may integrate here."
+        },
+        {
+          "path": "src/user/user.service.ts",
+          "confidence": 0.8,
+          "reason": "User service manages user operations; adding role checks likely involves modifying this."
+        },
+        {
+          "path": "src/user/dto/create-user.dto.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'user' matches path component."
+        },
+        {
+          "path": "src/user/dto/index.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'user' matches path component."
+        }
+      ],
+      "allowed_paths": [
+        "src/app.module.ts",
+        "src/article/article.entity.ts",
+        "src/user/auth.middleware.ts",
+        "src/user/dto/**",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.service.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 2,
+      "rationale": null
+    },
+    {
+      "id": "add-article-bookmarks",
+      "prompt": "Add a bookmarking feature so users can save articles for later, separate from the existing favorites system. Users should be able to bookmark and unbookmark articles via the API. Store the bookmark relationship in the database.",
+      "predicted_writes": [
+        {
+          "path": "src/article/article.interface.ts",
+          "confidence": 0.991189713734148,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 13.55)."
+        },
+        {
+          "path": "src/article/article.entity.ts",
+          "confidence": 0.9,
+          "reason": "Task involves storing bookmark relationships, requiring database schema changes in the article entity."
+        },
+        {
+          "path": "src/user/user.entity.ts",
+          "confidence": 0.9,
+          "reason": "Bookmarking involves user-article relationships, requiring updates to the user entity to support bookmarks."
+        },
+        {
+          "path": "src/article/article.controller.ts",
+          "confidence": 0.8,
+          "reason": "API endpoints for bookmarking articles need to be added to the article controller."
+        },
+        {
+          "path": "src/article/article.service.ts",
+          "confidence": 0.8,
+          "reason": "Service layer needs implementation for bookmarking logic and database operations."
+        },
+        {
+          "path": "src/user/user.service.ts",
+          "confidence": 0.8,
+          "reason": "User service needs methods to manage bookmark relationships with articles."
+        },
+        {
+          "path": "src/article/article.module.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'article' matches path component."
+        },
+        {
+          "path": "src/article/comment.entity.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'article' matches path component."
+        }
+      ],
+      "allowed_paths": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/article/comment.entity.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.service.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 3,
+      "rationale": null
+    },
+    {
+      "id": "extend-tag-crud",
+      "prompt": "Extend the tag system with write operations. Currently tags can only be read. Add the ability to create new tags and delete existing ones via the API.",
+      "predicted_writes": [
+        {
+          "path": "src/tag/tag.controller.spec.ts",
+          "confidence": 0.9734419970168373,
+          "reason": "personalized PageRank rank #7, top symbol matches: createTag, tag, tagController.; BM25 lexical match over path, identifiers, imports, docstrings (score 10.77)."
+        },
+        {
+          "path": "src/tag/tag.module.ts",
+          "confidence": 0.9726195098054695,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 10.69)."
+        },
+        {
+          "path": "src/tag/tag.controller.ts",
+          "confidence": 0.95,
+          "reason": "Task requires adding write operations to the tag system, and the controller is the entry point for API requests."
+        },
+        {
+          "path": "src/tag/tag.service.ts",
+          "confidence": 0.9,
+          "reason": "The service layer handles business logic, including creating and deleting tags, which is required by the task."
+        },
+        {
+          "path": "src/tag/tag.entity.ts",
+          "confidence": 0.6,
+          "reason": "The entity defines the structure of tags, and modifications may be needed to support new operations."
+        }
+      ],
+      "allowed_paths": [
+        "src/tag/tag.controller.spec.ts",
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.entity.ts",
+        "src/tag/tag.module.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    },
+    {
+      "id": "add-article-search",
+      "prompt": "Add full-text search to the articles API. Users should be able to search articles by keywords matching against the title and body fields. Return paginated results.",
+      "predicted_writes": [
+        {
+          "path": "src/article/article.interface.ts",
+          "confidence": 0.9815149006651598,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 11.69)."
+        },
+        {
+          "path": "src/article/article.controller.ts",
+          "confidence": 0.95,
+          "reason": "Task requires adding search functionality to articles API, which would modify the controller to handle search requests."
+        },
+        {
+          "path": "src/article/article.service.ts",
+          "confidence": 0.9,
+          "reason": "Task requires implementing full-text search logic, which would modify the service to include search functionality."
+        },
+        {
+          "path": "src/article/article.entity.ts",
+          "confidence": 0.8,
+          "reason": "Adding search requires querying title and body fields, which may require modifications to entity structure or indexing."
+        },
+        {
+          "path": "src/article/article.module.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'article' matches path component."
+        },
+        {
+          "path": "src/article/comment.entity.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'article' matches path component."
+        },
+        {
+          "path": "src/article/dto/create-article.dto.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'article' matches path component."
+        },
+        {
+          "path": "src/article/dto/create-comment.ts",
+          "confidence": 0.7,
+          "reason": "Hint 'article' matches path component."
+        }
+      ],
+      "allowed_paths": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/article/comment.entity.ts",
+        "src/article/dto/**"
+      ],
+      "depends_on": [],
+      "parallel_group": 4,
+      "rationale": null
+    },
+    {
+      "id": "add-health-check",
+      "prompt": "Add a health check endpoint that verifies the application and its database connection are operational. Return a standard health status response.",
+      "predicted_writes": [
+        {
+          "path": "src/app.controller.ts",
+          "confidence": 0.95,
+          "reason": "Task requires adding a health check endpoint, and AppController is the default root controller for application-level routes."
+        },
+        {
+          "path": "src/app.module.ts",
+          "confidence": 0.9,
+          "reason": "AppModule must import or expose the new health check endpoint if it's added to AppController."
+        },
+        {
+          "path": "src/article/article.service.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #1, top symbol matches: addComment."
+        },
+        {
+          "path": "prisma/.env",
+          "confidence": 0.8135521669592147,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 5.69)."
+        }
+      ],
+      "allowed_paths": [
+        "prisma/.env",
+        "src/app.controller.ts",
+        "src/app.module.ts",
+        "src/article/article.service.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 5,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "add-rate-limiting",
+          "extend-tag-crud"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      },
+      {
+        "id": 2,
+        "tasks": [
+          "add-user-roles"
+        ],
+        "type": "serial",
+        "waits_for": [
+          1
+        ]
+      },
+      {
+        "id": 3,
+        "tasks": [
+          "add-article-bookmarks"
+        ],
+        "type": "serial",
+        "waits_for": [
+          2
+        ]
+      },
+      {
+        "id": 4,
+        "tasks": [
+          "add-article-search"
+        ],
+        "type": "serial",
+        "waits_for": [
+          3
+        ]
+      },
+      {
+        "id": 5,
+        "tasks": [
+          "add-health-check"
+        ],
+        "type": "serial",
+        "waits_for": [
+          4
+        ]
+      }
+    ]
+  },
+  "conflicts_detected": [
+    {
+      "files": [
+        "src/app.module.ts"
+      ],
+      "between_tasks": [
+        "add-rate-limiting",
+        "add-user-roles"
+      ],
+      "resolution": "Serialize add-user-roles after add-rate-limiting; both modify src/app.module.ts"
+    },
+    {
+      "files": [
+        "src/article/article.controller.ts",
+        "src/article/article.service.ts"
+      ],
+      "between_tasks": [
+        "add-rate-limiting",
+        "add-article-bookmarks"
+      ],
+      "resolution": "Serialize add-article-bookmarks after add-rate-limiting; both modify src/article/article.controller.ts, src/article/article.service.ts"
+    },
+    {
+      "files": [
+        "src/article/article.controller.ts",
+        "src/article/article.service.ts"
+      ],
+      "between_tasks": [
+        "add-rate-limiting",
+        "add-article-search"
+      ],
+      "resolution": "Serialize add-article-search after add-rate-limiting; both modify src/article/article.controller.ts, src/article/article.service.ts"
+    },
+    {
+      "files": [
+        "src/app.module.ts",
+        "src/article/article.service.ts"
+      ],
+      "between_tasks": [
+        "add-rate-limiting",
+        "add-health-check"
+      ],
+      "resolution": "Serialize add-health-check after add-rate-limiting; both modify src/app.module.ts, src/article/article.service.ts"
+    },
+    {
+      "files": [
+        "src/article/article.entity.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.service.ts"
+      ],
+      "between_tasks": [
+        "add-user-roles",
+        "add-article-bookmarks"
+      ],
+      "resolution": "Serialize add-article-bookmarks after add-user-roles; both modify src/article/article.entity.ts, src/user/user.entity.ts, src/user/user.service.ts"
+    },
+    {
+      "files": [
+        "src/article/article.entity.ts"
+      ],
+      "between_tasks": [
+        "add-user-roles",
+        "add-article-search"
+      ],
+      "resolution": "Serialize add-article-search after add-user-roles; both modify src/article/article.entity.ts"
+    },
+    {
+      "files": [
+        "src/app.module.ts"
+      ],
+      "between_tasks": [
+        "add-user-roles",
+        "add-health-check"
+      ],
+      "resolution": "Serialize add-health-check after add-user-roles; both modify src/app.module.ts"
+    },
+    {
+      "files": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/article/comment.entity.ts"
+      ],
+      "between_tasks": [
+        "add-article-bookmarks",
+        "add-article-search"
+      ],
+      "resolution": "Serialize add-article-search after add-article-bookmarks; both modify src/article/article.controller.ts, src/article/article.entity.ts, src/article/article.interface.ts, src/article/article.module.ts, src/article/article.service.ts, src/article/comment.entity.ts"
+    },
+    {
+      "files": [
+        "src/article/article.service.ts"
+      ],
+      "between_tasks": [
+        "add-article-bookmarks",
+        "add-health-check"
+      ],
+      "resolution": "Serialize add-health-check after add-article-bookmarks; both modify src/article/article.service.ts"
+    },
+    {
+      "files": [
+        "src/article/article.service.ts"
+      ],
+      "between_tasks": [
+        "add-article-search",
+        "add-health-check"
+      ],
+      "resolution": "Serialize add-health-check after add-article-search; both modify src/article/article.service.ts"
+    }
+  ]
+}

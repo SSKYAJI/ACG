@@ -1,0 +1,259 @@
+{
+  "overall": {
+    "f1": 0.6452,
+    "precision": 0.5128,
+    "recall": 0.8696,
+    "total_blocks": 4,
+    "total_oob": 2,
+    "total_posthoc_oob": 0,
+    "total_proposal_oob": 2
+  },
+  "runs": [
+    {
+      "backend": "local",
+      "blocked_invalid_write_count": 0,
+      "cost_method": "sum_provider_reported_task_costs",
+      "cost_source": "body.usage.cost",
+      "cost_usd_total": 0.00027043,
+      "evidence_kind": "proposed_write_set",
+      "execution_mode": "propose_validate",
+      "out_of_bounds_write_count": 0,
+      "overlapping_write_pairs": 5,
+      "source_path": "experiments/realworld/runs_blind_openrouter/eval_run_combined.json",
+      "strategy": "acg_planned",
+      "suite_name": "realworld-nestjs-blind-openrouter-v2",
+      "tasks_completed": 6,
+      "tasks_total": 6,
+      "tested_tasks_completed": 0,
+      "tests_ran_count": 0,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_method": "estimated_chars_div_4",
+      "tokens_prompt_total": 1105
+    },
+    {
+      "backend": "local",
+      "blocked_invalid_write_count": 4,
+      "cost_method": "sum_provider_reported_task_costs",
+      "cost_source": "body.usage.cost",
+      "cost_usd_total": 0.00046567,
+      "evidence_kind": "proposed_write_set",
+      "execution_mode": "propose_validate",
+      "out_of_bounds_write_count": 0,
+      "overlapping_write_pairs": 3,
+      "source_path": "experiments/realworld/runs_blind_openrouter/eval_run_combined.json",
+      "strategy": "acg_planned_full_context",
+      "suite_name": "realworld-nestjs-blind-openrouter-v2",
+      "tasks_completed": 6,
+      "tasks_total": 6,
+      "tested_tasks_completed": 0,
+      "tests_ran_count": 0,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_method": "estimated_chars_div_4",
+      "tokens_prompt_total": 2128
+    },
+    {
+      "backend": "local",
+      "blocked_invalid_write_count": 0,
+      "cost_method": "sum_provider_reported_task_costs",
+      "cost_source": "body.usage.cost",
+      "cost_usd_total": 0.00058952,
+      "evidence_kind": "proposed_write_set",
+      "execution_mode": "propose_validate",
+      "out_of_bounds_write_count": 2,
+      "overlapping_write_pairs": 3,
+      "source_path": "experiments/realworld/runs_blind_openrouter/eval_run_combined.json",
+      "strategy": "naive_parallel",
+      "suite_name": "realworld-nestjs-blind-openrouter-v2",
+      "tasks_completed": 5,
+      "tasks_total": 6,
+      "tested_tasks_completed": 0,
+      "tests_ran_count": 0,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_method": "estimated_chars_div_4",
+      "tokens_prompt_total": 2128
+    }
+  ],
+  "tasks": {
+    "add-article-bookmarks": {
+      "actual_files_seen": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.service.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.service.ts"
+      ],
+      "allowed_glob_count": 8,
+      "blocked_events_total": 1,
+      "f1": 0.7692,
+      "false_negatives": 0,
+      "false_positives": 3,
+      "out_of_bounds_files": [],
+      "precision": 0.625,
+      "predicted_files": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/article/comment.entity.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.service.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 3,
+      "suggestions": [],
+      "task_id": "add-article-bookmarks",
+      "true_positives": 5
+    },
+    "add-article-search": {
+      "actual_files_seen": [
+        "src/article/article.controller.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.service.ts",
+        "src/article/dto/index.ts"
+      ],
+      "allowed_glob_count": 7,
+      "blocked_events_total": 0,
+      "f1": 0.5,
+      "false_negatives": 1,
+      "false_positives": 5,
+      "out_of_bounds_files": [],
+      "precision": 0.375,
+      "predicted_files": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/article/comment.entity.ts",
+        "src/article/dto/create-article.dto.ts",
+        "src/article/dto/create-comment.ts"
+      ],
+      "recall": 0.75,
+      "runs_seen": 3,
+      "suggestions": [
+        "predictor over-predicts (precision=0.38); consider removing ['src/article/article.entity.ts', 'src/article/article.module.ts', 'src/article/comment.entity.ts'] from predicted_writes seeds"
+      ],
+      "task_id": "add-article-search",
+      "true_positives": 3
+    },
+    "add-health-check": {
+      "actual_files_seen": [
+        "src/app.controller.ts",
+        "src/app.module.ts"
+      ],
+      "allowed_glob_count": 4,
+      "blocked_events_total": 0,
+      "f1": 0.6667,
+      "false_negatives": 0,
+      "false_positives": 2,
+      "out_of_bounds_files": [],
+      "precision": 0.5,
+      "predicted_files": [
+        "prisma/.env",
+        "src/app.controller.ts",
+        "src/app.module.ts",
+        "src/article/article.service.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 3,
+      "suggestions": [
+        "predictor over-predicts (precision=0.50); consider removing ['prisma/.env', 'src/article/article.service.ts'] from predicted_writes seeds"
+      ],
+      "task_id": "add-health-check",
+      "true_positives": 2
+    },
+    "add-rate-limiting": {
+      "actual_files_seen": [
+        "src/app.module.ts",
+        "src/main.ts"
+      ],
+      "allowed_glob_count": 6,
+      "blocked_events_total": 0,
+      "f1": 0.5,
+      "false_negatives": 0,
+      "false_positives": 4,
+      "out_of_bounds_files": [],
+      "precision": 0.3333,
+      "predicted_files": [
+        "src/app.module.ts",
+        "src/article/article.controller.ts",
+        "src/article/article.service.ts",
+        "src/main.ts",
+        "src/profile/profile.service.ts",
+        "tsconfig.json"
+      ],
+      "recall": 1.0,
+      "runs_seen": 3,
+      "suggestions": [
+        "predictor over-predicts (precision=0.33); consider removing ['src/article/article.controller.ts', 'src/article/article.service.ts', 'src/profile/profile.service.ts'] from predicted_writes seeds"
+      ],
+      "task_id": "add-rate-limiting",
+      "true_positives": 2
+    },
+    "add-user-roles": {
+      "actual_files_seen": [
+        "src/app.module.ts",
+        "src/user/auth.middleware.ts",
+        "src/user/user.decorator.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.module.ts",
+        "src/user/user.service.ts"
+      ],
+      "allowed_glob_count": 7,
+      "blocked_events_total": 3,
+      "f1": 0.6667,
+      "false_negatives": 2,
+      "false_positives": 3,
+      "out_of_bounds_files": [
+        "src/user/user.decorator.ts",
+        "src/user/user.module.ts"
+      ],
+      "precision": 0.625,
+      "predicted_files": [
+        "src/app.module.ts",
+        "src/article/article.entity.ts",
+        "src/user/auth.middleware.ts",
+        "src/user/dto/create-user.dto.ts",
+        "src/user/dto/index.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.service.ts"
+      ],
+      "recall": 0.7143,
+      "runs_seen": 3,
+      "suggestions": [
+        "agent proposed 2 OOB write(s) (['src/user/user.decorator.ts', 'src/user/user.module.ts']); decide: widen allowed_paths to include them, or audit the agent prompt"
+      ],
+      "task_id": "add-user-roles",
+      "true_positives": 5
+    },
+    "extend-tag-crud": {
+      "actual_files_seen": [
+        "src/tag/tag.controller.spec.ts",
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "allowed_glob_count": 5,
+      "blocked_events_total": 0,
+      "f1": 0.75,
+      "false_negatives": 0,
+      "false_positives": 2,
+      "out_of_bounds_files": [],
+      "precision": 0.6,
+      "predicted_files": [
+        "src/tag/tag.controller.spec.ts",
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.entity.ts",
+        "src/tag/tag.module.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 3,
+      "suggestions": [],
+      "task_id": "extend-tag-crud",
+      "true_positives": 3
+    }
+  }
+}

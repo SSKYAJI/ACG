@@ -31,6 +31,8 @@ def _write_eval_run(
     strategy: str,
     backend: str,
     tasks: list[dict],
+    execution_mode: str | None = None,
+    evidence_kind: str | None = None,
     overlap_pairs: int = 0,
     oob_count: int = 0,
     blocked_count: int = 0,
@@ -40,6 +42,8 @@ def _write_eval_run(
         "strategy": strategy,
         "backend": backend,
         "suite_name": "test-suite",
+        **({"execution_mode": execution_mode} if execution_mode is not None else {}),
+        **({"evidence_kind": evidence_kind} if evidence_kind is not None else {}),
         "summary_metrics": {
             "tasks_total": len(tasks),
             "tasks_completed": sum(1 for t in tasks if t.get("status") == "completed"),
@@ -231,3 +235,75 @@ def test_suggestions_flag_overprediction_and_oob_but_quiet_when_calibrated(
     md = format_markdown(report)
     assert "## Predictor accuracy" in md
     assert "OOB" in md or "out-of-bounds" in md.lower()
+
+
+def test_markdown_distinguishes_oob_proposals_from_validator_blocks(
+    tmp_path: Path,
+) -> None:
+    """Blind naive OOB proposals must not be reported as blocked writes."""
+    run_path = tmp_path / "blind_naive.json"
+    _write_eval_run(
+        run_path,
+        strategy="naive_parallel",
+        backend="mock",
+        tasks=[
+            {
+                "task_id": "blind",
+                "status": "completed_unsafe",
+                "predicted_write_files": ["a.py"],
+                "actual_changed_files": ["a.py", "x.py", "y.py", "z.py"],
+                "allowed_write_globs": ["a.py"],
+                "out_of_bounds_files": ["x.py", "y.py", "z.py"],
+                "blocked_write_events": [],
+            }
+        ],
+        oob_count=3,
+        blocked_count=0,
+    )
+
+    report = analyze_paths([run_path])
+    md = format_markdown(report)
+
+    assert report.runs[0].out_of_bounds_write_count == 3
+    assert report.runs[0].blocked_invalid_write_count == 0
+    assert report.total_proposal_oob == 3
+    assert report.total_posthoc_oob == 0
+    assert "Proposal out-of-bounds files across proposal-only runs: **3**" in md
+    assert "Planned validator-blocked write events across all runs: **0**" in md
+    assert "validator-blocked write events across all runs: **3**" not in md
+
+
+def test_markdown_does_not_double_count_posthoc_diff_oob(
+    tmp_path: Path,
+) -> None:
+    """Applied diff OOB belongs in post-hoc counts, not proposal counts."""
+    run_path = tmp_path / "devin_oob.json"
+    _write_eval_run(
+        run_path,
+        strategy="acg_planned",
+        backend="devin-api",
+        execution_mode="devin_diff",
+        evidence_kind="applied_diff",
+        tasks=[
+            {
+                "task_id": "hosted",
+                "status": "completed_unsafe",
+                "predicted_write_files": ["a.py"],
+                "actual_changed_files": ["a.py", "oops.py"],
+                "allowed_write_globs": ["a.py"],
+                "out_of_bounds_files": ["oops.py"],
+                "blocked_write_events": [],
+            }
+        ],
+        oob_count=1,
+        blocked_count=0,
+    )
+
+    report = analyze_paths([run_path])
+    md = format_markdown(report)
+
+    assert report.total_oob == 1
+    assert report.total_proposal_oob == 0
+    assert report.total_posthoc_oob == 1
+    assert "Proposal out-of-bounds files across proposal-only runs: **0**" in md
+    assert "Post-hoc out-of-bounds files detected in applied/manual diffs: **1**" in md

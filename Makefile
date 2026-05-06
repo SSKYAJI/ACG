@@ -1,4 +1,4 @@
-.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse eval-greenhouse-mock eval-greenhouse-local eval-greenhouse-devin-manual eval-greenhouse-devin-api eval-greenhouse-tight-mock eval-greenhouse-report mcp-serve cascade-hook-test
+.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse eval-greenhouse-mock eval-greenhouse-local eval-greenhouse-devin-manual eval-greenhouse-devin-api eval-greenhouse-tight-mock eval-greenhouse-report mcp-serve cascade-hook-test setup-realworld compile-realworld compile-realworld-blind eval-realworld-local eval-realworld-blind-local eval-realworld-blind-openrouter-ablation eval-realworld-mock analyze-realworld analyze-realworld-blind analyze-realworld-blind-openrouter
 
 # Override these on the command line if your ASUS hostname / port differ:
 #   make compile-gemma GEMMA_HOST=100.x.y.z GEMMA_PORT=8080
@@ -178,3 +178,80 @@ mcp-serve:
 # Quick smoke test of the Cascade hook script (exercises ALLOWED + BLOCKED).
 cascade-hook-test:
 	./.venv/bin/python -m pytest tests/test_precheck_write_script.py -v
+
+# --- RealWorld NestJS benchmark ---
+setup-realworld:
+	bash experiments/realworld/setup.sh
+
+compile-realworld: setup-realworld
+	set -a && . ./.env && set +a && \
+	./.venv/bin/acg compile \
+	  --repo experiments/realworld/checkout \
+	  --tasks experiments/realworld/tasks_explicit.json \
+	  --language typescript \
+	  --out experiments/realworld/agent_lock.json
+
+compile-realworld-blind: setup-realworld
+	set -a && . ./.env && set +a && \
+	./.venv/bin/acg compile \
+	  --repo experiments/realworld/checkout \
+	  --tasks experiments/realworld/tasks_blind.json \
+	  --language typescript \
+	  --out experiments/realworld/agent_lock_blind.json
+
+eval-realworld-local:
+	set -a && . ./.env && set +a && \
+	./.venv/bin/python -m experiments.greenhouse.headtohead \
+	  --lock experiments/realworld/agent_lock.json \
+	  --tasks experiments/realworld/tasks_explicit.json \
+	  --repo experiments/realworld/checkout \
+	  --backend local --strategy both \
+	  --out-dir experiments/realworld/runs \
+	  --suite-name realworld-nestjs-explicit
+
+eval-realworld-blind-local:
+	set -a && . ./.env && set +a && \
+	./.venv/bin/python -m experiments.greenhouse.headtohead \
+	  --lock experiments/realworld/agent_lock_blind.json \
+	  --tasks experiments/realworld/tasks_blind.json \
+	  --repo experiments/realworld/checkout \
+	  --backend local --strategy both \
+	  --out-dir experiments/realworld/runs_blind \
+	  --suite-name realworld-nestjs-blind
+
+eval-realworld-blind-openrouter-ablation:
+	set -a && . ./.env && set +a && \
+	./.venv/bin/python -m experiments.greenhouse.headtohead \
+	  --lock experiments/realworld/agent_lock_blind.json \
+	  --tasks experiments/realworld/tasks_blind.json \
+	  --repo experiments/realworld/checkout \
+	  --backend local --strategy ablation \
+	  --out-dir experiments/realworld/runs_blind_openrouter \
+	  --suite-name realworld-nestjs-blind-openrouter-v2
+
+eval-realworld-mock:
+	./.venv/bin/python -m experiments.greenhouse.headtohead \
+	  --lock experiments/realworld/agent_lock.json \
+	  --tasks experiments/realworld/tasks_explicit.json \
+	  --repo experiments/realworld/checkout \
+	  --backend mock --strategy both \
+	  --out-dir experiments/realworld/runs_mock \
+	  --suite-name realworld-nestjs-explicit
+
+analyze-realworld:
+	./.venv/bin/acg analyze-runs \
+	  experiments/realworld/runs/eval_run_combined.json \
+	  --out experiments/realworld/runs/analysis_report.md \
+	  --json-out experiments/realworld/runs/analysis_report.json
+
+analyze-realworld-blind:
+	./.venv/bin/acg analyze-runs \
+	  experiments/realworld/runs_blind/eval_run_combined.json \
+	  --out experiments/realworld/runs_blind/analysis_report.md \
+	  --json-out experiments/realworld/runs_blind/analysis_report.json
+
+analyze-realworld-blind-openrouter:
+	./.venv/bin/acg analyze-runs \
+	  experiments/realworld/runs_blind_openrouter/eval_run_combined.json \
+	  --out experiments/realworld/runs_blind_openrouter/analysis_report.md \
+	  --json-out experiments/realworld/runs_blind_openrouter/analysis_report.json

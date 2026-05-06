@@ -189,6 +189,8 @@ class LLMReply:
     completion_tokens: int
     finish_reason: str
     wall_s: float
+    cost_usd: float | None = None
+    cost_source: str | None = None
 
 
 class RuntimeLLMProtocol(Protocol):
@@ -275,7 +277,9 @@ class RuntimeLLM:
                 content = msg.get("content") or ""
                 reasoning = msg.get("reasoning_content") or ""
                 finish = choice.get("finish_reason") or ""
-                tokens = int((data.get("usage") or {}).get("completion_tokens") or 0)
+                usage = data.get("usage") or {}
+                tokens = int(usage.get("completion_tokens") or 0)
+                cost_usd, cost_source = _extract_cost_usd(data, response.headers)
             except (KeyError, IndexError, TypeError) as exc:
                 raise RuntimeLLMError(
                     f"unexpected response shape from {endpoint}: {data!r}"
@@ -286,6 +290,8 @@ class RuntimeLLM:
                 completion_tokens=tokens,
                 finish_reason=finish,
                 wall_s=time.perf_counter() - start,
+                cost_usd=cost_usd,
+                cost_source=cost_source,
             )
         raise RuntimeLLMError(f"unreachable runtime LLM retry loop, last_exc={last_exc}")
 
@@ -296,6 +302,52 @@ class RuntimeLLM:
 
 class RuntimeLLMError(RuntimeError):
     """Raised when the runtime LLM endpoint misbehaves after retries."""
+
+
+def _optional_cost_float(value: Any) -> float | None:
+    """Parse provider cost values without inventing units."""
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return float(value)
+    if isinstance(value, str) and value.strip():
+        try:
+            return float(value.strip().lstrip("$"))
+        except ValueError:
+            return None
+    return None
+
+
+def _extract_cost_usd(
+    data: dict[str, Any], headers: Any
+) -> tuple[float | None, str | None]:
+    """Best-effort OpenRouter/OpenAI-compatible cost extraction.
+
+    Providers are inconsistent: OpenRouter-compatible proxies sometimes put
+    spend in ``usage.cost``-style fields, while gateways may expose an
+    ``x-openrouter-cost`` header. If no explicit cost is present, return
+    ``(None, None)`` so reports can say "not recorded".
+    """
+    usage = data.get("usage") if isinstance(data, dict) else None
+    candidates: list[tuple[str, Any]] = []
+    if isinstance(usage, dict):
+        for key in ("cost", "cost_usd", "total_cost", "total_cost_usd"):
+            candidates.append((f"body.usage.{key}", usage.get(key)))
+    for key in ("cost", "cost_usd", "total_cost", "total_cost_usd"):
+        candidates.append((f"body.{key}", data.get(key)))
+    for source, value in candidates:
+        parsed = _optional_cost_float(value)
+        if parsed is not None:
+            return parsed, source
+
+    for key in (
+        "x-openrouter-cost",
+        "x-openrouter-cost-usd",
+        "openrouter-cost",
+        "openrouter-cost-usd",
+    ):
+        parsed = _optional_cost_float(headers.get(key))
+        if parsed is not None:
+            return parsed, f"header.{key}"
+    return None, None
 
 
 # ---------------------------------------------------------------------------
@@ -440,6 +492,8 @@ class WorkerResult:
     allowed_count: int
     blocked_count: int
     error: str | None = None
+    cost_usd: float | None = None
+    cost_source: str | None = None
 
 
 @dataclass
@@ -843,6 +897,8 @@ async def run_worker(
         allowed_count=allowed_count,
         blocked_count=blocked_count,
         error=error,
+        cost_usd=reply.cost_usd,
+        cost_source=reply.cost_source,
     )
 
 

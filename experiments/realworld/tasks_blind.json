@@ -1,0 +1,47 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "add-rate-limiting",
+      "prompt": "Add global API rate limiting to the application. Use a NestJS-compatible throttling library. Configure a default of 100 requests per 60 seconds. Apply it globally so all endpoints are protected.",
+      "hints": {
+        "touches": ["throttle", "config"]
+      }
+    },
+    {
+      "id": "add-user-roles",
+      "prompt": "Add role-based access control to the application. Users should have a role field (user or admin). Create a guard that checks the current user's role against a required role. Register it so endpoints can be decorated with a role requirement.",
+      "hints": {
+        "touches": ["roles", "guard", "user"]
+      }
+    },
+    {
+      "id": "add-article-bookmarks",
+      "prompt": "Add a bookmarking feature so users can save articles for later, separate from the existing favorites system. Users should be able to bookmark and unbookmark articles via the API. Store the bookmark relationship in the database.",
+      "hints": {
+        "touches": ["bookmark", "article", "user"]
+      }
+    },
+    {
+      "id": "extend-tag-crud",
+      "prompt": "Extend the tag system with write operations. Currently tags can only be read. Add the ability to create new tags and delete existing ones via the API.",
+      "hints": {
+        "touches": ["tag"]
+      }
+    },
+    {
+      "id": "add-article-search",
+      "prompt": "Add full-text search to the articles API. Users should be able to search articles by keywords matching against the title and body fields. Return paginated results.",
+      "hints": {
+        "touches": ["article", "search"]
+      }
+    },
+    {
+      "id": "add-health-check",
+      "prompt": "Add a health check endpoint that verifies the application and its database connection are operational. Return a standard health status response.",
+      "hints": {
+        "touches": ["health"]
+      }
+    }
+  ]
+}

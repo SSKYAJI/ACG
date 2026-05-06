@@ -362,11 +362,16 @@ def test_naive_strategy_records_overlap_on_pom_xml(tmp_path: Path) -> None:
     assert run.summary_metrics.overlapping_write_pairs == 3
     assert run.model.provider == "mock"
     assert run.model.model == "lockfile-echo"
+    assert run.execution_mode == "propose_validate"
+    assert run.evidence_kind == "proposed_write_set"
+    assert run.summary_metrics.tests_ran_count == 0
+    assert run.summary_metrics.tokens_prompt_method == "estimated_chars_div_4"
     # Every task's actual_changed_files contains pom.xml because naive does
     # not enforce; validate_write also does not flag in-bounds writes since
     # pom.xml is allowed for every task.
     for task in run.tasks:
         assert "pom.xml" in task.actual_changed_files
+        assert task.actual_changed_files_kind == "proposed_write_set"
 
 
 def test_acg_planned_strategy_zero_merge_conflicts_via_serialization(tmp_path: Path) -> None:
@@ -560,6 +565,53 @@ def test_planned_uses_fewer_prompt_tokens_than_naive_on_mock(tmp_path: Path) -> 
     )
 
 
+def test_full_context_planned_ablation_isolates_scoped_context_tokens(
+    tmp_path: Path,
+) -> None:
+    """Planned-full-context keeps the schedule but removes scoped prompts.
+
+    This is the paper-safe ablation: naive and planned-full-context see the
+    same full repo graph, while scoped planned sees only allowed-path files.
+    Any token delta between the two planned variants is therefore caused by
+    context scoping, not by serialization or a runtime orchestrator.
+    """
+    lock = _build_lock(serialized=True)
+    lock_path = tmp_path / "agent_lock.json"
+    lock_path.write_text(lock.model_dump_json(indent=2))
+    repo_graph = _greenhouse_repo_graph()
+
+    naive = run_strategy(
+        strategy="naive_parallel",
+        backend="mock",
+        lock=lock,
+        repo_graph=repo_graph,
+        lockfile_path=str(lock_path),
+    )
+    full_context = run_strategy(
+        strategy="acg_planned_full_context",
+        backend="mock",
+        lock=lock,
+        repo_graph=repo_graph,
+        lockfile_path=str(lock_path),
+    )
+    scoped = run_strategy(
+        strategy="acg_planned",
+        backend="mock",
+        lock=lock,
+        repo_graph=repo_graph,
+        lockfile_path=str(lock_path),
+    )
+
+    assert full_context.strategy == "acg_planned_full_context"
+    assert full_context.summary_metrics.tokens_prompt_total == (
+        naive.summary_metrics.tokens_prompt_total
+    )
+    assert scoped.summary_metrics.tokens_prompt_total < (
+        full_context.summary_metrics.tokens_prompt_total
+    )
+    assert full_context.summary_metrics.tokens_orchestrator_overhead is None
+
+
 def test_planned_uses_static_lockfile_without_extra_orchestrator_tax(tmp_path: Path) -> None:
     """Default planned execution walks the compiled lockfile directly."""
     lock = _build_lock(serialized=True)
@@ -736,6 +788,9 @@ def test_cli_writes_both_eval_run_files_under_out_dir(tmp_path: Path) -> None:
     acg_payload = json.loads(acg.read_text())
     assert naive_payload["strategy"] == "naive_parallel"
     assert acg_payload["strategy"] == "acg_planned"
+    assert naive_payload["execution_mode"] == "propose_validate"
+    assert naive_payload["summary_metrics"]["tokens_prompt_method"] == "estimated_chars_div_4"
+    assert naive_payload["summary_metrics"]["cost_usd_total"] is None
     # Hard correctness gate: planned must catch ≥ as many bad writes as naive,
     # AND naive must show overlaps that planned does not.
     assert (
@@ -743,6 +798,91 @@ def test_cli_writes_both_eval_run_files_under_out_dir(tmp_path: Path) -> None:
         >= naive_payload["summary_metrics"]["blocked_invalid_write_count"]
     )
     assert naive_payload["summary_metrics"]["overlapping_write_pairs"] >= 1
+
+
+def test_cli_ablation_writes_all_three_eval_run_files_under_out_dir(
+    tmp_path: Path,
+) -> None:
+    """`--strategy ablation` writes naive, planned-full, and planned-scoped."""
+    lock = _build_lock(serialized=True)
+    lock_path = tmp_path / "agent_lock.json"
+    lock_path.write_text(lock.model_dump_json(indent=2))
+    out_dir = tmp_path / "runs"
+
+    rc = headtohead.main(
+        [
+            "--lock",
+            str(lock_path),
+            "--strategy",
+            "ablation",
+            "--backend",
+            "mock",
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+
+    assert rc == 0
+    naive = out_dir / "eval_run_naive.json"
+    full_context = out_dir / "eval_run_acg_full_context.json"
+    acg = out_dir / "eval_run_acg.json"
+    combined = out_dir / "eval_run_combined.json"
+    assert naive.exists()
+    assert full_context.exists()
+    assert acg.exists()
+    assert combined.exists()
+
+    combo = json.loads(combined.read_text())
+    assert set(combo["strategies"]) == {
+        "naive_parallel",
+        "acg_planned_full_context",
+        "acg_planned",
+    }
+    assert combo["strategies"]["acg_planned_full_context"]["strategy"] == (
+        "acg_planned_full_context"
+    )
+
+
+def test_cli_realworld_like_run_does_not_emit_greenhouse_metadata(tmp_path: Path) -> None:
+    """Non-Greenhouse checkouts must carry explicit repo/suite metadata."""
+    lock = _build_lock(serialized=True)
+    lock.repo.root = str(tmp_path / "realworld" / "checkout")
+    lock.repo.git_url = None
+    lock.repo.commit = None
+    repo_path = Path(lock.repo.root)
+    repo_path.mkdir(parents=True)
+    lock_path = tmp_path / "agent_lock.json"
+    lock_path.write_text(lock.model_dump_json(indent=2))
+    out = tmp_path / "eval_run.json"
+
+    rc = headtohead.main(
+        [
+            "--lock",
+            str(lock_path),
+            "--repo",
+            str(repo_path),
+            "--suite-name",
+            "realworld-nestjs",
+            "--repo-url",
+            "https://github.com/example/nestjs-realworld-example-app.git",
+            "--repo-commit",
+            "abc123",
+            "--strategy",
+            "acg_planned",
+            "--backend",
+            "mock",
+            "--out",
+            str(out),
+        ]
+    )
+
+    assert rc == 0
+    payload = json.loads(out.read_text())
+    assert payload["suite_name"] == "realworld-nestjs"
+    assert payload["repo"]["local_path"] == str(repo_path.resolve())
+    assert payload["repo"]["url"] == "https://github.com/example/nestjs-realworld-example-app.git"
+    assert payload["repo"]["commit"] == "abc123"
+    assert payload["repo"]["url"] != "https://github.com/spring-attic/greenhouse.git"
 
 
 def test_cli_rejects_missing_lockfile(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

@@ -1,8 +1,8 @@
 """Strategy runners that turn a lockfile + a backend into ``EvalRun`` artifacts.
 
-Two strategies (``naive_parallel``, ``acg_planned``) crossed with four
-backends (``mock``, ``local``, ``devin-manual``, ``devin-api``) all share
-the same per-task data shape: see :mod:`eval_schema`.
+The local/mock strategies (``naive_parallel``, ``acg_planned``, and the
+``acg_planned_full_context`` ablation) share the same per-task data shape:
+see :mod:`eval_schema`.
 
 The mock backend is the workhorse for CI and offline development. It uses
 :class:`LockfileEchoMockLLM` to derive proposals from the lockfile's
@@ -16,6 +16,7 @@ import asyncio
 import json
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from acg.enforce import validate_write
@@ -31,18 +32,30 @@ from acg.schema import AgentLock, Task
 from .eval_schema import (
     BlockedWriteEvent,
     EvalModel,
+    EvalRepo,
     EvalRun,
     EvalTask,
     annotate_overlaps,
     compute_summary_metrics,
     make_run_id,
     now_iso,
+    repo_from_path,
+    suite_name_from_lock,
     task_from_lock,
 )
 
 # How many predicted writes (sorted by confidence) the mock LLM echoes per task.
 # Capped so that a noisy predictor doesn't drown the eval in noise.
 LOCKFILE_ECHO_TOP_K = 8
+
+NAIVE_STRATEGY = "naive_parallel"
+ACG_PLANNED_STRATEGY = "acg_planned"
+ACG_PLANNED_FULL_CONTEXT_STRATEGY = "acg_planned_full_context"
+LOCAL_STRATEGIES = (
+    NAIVE_STRATEGY,
+    ACG_PLANNED_STRATEGY,
+    ACG_PLANNED_FULL_CONTEXT_STRATEGY,
+)
 
 # Heuristic ratio for converting prompt characters to estimated input tokens.
 # Llama 3.x averages ~3.7-4.2 chars/token on English+code; 4 is a defensible
@@ -260,6 +273,8 @@ def _proposals_to_naive_eval_task(
     eval_task.timestamps.finished_at = finished_at
     eval_task.metrics.wall_time_seconds = round(worker.wall_s, 4)
     eval_task.metrics.tokens_completion = worker.completion_tokens or None
+    eval_task.metrics.cost_usd = worker.cost_usd
+    eval_task.metrics.cost_source = worker.cost_source
     eval_task.metrics.model_calls = 1
     return eval_task
 
@@ -298,6 +313,8 @@ def _proposals_to_planned_eval_task(
     eval_task.timestamps.finished_at = finished_at
     eval_task.metrics.wall_time_seconds = round(worker.wall_s, 4)
     eval_task.metrics.tokens_completion = worker.completion_tokens or None
+    eval_task.metrics.cost_usd = worker.cost_usd
+    eval_task.metrics.cost_source = worker.cost_source
     eval_task.metrics.model_calls = 1
     return eval_task
 
@@ -393,15 +410,20 @@ async def _run_acg_planned(
     lockfile_path: str,
     prompts_by_task: dict[str, str] | None = None,
     cap_parallelism: int | None = None,
+    scope_repo_graph: bool = True,
 ) -> tuple[list[EvalTask], float]:
-    """Walk ``execution_plan.groups`` with per-task scoped repo graphs.
+    """Walk ``execution_plan.groups`` with optional per-task scoped repo graphs.
 
     Replaces a previous :func:`acg.runtime.run_lockfile` call so we can
     inject a different ``repo_graph`` per worker invocation — the planned
     strategy's value is precisely that each worker only sees files inside
-    its task's ``allowed_paths``. A normal lead/coordinator exists for both
-    naive and planned strategies; this runner does not charge ACG for a
-    second LLM plan-review pass by default.
+    its task's ``allowed_paths``. The ``acg_planned_full_context`` ablation
+    sets ``scope_repo_graph=False`` so it keeps the same serialized schedule
+    but gives every worker the full repo graph.
+
+    A normal lead/coordinator exists for both naive and planned strategies;
+    this runner does not charge ACG for a second LLM plan-review pass by
+    default.
 
     ``lockfile_path`` is accepted for signature parity with previous
     callers; the lockfile object is the source of truth so the path is
@@ -425,19 +447,23 @@ async def _run_acg_planned(
             group_tasks = [tasks_by_id[tid] for tid in group.tasks if tid in tasks_by_id]
             if not group_tasks:
                 continue
-            results = await _gather_capped(
-                [
+            coros = []
+            for task in group_tasks:
+                task_graph = (
+                    _scoped_repo_graph(repo_graph, lock, task.id)
+                    if scope_repo_graph
+                    else repo_graph
+                )
+                coros.append(
                     run_worker(
-                        t,
+                        task,
                         lock,
-                        _scoped_repo_graph(repo_graph, lock, t.id),
+                        task_graph,
                         counting_sub,
                         group.id,
                     )
-                    for t in group_tasks
-                ],
-                cap_parallelism,
-            )
+                )
+            results = await _gather_capped(coros, cap_parallelism)
             worker_results.extend(results)
     finally:
         await counting_sub.aclose()
@@ -510,6 +536,8 @@ def run_strategy(
     prompts_by_task: dict[str, str] | None = None,
     sequential_wall_time_seconds: float | None = None,
     cap_parallelism: int | None = None,
+    suite_name: str | None = None,
+    repo: EvalRepo | None = None,
 ) -> EvalRun:
     """Execute one (strategy, backend) pair and return the populated :class:`EvalRun`.
 
@@ -518,7 +546,7 @@ def run_strategy(
     :mod:`devin_adapter` rather than this function — they don't go through
     :class:`RuntimeLLM`.
     """
-    if strategy not in ("naive_parallel", "acg_planned"):
+    if strategy not in LOCAL_STRATEGIES:
         raise ValueError(f"unknown strategy {strategy!r}")
     if backend not in ("mock", "local"):
         raise ValueError(
@@ -532,7 +560,7 @@ def run_strategy(
         sub_factory, model = _local_factory()
 
     orch_overhead: int | None
-    if strategy == "naive_parallel":
+    if strategy == NAIVE_STRATEGY:
         tasks, wall_s = asyncio.run(
             _run_naive_parallel(
                 lock,
@@ -552,6 +580,7 @@ def run_strategy(
                 lockfile_path=lockfile_path,
                 prompts_by_task=prompts_by_task,
                 cap_parallelism=cap_parallelism,
+                scope_repo_graph=(strategy == ACG_PLANNED_STRATEGY),
             )
         )
         orch_overhead = None
@@ -561,13 +590,26 @@ def run_strategy(
         wall_time_seconds=wall_s,
         sequential_wall_time_seconds=sequential_wall_time_seconds,
         tokens_orchestrator_overhead=orch_overhead,
+        tokens_prompt_method="estimated_chars_div_4",
+        tokens_completion_method=(
+            "provider_usage_completion_tokens" if backend == "local" else "mock_reply_completion_tokens"
+        ),
     )
     return EvalRun(
         run_id=make_run_id(strategy, backend),
         created_at=now_iso(),
+        suite_name=suite_name or suite_name_from_lock(lock),
         strategy=strategy,
         backend=backend,
+        execution_mode="propose_validate",
+        evidence_kind="proposed_write_set",
         model=model,
+        repo=repo
+        or repo_from_path(
+            Path(lock.repo.root) if lock.repo.root else None,
+            repo_url=lock.repo.git_url,
+            repo_commit=lock.repo.commit,
+        ),
         lockfile=lockfile_path,
         tasks=tasks,
         summary_metrics=summary,
@@ -575,7 +617,11 @@ def run_strategy(
 
 
 __all__ = [
+    "ACG_PLANNED_FULL_CONTEXT_STRATEGY",
+    "ACG_PLANNED_STRATEGY",
     "LOCKFILE_ECHO_TOP_K",
     "LockfileEchoMockLLM",
+    "LOCAL_STRATEGIES",
+    "NAIVE_STRATEGY",
     "run_strategy",
 ]

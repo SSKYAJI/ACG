@@ -12,6 +12,7 @@ metrics never raise on a divide-by-zero; missing data is reported as
 
 from __future__ import annotations
 
+import subprocess
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from itertools import combinations
@@ -62,6 +63,8 @@ class TaskMetrics:
     # Devin reports ``acus_consumed`` per session; populated by the
     # ``devin-api`` backend, ``None`` for mock/local where ACUs do not apply.
     acus_consumed: float | None = None
+    cost_usd: float | None = None
+    cost_source: str | None = None
 
 
 @dataclass
@@ -88,9 +91,10 @@ class EvalTask:
     """Per-task block in ``eval_run.json``.
 
     ``predicted_write_files`` and ``allowed_write_globs`` are taken straight
-    from the lockfile so reviewers can audit the mapping. ``actual_changed_files``
-    is whatever the backend reports; for mock that's the lockfile's predicted
-    set echoed back, for Devin it's the diff's file list.
+    from the lockfile so reviewers can audit the mapping. For mock/local
+    propose-and-validate runs, ``actual_changed_files`` is the accepted/proposed
+    write set, not a git diff from mutated files. For Devin/manual runs it is
+    the backend-reported applied diff file list.
     """
 
     task_id: str
@@ -101,6 +105,7 @@ class EvalTask:
     predicted_write_files: list[str] = field(default_factory=list)
     allowed_write_globs: list[str] = field(default_factory=list)
     actual_changed_files: list[str] = field(default_factory=list)
+    actual_changed_files_kind: str = "proposed_write_set"
     out_of_bounds_files: list[str] = field(default_factory=list)
     blocked_write_events: list[BlockedWriteEvent] = field(default_factory=list)
     overlaps_with: list[str] = field(default_factory=list)
@@ -134,6 +139,12 @@ class SummaryMetrics:
     tasks_total: int = 0
     tasks_completed: int = 0
     task_completion_rate: float = 0.0
+    # Proposal completion counts "worker produced an accepted proposal" for
+    # propose-validate backends. It is not implementation correctness.
+    proposal_completion_rate: float = 0.0
+    tests_ran_count: int = 0
+    tested_tasks_completed: int = 0
+    tested_completion_rate: float = 0.0
     tasks_completed_per_hour: float = 0.0
     first_run_pass_rate: float = 0.0
     successful_parallel_speedup: float | None = None
@@ -152,13 +163,18 @@ class SummaryMetrics:
     # exact prompt strings dispatched to the worker LLM, so naive vs planned
     # is directly comparable.
     tokens_prompt_total: int | None = None
+    tokens_prompt_method: str | None = None
     # Sum of per-task ``tokens_completion`` (real output tokens reported by
     # the OpenAI-compatible ``usage`` block on the local backend).
     tokens_completion_total: int | None = None
+    tokens_completion_method: str | None = None
     # Tokens spent on optional LLM coordination / plan-review calls outside
     # per-task worker prompts. Default local/mock ACG planned execution walks
     # the compiled lockfile directly, so this is normally ``None``.
     tokens_orchestrator_overhead: int | None = None
+    cost_usd_total: float | None = None
+    cost_method: str | None = None
+    cost_source: str | None = None
 
 
 @dataclass
@@ -171,6 +187,8 @@ class EvalRun:
     suite_name: str = SUITE_NAME
     strategy: str = "naive_parallel"
     backend: str = "mock"
+    execution_mode: str = "propose_validate"
+    evidence_kind: str = "proposed_write_set"
     model: EvalModel = field(default_factory=EvalModel)
     repo: EvalRepo = field(default_factory=EvalRepo)
     lockfile: str = ""
@@ -192,6 +210,62 @@ def make_run_id(strategy: str, backend: str) -> str:
     """Construct a deterministic-ish run id like ``greenhouse-mock-naive_parallel-2026...``."""
     ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     return f"greenhouse-{backend}-{strategy}-{ts}"
+
+
+def _git_value(repo_path: Path, args: list[str]) -> str | None:
+    """Return a git value for ``repo_path`` when it is available."""
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo_path), *args],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
+    if proc.returncode != 0:
+        return None
+    value = proc.stdout.strip()
+    return value or None
+
+
+def repo_from_path(
+    repo_path: Path | None,
+    *,
+    repo_url: str | None = None,
+    repo_commit: str | None = None,
+) -> EvalRepo:
+    """Build honest repo metadata from a checkout, preserving Greenhouse defaults.
+
+    If no ``repo_path`` is supplied, the historical Greenhouse defaults are
+    retained for compatibility with existing tests and artifacts.
+    """
+    if repo_path is None:
+        return EvalRepo(
+            url=repo_url or GREENHOUSE_REPO_URL,
+            commit=repo_commit or GREENHOUSE_PINNED_COMMIT,
+            local_path="experiments/greenhouse/checkout",
+        )
+    resolved = Path(repo_path).resolve()
+    return EvalRepo(
+        url=repo_url or _git_value(resolved, ["remote", "get-url", "origin"]) or "",
+        commit=repo_commit or _git_value(resolved, ["rev-parse", "HEAD"]) or "",
+        local_path=str(resolved),
+    )
+
+
+def suite_name_from_lock(lock: AgentLock, explicit: str | None = None) -> str:
+    """Choose a suite name without hardcoding Greenhouse for every codebase."""
+    if explicit:
+        return explicit
+    root = (lock.repo.root or "").replace("\\", "/").rstrip("/")
+    if "greenhouse" in root:
+        return SUITE_NAME
+    if root:
+        path = Path(root)
+        name = path.parent.name if path.name == "checkout" and path.parent.name else path.name
+        return f"{name}-eval"
+    return SUITE_NAME
 
 
 def task_from_lock(task: Task, *, prompt: str | None = None) -> EvalTask:
@@ -277,6 +351,18 @@ def _is_completed(task: EvalTask) -> bool:
     return True
 
 
+def _is_proposal_completed(task: EvalTask) -> bool:
+    """Completion for proposal-only evidence, separated from correctness."""
+    if task.status not in {"completed", "completed_unsafe"}:
+        return False
+    return bool(task.actual_changed_files or task.blocked_write_events)
+
+
+def _is_tested_completed(task: EvalTask) -> bool:
+    """Implementation success requires an executed passing test."""
+    return task.status == "completed" and task.test.ran and task.test.passed is True
+
+
 def _is_first_run_pass(task: EvalTask) -> bool:
     """First-run pass ⇒ tests ran AND passed AND zero retries/interventions."""
     if not task.test.ran:
@@ -295,6 +381,11 @@ def compute_summary_metrics(
     sequential_wall_time_seconds: float | None = None,
     merge_conflicts: int = 0,
     tokens_orchestrator_overhead: int | None = None,
+    tokens_prompt_method: str | None = None,
+    tokens_completion_method: str | None = None,
+    cost_usd_total: float | None = None,
+    cost_method: str | None = None,
+    cost_source: str | None = None,
 ) -> SummaryMetrics:
     """Aggregate per-task data into the run-level summary.
 
@@ -312,8 +403,13 @@ def compute_summary_metrics(
     """
     total = len(tasks)
     completed = sum(1 for t in tasks if _is_completed(t))
+    proposal_completed = sum(1 for t in tasks if _is_proposal_completed(t))
     first_run = sum(1 for t in tasks if _is_first_run_pass(t))
+    tests_ran = sum(1 for t in tasks if t.test.ran)
+    tested_completed = sum(1 for t in tasks if _is_tested_completed(t))
     rate = completed / total if total else 0.0
+    proposal_rate = proposal_completed / total if total else 0.0
+    tested_rate = tested_completed / total if total else 0.0
     per_hour = completed / (wall_time_seconds / SECONDS_PER_HOUR) if wall_time_seconds > 0 else 0.0
     pass_rate = first_run / total if total else 0.0
     speedup: float | None
@@ -335,11 +431,21 @@ def compute_summary_metrics(
     ]
     prompt_total: int | None = sum(prompt_values) if prompt_values else None
     completion_total: int | None = sum(completion_values) if completion_values else None
+    task_cost_values = [t.metrics.cost_usd for t in tasks if t.metrics.cost_usd is not None]
+    if cost_usd_total is None and task_cost_values:
+        cost_usd_total = round(sum(task_cost_values), 8)
+        cost_method = cost_method or "sum_provider_reported_task_costs"
+        sources = sorted({t.metrics.cost_source or "provider_response" for t in tasks if t.metrics.cost_usd is not None})
+        cost_source = cost_source or ",".join(sources)
 
     return SummaryMetrics(
         tasks_total=total,
         tasks_completed=completed,
         task_completion_rate=round(rate, 4),
+        proposal_completion_rate=round(proposal_rate, 4),
+        tests_ran_count=tests_ran,
+        tested_tasks_completed=tested_completed,
+        tested_completion_rate=round(tested_rate, 4),
         tasks_completed_per_hour=round(per_hour, 4),
         first_run_pass_rate=round(pass_rate, 4),
         successful_parallel_speedup=speedup,
@@ -351,8 +457,15 @@ def compute_summary_metrics(
         wall_time_seconds=round(wall_time_seconds, 4),
         acus_consumed_total=acus_total,
         tokens_prompt_total=prompt_total,
+        tokens_prompt_method=tokens_prompt_method if prompt_total is not None else None,
         tokens_completion_total=completion_total,
+        tokens_completion_method=(
+            tokens_completion_method if completion_total is not None else None
+        ),
         tokens_orchestrator_overhead=tokens_orchestrator_overhead,
+        cost_usd_total=cost_usd_total,
+        cost_method=cost_method,
+        cost_source=cost_source,
     )
 
 
@@ -402,6 +515,8 @@ __all__ = [
     "compute_summary_metrics",
     "make_run_id",
     "now_iso",
+    "repo_from_path",
+    "suite_name_from_lock",
     "task_from_lock",
     "to_dict",
     "validate_actual_files",

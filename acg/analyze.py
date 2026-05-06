@@ -97,13 +97,21 @@ class RunSummary:
     strategy: str
     backend: str
     suite_name: str
+    execution_mode: str
+    evidence_kind: str
     tasks_total: int
     tasks_completed: int
+    tests_ran_count: int
+    tested_tasks_completed: int
     overlapping_write_pairs: int
     out_of_bounds_write_count: int
     blocked_invalid_write_count: int
     tokens_prompt_total: int | None
+    tokens_prompt_method: str | None
     tokens_orchestrator_overhead: int | None
+    cost_usd_total: float | None
+    cost_method: str | None
+    cost_source: str | None
 
 
 @dataclass
@@ -140,7 +148,34 @@ class AnalysisReport:
 
     @property
     def total_oob(self) -> int:
-        return sum(len(t.out_of_bounds_files) for t in self.tasks.values())
+        return self.total_proposal_oob + self.total_posthoc_oob
+
+    @property
+    def total_proposal_oob(self) -> int:
+        return sum(
+            r.out_of_bounds_write_count for r in self.runs if not _is_applied_diff_run(r)
+        )
+
+    @property
+    def total_posthoc_oob(self) -> int:
+        return sum(
+            r.out_of_bounds_write_count for r in self.runs if _is_applied_diff_run(r)
+        )
+
+
+def _is_applied_diff_run(run: RunSummary) -> bool:
+    """Return True when OOB files came from applied/manual/hosted diffs."""
+    if run.evidence_kind in {"applied_diff", "manual_diff", "devin_diff"}:
+        return True
+    if run.execution_mode in {"applied_diff", "manual_diff", "devin_diff"}:
+        return True
+    if run.evidence_kind in {"proposed_write_set"} or run.execution_mode in {
+        "propose_validate"
+    }:
+        return False
+    # Backward compatibility for older artifacts written before evidence_kind
+    # existed: Devin backends report applied diffs, local/mock report proposals.
+    return run.backend in {"devin-api", "devin-manual"}
 
 
 # ---------------------------------------------------------------------------
@@ -208,17 +243,27 @@ def analyze_paths(paths: Iterable[Path]) -> AnalysisReport:
                     strategy=run.get("strategy", "?"),
                     backend=run.get("backend", "?"),
                     suite_name=run.get("suite_name", "?"),
+                    execution_mode=run.get("execution_mode", "?"),
+                    evidence_kind=run.get("evidence_kind", "?"),
                     tasks_total=summary_metrics.get("tasks_total", 0),
                     tasks_completed=summary_metrics.get("tasks_completed", 0),
+                    tests_ran_count=summary_metrics.get("tests_ran_count", 0),
+                    tested_tasks_completed=summary_metrics.get(
+                        "tested_tasks_completed", 0
+                    ),
                     overlapping_write_pairs=summary_metrics.get("overlapping_write_pairs", 0),
                     out_of_bounds_write_count=summary_metrics.get("out_of_bounds_write_count", 0),
                     blocked_invalid_write_count=summary_metrics.get(
                         "blocked_invalid_write_count", 0
                     ),
                     tokens_prompt_total=summary_metrics.get("tokens_prompt_total"),
+                    tokens_prompt_method=summary_metrics.get("tokens_prompt_method"),
                     tokens_orchestrator_overhead=summary_metrics.get(
                         "tokens_orchestrator_overhead"
                     ),
+                    cost_usd_total=summary_metrics.get("cost_usd_total"),
+                    cost_method=summary_metrics.get("cost_method"),
+                    cost_source=summary_metrics.get("cost_source"),
                 )
             )
 
@@ -330,10 +375,14 @@ def format_markdown(report: AnalysisReport) -> str:
                 r.strategy,
                 r.backend,
                 f"{r.tasks_completed}/{r.tasks_total}",
+                f"{r.tested_tasks_completed}/{r.tests_ran_count}",
                 str(r.overlapping_write_pairs),
-                str(r.out_of_bounds_write_count),
+                "0" if _is_applied_diff_run(r) else str(r.out_of_bounds_write_count),
+                str(r.out_of_bounds_write_count) if _is_applied_diff_run(r) else "0",
                 str(r.blocked_invalid_write_count),
                 "—" if r.tokens_prompt_total is None else str(r.tokens_prompt_total),
+                r.tokens_prompt_method or "—",
+                "not recorded" if r.cost_usd_total is None else f"{r.cost_usd_total:.6f}",
             ]
             for r in report.runs
         ]
@@ -345,11 +394,15 @@ def format_markdown(report: AnalysisReport) -> str:
                     "suite",
                     "strategy",
                     "backend",
-                    "completed",
+                    "status_completed",
+                    "tested_passed/tests_ran",
                     "overlap_pairs",
-                    "oob",
-                    "blocked",
+                    "proposal_oob",
+                    "posthoc_diff_oob",
+                    "validator_blocked",
                     "prompt_tokens",
+                    "prompt_token_method",
+                    "cost_usd",
                 ],
             )
         )
@@ -403,11 +456,16 @@ def format_markdown(report: AnalysisReport) -> str:
     lines.append("## Contract enforcement")
     lines.append("")
     lines.append(
-        f"- Total out-of-bounds proposals across all runs: **{report.total_oob}**"
+        f"- Proposal out-of-bounds files across proposal-only runs: "
+        f"**{report.total_proposal_oob}**"
     )
     lines.append(
-        f"- Total validator-blocked write events across all runs: "
+        f"- Planned validator-blocked write events across all runs: "
         f"**{report.total_blocks}**"
+    )
+    lines.append(
+        f"- Post-hoc out-of-bounds files detected in applied/manual diffs: "
+        f"**{report.total_posthoc_oob}**"
     )
     lines.append("")
     if report.total_oob == 0 and report.total_blocks == 0:

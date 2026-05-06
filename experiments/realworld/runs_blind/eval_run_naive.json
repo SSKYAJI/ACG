@@ -1,0 +1,415 @@
+{
+  "backend": "local",
+  "created_at": "2026-05-05T22:30:48Z",
+  "lockfile": "experiments/realworld/agent_lock_blind.json",
+  "model": {
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "provider": "openai-compatible",
+    "url": "https://openrouter.ai/api/v1"
+  },
+  "repo": {
+    "commit": "174c1c320875a66447deb2a15d04fc86afd07f60",
+    "local_path": "experiments/greenhouse/checkout",
+    "url": "https://github.com/spring-attic/greenhouse.git"
+  },
+  "run_id": "greenhouse-local-naive_parallel-20260505-223048",
+  "strategy": "naive_parallel",
+  "suite_name": "greenhouse-java6-modernization",
+  "summary_metrics": {
+    "acus_consumed_total": null,
+    "blocked_invalid_write_count": 0,
+    "first_run_pass_rate": 0.0,
+    "human_interventions": 0,
+    "merge_conflicts": 0,
+    "out_of_bounds_write_count": 3,
+    "overlapping_write_pairs": 3,
+    "successful_parallel_speedup": null,
+    "task_completion_rate": 0.6667,
+    "tasks_completed": 4,
+    "tasks_completed_per_hour": 5327.501,
+    "tasks_total": 6,
+    "tokens_completion_total": 712,
+    "tokens_orchestrator_overhead": null,
+    "tokens_prompt_total": 2128,
+    "wall_time_seconds": 2.703
+  },
+  "tasks": [
+    {
+      "actual_changed_files": [
+        "src/app.module.ts"
+      ],
+      "allowed_write_globs": [
+        "src/app.module.ts",
+        "src/article/article.controller.ts",
+        "src/article/article.service.ts",
+        "src/main.ts",
+        "src/profile/profile.service.ts",
+        "tsconfig.json"
+      ],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 53,
+        "tokens_prompt": 357,
+        "wall_time_seconds": 1.1597
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [
+        "add-health-check"
+      ],
+      "predicted_write_files": [
+        "src/article/article.controller.ts",
+        "src/article/article.service.ts",
+        "src/main.ts",
+        "src/profile/profile.service.ts",
+        "src/app.module.ts",
+        "tsconfig.json"
+      ],
+      "prompt": "Add global API rate limiting to the application. Use a NestJS-compatible throttling library. Configure a default of 100 requests per 60 seconds. Apply it globally so all endpoints are protected.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "add-rate-limiting",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-05T22:30:48Z",
+        "started_at": "2026-05-05T22:30:45Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "src/user/auth.middleware.ts",
+        "src/user/user.decorator.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.module.ts",
+        "src/user/user.service.ts"
+      ],
+      "allowed_write_globs": [
+        "src/app.module.ts",
+        "src/article/article.entity.ts",
+        "src/user/auth.middleware.ts",
+        "src/user/dto/**",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.service.ts"
+      ],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 192,
+        "tokens_prompt": 367,
+        "wall_time_seconds": 2.6948
+      },
+      "out_of_bounds_files": [
+        "src/user/user.decorator.ts",
+        "src/user/user.module.ts"
+      ],
+      "overlaps_with": [
+        "add-article-bookmarks"
+      ],
+      "predicted_write_files": [
+        "src/app.module.ts",
+        "src/article/article.entity.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/auth.middleware.ts",
+        "src/user/user.service.ts",
+        "src/user/dto/create-user.dto.ts",
+        "src/user/dto/index.ts"
+      ],
+      "prompt": "Add role-based access control to the application. Users should have a role field (user or admin). Create a guard that checks the current user's role against a required role. Register it so endpoints can be decorated with a role requirement.",
+      "session_id": null,
+      "status": "completed_unsafe",
+      "task_id": "add-user-roles",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-05T22:30:48Z",
+        "started_at": "2026-05-05T22:30:45Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.service.ts",
+        "src/article/dto/index.ts",
+        "src/user/user.entity.ts"
+      ],
+      "allowed_write_globs": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/article/comment.entity.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.service.ts"
+      ],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 186,
+        "tokens_prompt": 366,
+        "wall_time_seconds": 2.6921
+      },
+      "out_of_bounds_files": [
+        "src/article/dto/index.ts"
+      ],
+      "overlaps_with": [
+        "add-article-search",
+        "add-user-roles"
+      ],
+      "predicted_write_files": [
+        "src/article/article.interface.ts",
+        "src/article/article.entity.ts",
+        "src/user/user.entity.ts",
+        "src/article/article.controller.ts",
+        "src/article/article.service.ts",
+        "src/user/user.service.ts",
+        "src/article/article.module.ts",
+        "src/article/comment.entity.ts"
+      ],
+      "prompt": "Add a bookmarking feature so users can save articles for later, separate from the existing favorites system. Users should be able to bookmark and unbookmark articles via the API. Store the bookmark relationship in the database.",
+      "session_id": null,
+      "status": "completed_unsafe",
+      "task_id": "add-article-bookmarks",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-05T22:30:48Z",
+        "started_at": "2026-05-05T22:30:45Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "allowed_write_globs": [
+        "src/tag/tag.controller.spec.ts",
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.entity.ts",
+        "src/tag/tag.module.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 80,
+        "tokens_prompt": 345,
+        "wall_time_seconds": 1.6564
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "predicted_write_files": [
+        "src/tag/tag.controller.spec.ts",
+        "src/tag/tag.module.ts",
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.service.ts",
+        "src/tag/tag.entity.ts"
+      ],
+      "prompt": "Extend the tag system with write operations. Currently tags can only be read. Add the ability to create new tags and delete existing ones via the API.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "extend-tag-crud",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-05T22:30:48Z",
+        "started_at": "2026-05-05T22:30:45Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "src/article/article.controller.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.service.ts",
+        "src/article/dto/index.ts"
+      ],
+      "allowed_write_globs": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/article/comment.entity.ts",
+        "src/article/dto/**"
+      ],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 136,
+        "tokens_prompt": 349,
+        "wall_time_seconds": 2.2873
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [
+        "add-article-bookmarks"
+      ],
+      "predicted_write_files": [
+        "src/article/article.interface.ts",
+        "src/article/article.controller.ts",
+        "src/article/article.service.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.module.ts",
+        "src/article/comment.entity.ts",
+        "src/article/dto/create-article.dto.ts",
+        "src/article/dto/create-comment.ts"
+      ],
+      "prompt": "Add full-text search to the articles API. Users should be able to search articles by keywords matching against the title and body fields. Return paginated results.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "add-article-search",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-05T22:30:48Z",
+        "started_at": "2026-05-05T22:30:45Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "src/app.controller.ts",
+        "src/app.module.ts"
+      ],
+      "allowed_write_globs": [
+        "prisma/.env",
+        "src/app.controller.ts",
+        "src/app.module.ts",
+        "src/article/article.service.ts"
+      ],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 65,
+        "tokens_prompt": 344,
+        "wall_time_seconds": 1.5283
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [
+        "add-rate-limiting"
+      ],
+      "predicted_write_files": [
+        "src/app.controller.ts",
+        "src/app.module.ts",
+        "src/article/article.service.ts",
+        "prisma/.env"
+      ],
+      "prompt": "Add a health check endpoint that verifies the application and its database connection are operational. Return a standard health status response.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "add-health-check",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-05T22:30:48Z",
+        "started_at": "2026-05-05T22:30:45Z"
+      }
+    }
+  ],
+  "version": "0.1"
+}

@@ -1,0 +1,428 @@
+{
+  "overall": {
+    "f1": 0.6032,
+    "precision": 0.4419,
+    "recall": 0.95,
+    "total_blocks": 0,
+    "total_oob": 3
+  },
+  "runs": [
+    {
+      "backend": "local",
+      "blocked_invalid_write_count": 0,
+      "out_of_bounds_write_count": 0,
+      "overlapping_write_pairs": 4,
+      "source_path": "experiments/realworld/runs/eval_run_combined.json",
+      "strategy": "acg_planned",
+      "suite_name": "greenhouse-java6-modernization",
+      "tasks_completed": 6,
+      "tasks_total": 6,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_total": 1380
+    },
+    {
+      "backend": "local",
+      "blocked_invalid_write_count": 0,
+      "out_of_bounds_write_count": 0,
+      "overlapping_write_pairs": 5,
+      "source_path": "experiments/realworld/runs/eval_run_combined.json",
+      "strategy": "naive_parallel",
+      "suite_name": "greenhouse-java6-modernization",
+      "tasks_completed": 6,
+      "tasks_total": 6,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_total": 2451
+    },
+    {
+      "backend": "local",
+      "blocked_invalid_write_count": 0,
+      "out_of_bounds_write_count": 0,
+      "overlapping_write_pairs": 5,
+      "source_path": "experiments/realworld/runs_blind/eval_run_combined.json",
+      "strategy": "acg_planned",
+      "suite_name": "greenhouse-java6-modernization",
+      "tasks_completed": 6,
+      "tasks_total": 6,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_total": 1105
+    },
+    {
+      "backend": "local",
+      "blocked_invalid_write_count": 0,
+      "out_of_bounds_write_count": 3,
+      "overlapping_write_pairs": 3,
+      "source_path": "experiments/realworld/runs_blind/eval_run_combined.json",
+      "strategy": "naive_parallel",
+      "suite_name": "greenhouse-java6-modernization",
+      "tasks_completed": 4,
+      "tasks_total": 6,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_total": 2128
+    },
+    {
+      "backend": "devin-api",
+      "blocked_invalid_write_count": 0,
+      "out_of_bounds_write_count": 0,
+      "overlapping_write_pairs": 3,
+      "source_path": "experiments/greenhouse/runs/eval_run_devin_api_naive_smoke.json",
+      "strategy": "naive_parallel",
+      "suite_name": "greenhouse-java6-modernization",
+      "tasks_completed": 3,
+      "tasks_total": 3,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_total": null
+    },
+    {
+      "backend": "devin-api",
+      "blocked_invalid_write_count": 0,
+      "out_of_bounds_write_count": 0,
+      "overlapping_write_pairs": 3,
+      "source_path": "experiments/greenhouse/runs/eval_run_devin_api_acg_smoke.json",
+      "strategy": "acg_planned",
+      "suite_name": "greenhouse-java6-modernization",
+      "tasks_completed": 3,
+      "tasks_total": 3,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_total": null
+    },
+    {
+      "backend": "local",
+      "blocked_invalid_write_count": 0,
+      "out_of_bounds_write_count": 0,
+      "overlapping_write_pairs": 3,
+      "source_path": "experiments/greenhouse/runs/_local/eval_run_combined.json",
+      "strategy": "acg_planned",
+      "suite_name": "greenhouse-java6-modernization",
+      "tasks_completed": 3,
+      "tasks_total": 3,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_total": 1922
+    },
+    {
+      "backend": "local",
+      "blocked_invalid_write_count": 0,
+      "out_of_bounds_write_count": 0,
+      "overlapping_write_pairs": 3,
+      "source_path": "experiments/greenhouse/runs/_local/eval_run_combined.json",
+      "strategy": "naive_parallel",
+      "suite_name": "greenhouse-java6-modernization",
+      "tasks_completed": 3,
+      "tasks_total": 3,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_total": 2159
+    }
+  ],
+  "tasks": {
+    "add-article-bookmarks": {
+      "actual_files_seen": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/article/bookmark.entity.ts",
+        "src/article/dto/index.ts",
+        "src/user/user.entity.ts"
+      ],
+      "allowed_glob_count": 8,
+      "blocked_events_total": 0,
+      "f1": 0.75,
+      "false_negatives": 1,
+      "false_positives": 3,
+      "out_of_bounds_files": [
+        "src/article/dto/index.ts"
+      ],
+      "precision": 0.6667,
+      "predicted_files": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/article/bookmark.entity.ts",
+        "src/article/comment.entity.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.service.ts"
+      ],
+      "recall": 0.8571,
+      "runs_seen": 4,
+      "suggestions": [
+        "agent proposed 1 OOB write(s) (['src/article/dto/index.ts']); decide: widen allowed_paths to include them, or audit the agent prompt"
+      ],
+      "task_id": "add-article-bookmarks",
+      "true_positives": 6
+    },
+    "add-article-search": {
+      "actual_files_seen": [
+        "src/article/article.controller.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.service.ts",
+        "src/article/dto/index.ts",
+        "src/article/dto/search-query.dto.ts"
+      ],
+      "allowed_glob_count": 7,
+      "blocked_events_total": 0,
+      "f1": 0.625,
+      "false_negatives": 0,
+      "false_positives": 6,
+      "out_of_bounds_files": [],
+      "precision": 0.4545,
+      "predicted_files": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/article/comment.entity.ts",
+        "src/article/dto/create-article.dto.ts",
+        "src/article/dto/create-comment.ts",
+        "src/article/dto/index.ts",
+        "src/article/dto/search-query.dto.ts",
+        "src/user/dto/create-user.dto.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 4,
+      "suggestions": [
+        "predictor over-predicts (precision=0.45); consider removing ['src/article/article.entity.ts', 'src/article/article.module.ts', 'src/article/comment.entity.ts'] from predicted_writes seeds"
+      ],
+      "task_id": "add-article-search",
+      "true_positives": 5
+    },
+    "add-health-check": {
+      "actual_files_seen": [
+        "package.json",
+        "src/app.controller.ts",
+        "src/app.module.ts",
+        "src/health/health.controller.ts",
+        "src/health/health.module.ts"
+      ],
+      "allowed_glob_count": 6,
+      "blocked_events_total": 0,
+      "f1": 0.7143,
+      "false_negatives": 0,
+      "false_positives": 4,
+      "out_of_bounds_files": [],
+      "precision": 0.5556,
+      "predicted_files": [
+        "package.js",
+        "package.json",
+        "prisma/.env",
+        "src/app.controller.ts",
+        "src/app.module.ts",
+        "src/article/article.service.ts",
+        "src/health/health.controller.ts",
+        "src/health/health.module.ts",
+        "src/main.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 4,
+      "suggestions": [
+        "predictor over-predicts (precision=0.56); consider removing ['package.js', 'prisma/.env', 'src/article/article.service.ts'] from predicted_writes seeds"
+      ],
+      "task_id": "add-health-check",
+      "true_positives": 5
+    },
+    "add-rate-limiting": {
+      "actual_files_seen": [
+        "package.json",
+        "src/app.module.ts",
+        "src/main.ts",
+        "src/shared/throttle.config.ts"
+      ],
+      "allowed_glob_count": 8,
+      "blocked_events_total": 0,
+      "f1": 0.5,
+      "false_negatives": 0,
+      "false_positives": 8,
+      "out_of_bounds_files": [],
+      "precision": 0.3333,
+      "predicted_files": [
+        ".env.example",
+        "package.js",
+        "package.json",
+        "src/app.module.ts",
+        "src/article/article.controller.ts",
+        "src/article/article.service.ts",
+        "src/main.ts",
+        "src/profile/profile.service.ts",
+        "src/shared/base.controller.ts",
+        "src/shared/pipes/validation.pipe.ts",
+        "src/shared/throttle.config.ts",
+        "tsconfig.json"
+      ],
+      "recall": 1.0,
+      "runs_seen": 4,
+      "suggestions": [
+        "predictor over-predicts (precision=0.33); consider removing ['.env.example', 'package.js', 'src/article/article.controller.ts'] from predicted_writes seeds"
+      ],
+      "task_id": "add-rate-limiting",
+      "true_positives": 4
+    },
+    "add-user-roles": {
+      "actual_files_seen": [
+        "src/app.module.ts",
+        "src/user/auth.middleware.ts",
+        "src/user/roles.decorator.ts",
+        "src/user/roles.guard.ts",
+        "src/user/user.decorator.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.module.ts",
+        "src/user/user.service.ts"
+      ],
+      "allowed_glob_count": 8,
+      "blocked_events_total": 0,
+      "f1": 0.7619,
+      "false_negatives": 1,
+      "false_positives": 4,
+      "out_of_bounds_files": [
+        "src/user/user.decorator.ts",
+        "src/user/user.module.ts"
+      ],
+      "precision": 0.6667,
+      "predicted_files": [
+        ".env.example",
+        "src/app.module.ts",
+        "src/article/article.entity.ts",
+        "src/user/auth.middleware.ts",
+        "src/user/dto/create-user.dto.ts",
+        "src/user/dto/index.ts",
+        "src/user/roles.decorator.ts",
+        "src/user/roles.guard.ts",
+        "src/user/user.decorator.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.service.ts"
+      ],
+      "recall": 0.8889,
+      "runs_seen": 4,
+      "suggestions": [
+        "agent proposed 2 OOB write(s) (['src/user/user.decorator.ts', 'src/user/user.module.ts']); decide: widen allowed_paths to include them, or audit the agent prompt"
+      ],
+      "task_id": "add-user-roles",
+      "true_positives": 8
+    },
+    "extend-tag-crud": {
+      "actual_files_seen": [
+        "src/tag/dto/create-tag.dto.ts",
+        "src/tag/tag.controller.spec.ts",
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "allowed_glob_count": 6,
+      "blocked_events_total": 0,
+      "f1": 0.6154,
+      "false_negatives": 0,
+      "false_positives": 5,
+      "out_of_bounds_files": [],
+      "precision": 0.4444,
+      "predicted_files": [
+        "src/article/dto/create-article.dto.ts",
+        "src/article/dto/create-comment.ts",
+        "src/article/dto/index.ts",
+        "src/tag/dto/create-tag.dto.ts",
+        "src/tag/tag.controller.spec.ts",
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.entity.ts",
+        "src/tag/tag.module.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 4,
+      "suggestions": [
+        "predictor over-predicts (precision=0.44); consider removing ['src/article/dto/create-article.dto.ts', 'src/article/dto/create-comment.ts', 'src/article/dto/index.ts'] from predicted_writes seeds"
+      ],
+      "task_id": "extend-tag-crud",
+      "true_positives": 4
+    },
+    "lambda-rowmapper-account": {
+      "actual_files_seen": [
+        "pom.xml",
+        "src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java"
+      ],
+      "allowed_glob_count": 4,
+      "blocked_events_total": 0,
+      "f1": 0.4,
+      "false_negatives": 0,
+      "false_positives": 6,
+      "out_of_bounds_files": [],
+      "precision": 0.25,
+      "predicted_files": [
+        "pom.xml",
+        "src/main/java/com/springsource/greenhouse/account/Account.java",
+        "src/main/java/com/springsource/greenhouse/account/AccountException.java",
+        "src/main/java/com/springsource/greenhouse/account/AccountMapper.java",
+        "src/main/java/com/springsource/greenhouse/account/AccountRepository.java",
+        "src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java",
+        "src/main/java/com/springsource/greenhouse/invite/JdbcInviteRepository.java",
+        "src/main/java/com/springsource/greenhouse/members/JdbcProfileRepository.java"
+      ],
+      "recall": 1.0,
+      "runs_seen": 4,
+      "suggestions": [
+        "predictor over-predicts (precision=0.25); consider removing ['src/main/java/com/springsource/greenhouse/account/Account.java', 'src/main/java/com/springsource/greenhouse/account/AccountException.java', 'src/main/java/com/springsource/greenhouse/account/AccountMapper.java'] from predicted_writes seeds"
+      ],
+      "task_id": "lambda-rowmapper-account",
+      "true_positives": 2
+    },
+    "lambda-rowmapper-app": {
+      "actual_files_seen": [
+        "pom.xml",
+        "src/main/java/com/springsource/greenhouse/develop/JdbcAppRepository.java"
+      ],
+      "allowed_glob_count": 2,
+      "blocked_events_total": 0,
+      "f1": 0.4,
+      "false_negatives": 0,
+      "false_positives": 6,
+      "out_of_bounds_files": [],
+      "precision": 0.25,
+      "predicted_files": [
+        "pom.xml",
+        "src/main/java/com/springsource/greenhouse/develop/App.java",
+        "src/main/java/com/springsource/greenhouse/develop/AppConnection.java",
+        "src/main/java/com/springsource/greenhouse/develop/AppController.java",
+        "src/main/java/com/springsource/greenhouse/develop/AppForm.java",
+        "src/main/java/com/springsource/greenhouse/develop/AppRepository.java",
+        "src/main/java/com/springsource/greenhouse/develop/AppSummary.java",
+        "src/main/java/com/springsource/greenhouse/develop/JdbcAppRepository.java"
+      ],
+      "recall": 1.0,
+      "runs_seen": 4,
+      "suggestions": [
+        "predictor over-predicts (precision=0.25); consider removing ['src/main/java/com/springsource/greenhouse/develop/App.java', 'src/main/java/com/springsource/greenhouse/develop/AppConnection.java', 'src/main/java/com/springsource/greenhouse/develop/AppController.java'] from predicted_writes seeds"
+      ],
+      "task_id": "lambda-rowmapper-app",
+      "true_positives": 2
+    },
+    "lambda-rowmapper-invite": {
+      "actual_files_seen": [
+        "pom.xml",
+        "src/main/java/com/springsource/greenhouse/invite/JdbcInviteRepository.java"
+      ],
+      "allowed_glob_count": 4,
+      "blocked_events_total": 0,
+      "f1": 0.4,
+      "false_negatives": 0,
+      "false_positives": 6,
+      "out_of_bounds_files": [],
+      "precision": 0.25,
+      "predicted_files": [
+        "pom.xml",
+        "src/main/java/com/springsource/greenhouse/invite/FacebookInviteController.java",
+        "src/main/java/com/springsource/greenhouse/invite/Invite.java",
+        "src/main/java/com/springsource/greenhouse/invite/InviteAcceptAction.java",
+        "src/main/java/com/springsource/greenhouse/invite/InviteRepository.java",
+        "src/main/java/com/springsource/greenhouse/invite/JdbcInviteRepository.java",
+        "src/main/java/com/springsource/greenhouse/invite/mail/MailInviteService.java",
+        "src/test/java/com/springsource/greenhouse/database/GreenhouseTestDatabaseBuilder.java"
+      ],
+      "recall": 1.0,
+      "runs_seen": 4,
+      "suggestions": [
+        "predictor over-predicts (precision=0.25); consider removing ['src/main/java/com/springsource/greenhouse/invite/FacebookInviteController.java', 'src/main/java/com/springsource/greenhouse/invite/Invite.java', 'src/main/java/com/springsource/greenhouse/invite/InviteAcceptAction.java'] from predicted_writes seeds"
+      ],
+      "task_id": "lambda-rowmapper-invite",
+      "true_positives": 2
+    }
+  }
+}
