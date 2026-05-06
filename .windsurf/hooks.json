@@ -5,6 +5,12 @@
         "command": "./scripts/precheck_write.sh",
         "show_output": true
       }
+    ],
+    "post_write_code": [
+      {
+        "command": "./scripts/postcheck_write.sh",
+        "show_output": true
+      }
     ]
   }
 }

@@ -86,6 +86,7 @@ if "${ACG_BIN}" validate-write \
       --task "${TASK_ID}" \
       --path "${WRITE_PATH}" \
       --quiet; then
+  echo "[acg-hook] ALLOWED: ${WRITE_PATH} validated via Cascade pre_write_code hook (task=${TASK_ID})"
   exit 0
 fi
 
