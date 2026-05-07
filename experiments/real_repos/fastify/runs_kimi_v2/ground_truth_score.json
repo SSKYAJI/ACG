@@ -1,0 +1,213 @@
+{
+  "aggregate": {
+    "agent_match_to_human_macro_by_strategy": {
+      "acg_planned": {
+        "agent_match_to_human": 0.35555555555555557,
+        "f1": 0.35555555555555557,
+        "precision": 0.5,
+        "recall": 0.2777777777777778
+      },
+      "acg_planned_full_context": {
+        "agent_match_to_human": 0.16666666666666666,
+        "f1": 0.16666666666666666,
+        "precision": 0.3333333333333333,
+        "recall": 0.1111111111111111
+      },
+      "naive_parallel": {
+        "agent_match_to_human": 0.13333333333333333,
+        "f1": 0.13333333333333333,
+        "precision": 0.16666666666666666,
+        "recall": 0.1111111111111111
+      }
+    },
+    "agent_match_to_human_micro_by_strategy": {
+      "acg_planned": {
+        "agent_match_to_human": 0.25,
+        "f1": 0.25,
+        "false_negatives": 8,
+        "false_positives": 4,
+        "precision": 0.3333333333333333,
+        "recall": 0.2,
+        "true_positives": 2
+      },
+      "acg_planned_full_context": {
+        "agent_match_to_human": 0.16666666666666669,
+        "f1": 0.16666666666666669,
+        "false_negatives": 9,
+        "false_positives": 1,
+        "precision": 0.5,
+        "recall": 0.1,
+        "true_positives": 1
+      },
+      "naive_parallel": {
+        "agent_match_to_human": 0.11764705882352941,
+        "f1": 0.11764705882352941,
+        "false_negatives": 9,
+        "false_positives": 6,
+        "precision": 0.14285714285714285,
+        "recall": 0.1,
+        "true_positives": 1
+      }
+    },
+    "cost_usd_total_recorded": 0.0033748999999999997
+  },
+  "full_name": "fastify/fastify",
+  "model": "moonshotai/kimi-k2-0905",
+  "repo": "fastify",
+  "score_definition": {
+    "agent_match_to_human": "F1 of proposed_write_files (== actual_changed_files for local-proposal artifacts) vs manifest ground_truth_files",
+    "path_normalization": "repo-relative strings"
+  },
+  "tasks": {
+    "pr-6653": {
+      "agent_match_to_human_by_strategy": {
+        "acg_planned": {
+          "agent_match_to_human": 0.0,
+          "blocked_invalid_write_count": 2,
+          "f1": 0.0,
+          "false_negatives": 5,
+          "false_positives": 3,
+          "precision": 0.0,
+          "proposed_write_files": [
+            "lib/content-type-parser.js",
+            "test/content-parser.test.js",
+            "types/content-type-parser.d.ts"
+          ],
+          "recall": 0.0,
+          "true_positives": 0
+        },
+        "acg_planned_full_context": {
+          "agent_match_to_human": 0.0,
+          "blocked_invalid_write_count": 3,
+          "f1": 0.0,
+          "false_negatives": 5,
+          "false_positives": 1,
+          "precision": 0.0,
+          "proposed_write_files": [
+            "lib/content-type-parser.js"
+          ],
+          "recall": 0.0,
+          "true_positives": 0
+        },
+        "naive_parallel": {
+          "agent_match_to_human": 0.0,
+          "blocked_invalid_write_count": 0,
+          "f1": 0.0,
+          "false_negatives": 5,
+          "false_positives": 4,
+          "precision": 0.0,
+          "proposed_write_files": [
+            "fastify.d.ts",
+            "lib/content-type-parser.js",
+            "lib/content-type.js",
+            "lib/context.js"
+          ],
+          "recall": 0.0,
+          "true_positives": 0
+        }
+      },
+      "ground_truth_files": [
+        "lib/handle-request.js",
+        "lib/request.js",
+        "lib/symbols.js",
+        "lib/validation.js",
+        "types/request.d.ts"
+      ]
+    },
+    "pr-6692": {
+      "agent_match_to_human_by_strategy": {
+        "acg_planned": {
+          "agent_match_to_human": 0.6666666666666666,
+          "blocked_invalid_write_count": 0,
+          "f1": 0.6666666666666666,
+          "false_negatives": 1,
+          "false_positives": 0,
+          "precision": 1.0,
+          "proposed_write_files": [
+            "lib/schemas.js"
+          ],
+          "recall": 0.5,
+          "true_positives": 1
+        },
+        "acg_planned_full_context": {
+          "agent_match_to_human": 0.0,
+          "blocked_invalid_write_count": 2,
+          "f1": 0.0,
+          "false_negatives": 2,
+          "false_positives": 0,
+          "precision": 0.0,
+          "proposed_write_files": [],
+          "recall": 0.0,
+          "true_positives": 0
+        },
+        "naive_parallel": {
+          "agent_match_to_human": 0.0,
+          "blocked_invalid_write_count": 0,
+          "f1": 0.0,
+          "false_negatives": 2,
+          "false_positives": 1,
+          "precision": 0.0,
+          "proposed_write_files": [
+            "lib/content-type.js"
+          ],
+          "recall": 0.0,
+          "true_positives": 0
+        }
+      },
+      "ground_truth_files": [
+        "lib/content-type-parser.js",
+        "lib/schemas.js"
+      ]
+    },
+    "pr-6694": {
+      "agent_match_to_human_by_strategy": {
+        "acg_planned": {
+          "agent_match_to_human": 0.4,
+          "blocked_invalid_write_count": 0,
+          "f1": 0.4,
+          "false_negatives": 2,
+          "false_positives": 1,
+          "precision": 0.5,
+          "proposed_write_files": [
+            "lib/content-type-parser.js",
+            "test/content-parser.test.js"
+          ],
+          "recall": 0.3333333333333333,
+          "true_positives": 1
+        },
+        "acg_planned_full_context": {
+          "agent_match_to_human": 0.5,
+          "blocked_invalid_write_count": 1,
+          "f1": 0.5,
+          "false_negatives": 2,
+          "false_positives": 0,
+          "precision": 1.0,
+          "proposed_write_files": [
+            "lib/content-type-parser.js"
+          ],
+          "recall": 0.3333333333333333,
+          "true_positives": 1
+        },
+        "naive_parallel": {
+          "agent_match_to_human": 0.4,
+          "blocked_invalid_write_count": 0,
+          "f1": 0.4,
+          "false_negatives": 2,
+          "false_positives": 1,
+          "precision": 0.5,
+          "proposed_write_files": [
+            "lib/content-type-parser.js",
+            "lib/content-type.js"
+          ],
+          "recall": 0.3333333333333333,
+          "true_positives": 1
+        }
+      },
+      "ground_truth_files": [
+        "lib/content-type-parser.js",
+        "lib/handle-request.js",
+        "lib/request.js"
+      ]
+    }
+  }
+}

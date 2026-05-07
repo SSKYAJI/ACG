@@ -34,12 +34,14 @@ from acg.schema import (
 from experiments.greenhouse import devin_adapter, headtohead, report
 from experiments.greenhouse.eval_schema import (
     EVAL_VERSION,
+    BlockedWriteEvent,
     EvalRun,
     EvalTask,
     SummaryMetrics,
     TaskMetrics,
     TaskTest,
     annotate_overlaps,
+    compute_integration_burden,
     compute_overlap_pairs,
     compute_summary_metrics,
     task_from_lock,
@@ -197,6 +199,7 @@ def test_eval_run_serializes_with_required_top_level_keys(tmp_path: Path) -> Non
     assert "provider" in payload["model"]
     assert payload["repo"]["commit"]  # Greenhouse pin always present.
     assert payload["tasks"][0]["task_id"] == "t1"
+    assert "integration_burden" in payload["summary_metrics"]
     # JSON must be sort_keys=True for stable diffs.
     serialized = out.read_text()
     assert serialized.index('"backend"') < serialized.index('"strategy"')
@@ -247,6 +250,64 @@ def test_annotate_overlaps_populates_each_task() -> None:
     assert tasks[0].overlaps_with == ["invite"]
     assert tasks[1].overlaps_with == ["account"]
     assert tasks[2].overlaps_with == []
+
+
+def test_compute_integration_burden_three_tasks_share_pom_xml() -> None:
+    """Three two-file task outputs sharing pom.xml expose duplicate touches."""
+    tasks = [
+        EvalTask(task_id="account", actual_changed_files=["JdbcAccountRepository.java", "pom.xml"]),
+        EvalTask(task_id="invite", actual_changed_files=["JdbcInviteRepository.java", "pom.xml"]),
+        EvalTask(task_id="app", actual_changed_files=["JdbcAppRepository.java", "pom.xml"]),
+    ]
+
+    burden = compute_integration_burden(tasks)
+
+    assert burden.changed_file_mentions_total == 6
+    assert burden.unique_changed_files == 4
+    assert burden.duplicate_file_touches == 2
+    assert burden.overlapping_task_pairs == 3
+    assert burden.overlapping_files == ["pom.xml"]
+
+
+def test_compute_integration_burden_disjoint_tasks_zero_duplicates() -> None:
+    tasks = [
+        EvalTask(task_id="a", actual_changed_files=["a.java"]),
+        EvalTask(task_id="b", actual_changed_files=["b.java"]),
+    ]
+
+    burden = compute_integration_burden(tasks)
+
+    assert burden.duplicate_file_touches == 0
+    assert burden.overlapping_task_pairs == 0
+    assert burden.overlapping_files == []
+
+
+def test_compute_integration_burden_counts_blocked_events_for_review_mentions() -> None:
+    tasks = [
+        EvalTask(
+            task_id="a",
+            actual_changed_files=["a.java"],
+            blocked_write_events=[
+                BlockedWriteEvent(
+                    file="a.java",
+                    description="blocked duplicate",
+                    reason="outside allowed_paths",
+                ),
+                BlockedWriteEvent(
+                    file="x.java",
+                    description="blocked extra",
+                    reason="outside allowed_paths",
+                ),
+            ],
+        )
+    ]
+
+    burden = compute_integration_burden(tasks)
+
+    assert burden.changed_file_mentions_total == 1
+    assert burden.blocked_events_total == 2
+    assert burden.review_file_mentions_total == 3
+    assert burden.review_unique_files_total == 2
 
 
 # ---------------------------------------------------------------------------
@@ -827,7 +888,14 @@ def test_manual_applied_diff_can_extract_changed_files_from_git_diff(tmp_path: P
         "src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java",
     ]
     assert task.out_of_bounds_files == []
+    assert task.metrics.changed_lines_added == 2
+    assert task.metrics.changed_lines_deleted == 2
+    assert task.metrics.changed_lines_kind == "git_numstat"
     assert run.summary_metrics.tasks_completed == 1
+    assert run.summary_metrics.integration_burden.changed_lines_added == 2
+    assert run.summary_metrics.integration_burden.changed_lines_deleted == 2
+    assert run.summary_metrics.integration_burden.changed_lines_total == 4
+    assert run.summary_metrics.integration_burden.diff_stats_kind == "git_numstat"
     assert run.repo.local_path == str(repo.resolve())
 
     devin_run = devin_adapter.run_devin_manual(
@@ -838,6 +906,7 @@ def test_manual_applied_diff_can_extract_changed_files_from_git_diff(tmp_path: P
     )
     assert devin_run.backend == "devin-manual"
     assert devin_run.tasks[0].actual_changed_files == task.actual_changed_files
+    assert devin_run.summary_metrics.integration_burden.changed_lines_total == 4
 
 
 def test_devin_manual_rejects_strategy_mismatch(tmp_path: Path) -> None:
@@ -1026,6 +1095,7 @@ def test_cli_applied_diff_backend_writes_applied_diff_artifact(tmp_path: Path) -
     assert payload["execution_mode"] == "applied_diff"
     assert payload["evidence_kind"] == "applied_diff"
     assert payload["tasks"][0]["actual_changed_files_kind"] == "applied_diff"
+    assert "integration_burden" in payload["summary_metrics"]
 
 
 def test_cli_realworld_like_run_does_not_emit_greenhouse_metadata(tmp_path: Path) -> None:

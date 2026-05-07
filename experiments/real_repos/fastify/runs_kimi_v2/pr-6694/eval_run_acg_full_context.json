@@ -1,9 +1,9 @@
 {
   "backend": "local",
-  "created_at": "2026-05-07T06:52:00Z",
+  "created_at": "2026-05-07T06:52:40Z",
   "evidence_kind": "proposed_write_set",
   "execution_mode": "propose_validate",
-  "lockfile": "experiments/real_repos/fastify/agent_lock_pr-6653.json",
+  "lockfile": "experiments/real_repos/fastify/agent_lock_pr-6694.json",
   "model": {
     "model": "moonshotai/kimi-k2-0905",
     "provider": "openai-compatible",
@@ -14,20 +14,20 @@
     "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/fastify/checkout",
     "url": "https://github.com/fastify/fastify.git"
   },
-  "run_id": "greenhouse-local-acg_planned-20260507-065200",
-  "strategy": "acg_planned",
+  "run_id": "greenhouse-local-acg_planned_full_context-20260507-065240",
+  "strategy": "acg_planned_full_context",
   "suite_name": "fastify-eval",
   "summary_metrics": {
     "acus_consumed_total": null,
-    "blocked_invalid_write_count": 2,
+    "blocked_invalid_write_count": 1,
     "cost_method": "sum_provider_reported_task_costs",
     "cost_source": "body.usage.cost",
-    "cost_usd_total": 0.0003945,
+    "cost_usd_total": 0.0003634,
     "first_run_pass_rate": 0.0,
     "human_interventions": 0,
     "integration_burden": {
-      "blocked_events_total": 2,
-      "changed_file_mentions_total": 3,
+      "blocked_events_total": 1,
+      "changed_file_mentions_total": 1,
       "changed_lines_added": null,
       "changed_lines_deleted": null,
       "changed_lines_total": null,
@@ -36,9 +36,9 @@
       "out_of_bounds_files_total": 0,
       "overlapping_files": [],
       "overlapping_task_pairs": 0,
-      "review_file_mentions_total": 5,
-      "review_unique_files_total": 5,
-      "unique_changed_files": 3
+      "review_file_mentions_total": 2,
+      "review_unique_files_total": 2,
+      "unique_changed_files": 1
     },
     "merge_conflicts": 0,
     "out_of_bounds_write_count": 0,
@@ -47,30 +47,27 @@
     "successful_parallel_speedup": null,
     "task_completion_rate": 1.0,
     "tasks_completed": 1,
-    "tasks_completed_per_hour": 483.2116,
+    "tasks_completed_per_hour": 1136.509,
     "tasks_total": 1,
     "tested_completion_rate": 0.0,
     "tested_tasks_completed": 0,
     "tests_ran_count": 0,
     "tokens_completion_method": "provider_usage_completion_tokens",
-    "tokens_completion_total": 117,
+    "tokens_completion_total": 64,
     "tokens_orchestrator_overhead": null,
     "tokens_prompt_method": "provider_usage_prompt_tokens",
-    "tokens_prompt_total": 170,
-    "wall_time_seconds": 7.4502
+    "tokens_prompt_total": 339,
+    "wall_time_seconds": 3.1676
   },
   "tasks": [
     {
       "actual_changed_files": [
-        "lib/content-type-parser.js",
-        "test/content-parser.test.js",
-        "types/content-type-parser.d.ts"
+        "lib/content-type-parser.js"
       ],
       "actual_changed_files_kind": "proposed_write_set",
       "allowed_write_globs": [
         "lib/content-type-parser.js",
         "test/content-parser.test.js",
-        "test/internals/validation.test.js",
         "test/logger/logger-test-utils.js",
         "types/content-type-parser.d.ts"
       ],
@@ -84,14 +81,9 @@
       },
       "blocked_write_events": [
         {
-          "description": "Update validation to reuse the cached parsed mediaType instead of re-parsing",
-          "file": "lib/validation.js",
-          "reason": "path 'lib/validation.js' is outside task 'pr-6653''s allowed_paths (lib/content-type-parser.js, test/content-parser.test.js, test/internals/validation.test.js, test/logger/logger-test-utils.js, types/content-type-parser.d.ts)"
-        },
-        {
-          "description": "Expose the cached mediaType property on the request prototype",
-          "file": "lib/request.js",
-          "reason": "path 'lib/request.js' is outside task 'pr-6653''s allowed_paths (lib/content-type-parser.js, test/content-parser.test.js, test/internals/validation.test.js, test/logger/logger-test-utils.js, types/content-type-parser.d.ts)"
+          "description": "Ensure ContentType instances are immutable so they can be safely cached and reused without side effects.",
+          "file": "lib/content-type.js",
+          "reason": "path 'lib/content-type.js' is outside task 'pr-6694''s allowed_paths (lib/content-type-parser.js, test/content-parser.test.js, test/logger/logger-test-utils.js, types/content-type-parser.d.ts)"
         }
       ],
       "failure_reason": null,
@@ -101,12 +93,12 @@
         "changed_lines_deleted": null,
         "changed_lines_kind": null,
         "cost_source": "body.usage.cost",
-        "cost_usd": 0.0003945,
+        "cost_usd": 0.0003634,
         "human_interventions": 0,
         "model_calls": 1,
-        "tokens_completion": 117,
-        "tokens_prompt": 170,
-        "wall_time_seconds": 7.4447
+        "tokens_completion": 64,
+        "tokens_prompt": 339,
+        "wall_time_seconds": 3.1654
       },
       "out_of_bounds_files": [],
       "overlaps_with": [],
@@ -114,13 +106,12 @@
         "types/content-type-parser.d.ts",
         "test/content-parser.test.js",
         "lib/content-type-parser.js",
-        "test/internals/validation.test.js",
         "test/logger/logger-test-utils.js"
       ],
-      "prompt": "Add a readonly request.mediaType property that exposes the parsed request Content-Type media type, cache the parsed ContentType on the request, and update validation and request handling to reuse the parsed value.",
+      "prompt": "Improve Content-Type parsing performance by caching parsed ContentType objects in ContentTypeParser and reusing those parsed objects from request handling and request.mediaType without changing external behavior.",
       "session_id": null,
       "status": "completed",
-      "task_id": "pr-6653",
+      "task_id": "pr-6694",
       "test": {
         "command": null,
         "duration_seconds": null,
@@ -130,8 +121,8 @@
         "ran": false
       },
       "timestamps": {
-        "finished_at": "2026-05-07T06:52:00Z",
-        "started_at": "2026-05-07T06:51:53Z"
+        "finished_at": "2026-05-07T06:52:40Z",
+        "started_at": "2026-05-07T06:52:37Z"
       }
     }
   ],

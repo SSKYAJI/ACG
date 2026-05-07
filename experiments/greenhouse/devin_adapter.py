@@ -45,6 +45,7 @@ Manual/applied-diff sidecar JSON (``--diff-results`` or
         "duration_seconds": 27.4
       },
       "wall_time_seconds": 612.0,
+      "diff_stats": {"added": 12, "deleted": 4},
       "started_at": "2026-04-25T18:00:00Z",
       "finished_at": "2026-04-25T18:10:12Z",
       "pr_url": "https://github.com/.../pull/42",
@@ -151,6 +152,32 @@ def _changed_files_from_git_diff(
     return sorted(changed)
 
 
+def _numstat_from_git_diff(
+    repo_path: Path, *, base_ref: str, head_ref: str | None = None
+) -> tuple[int, int]:
+    """Return added/deleted text-line totals for a git diff.
+
+    Binary entries are reported by git as ``-``/``-`` and are intentionally
+    ignored. The helper mirrors :func:`_changed_files_from_git_diff`'s diff
+    target selection so file lists and line counts refer to the same range.
+    """
+    if not repo_path.exists():
+        raise DevinManualError(f"git diff repo_path does not exist: {repo_path}")
+    diff_target = f"{base_ref}...{head_ref}" if head_ref else base_ref
+    added_total = 0
+    deleted_total = 0
+    for line in _git_text(
+        repo_path,
+        ["diff", "--numstat", "--diff-filter=ACMRTUXB", diff_target, "--"],
+    ).splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) < 3 or parts[0] == "-" or parts[1] == "-":
+            continue
+        added_total += int(parts[0])
+        deleted_total += int(parts[1])
+    return added_total, deleted_total
+
+
 def _task_from_manual_entry(
     entry: dict[str, Any],
     lock: AgentLock,
@@ -185,6 +212,23 @@ def _task_from_manual_entry(
             Path(repo_path), base_ref=str(base_ref), head_ref=head_ref
         )
     eval_task.actual_changed_files = actual_changed_files
+    diff_stats = entry.get("diff_stats") or {}
+    if diff_stats:
+        eval_task.metrics.changed_lines_added = int(diff_stats.get("added") or 0)
+        eval_task.metrics.changed_lines_deleted = int(diff_stats.get("deleted") or 0)
+        eval_task.metrics.changed_lines_kind = "sidecar_numstat"
+    elif repo_path:
+        try:
+            added, deleted = _numstat_from_git_diff(
+                Path(repo_path), base_ref=str(base_ref), head_ref=head_ref
+            )
+        except DevinManualError:
+            if not actual_changed_files:
+                raise
+        else:
+            eval_task.metrics.changed_lines_added = added
+            eval_task.metrics.changed_lines_deleted = deleted
+            eval_task.metrics.changed_lines_kind = "git_numstat"
     eval_task.timestamps.started_at = entry.get("started_at")
     eval_task.timestamps.finished_at = entry.get("finished_at")
     eval_task.metrics.wall_time_seconds = float(entry.get("wall_time_seconds") or 0.0)

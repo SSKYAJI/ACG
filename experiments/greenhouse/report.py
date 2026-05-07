@@ -79,6 +79,28 @@ def render_markdown_table(runs: list[dict[str, Any]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_integration_burden_line(runs: list[dict[str, Any]]) -> str:
+    """Render a compact integration-burden summary when artifacts provide it."""
+    parts: list[str] = []
+    for run in runs:
+        summary = run.get("summary_metrics") or {}
+        burden = summary.get("integration_burden") or {}
+        if not burden:
+            continue
+        files = burden.get("overlapping_files") or []
+        file_preview = ", ".join(files[:3])
+        if len(files) > 3:
+            file_preview = f"{file_preview}, +{len(files) - 3} more"
+        parts.append(
+            f"{run.get('strategy', '?')}: "
+            f"{burden.get('duplicate_file_touches', 0)} duplicate touches"
+            f"; multi-touched files: {file_preview or 'none'}"
+        )
+    if not parts:
+        return ""
+    return "Integration burden: " + " | ".join(parts)
+
+
 def render_demo_line(runs: list[dict[str, Any]]) -> str:
     """Pick the megaplan demo line that fits the data.
 
@@ -200,6 +222,10 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(list(sys.argv[1:] if argv is None else argv))
     runs = [_load(p) for p in args.runs]
     sys.stdout.write(render_markdown_table(runs))
+    burden_line = render_integration_burden_line(runs)
+    if burden_line:
+        sys.stdout.write("\n")
+        sys.stdout.write(burden_line + "\n")
     if not args.no_demo_line:
         sys.stdout.write("\n")
         sys.stdout.write(render_demo_line(runs) + "\n")

@@ -59,6 +59,9 @@ class TaskMetrics:
     model_calls: int | None = None
     tokens_prompt: int | None = None
     tokens_completion: int | None = None
+    changed_lines_added: int | None = None
+    changed_lines_deleted: int | None = None
+    changed_lines_kind: str | None = None
     human_interventions: int = 0
     # Devin reports ``acus_consumed`` per session; populated by the
     # ``devin-api`` backend, ``None`` for mock/local where ACUs do not apply.
@@ -137,6 +140,30 @@ class EvalModel:
 
 
 @dataclass
+class IntegrationBurdenMetrics:
+    """File-level burden a downstream integrator would inherit.
+
+    These are bridge metrics only: they do not simulate a manager/reviewer LLM
+    or claim semantic patch quality. They summarize repeated file touches,
+    overlap files, contract violations, and optional diff line volume.
+    """
+
+    changed_file_mentions_total: int = 0
+    unique_changed_files: int = 0
+    duplicate_file_touches: int = 0
+    overlapping_task_pairs: int = 0
+    overlapping_files: list[str] = field(default_factory=list)
+    out_of_bounds_files_total: int = 0
+    blocked_events_total: int = 0
+    review_file_mentions_total: int = 0
+    review_unique_files_total: int = 0
+    changed_lines_added: int | None = None
+    changed_lines_deleted: int | None = None
+    changed_lines_total: int | None = None
+    diff_stats_kind: str | None = None
+
+
+@dataclass
 class SummaryMetrics:
     tasks_total: int = 0
     tasks_completed: int = 0
@@ -176,6 +203,9 @@ class SummaryMetrics:
     cost_usd_total: float | None = None
     cost_method: str | None = None
     cost_source: str | None = None
+    integration_burden: IntegrationBurdenMetrics = field(
+        default_factory=IntegrationBurdenMetrics
+    )
 
 
 @dataclass
@@ -324,6 +354,79 @@ def compute_overlap_pairs(tasks: list[EvalTask]) -> int:
     return pair_count
 
 
+def compute_integration_burden(tasks: list[EvalTask]) -> IntegrationBurdenMetrics:
+    """Summarize file-level integration/review burden from task artifacts.
+
+    The helper is backend-neutral: ``actual_changed_files`` can mean proposed
+    write sets for mock/local runs or applied diffs for Devin/applied-diff
+    runs. Optional line stats are included only when task metrics provide them.
+    """
+    changed_mentions = [
+        file
+        for task in tasks
+        for file in task.actual_changed_files
+        if file
+    ]
+    changed_unique = set(changed_mentions)
+    file_touch_counts: dict[str, int] = {}
+    for file in changed_mentions:
+        file_touch_counts[file] = file_touch_counts.get(file, 0) + 1
+
+    blocked_files = [
+        event.file
+        for task in tasks
+        for event in task.blocked_write_events
+        if event.file
+    ]
+    blocked_events_count = sum(len(task.blocked_write_events) for task in tasks)
+    added_values = [
+        task.metrics.changed_lines_added
+        for task in tasks
+        if task.metrics.changed_lines_added is not None
+    ]
+    deleted_values = [
+        task.metrics.changed_lines_deleted
+        for task in tasks
+        if task.metrics.changed_lines_deleted is not None
+    ]
+    if added_values or deleted_values:
+        added_total = sum(added_values)
+        deleted_total = sum(deleted_values)
+        changed_total: int | None = added_total + deleted_total
+        kinds = {
+            task.metrics.changed_lines_kind or "task_metrics"
+            for task in tasks
+            if (
+                task.metrics.changed_lines_added is not None
+                or task.metrics.changed_lines_deleted is not None
+            )
+        }
+        diff_stats_kind = next(iter(kinds)) if len(kinds) == 1 else "mixed"
+    else:
+        added_total = None
+        deleted_total = None
+        changed_total = None
+        diff_stats_kind = None
+
+    return IntegrationBurdenMetrics(
+        changed_file_mentions_total=len(changed_mentions),
+        unique_changed_files=len(changed_unique),
+        duplicate_file_touches=len(changed_mentions) - len(changed_unique),
+        overlapping_task_pairs=compute_overlap_pairs(tasks),
+        overlapping_files=sorted(
+            file for file, count in file_touch_counts.items() if count >= 2
+        ),
+        out_of_bounds_files_total=sum(len(t.out_of_bounds_files) for t in tasks),
+        blocked_events_total=blocked_events_count,
+        review_file_mentions_total=len(changed_mentions) + blocked_events_count,
+        review_unique_files_total=len(changed_unique | set(blocked_files)),
+        changed_lines_added=added_total,
+        changed_lines_deleted=deleted_total,
+        changed_lines_total=changed_total,
+        diff_stats_kind=diff_stats_kind,
+    )
+
+
 def annotate_overlaps(tasks: list[EvalTask]) -> None:
     """Populate each task's ``overlaps_with`` list in place."""
     by_id = {t.task_id: t for t in tasks}
@@ -467,6 +570,7 @@ def compute_summary_metrics(
         cost_usd_total=cost_usd_total,
         cost_method=cost_method,
         cost_source=cost_source,
+        integration_burden=compute_integration_burden(tasks),
     )
 
 
@@ -502,6 +606,7 @@ __all__ = [
     "EvalRun",
     "EvalTask",
     "EvalModel",
+    "IntegrationBurdenMetrics",
     "GREENHOUSE_PINNED_COMMIT",
     "GREENHOUSE_REPO_URL",
     "SECONDS_PER_HOUR",
@@ -512,6 +617,7 @@ __all__ = [
     "TaskTest",
     "TaskTimestamps",
     "annotate_overlaps",
+    "compute_integration_burden",
     "compute_overlap_pairs",
     "compute_summary_metrics",
     "make_run_id",
