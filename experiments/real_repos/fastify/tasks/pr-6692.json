@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr-6692",
+      "prompt": "Avoid unnecessary ContentType object creation in getSchemaSerializer by only parsing the response content type for content-type-keyed response schemas, including status-code, fallback, and default lookup paths."
+    }
+  ]
+}

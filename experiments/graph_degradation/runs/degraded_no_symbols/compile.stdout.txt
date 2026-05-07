@@ -1,0 +1,6 @@
+reusing cached context graph at 
+/Users/prajit/Desktop/projects/cognition/experiments/graph_degradation/runs/degr
+aded_no_symbols/repo/.acg/context_graph.json
+wrote 
+/Users/prajit/Desktop/projects/cognition/experiments/graph_degradation/runs/degr
+aded_no_symbols/agent_lock.json (4 tasks, 3 groups, 4 conflicts)

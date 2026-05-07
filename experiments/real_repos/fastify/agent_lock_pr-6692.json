@@ -1,0 +1,61 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-07T05:25:49.551934Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "mock-llm-canned"
+  },
+  "repo": {
+    "root": "experiments/real_repos/fastify/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "javascript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-6692",
+      "prompt": "Avoid unnecessary ContentType object creation in getSchemaSerializer by only parsing the response content type for content-type-keyed response schemas, including status-code, fallback, and default lookup paths.",
+      "predicted_writes": [
+        {
+          "path": "lib/schemas.js",
+          "confidence": 0.9999995334194158,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 38.18)."
+        },
+        {
+          "path": "types/content-type-parser.d.ts",
+          "confidence": 0.9999991477356422,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 36.67)."
+        },
+        {
+          "path": "test/internals/reply-serialize.test.js",
+          "confidence": 0.9999989058208376,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 36.05)."
+        }
+      ],
+      "allowed_paths": [
+        "lib/schemas.js",
+        "test/internals/reply-serialize.test.js",
+        "types/content-type-parser.d.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-6692"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

@@ -1,0 +1,233 @@
+{
+  "base_dir": "experiments/greenhouse/runs_openrouter_seeds",
+  "bootstrap": {
+    "reps": 10000,
+    "seed": 20260506
+  },
+  "metrics": [
+    "tokens_prompt_total",
+    "out_of_bounds_write_count",
+    "blocked_invalid_write_count",
+    "cost_usd_total",
+    "wall_time_seconds"
+  ],
+  "prompt_token_reduction": {
+    "bootstrap_95_ci": null,
+    "full_context_source_by_seed": {
+      "seed1": "naive_parallel",
+      "seed2": "naive_parallel",
+      "seed3": "naive_parallel",
+      "seed4": "naive_parallel",
+      "seed5": "naive_parallel"
+    },
+    "mean": 0.09709172,
+    "missing": 0,
+    "n": 5,
+    "scoped_strategy": "acg_planned",
+    "stdev": 0.0,
+    "values_by_seed": {
+      "seed1": 0.09709172,
+      "seed2": 0.09709172,
+      "seed3": 0.09709172,
+      "seed4": 0.09709172,
+      "seed5": 0.09709172
+    },
+    "variance_treatment": "deterministic"
+  },
+  "seed_count": 5,
+  "seeds": [
+    {
+      "path": "experiments/greenhouse/runs_openrouter_seeds/seed1",
+      "seed": "seed1"
+    },
+    {
+      "path": "experiments/greenhouse/runs_openrouter_seeds/seed2",
+      "seed": "seed2"
+    },
+    {
+      "path": "experiments/greenhouse/runs_openrouter_seeds/seed3",
+      "seed": "seed3"
+    },
+    {
+      "path": "experiments/greenhouse/runs_openrouter_seeds/seed4",
+      "seed": "seed4"
+    },
+    {
+      "path": "experiments/greenhouse/runs_openrouter_seeds/seed5",
+      "seed": "seed5"
+    }
+  ],
+  "strategies": {
+    "acg_planned": {
+      "metrics": {
+        "blocked_invalid_write_count": {
+          "bootstrap_95_ci": null,
+          "mean": 0.0,
+          "missing": 0,
+          "n": 5,
+          "stdev": 0.0,
+          "values_by_seed": {
+            "seed1": 0.0,
+            "seed2": 0.0,
+            "seed3": 0.0,
+            "seed4": 0.0,
+            "seed5": 0.0
+          },
+          "variance_treatment": "zero_variance_observation"
+        },
+        "cost_usd_total": {
+          "bootstrap_95_ci": [
+            0.00022213,
+            0.00022294
+          ],
+          "mean": 0.00022254,
+          "missing": 0,
+          "n": 5,
+          "stdev": 5.2e-07,
+          "values_by_seed": {
+            "seed1": 0.00022257,
+            "seed2": 0.00022311,
+            "seed3": 0.00022218,
+            "seed4": 0.00022296,
+            "seed5": 0.00022187
+          },
+          "variance_treatment": "stochastic"
+        },
+        "out_of_bounds_write_count": {
+          "bootstrap_95_ci": null,
+          "mean": 0.0,
+          "missing": 0,
+          "n": 5,
+          "stdev": 0.0,
+          "values_by_seed": {
+            "seed1": 0.0,
+            "seed2": 0.0,
+            "seed3": 0.0,
+            "seed4": 0.0,
+            "seed5": 0.0
+          },
+          "variance_treatment": "zero_variance_observation"
+        },
+        "tokens_prompt_total": {
+          "bootstrap_95_ci": null,
+          "mean": 2018.0,
+          "missing": 0,
+          "n": 5,
+          "stdev": 0.0,
+          "values_by_seed": {
+            "seed1": 2018.0,
+            "seed2": 2018.0,
+            "seed3": 2018.0,
+            "seed4": 2018.0,
+            "seed5": 2018.0
+          },
+          "variance_treatment": "deterministic"
+        },
+        "wall_time_seconds": {
+          "bootstrap_95_ci": [
+            8.11538,
+            11.3953
+          ],
+          "mean": 9.79094,
+          "missing": 0,
+          "n": 5,
+          "stdev": 2.16691846,
+          "values_by_seed": {
+            "seed1": 10.6567,
+            "seed2": 10.1965,
+            "seed3": 12.7333,
+            "seed4": 7.276,
+            "seed5": 8.0922
+          },
+          "variance_treatment": "stochastic"
+        }
+      }
+    },
+    "naive_parallel": {
+      "metrics": {
+        "blocked_invalid_write_count": {
+          "bootstrap_95_ci": null,
+          "mean": 0.0,
+          "missing": 0,
+          "n": 5,
+          "stdev": 0.0,
+          "values_by_seed": {
+            "seed1": 0.0,
+            "seed2": 0.0,
+            "seed3": 0.0,
+            "seed4": 0.0,
+            "seed5": 0.0
+          },
+          "variance_treatment": "zero_variance_observation"
+        },
+        "cost_usd_total": {
+          "bootstrap_95_ci": [
+            0.00023643,
+            0.00057204
+          ],
+          "mean": 0.00034906,
+          "missing": 0,
+          "n": 5,
+          "stdev": 0.0002489,
+          "values_by_seed": {
+            "seed1": 0.00023814,
+            "seed2": 0.0002349,
+            "seed3": 0.00023865,
+            "seed4": 0.0007943,
+            "seed5": 0.00023931
+          },
+          "variance_treatment": "stochastic"
+        },
+        "out_of_bounds_write_count": {
+          "bootstrap_95_ci": null,
+          "mean": 0.0,
+          "missing": 0,
+          "n": 5,
+          "stdev": 0.0,
+          "values_by_seed": {
+            "seed1": 0.0,
+            "seed2": 0.0,
+            "seed3": 0.0,
+            "seed4": 0.0,
+            "seed5": 0.0
+          },
+          "variance_treatment": "zero_variance_observation"
+        },
+        "tokens_prompt_total": {
+          "bootstrap_95_ci": null,
+          "mean": 2235.0,
+          "missing": 0,
+          "n": 5,
+          "stdev": 0.0,
+          "values_by_seed": {
+            "seed1": 2235.0,
+            "seed2": 2235.0,
+            "seed3": 2235.0,
+            "seed4": 2235.0,
+            "seed5": 2235.0
+          },
+          "variance_treatment": "deterministic"
+        },
+        "wall_time_seconds": {
+          "bootstrap_95_ci": [
+            3.5038,
+            6.9259
+          ],
+          "mean": 5.26468,
+          "missing": 0,
+          "n": 5,
+          "stdev": 2.16415315,
+          "values_by_seed": {
+            "seed1": 4.1058,
+            "seed2": 6.3143,
+            "seed3": 8.0658,
+            "seed4": 2.3663,
+            "seed5": 5.4712
+          },
+          "variance_treatment": "stochastic"
+        }
+      }
+    }
+  },
+  "version": "0.1"
+}

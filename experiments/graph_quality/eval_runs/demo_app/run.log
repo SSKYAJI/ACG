@@ -1,0 +1,23 @@
+ starting (group 1)
+ starting (group 1)
+ proposed 2 writes (1.72s, 80 tokens)
+   ALLOWED settings → src/app/settings/page.tsx
+   ALLOWED settings → src/components/Sidebar.tsx
+ proposed 5 writes (2.78s, 170 tokens)
+   ALLOWED oauth → src/server/auth/config.ts
+   ALLOWED oauth → prisma/schema.prisma
+   ALLOWED oauth → src/server/auth/index.ts
+   ALLOWED oauth → .env.example
+   ALLOWED oauth → src/app/api/auth/[...nextauth]/route.ts
+ starting (group 2)
+ proposed 3 writes (4.62s, 104 tokens)
+   ALLOWED billing → src/components/Sidebar.tsx
+   ALLOWED billing → prisma/schema.prisma
+   ALLOWED billing → src/app/dashboard/page.tsx
+ starting (group 3)
+ proposed 1 writes (3.38s, 55 tokens)
+   BLOCKED tests → tests/checkout-flow.spec.ts: path 
+'tests/checkout-flow.spec.ts' is outside task 'tests''s allowed_paths 
+(.env.example, playwright.config.ts, src/app/api/checkout/**, src/server/db.ts, 
+tests/e2e/**)
+[acg_planned/local] wrote experiments/graph_quality/eval_runs/demo_app/eval_run_acg.json — completed=4/4, evidence=proposed_write_set, overlaps=2, oob=0, blocked=1, wall=10.791s

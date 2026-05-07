@@ -1,0 +1,570 @@
+{
+  "generated_at": "2026-05-07T05:36:33+00:00",
+  "headline": {
+    "apply_and_test_passed_prs": 0,
+    "historical_prs": 6,
+    "mean_ground_truth_precision": 0.375,
+    "mean_ground_truth_recall": 0.5833333333333334,
+    "production_repos": 2,
+    "sentence": "On 2 production repos with 6 historical PRs, the predictor achieved 0.583 mean ground-truth recall and 0.375 mean ground-truth precision. 0 PR(s) verified end-to-end via apply-and-test."
+  },
+  "lane_failures": [
+    {
+      "lane": "O4",
+      "path": "experiments/real_repos/black/LANE_O4_FAILURE.md",
+      "repo": "black",
+      "summary": "Lane O4 failure for `black`.\n- Starting pytest: `211 passed`.\n- Task attempted: `pr-5080`.\n- Parent commit checked out: `866c350cec7edd999ef55a0edb7b2202aa917f15`.\n- Failure: first compile command failed before any harness run because the installed `acg` CLI rejected `--language python`.\n- Compile output: `unsupported --language 'python'; expected one of: auto, typescript, javascript, java`.\n- OpenRouter spend: `$0.00`; no OpenRouter calls were made."
+    }
+  ],
+  "pytest": {
+    "final": {
+      "command": "./.venv/bin/python -m pytest tests/ -q",
+      "passed": 211,
+      "required_passes": 211,
+      "status": "passed",
+      "warnings": 11
+    },
+    "initial": {
+      "command": "./.venv/bin/python -m pytest tests/ -q",
+      "passed": 211,
+      "required_passes": 211,
+      "status": "passed"
+    }
+  },
+  "repo_root": "/Users/prajit/Desktop/projects/cognition",
+  "repos": [
+    {
+      "apply": {
+        "notes": [
+          "apply_summary.md says skipped; no patch or test-output artifact present"
+        ],
+        "patch_path": null,
+        "patch_valid_unified_diff": null,
+        "summary_path": "experiments/real_repos/fastify/runs/apply_summary.md",
+        "test_output_path": null,
+        "test_output_result": null,
+        "verdict": "SKIPPED-APPLY"
+      },
+      "done_sentinel": "experiments/real_repos/fastify/LANE_O2_DONE.md",
+      "eval_run_combined_paths": [
+        "experiments/real_repos/fastify/runs/pr-6653/eval_run_combined.json",
+        "experiments/real_repos/fastify/runs/pr-6692/eval_run_combined.json",
+        "experiments/real_repos/fastify/runs/pr-6694/eval_run_combined.json"
+      ],
+      "ground_truth_score_path": "experiments/real_repos/fastify/runs/ground_truth_score.json",
+      "lane": "O2",
+      "repo": "fastify",
+      "sanity": {
+        "cost_source_body_usage_cost_ok": true,
+        "ground_truth_files_ok": true,
+        "mock_provider_objects_found": false,
+        "out_of_bounds_file_count": 5,
+        "predicted_and_proposed_paths_ok": true,
+        "tokens_prompt_method_ok": true,
+        "unsafe_strategy_task_count": 3
+      },
+      "summary": {
+        "failed_apply": 0,
+        "failed_propose": 0,
+        "historical_prs": 3,
+        "mean_ground_truth_precision": 0.19444444444444445,
+        "mean_ground_truth_recall": 0.2777777777777778,
+        "partial_apply": 0,
+        "pass_apply": 0,
+        "pass_propose": 1,
+        "skipped_apply": 3,
+        "weak_propose": 2
+      },
+      "tasks": [
+        {
+          "apply_verdict": "SKIPPED-APPLY",
+          "extra_files": [
+            "lib/content-type-parser.js",
+            "test/content-parser.test.js",
+            "test/internals/validation.test.js",
+            "test/logger/logger-test-utils.js",
+            "types/content-type-parser.d.ts"
+          ],
+          "ground_truth_f1": 0.0,
+          "ground_truth_files": [
+            "lib/handle-request.js",
+            "lib/request.js",
+            "lib/symbols.js",
+            "lib/validation.js",
+            "types/request.d.ts"
+          ],
+          "ground_truth_precision": 0.0,
+          "ground_truth_recall": 0.0,
+          "lane": "O2",
+          "matched_files": [],
+          "missed_files": [
+            "lib/handle-request.js",
+            "lib/request.js",
+            "lib/symbols.js",
+            "lib/validation.js",
+            "types/request.d.ts"
+          ],
+          "pr_number": 6653,
+          "predicted_writes": [
+            "lib/content-type-parser.js",
+            "test/content-parser.test.js",
+            "test/internals/validation.test.js",
+            "test/logger/logger-test-utils.js",
+            "types/content-type-parser.d.ts"
+          ],
+          "propose_verdict": "WEAK-PROPOSE",
+          "repo": "fastify",
+          "strategy_summaries": [
+            {
+              "f1": 0.0,
+              "precision": 0.0,
+              "proposed_write_files": [
+                "lib/content-type-parser.js",
+                "test/content-parser.test.js",
+                "test/internals/validation.test.js"
+              ],
+              "recall": 0.0,
+              "status": "completed",
+              "strategy": "acg_planned"
+            },
+            {
+              "f1": 0.0,
+              "precision": 0.0,
+              "proposed_write_files": [
+                "lib/content-type-parser.js"
+              ],
+              "recall": 0.0,
+              "status": "completed",
+              "strategy": "acg_planned_full_context"
+            },
+            {
+              "f1": 0.0,
+              "precision": 0.0,
+              "proposed_write_files": [
+                "fastify.js",
+                "lib/config-validator.js",
+                "lib/content-type-parser.js",
+                "lib/content-type.js"
+              ],
+              "recall": 0.0,
+              "status": "completed_unsafe",
+              "strategy": "naive_parallel"
+            }
+          ],
+          "task_id": "pr-6653",
+          "warnings": []
+        },
+        {
+          "apply_verdict": "SKIPPED-APPLY",
+          "extra_files": [
+            "test/internals/reply-serialize.test.js",
+            "types/content-type-parser.d.ts"
+          ],
+          "ground_truth_f1": 0.4,
+          "ground_truth_files": [
+            "lib/content-type-parser.js",
+            "lib/schemas.js"
+          ],
+          "ground_truth_precision": 0.3333333333333333,
+          "ground_truth_recall": 0.5,
+          "lane": "O2",
+          "matched_files": [
+            "lib/schemas.js"
+          ],
+          "missed_files": [
+            "lib/content-type-parser.js"
+          ],
+          "pr_number": 6692,
+          "predicted_writes": [
+            "lib/schemas.js",
+            "test/internals/reply-serialize.test.js",
+            "types/content-type-parser.d.ts"
+          ],
+          "propose_verdict": "PASS-PROPOSE",
+          "repo": "fastify",
+          "strategy_summaries": [
+            {
+              "f1": 0.6666666666666666,
+              "precision": 1.0,
+              "proposed_write_files": [
+                "lib/schemas.js"
+              ],
+              "recall": 0.5,
+              "status": "completed",
+              "strategy": "acg_planned"
+            },
+            {
+              "f1": 0.0,
+              "precision": 0.0,
+              "proposed_write_files": [],
+              "recall": 0.0,
+              "status": "completed",
+              "strategy": "acg_planned_full_context"
+            },
+            {
+              "f1": 0.0,
+              "precision": 0.0,
+              "proposed_write_files": [
+                "lib/content-type.js"
+              ],
+              "recall": 0.0,
+              "status": "completed_unsafe",
+              "strategy": "naive_parallel"
+            }
+          ],
+          "task_id": "pr-6692",
+          "warnings": []
+        },
+        {
+          "apply_verdict": "SKIPPED-APPLY",
+          "extra_files": [
+            "test/content-parser.test.js",
+            "test/logger/logger-test-utils.js",
+            "types/content-type-parser.d.ts"
+          ],
+          "ground_truth_f1": 0.28571428571428575,
+          "ground_truth_files": [
+            "lib/content-type-parser.js",
+            "lib/handle-request.js",
+            "lib/request.js"
+          ],
+          "ground_truth_precision": 0.25,
+          "ground_truth_recall": 0.3333333333333333,
+          "lane": "O2",
+          "matched_files": [
+            "lib/content-type-parser.js"
+          ],
+          "missed_files": [
+            "lib/handle-request.js",
+            "lib/request.js"
+          ],
+          "pr_number": 6694,
+          "predicted_writes": [
+            "lib/content-type-parser.js",
+            "test/content-parser.test.js",
+            "test/logger/logger-test-utils.js",
+            "types/content-type-parser.d.ts"
+          ],
+          "propose_verdict": "WEAK-PROPOSE",
+          "repo": "fastify",
+          "strategy_summaries": [
+            {
+              "f1": 0.3333333333333333,
+              "precision": 0.3333333333333333,
+              "proposed_write_files": [
+                "lib/content-type-parser.js",
+                "test/content-parser.test.js",
+                "types/content-type-parser.d.ts"
+              ],
+              "recall": 0.3333333333333333,
+              "status": "completed",
+              "strategy": "acg_planned"
+            },
+            {
+              "f1": 0.5,
+              "precision": 1.0,
+              "proposed_write_files": [
+                "lib/content-type-parser.js"
+              ],
+              "recall": 0.3333333333333333,
+              "status": "completed",
+              "strategy": "acg_planned_full_context"
+            },
+            {
+              "f1": 0.4,
+              "precision": 0.5,
+              "proposed_write_files": [
+                "lib/content-type-parser.js",
+                "lib/content-type.js"
+              ],
+              "recall": 0.3333333333333333,
+              "status": "completed_unsafe",
+              "strategy": "naive_parallel"
+            }
+          ],
+          "task_id": "pr-6694",
+          "warnings": []
+        }
+      ],
+      "warnings": []
+    },
+    {
+      "apply": {
+        "notes": [
+          "apply_summary.md says skipped; no patch or test-output artifact present"
+        ],
+        "patch_path": null,
+        "patch_valid_unified_diff": null,
+        "summary_path": "experiments/real_repos/starlette/runs/apply_summary.md",
+        "test_output_path": null,
+        "test_output_result": null,
+        "verdict": "SKIPPED-APPLY"
+      },
+      "done_sentinel": "experiments/real_repos/starlette/LANE_O3_DONE.md",
+      "eval_run_combined_paths": [
+        "experiments/real_repos/starlette/runs/pr3137-cors-credentials-origin/eval_run_combined.json",
+        "experiments/real_repos/starlette/runs/pr3148-jinja2-autoescape/eval_run_combined.json",
+        "experiments/real_repos/starlette/runs/pr3166-session-middleware/eval_run_combined.json"
+      ],
+      "ground_truth_score_path": "experiments/real_repos/starlette/runs/ground_truth_score.json",
+      "lane": "O3",
+      "repo": "starlette",
+      "sanity": {
+        "cost_source_body_usage_cost_ok": true,
+        "ground_truth_files_ok": true,
+        "mock_provider_objects_found": false,
+        "out_of_bounds_file_count": 5,
+        "predicted_and_proposed_paths_ok": true,
+        "tokens_prompt_method_ok": true,
+        "unsafe_strategy_task_count": 2
+      },
+      "summary": {
+        "failed_apply": 0,
+        "failed_propose": 0,
+        "historical_prs": 3,
+        "mean_ground_truth_precision": 0.5555555555555556,
+        "mean_ground_truth_recall": 0.8888888888888888,
+        "partial_apply": 0,
+        "pass_apply": 0,
+        "pass_propose": 3,
+        "skipped_apply": 3,
+        "weak_propose": 0
+      },
+      "tasks": [
+        {
+          "apply_verdict": "SKIPPED-APPLY",
+          "extra_files": [
+            "tests/test_staticfiles.py"
+          ],
+          "ground_truth_f1": 0.8,
+          "ground_truth_files": [
+            "starlette/middleware/cors.py",
+            "tests/middleware/test_cors.py"
+          ],
+          "ground_truth_precision": 0.6666666666666666,
+          "ground_truth_recall": 1.0,
+          "lane": "O3",
+          "matched_files": [
+            "starlette/middleware/cors.py",
+            "tests/middleware/test_cors.py"
+          ],
+          "missed_files": [],
+          "pr_number": 3137,
+          "predicted_writes": [
+            "starlette/middleware/cors.py",
+            "tests/middleware/test_cors.py",
+            "tests/test_staticfiles.py"
+          ],
+          "propose_verdict": "PASS-PROPOSE",
+          "repo": "starlette",
+          "strategy_summaries": [
+            {
+              "f1": 0.6666666666666666,
+              "precision": 1.0,
+              "proposed_write_files": [
+                "starlette/middleware/cors.py"
+              ],
+              "recall": 0.5,
+              "status": "completed",
+              "strategy": "acg_planned"
+            },
+            {
+              "f1": 0.6666666666666666,
+              "precision": 1.0,
+              "proposed_write_files": [
+                "starlette/middleware/cors.py"
+              ],
+              "recall": 0.5,
+              "status": "completed",
+              "strategy": "acg_planned_full_context"
+            },
+            {
+              "f1": 0.6666666666666666,
+              "precision": 1.0,
+              "proposed_write_files": [
+                "starlette/middleware/cors.py"
+              ],
+              "recall": 0.5,
+              "status": "completed",
+              "strategy": "naive_parallel"
+            }
+          ],
+          "task_id": "pr3137-cors-credentials-origin",
+          "warnings": []
+        },
+        {
+          "apply_verdict": "SKIPPED-APPLY",
+          "extra_files": [
+            "tests/test_adding.py",
+            "tests/test_environments.py",
+            "tests/test_escaping.py",
+            "tests/test_exceptions.py"
+          ],
+          "ground_truth_f1": 0.5,
+          "ground_truth_files": [
+            "starlette/templating.py",
+            "tests/test_templates.py"
+          ],
+          "ground_truth_precision": 0.3333333333333333,
+          "ground_truth_recall": 1.0,
+          "lane": "O3",
+          "matched_files": [
+            "starlette/templating.py",
+            "tests/test_templates.py"
+          ],
+          "missed_files": [],
+          "pr_number": 3148,
+          "predicted_writes": [
+            "starlette/templating.py",
+            "tests/test_adding.py",
+            "tests/test_environments.py",
+            "tests/test_escaping.py",
+            "tests/test_exceptions.py",
+            "tests/test_templates.py"
+          ],
+          "propose_verdict": "PASS-PROPOSE",
+          "repo": "starlette",
+          "strategy_summaries": [
+            {
+              "f1": 1.0,
+              "precision": 1.0,
+              "proposed_write_files": [
+                "starlette/templating.py",
+                "tests/test_templates.py"
+              ],
+              "recall": 1.0,
+              "status": "completed",
+              "strategy": "acg_planned"
+            },
+            {
+              "f1": 0.0,
+              "precision": 0.0,
+              "proposed_write_files": [],
+              "recall": 0.0,
+              "status": "completed",
+              "strategy": "acg_planned_full_context"
+            },
+            {
+              "f1": 0.5,
+              "precision": 0.5,
+              "proposed_write_files": [
+                "starlette/templating.py",
+                "tests/test_templating.py"
+              ],
+              "recall": 0.5,
+              "status": "completed_unsafe",
+              "strategy": "naive_parallel"
+            }
+          ],
+          "task_id": "pr3148-jinja2-autoescape",
+          "warnings": []
+        },
+        {
+          "apply_verdict": "SKIPPED-APPLY",
+          "extra_files": [
+            "tests/test_responses.py"
+          ],
+          "ground_truth_f1": 0.6666666666666666,
+          "ground_truth_files": [
+            "starlette/middleware/sessions.py",
+            "starlette/requests.py",
+            "tests/middleware/test_session.py"
+          ],
+          "ground_truth_precision": 0.6666666666666666,
+          "ground_truth_recall": 0.6666666666666666,
+          "lane": "O3",
+          "matched_files": [
+            "starlette/middleware/sessions.py",
+            "tests/middleware/test_session.py"
+          ],
+          "missed_files": [
+            "starlette/requests.py"
+          ],
+          "pr_number": 3166,
+          "predicted_writes": [
+            "starlette/middleware/sessions.py",
+            "tests/middleware/test_session.py",
+            "tests/test_responses.py"
+          ],
+          "propose_verdict": "PASS-PROPOSE",
+          "repo": "starlette",
+          "strategy_summaries": [
+            {
+              "f1": 0.8,
+              "precision": 1.0,
+              "proposed_write_files": [
+                "starlette/middleware/sessions.py",
+                "tests/middleware/test_session.py"
+              ],
+              "recall": 0.6666666666666666,
+              "status": "completed",
+              "strategy": "acg_planned"
+            },
+            {
+              "f1": 0.0,
+              "precision": 0.0,
+              "proposed_write_files": [],
+              "recall": 0.0,
+              "status": "completed",
+              "strategy": "acg_planned_full_context"
+            },
+            {
+              "f1": 0.0,
+              "precision": 0.0,
+              "proposed_write_files": [
+                "starlette/middleware/__init__.py",
+                "starlette/middleware/base.py",
+                "starlette/middleware/session.py",
+                "tests/test_session_middleware.py"
+              ],
+              "recall": 0.0,
+              "status": "completed_unsafe",
+              "strategy": "naive_parallel"
+            }
+          ],
+          "task_id": "pr3166-session-middleware",
+          "warnings": []
+        }
+      ],
+      "warnings": []
+    }
+  ],
+  "required_lane_status": {
+    "O2": {
+      "entries": [
+        {
+          "lane": "O2",
+          "path": "experiments/real_repos/fastify/LANE_O2_DONE.md",
+          "repo": "fastify",
+          "status": "DONE"
+        }
+      ],
+      "satisfied": true
+    },
+    "O3": {
+      "entries": [
+        {
+          "lane": "O3",
+          "path": "experiments/real_repos/starlette/LANE_O3_DONE.md",
+          "repo": "starlette",
+          "status": "DONE"
+        }
+      ],
+      "satisfied": true
+    },
+    "O4": {
+      "entries": [
+        {
+          "lane": "O4",
+          "path": "experiments/real_repos/black/LANE_O4_FAILURE.md",
+          "repo": "black",
+          "status": "FAILURE"
+        }
+      ],
+      "satisfied": true
+    }
+  },
+  "schema_version": 1,
+  "suspicious_findings": [],
+  "wait_condition_satisfied": true
+}

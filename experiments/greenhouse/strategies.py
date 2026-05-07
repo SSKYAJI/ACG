@@ -57,12 +57,9 @@ LOCAL_STRATEGIES = (
     ACG_PLANNED_FULL_CONTEXT_STRATEGY,
 )
 
-# Heuristic ratio for converting prompt characters to estimated input tokens.
+# Fallback ratio for converting prompt characters to estimated input tokens.
 # Llama 3.x averages ~3.7-4.2 chars/token on English+code; 4 is a defensible
-# midpoint that lets us compare strategies on the same backend without
-# touching ``acg.runtime``. Devin's v3 API does not expose token counts, so
-# this estimator is the only token signal available for cross-strategy
-# comparison on the local backend.
+# midpoint when a provider does not return ``usage.prompt_tokens``.
 _CHARS_PER_TOKEN = 4
 
 
@@ -122,14 +119,15 @@ def _scoped_repo_graph(
 
 
 class _PromptCountingLLM:
-    """Wraps an :class:`RuntimeLLMProtocol` to estimate per-task input tokens.
+    """Wraps an :class:`RuntimeLLMProtocol` to record per-task input tokens.
 
-    For every ``complete()`` call we sum the message-content character
-    counts and convert to a token estimate via :func:`estimate_prompt_tokens`.
-    The estimate is attributed to a task id when the prompt contains the
-    ``Task id:`` marker (always emitted by :func:`acg.runtime._build_worker_prompt`),
-    otherwise it lands in :attr:`orchestrator_tokens` for optional plan-review
-    or shared coordination calls.
+    For providers that return ``usage.prompt_tokens`` (OpenRouter/OpenAI-style
+    responses), the provider count wins. When that field is absent we fall back
+    to the previous chars/4 estimate. The count is attributed to a task id when
+    the prompt contains the ``Task id:`` marker (always emitted by
+    :func:`acg.runtime._build_worker_prompt`), otherwise it lands in
+    :attr:`orchestrator_tokens` for optional plan-review or shared coordination
+    calls.
 
     The wrapper is a pure observer — it never mutates the prompt or the
     inner LLM's reply, so behavior on either backend is unchanged.
@@ -142,6 +140,8 @@ class _PromptCountingLLM:
         self.tokens_by_task: dict[str, int] = {}
         self.orchestrator_tokens: int = 0
         self.calls: int = 0
+        self.provider_prompt_token_calls: int = 0
+        self.estimated_prompt_token_calls: int = 0
 
     async def complete(
         self,
@@ -152,17 +152,34 @@ class _PromptCountingLLM:
     ) -> LLMReply:
         est = estimate_prompt_tokens(messages)
         task_id = _extract_task_id(messages)
-        if task_id is not None:
-            self.tokens_by_task[task_id] = self.tokens_by_task.get(task_id, 0) + est
-        else:
-            self.orchestrator_tokens += est
-        self.calls += 1
-        return await self._inner.complete(
+        reply = await self._inner.complete(
             messages, max_tokens=max_tokens, temperature=temperature
         )
+        if reply.prompt_tokens is not None:
+            prompt_tokens = reply.prompt_tokens
+            self.provider_prompt_token_calls += 1
+        else:
+            prompt_tokens = est
+            self.estimated_prompt_token_calls += 1
+        if task_id is not None:
+            self.tokens_by_task[task_id] = (
+                self.tokens_by_task.get(task_id, 0) + prompt_tokens
+            )
+        else:
+            self.orchestrator_tokens += prompt_tokens
+        self.calls += 1
+        return reply
 
     async def aclose(self) -> None:
         await self._inner.aclose()
+
+    @property
+    def prompt_token_method(self) -> str:
+        if self.provider_prompt_token_calls and not self.estimated_prompt_token_calls:
+            return "provider_usage_prompt_tokens"
+        if self.provider_prompt_token_calls and self.estimated_prompt_token_calls:
+            return "mixed_provider_usage_prompt_tokens_and_estimated_chars_div_4"
+        return "estimated_chars_div_4"
 
 
 # ---------------------------------------------------------------------------
@@ -351,7 +368,7 @@ async def _run_naive_parallel(
     *,
     prompts_by_task: dict[str, str] | None = None,
     cap_parallelism: int | None = None,
-) -> tuple[list[EvalTask], float]:
+) -> tuple[list[EvalTask], float, str]:
     """Fan all lockfile tasks out concurrently with no coordination.
 
     Every worker receives the **full** ``repo_graph`` so its prompt enumerates
@@ -360,8 +377,8 @@ async def _run_naive_parallel(
     estimate per task so the resulting :class:`EvalTask` artifacts carry a
     naive vs planned-comparable ``tokens_prompt`` value.
 
-    Returns ``(tasks, wall_time_seconds)``. Wall time is the wall-clock the
-    gather observed (mocks ⇒ near-zero; live LLMs ⇒ honest).
+    Returns ``(tasks, wall_time_seconds, prompt_token_method)``. Wall time is
+    the wall-clock the gather observed (mocks ⇒ near-zero; live LLMs ⇒ honest).
     """
     sub_inner = sub_factory()
     counting_sub = _PromptCountingLLM(sub_inner)
@@ -394,7 +411,7 @@ async def _run_naive_parallel(
     for et in tasks:
         et.metrics.tokens_prompt = counting_sub.tokens_by_task.get(et.task_id)
     annotate_overlaps(tasks)
-    return tasks, wall_s
+    return tasks, wall_s, counting_sub.prompt_token_method
 
 
 # ---------------------------------------------------------------------------
@@ -411,7 +428,7 @@ async def _run_acg_planned(
     prompts_by_task: dict[str, str] | None = None,
     cap_parallelism: int | None = None,
     scope_repo_graph: bool = True,
-) -> tuple[list[EvalTask], float]:
+) -> tuple[list[EvalTask], float, str]:
     """Walk ``execution_plan.groups`` with optional per-task scoped repo graphs.
 
     Replaces a previous :func:`acg.runtime.run_lockfile` call so we can
@@ -429,7 +446,7 @@ async def _run_acg_planned(
     callers; the lockfile object is the source of truth so the path is
     only used in narrative output upstream.
 
-    Returns ``(tasks, wall_time_seconds)``.
+    Returns ``(tasks, wall_time_seconds, prompt_token_method)``.
     """
     del lockfile_path  # narrative-only; the AgentLock object IS the contract
 
@@ -484,7 +501,7 @@ async def _run_acg_planned(
         et.metrics.tokens_prompt = counting_sub.tokens_by_task.get(wr.task_id)
         tasks.append(et)
     annotate_overlaps(tasks)
-    return tasks, wall_s
+    return tasks, wall_s, counting_sub.prompt_token_method
 
 
 # ---------------------------------------------------------------------------
@@ -561,7 +578,7 @@ def run_strategy(
 
     orch_overhead: int | None
     if strategy == NAIVE_STRATEGY:
-        tasks, wall_s = asyncio.run(
+        tasks, wall_s, prompt_token_method = asyncio.run(
             _run_naive_parallel(
                 lock,
                 repo_graph,
@@ -572,7 +589,7 @@ def run_strategy(
         )
         orch_overhead = None
     else:
-        tasks, wall_s = asyncio.run(
+        tasks, wall_s, prompt_token_method = asyncio.run(
             _run_acg_planned(
                 lock,
                 repo_graph,
@@ -590,7 +607,7 @@ def run_strategy(
         wall_time_seconds=wall_s,
         sequential_wall_time_seconds=sequential_wall_time_seconds,
         tokens_orchestrator_overhead=orch_overhead,
-        tokens_prompt_method="estimated_chars_div_4",
+        tokens_prompt_method=prompt_token_method,
         tokens_completion_method=(
             "provider_usage_completion_tokens" if backend == "local" else "mock_reply_completion_tokens"
         ),

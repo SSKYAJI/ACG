@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr-6653",
+      "prompt": "Add a readonly request.mediaType property that exposes the parsed request Content-Type media type, cache the parsed ContentType on the request, and update validation and request handling to reuse the parsed value."
+    }
+  ]
+}

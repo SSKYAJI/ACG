@@ -1,0 +1,91 @@
+ starting (group 1)
+ starting (group 1)
+ starting (group 1)
+ proposed 4 writes (2.22s, 164 tokens)
+   ALLOWED users-search → src/users/dto/query-user.dto.ts
+   ALLOWED users-search → 
+src/users/infrastructure/persistence/relational/repositories/user.repository.ts
+   ALLOWED users-search → src/users/users.service.ts
+   ALLOWED users-search → src/users/users.controller.ts
+ proposed 6 writes (3.12s, 242 tokens)
+   BLOCKED deployment-config → .env.example: path '.env.example' is outside task
+'deployment-config''s allowed_paths (commitlint.config.js, docker-compose.yml, 
+src/config/app-config.type.ts, src/config/app.config.ts, src/database/config/**,
+src/roles/domain/**, src/statuses/domain/**)
+   ALLOWED deployment-config → docker-compose.yml
+   ALLOWED deployment-config → src/config/app.config.ts
+   ALLOWED deployment-config → src/config/app-config.type.ts
+   ALLOWED deployment-config → src/database/config/database.config.ts
+   ALLOWED deployment-config → src/database/config/database-config.type.ts
+ proposed 10 writes (13.41s, 363 tokens)
+   BLOCKED products-domain → src/products/products.module.ts: path 
+'src/products/products.module.ts' is outside task 'products-domain''s 
+allowed_paths (src/app.module.ts, src/database/migrations/**, 
+src/files/infrastructure/persistence/relational/**, src/products/domain/**, 
+src/products/dto/**, src/products/infrastructure/persistence/**, 
+src/session/infrastructure/persistence/relational/**)
+   BLOCKED products-domain → src/products/products.controller.ts: path 
+'src/products/products.controller.ts' is outside task 'products-domain''s 
+allowed_paths (src/app.module.ts, src/database/migrations/**, 
+src/files/infrastructure/persistence/relational/**, src/products/domain/**, 
+src/products/dto/**, src/products/infrastructure/persistence/**, 
+src/session/infrastructure/persistence/relational/**)
+   BLOCKED products-domain → src/products/products.service.ts: path 
+'src/products/products.service.ts' is outside task 'products-domain''s 
+allowed_paths (src/app.module.ts, src/database/migrations/**, 
+src/files/infrastructure/persistence/relational/**, src/products/domain/**, 
+src/products/dto/**, src/products/infrastructure/persistence/**, 
+src/session/infrastructure/persistence/relational/**)
+   ALLOWED products-domain → src/products/domain/product.ts
+   ALLOWED products-domain → src/products/dto/create-product.dto.ts
+   ALLOWED products-domain → src/products/dto/update-product.dto.ts
+   ALLOWED products-domain → 
+src/products/infrastructure/persistence/product.repository.ts
+   ALLOWED products-domain → 
+src/products/infrastructure/persistence/relational/entities/product.entity.ts
+   ALLOWED products-domain → 
+src/products/infrastructure/persistence/relational/repositories/product.reposito
+ry.ts
+   ALLOWED products-domain → 
+src/database/migrations/1715028537218-CreateProduct.ts
+ starting (group 2)
+ proposed 7 writes (9.06s, 258 tokens)
+   ALLOWED api-key-auth → src/auth-api-key/auth-api-key.module.ts
+   ALLOWED api-key-auth → src/auth-api-key/auth-api-key.guard.ts
+   ALLOWED api-key-auth → src/auth-api-key/auth-api-key.service.ts
+   ALLOWED api-key-auth → src/auth-api-key/config/api-key.config.ts
+   ALLOWED api-key-auth → src/auth-api-key/config/api-key-config.type.ts
+   ALLOWED api-key-auth → src/app.module.ts
+   BLOCKED api-key-auth → .env.example: path '.env.example' is outside task 
+'api-key-auth''s allowed_paths (src/app.module.ts, 
+src/auth-api-key/auth-api-key.guard.ts, src/auth-api-key/auth-api-key.module.ts,
+src/auth-api-key/auth-api-key.service.ts, src/auth-api-key/config/**, 
+src/auth-apple/auth-apple.controller.ts, src/auth-apple/dto/**, 
+src/auth-facebook/auth-facebook.controller.ts)
+ starting (group 3)
+ proposed 1 writes (1.35s, 44 tokens)
+   ALLOWED files-e2e-tests → test/files.e2e-spec.ts
+ starting (group 4)
+ proposed 8 writes (3.13s, 258 tokens)
+   ALLOWED registration-email-job → src/jobs/jobs.module.ts
+   ALLOWED registration-email-job → src/jobs/registration-email.processor.ts
+   ALLOWED registration-email-job → src/jobs/registration-email.service.ts
+   ALLOWED registration-email-job → src/auth/auth.service.ts
+   ALLOWED registration-email-job → src/mail/mail.module.ts
+   ALLOWED registration-email-job → src/app.module.ts
+   BLOCKED registration-email-job → .env.example: path '.env.example' is outside
+task 'registration-email-job''s allowed_paths (docker-compose.yml, 
+src/app.module.ts, src/auth/auth.service.ts, src/jobs/jobs.module.ts, 
+src/jobs/registration-email.processor.ts, 
+src/jobs/registration-email.service.ts, src/mail/mail.module.ts, 
+test/utils/constants.ts)
+   ALLOWED registration-email-job → docker-compose.yml
+ starting (group 5)
+ proposed 5 writes (2.29s, 147 tokens)
+   ALLOWED notifications-webhook → src/notifications/notifications.module.ts
+   ALLOWED notifications-webhook → src/notifications/notifications.controller.ts
+   ALLOWED notifications-webhook → src/notifications/notifications.service.ts
+   ALLOWED notifications-webhook → 
+src/notifications/dto/notification-webhook.dto.ts
+   ALLOWED notifications-webhook → src/app.module.ts
+[acg_planned/local] wrote experiments/graph_quality/eval_runs/brocoders/eval_run_acg.json — completed=7/7, evidence=proposed_write_set, overlaps=4, oob=0, blocked=6, wall=29.284s

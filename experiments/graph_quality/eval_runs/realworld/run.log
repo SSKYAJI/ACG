@@ -1,0 +1,35 @@
+ starting (group 1)
+ starting (group 1)
+ starting (group 1)
+ proposed 3 writes (4.38s, 121 tokens)
+   ALLOWED extend-tag-crud → src/tag/dto/create-tag.dto.ts
+   ALLOWED extend-tag-crud → src/tag/tag.service.ts
+   ALLOWED extend-tag-crud → src/tag/tag.controller.ts
+ proposed 5 writes (5.09s, 183 tokens)
+   ALLOWED add-article-bookmarks → src/article/bookmark.entity.ts
+   ALLOWED add-article-bookmarks → src/user/user.entity.ts
+   ALLOWED add-article-bookmarks → src/article/article.controller.ts
+   ALLOWED add-article-bookmarks → src/article/article.service.ts
+   ALLOWED add-article-bookmarks → src/article/article.module.ts
+ proposed 3 writes (7.32s, 114 tokens)
+   ALLOWED add-rate-limiting → package.json
+   ALLOWED add-rate-limiting → src/app.module.ts
+   ALLOWED add-rate-limiting → src/shared/throttle.config.ts
+ starting (group 2)
+ starting (group 2)
+ proposed 3 writes (7.64s, 114 tokens)
+   ALLOWED add-article-search → src/article/dto/search-query.dto.ts
+   ALLOWED add-article-search → src/article/article.service.ts
+   ALLOWED add-article-search → src/article/article.controller.ts
+ proposed 3 writes (7.92s, 108 tokens)
+   ALLOWED add-health-check → package.json
+   ALLOWED add-health-check → src/health/health.module.ts
+   ALLOWED add-health-check → src/health/health.controller.ts
+ starting (group 3)
+ proposed 5 writes (81.91s, 165 tokens)
+   ALLOWED add-user-roles → src/user/user.entity.ts
+   ALLOWED add-user-roles → src/user/roles.guard.ts
+   ALLOWED add-user-roles → src/user/roles.decorator.ts
+   ALLOWED add-user-roles → src/app.module.ts
+   ALLOWED add-user-roles → src/user/user.interface.ts
+[acg_planned/local] wrote experiments/graph_quality/eval_runs/realworld/eval_run_acg.json — completed=6/6, evidence=proposed_write_set, overlaps=4, oob=0, blocked=0, wall=97.177s

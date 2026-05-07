@@ -1,0 +1,344 @@
+{
+  "variants": [
+    {
+      "delta_f1_vs_control": 0.0,
+      "f1": 1.0,
+      "ground_truth": 22,
+      "lockfile": "demo-app/agent_lock.json",
+      "per_task": {
+        "billing": {
+          "f1": 1.0,
+          "ground_truth": 8,
+          "precision": 1.0,
+          "predicted": 8,
+          "recall": 1.0,
+          "true_positive": 8
+        },
+        "oauth": {
+          "f1": 1.0,
+          "ground_truth": 6,
+          "precision": 1.0,
+          "predicted": 6,
+          "recall": 1.0,
+          "true_positive": 6
+        },
+        "settings": {
+          "f1": 1.0,
+          "ground_truth": 3,
+          "precision": 1.0,
+          "predicted": 3,
+          "recall": 1.0,
+          "true_positive": 3
+        },
+        "tests": {
+          "f1": 1.0,
+          "ground_truth": 5,
+          "precision": 1.0,
+          "predicted": 5,
+          "recall": 1.0,
+          "true_positive": 5
+        }
+      },
+      "precision": 1.0,
+      "predicted": 22,
+      "recall": 1.0,
+      "true_positive": 22,
+      "variant": "control"
+    },
+    {
+      "delta_f1_vs_control": -0.022222222222222254,
+      "f1": 0.9777777777777777,
+      "graph": "experiments/graph_degradation/runs/degraded_no_symbols/context_graph.json",
+      "ground_truth": 22,
+      "lockfile": "experiments/graph_degradation/runs/degraded_no_symbols/agent_lock.json",
+      "per_task": {
+        "billing": {
+          "f1": 1.0,
+          "ground_truth": 8,
+          "precision": 1.0,
+          "predicted": 8,
+          "recall": 1.0,
+          "true_positive": 8
+        },
+        "oauth": {
+          "f1": 1.0,
+          "ground_truth": 6,
+          "precision": 1.0,
+          "predicted": 6,
+          "recall": 1.0,
+          "true_positive": 6
+        },
+        "settings": {
+          "f1": 0.8571428571428571,
+          "ground_truth": 3,
+          "precision": 0.75,
+          "predicted": 4,
+          "recall": 1.0,
+          "true_positive": 3
+        },
+        "tests": {
+          "f1": 1.0,
+          "ground_truth": 5,
+          "precision": 1.0,
+          "predicted": 5,
+          "recall": 1.0,
+          "true_positive": 5
+        }
+      },
+      "precision": 0.9565217391304348,
+      "predicted": 23,
+      "recall": 1.0,
+      "repo_graph": "experiments/graph_degradation/runs/degraded_no_symbols/repo/.acg/context_graph.json",
+      "true_positive": 22,
+      "variant": "degraded_no_symbols"
+    },
+    {
+      "delta_f1_vs_control": -0.022222222222222254,
+      "f1": 0.9777777777777777,
+      "graph": "experiments/graph_degradation/runs/degraded_no_imports/context_graph.json",
+      "ground_truth": 22,
+      "lockfile": "experiments/graph_degradation/runs/degraded_no_imports/agent_lock.json",
+      "per_task": {
+        "billing": {
+          "f1": 1.0,
+          "ground_truth": 8,
+          "precision": 1.0,
+          "predicted": 8,
+          "recall": 1.0,
+          "true_positive": 8
+        },
+        "oauth": {
+          "f1": 1.0,
+          "ground_truth": 6,
+          "precision": 1.0,
+          "predicted": 6,
+          "recall": 1.0,
+          "true_positive": 6
+        },
+        "settings": {
+          "f1": 0.8571428571428571,
+          "ground_truth": 3,
+          "precision": 0.75,
+          "predicted": 4,
+          "recall": 1.0,
+          "true_positive": 3
+        },
+        "tests": {
+          "f1": 1.0,
+          "ground_truth": 5,
+          "precision": 1.0,
+          "predicted": 5,
+          "recall": 1.0,
+          "true_positive": 5
+        }
+      },
+      "precision": 0.9565217391304348,
+      "predicted": 23,
+      "recall": 1.0,
+      "repo_graph": "experiments/graph_degradation/runs/degraded_no_imports/repo/.acg/context_graph.json",
+      "true_positive": 22,
+      "variant": "degraded_no_imports"
+    },
+    {
+      "delta_f1_vs_control": -0.022222222222222254,
+      "f1": 0.9777777777777777,
+      "graph": "experiments/graph_degradation/runs/degraded_no_structure/context_graph.json",
+      "ground_truth": 22,
+      "lockfile": "experiments/graph_degradation/runs/degraded_no_structure/agent_lock.json",
+      "per_task": {
+        "billing": {
+          "f1": 1.0,
+          "ground_truth": 8,
+          "precision": 1.0,
+          "predicted": 8,
+          "recall": 1.0,
+          "true_positive": 8
+        },
+        "oauth": {
+          "f1": 1.0,
+          "ground_truth": 6,
+          "precision": 1.0,
+          "predicted": 6,
+          "recall": 1.0,
+          "true_positive": 6
+        },
+        "settings": {
+          "f1": 0.8571428571428571,
+          "ground_truth": 3,
+          "precision": 0.75,
+          "predicted": 4,
+          "recall": 1.0,
+          "true_positive": 3
+        },
+        "tests": {
+          "f1": 1.0,
+          "ground_truth": 5,
+          "precision": 1.0,
+          "predicted": 5,
+          "recall": 1.0,
+          "true_positive": 5
+        }
+      },
+      "precision": 0.9565217391304348,
+      "predicted": 23,
+      "recall": 1.0,
+      "repo_graph": "experiments/graph_degradation/runs/degraded_no_structure/repo/.acg/context_graph.json",
+      "true_positive": 22,
+      "variant": "degraded_no_structure"
+    }
+  ],
+  "verification": {
+    "control_lockfile": "demo-app/agent_lock.json",
+    "strip_checks": {
+      "degraded_no_symbols": {
+        "graph": "experiments/graph_degradation/runs/degraded_no_symbols/context_graph.json",
+        "file_count": 19,
+        "symbols_index_empty": true,
+        "all_file_symbols_empty": true,
+        "all_file_imports_empty": false,
+        "all_file_exports_empty": false,
+        "requested_condition_passed": true,
+        "additional_observation": {
+          "top_level_import_map_nonempty_entries": 14,
+          "top_level_export_map_nonempty_entries": 13,
+          "note": "Requested checks are file-field checks. Raw graph-level imports/exports maps remain populated in the JSON artifact; acg.repo_graph.load_context_graph normalizes those top-level maps from per-file fields in memory during compile."
+        },
+        "cached_graph": "experiments/graph_degradation/runs/degraded_no_symbols/repo/.acg/context_graph.json",
+        "cached_graph_byte_identical_to_graph": true
+      },
+      "degraded_no_imports": {
+        "graph": "experiments/graph_degradation/runs/degraded_no_imports/context_graph.json",
+        "file_count": 19,
+        "symbols_index_empty": false,
+        "all_file_symbols_empty": false,
+        "all_file_imports_empty": true,
+        "all_file_exports_empty": true,
+        "requested_condition_passed": true,
+        "additional_observation": {
+          "top_level_import_map_nonempty_entries": 14,
+          "top_level_export_map_nonempty_entries": 13,
+          "note": "Requested checks are file-field checks. Raw graph-level imports/exports maps remain populated in the JSON artifact; acg.repo_graph.load_context_graph normalizes those top-level maps from per-file fields in memory during compile."
+        },
+        "cached_graph": "experiments/graph_degradation/runs/degraded_no_imports/repo/.acg/context_graph.json",
+        "cached_graph_byte_identical_to_graph": true
+      },
+      "degraded_no_structure": {
+        "graph": "experiments/graph_degradation/runs/degraded_no_structure/context_graph.json",
+        "file_count": 19,
+        "symbols_index_empty": true,
+        "all_file_symbols_empty": true,
+        "all_file_imports_empty": true,
+        "all_file_exports_empty": true,
+        "requested_condition_passed": true,
+        "additional_observation": {
+          "top_level_import_map_nonempty_entries": 14,
+          "top_level_export_map_nonempty_entries": 13,
+          "note": "Requested checks are file-field checks. Raw graph-level imports/exports maps remain populated in the JSON artifact; acg.repo_graph.load_context_graph normalizes those top-level maps from per-file fields in memory during compile."
+        },
+        "cached_graph": "experiments/graph_degradation/runs/degraded_no_structure/repo/.acg/context_graph.json",
+        "cached_graph_byte_identical_to_graph": true
+      }
+    },
+    "lockfile_comparison": {
+      "degraded_no_symbols": {
+        "lockfile": "experiments/graph_degradation/runs/degraded_no_symbols/agent_lock.json",
+        "byte_identical_to_control": false,
+        "predicted_write_sets_differ_from_control": true,
+        "predicted_counts_by_task": {
+          "oauth": 6,
+          "billing": 8,
+          "settings": 4,
+          "tests": 5
+        },
+        "predicted_write_diffs_by_task": {
+          "settings": {
+            "added": [
+              "src/app/profile/page.tsx"
+            ],
+            "removed": []
+          }
+        }
+      },
+      "degraded_no_imports": {
+        "lockfile": "experiments/graph_degradation/runs/degraded_no_imports/agent_lock.json",
+        "byte_identical_to_control": false,
+        "predicted_write_sets_differ_from_control": true,
+        "predicted_counts_by_task": {
+          "oauth": 6,
+          "billing": 8,
+          "settings": 4,
+          "tests": 5
+        },
+        "predicted_write_diffs_by_task": {
+          "settings": {
+            "added": [
+              "src/app/profile/page.tsx"
+            ],
+            "removed": []
+          }
+        }
+      },
+      "degraded_no_structure": {
+        "lockfile": "experiments/graph_degradation/runs/degraded_no_structure/agent_lock.json",
+        "byte_identical_to_control": false,
+        "predicted_write_sets_differ_from_control": true,
+        "predicted_counts_by_task": {
+          "oauth": 6,
+          "billing": 8,
+          "settings": 4,
+          "tests": 5
+        },
+        "predicted_write_diffs_by_task": {
+          "settings": {
+            "added": [
+              "src/app/profile/page.tsx"
+            ],
+            "removed": []
+          }
+        }
+      }
+    },
+    "prediction_convergence": {
+      "stripped_variants_have_identical_predicted_write_sets": true,
+      "common_prediction_delta_vs_control": {
+        "settings": {
+          "added": [
+            "src/app/profile/page.tsx"
+          ],
+          "removed": []
+        }
+      },
+      "stripped_variants_delta_f1_vs_control": -0.022222222222222254
+    },
+    "predictor_evidence": {
+      "formal_seed_or_evidence_fields_present": false,
+      "available_evidence": [
+        "tasks[].predicted_writes[].reason strings",
+        "compile stdout/stderr logs"
+      ],
+      "compile_log_summary": "stdout only reports cached graph reuse and lockfile writes; stderr only contains a tree_sitter FutureWarning.",
+      "control_reason_classification": {
+        "method": "Heuristic classification of predicted_writes[].reason strings; direct route/schema/config/env/convention reasons counted as prompt/static/convention, PageRank/BM25/symbol/hint reasons counted as index/graph/lexical.",
+        "predicted_write_items": 22,
+        "static_prompt_or_convention": 16,
+        "index_or_graph_lexical": 6
+      },
+      "static_prompt_or_convention_examples": [
+        "Settings page route",
+        "Billing dashboard route",
+        "Env-var seed: prompt mentions credentials/providers",
+        "playwright config file inferred from task prompt"
+      ],
+      "index_or_graph_lexical_examples": [
+        "personalized PageRank rank #...",
+        "BM25 lexical match over path, identifiers, imports, docstrings"
+      ],
+      "limitation": "The lockfiles do not expose a formal seed attribution object. The predictor also receives repo_root and deterministic indexers can read source files, so stripped graph fields do not remove all path/source-derived cues."
+    },
+    "conclusion": {
+      "status": "verified_qualified",
+      "summary": "Requested strip checks pass and every degraded lockfile differs from control. Predicted write sets differ only by the same extra settings prediction, src/app/profile/page.tsx, producing the common F1 drop of -0.022. Demo-app appears dominated by prompt/static filename/convention cues; this is a defensible modest-degradation finding, not strong graph-causality evidence.",
+      "citation_guidance": "Cite only with the qualification that the ablation shows limited sensitivity on demo-app and does not establish strong causal dependence on graph structure."
+    }
+  }
+}

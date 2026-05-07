@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr-5080",
+      "prompt": "Separate source AST parse failures from Black internal AST safety errors, map source parse failures to 400 responses in blackd, keep internal safety failures as 500 responses, and update tests around formatting equivalence error handling."
+    }
+  ]
+}

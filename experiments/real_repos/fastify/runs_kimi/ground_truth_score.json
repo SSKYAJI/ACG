@@ -1,0 +1,421 @@
+{
+  "aggregate": {
+    "agent_match_to_human_macro_by_strategy": {
+      "acg_planned": {
+        "agent_match_to_human": 0.0,
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0
+      },
+      "acg_planned_full_context": {
+        "agent_match_to_human": 0.0,
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0
+      },
+      "naive_parallel": {
+        "agent_match_to_human": 0.2777777777777778,
+        "f1": 0.2777777777777778,
+        "precision": 0.3333333333333333,
+        "recall": 0.24444444444444444
+      }
+    },
+    "agent_match_to_human_micro_by_strategy": {
+      "acg_planned": {
+        "agent_match_to_human": 0.0,
+        "f1": 0.0,
+        "false_negatives": 10,
+        "false_positives": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "true_positives": 0
+      },
+      "acg_planned_full_context": {
+        "agent_match_to_human": 0.0,
+        "f1": 0.0,
+        "false_negatives": 10,
+        "false_positives": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "true_positives": 0
+      },
+      "naive_parallel": {
+        "agent_match_to_human": 0.3529411764705882,
+        "f1": 0.3529411764705882,
+        "false_negatives": 7,
+        "false_positives": 4,
+        "precision": 0.42857142857142855,
+        "recall": 0.3,
+        "true_positives": 3
+      }
+    },
+    "cost_usd_total_recorded": 0.0022175,
+    "predicted_vs_ground_truth_macro": {
+      "f1": 0.2285714285714286,
+      "precision": 0.19444444444444445,
+      "recall": 0.2777777777777778
+    },
+    "predicted_vs_ground_truth_micro": {
+      "f1": 0.1818181818181818,
+      "false_negatives": 8,
+      "false_positives": 10,
+      "precision": 0.16666666666666666,
+      "recall": 0.2,
+      "true_positives": 2
+    }
+  },
+  "full_name": "fastify/fastify",
+  "repo": "fastify",
+  "score_definition": {
+    "agent_match_to_human": "F1 of proposed_write_files compared with manifest ground_truth_files; for local proposal artifacts, actual_changed_files is the proposed_write_files set",
+    "ground_truth_precision_recall_f1": "predicted_write_files compared with manifest ground_truth_files",
+    "path_normalization": "repo-relative strings with leading ./ and checkout absolute prefixes removed"
+  },
+  "tasks": {
+    "pr-6653": {
+      "agent_match_to_human": 0.0,
+      "agent_match_to_human_by_strategy": {
+        "acg_planned": {
+          "agent_f1": 0.0,
+          "agent_match_to_human": 0.0,
+          "agent_precision": 0.0,
+          "agent_recall": 0.0,
+          "extra_files": [],
+          "f1": 0.0,
+          "false_negatives": 5,
+          "false_positives": 0,
+          "matched_files": [],
+          "missed_files": [
+            "lib/handle-request.js",
+            "lib/request.js",
+            "lib/symbols.js",
+            "lib/validation.js",
+            "types/request.d.ts"
+          ],
+          "precision": 0.0,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [],
+          "recall": 0.0,
+          "status": "completed",
+          "true_positives": 0
+        },
+        "acg_planned_full_context": {
+          "agent_f1": 0.0,
+          "agent_match_to_human": 0.0,
+          "agent_precision": 0.0,
+          "agent_recall": 0.0,
+          "extra_files": [],
+          "f1": 0.0,
+          "false_negatives": 5,
+          "false_positives": 0,
+          "matched_files": [],
+          "missed_files": [
+            "lib/handle-request.js",
+            "lib/request.js",
+            "lib/symbols.js",
+            "lib/validation.js",
+            "types/request.d.ts"
+          ],
+          "precision": 0.0,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [],
+          "recall": 0.0,
+          "status": "completed",
+          "true_positives": 0
+        },
+        "naive_parallel": {
+          "agent_f1": 0.5,
+          "agent_match_to_human": 0.5,
+          "agent_precision": 0.6666666666666666,
+          "agent_recall": 0.4,
+          "extra_files": [
+            "lib/route.js"
+          ],
+          "f1": 0.5,
+          "false_negatives": 3,
+          "false_positives": 1,
+          "matched_files": [
+            "lib/request.js",
+            "lib/validation.js"
+          ],
+          "missed_files": [
+            "lib/handle-request.js",
+            "lib/symbols.js",
+            "types/request.d.ts"
+          ],
+          "precision": 0.6666666666666666,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [
+            "lib/request.js",
+            "lib/route.js",
+            "lib/validation.js"
+          ],
+          "recall": 0.4,
+          "status": "completed_unsafe",
+          "true_positives": 2
+        }
+      },
+      "ground_truth_f1": 0.0,
+      "ground_truth_files": [
+        "lib/handle-request.js",
+        "lib/request.js",
+        "lib/symbols.js",
+        "lib/validation.js",
+        "types/request.d.ts"
+      ],
+      "ground_truth_precision": 0.0,
+      "ground_truth_recall": 0.0,
+      "pr_number": 6653,
+      "predicted_vs_ground_truth": {
+        "extra_files": [
+          "lib/content-type-parser.js",
+          "test/content-parser.test.js",
+          "test/internals/validation.test.js",
+          "test/logger/logger-test-utils.js",
+          "types/content-type-parser.d.ts"
+        ],
+        "f1": 0.0,
+        "false_negatives": 5,
+        "false_positives": 5,
+        "matched_files": [],
+        "missed_files": [
+          "lib/handle-request.js",
+          "lib/request.js",
+          "lib/symbols.js",
+          "lib/validation.js",
+          "types/request.d.ts"
+        ],
+        "precision": 0.0,
+        "recall": 0.0,
+        "true_positives": 0
+      },
+      "predicted_writes": [
+        "lib/content-type-parser.js",
+        "test/content-parser.test.js",
+        "test/internals/validation.test.js",
+        "test/logger/logger-test-utils.js",
+        "types/content-type-parser.d.ts"
+      ],
+      "task_id": "pr-6653"
+    },
+    "pr-6692": {
+      "agent_match_to_human": 0.0,
+      "agent_match_to_human_by_strategy": {
+        "acg_planned": {
+          "agent_f1": 0.0,
+          "agent_match_to_human": 0.0,
+          "agent_precision": 0.0,
+          "agent_recall": 0.0,
+          "extra_files": [],
+          "f1": 0.0,
+          "false_negatives": 2,
+          "false_positives": 0,
+          "matched_files": [],
+          "missed_files": [
+            "lib/content-type-parser.js",
+            "lib/schemas.js"
+          ],
+          "precision": 0.0,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [],
+          "recall": 0.0,
+          "status": "completed",
+          "true_positives": 0
+        },
+        "acg_planned_full_context": {
+          "agent_f1": 0.0,
+          "agent_match_to_human": 0.0,
+          "agent_precision": 0.0,
+          "agent_recall": 0.0,
+          "extra_files": [],
+          "f1": 0.0,
+          "false_negatives": 2,
+          "false_positives": 0,
+          "matched_files": [],
+          "missed_files": [
+            "lib/content-type-parser.js",
+            "lib/schemas.js"
+          ],
+          "precision": 0.0,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [],
+          "recall": 0.0,
+          "status": "completed",
+          "true_positives": 0
+        },
+        "naive_parallel": {
+          "agent_f1": 0.0,
+          "agent_match_to_human": 0.0,
+          "agent_precision": 0.0,
+          "agent_recall": 0.0,
+          "extra_files": [
+            "src/main/java/io/swagger/v3/core/util/ApiResponsesDeserializer.java"
+          ],
+          "f1": 0.0,
+          "false_negatives": 2,
+          "false_positives": 1,
+          "matched_files": [],
+          "missed_files": [
+            "lib/content-type-parser.js",
+            "lib/schemas.js"
+          ],
+          "precision": 0.0,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [
+            "src/main/java/io/swagger/v3/core/util/ApiResponsesDeserializer.java"
+          ],
+          "recall": 0.0,
+          "status": "completed_unsafe",
+          "true_positives": 0
+        }
+      },
+      "ground_truth_f1": 0.4,
+      "ground_truth_files": [
+        "lib/content-type-parser.js",
+        "lib/schemas.js"
+      ],
+      "ground_truth_precision": 0.3333333333333333,
+      "ground_truth_recall": 0.5,
+      "pr_number": 6692,
+      "predicted_vs_ground_truth": {
+        "extra_files": [
+          "test/internals/reply-serialize.test.js",
+          "types/content-type-parser.d.ts"
+        ],
+        "f1": 0.4,
+        "false_negatives": 1,
+        "false_positives": 2,
+        "matched_files": [
+          "lib/schemas.js"
+        ],
+        "missed_files": [
+          "lib/content-type-parser.js"
+        ],
+        "precision": 0.3333333333333333,
+        "recall": 0.5,
+        "true_positives": 1
+      },
+      "predicted_writes": [
+        "lib/schemas.js",
+        "test/internals/reply-serialize.test.js",
+        "types/content-type-parser.d.ts"
+      ],
+      "task_id": "pr-6692"
+    },
+    "pr-6694": {
+      "agent_match_to_human": 0.0,
+      "agent_match_to_human_by_strategy": {
+        "acg_planned": {
+          "agent_f1": 0.0,
+          "agent_match_to_human": 0.0,
+          "agent_precision": 0.0,
+          "agent_recall": 0.0,
+          "extra_files": [],
+          "f1": 0.0,
+          "false_negatives": 3,
+          "false_positives": 0,
+          "matched_files": [],
+          "missed_files": [
+            "lib/content-type-parser.js",
+            "lib/handle-request.js",
+            "lib/request.js"
+          ],
+          "precision": 0.0,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [],
+          "recall": 0.0,
+          "status": "completed",
+          "true_positives": 0
+        },
+        "acg_planned_full_context": {
+          "agent_f1": 0.0,
+          "agent_match_to_human": 0.0,
+          "agent_precision": 0.0,
+          "agent_recall": 0.0,
+          "extra_files": [],
+          "f1": 0.0,
+          "false_negatives": 3,
+          "false_positives": 0,
+          "matched_files": [],
+          "missed_files": [
+            "lib/content-type-parser.js",
+            "lib/handle-request.js",
+            "lib/request.js"
+          ],
+          "precision": 0.0,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [],
+          "recall": 0.0,
+          "status": "completed",
+          "true_positives": 0
+        },
+        "naive_parallel": {
+          "agent_f1": 0.3333333333333333,
+          "agent_match_to_human": 0.3333333333333333,
+          "agent_precision": 0.3333333333333333,
+          "agent_recall": 0.3333333333333333,
+          "extra_files": [
+            "lib/contentType.js",
+            "lib/contentTypeParser.js"
+          ],
+          "f1": 0.3333333333333333,
+          "false_negatives": 2,
+          "false_positives": 2,
+          "matched_files": [
+            "lib/request.js"
+          ],
+          "missed_files": [
+            "lib/content-type-parser.js",
+            "lib/handle-request.js"
+          ],
+          "precision": 0.3333333333333333,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [
+            "lib/contentType.js",
+            "lib/contentTypeParser.js",
+            "lib/request.js"
+          ],
+          "recall": 0.3333333333333333,
+          "status": "completed_unsafe",
+          "true_positives": 1
+        }
+      },
+      "ground_truth_f1": 0.28571428571428575,
+      "ground_truth_files": [
+        "lib/content-type-parser.js",
+        "lib/handle-request.js",
+        "lib/request.js"
+      ],
+      "ground_truth_precision": 0.25,
+      "ground_truth_recall": 0.3333333333333333,
+      "pr_number": 6694,
+      "predicted_vs_ground_truth": {
+        "extra_files": [
+          "test/content-parser.test.js",
+          "test/logger/logger-test-utils.js",
+          "types/content-type-parser.d.ts"
+        ],
+        "f1": 0.28571428571428575,
+        "false_negatives": 2,
+        "false_positives": 3,
+        "matched_files": [
+          "lib/content-type-parser.js"
+        ],
+        "missed_files": [
+          "lib/handle-request.js",
+          "lib/request.js"
+        ],
+        "precision": 0.25,
+        "recall": 0.3333333333333333,
+        "true_positives": 1
+      },
+      "predicted_writes": [
+        "lib/content-type-parser.js",
+        "test/content-parser.test.js",
+        "test/logger/logger-test-utils.js",
+        "types/content-type-parser.d.ts"
+      ],
+      "task_id": "pr-6694"
+    }
+  }
+}

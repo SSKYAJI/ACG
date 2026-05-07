@@ -1,0 +1,115 @@
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ proposed 2 writes (1.79s, 67 tokens)
+   ALLOWED add-health-check → src/app.controller.ts
+   ALLOWED add-health-check → src/app.module.ts
+ proposed 2 writes (1.86s, 80 tokens)
+   ALLOWED extend-tag-crud → src/tag/tag.controller.ts
+   ALLOWED extend-tag-crud → src/tag/tag.service.ts
+ proposed 3 writes (2.16s, 127 tokens)
+   ALLOWED add-article-search → src/article/article.controller.ts
+   ALLOWED add-article-search → src/article/article.service.ts
+   ALLOWED add-article-search → src/article/article.interface.ts
+ proposed 1 writes (3.18s, 42 tokens)
+   ALLOWED add-rate-limiting → src/app.module.ts
+ proposed 6 writes (7.33s, 188 tokens)
+   ALLOWED add-user-roles → src/user/user.entity.ts
+   ALLOWED add-user-roles → src/user/user.interface.ts
+   ALLOWED add-user-roles → src/user/user.service.ts
+   ALLOWED add-user-roles → src/user/auth.middleware.ts
+   BLOCKED add-user-roles → src/user/user.decorator.ts: path 
+'src/user/user.decorator.ts' is outside task 'add-user-roles''s allowed_paths 
+(src/app.module.ts, src/article/article.entity.ts, src/user/auth.middleware.ts, 
+src/user/dto/**, src/user/user.entity.ts, src/user/user.interface.ts, 
+src/user/user.service.ts)
+   BLOCKED add-user-roles → src/user/user.module.ts: path 
+'src/user/user.module.ts' is outside task 'add-user-roles''s allowed_paths 
+(src/app.module.ts, src/article/article.entity.ts, src/user/auth.middleware.ts, 
+src/user/dto/**, src/user/user.entity.ts, src/user/user.interface.ts, 
+src/user/user.service.ts)
+ proposed 6 writes (8.00s, 212 tokens)
+   ALLOWED add-article-bookmarks → src/article/article.entity.ts
+   ALLOWED add-article-bookmarks → src/user/user.entity.ts
+   ALLOWED add-article-bookmarks → src/article/article.service.ts
+   ALLOWED add-article-bookmarks → src/article/article.controller.ts
+   ALLOWED add-article-bookmarks → src/article/article.interface.ts
+   ALLOWED add-article-bookmarks → src/user/user.service.ts
+[naive_parallel/local] wrote experiments/realworld/runs_blind_openrouter_seeds/seed3/eval_run_naive.json — completed=5/6, evidence=proposed_write_set, overlaps=3, oob=2, blocked=0, wall=8.012s
+ starting (group 1)
+ starting (group 1)
+ proposed 1 writes (1.50s, 42 tokens)
+   ALLOWED add-rate-limiting → src/app.module.ts
+ proposed 2 writes (1.68s, 80 tokens)
+   ALLOWED extend-tag-crud → src/tag/tag.controller.ts
+   ALLOWED extend-tag-crud → src/tag/tag.service.ts
+ starting (group 2)
+ proposed 6 writes (6.32s, 185 tokens)
+   ALLOWED add-user-roles → src/user/user.entity.ts
+   ALLOWED add-user-roles → src/user/user.interface.ts
+   ALLOWED add-user-roles → src/user/user.service.ts
+   BLOCKED add-user-roles → src/user/user.decorator.ts: path 
+'src/user/user.decorator.ts' is outside task 'add-user-roles''s allowed_paths 
+(src/app.module.ts, src/article/article.entity.ts, src/user/auth.middleware.ts, 
+src/user/dto/**, src/user/user.entity.ts, src/user/user.interface.ts, 
+src/user/user.service.ts)
+   ALLOWED add-user-roles → src/user/auth.middleware.ts
+   BLOCKED add-user-roles → src/user/user.module.ts: path 
+'src/user/user.module.ts' is outside task 'add-user-roles''s allowed_paths 
+(src/app.module.ts, src/article/article.entity.ts, src/user/auth.middleware.ts, 
+src/user/dto/**, src/user/user.entity.ts, src/user/user.interface.ts, 
+src/user/user.service.ts)
+ starting (group 3)
+ proposed 5 writes (6.83s, 184 tokens)
+   ALLOWED add-article-bookmarks → src/article/article.entity.ts
+   ALLOWED add-article-bookmarks → src/user/user.entity.ts
+   ALLOWED add-article-bookmarks → src/article/article.service.ts
+   ALLOWED add-article-bookmarks → src/article/article.controller.ts
+   ALLOWED add-article-bookmarks → src/user/user.service.ts
+ starting (group 4)
+ proposed 3 writes (2.06s, 105 tokens)
+   ALLOWED add-article-search → src/article/article.service.ts
+   ALLOWED add-article-search → src/article/article.controller.ts
+   ALLOWED add-article-search → src/article/dto/index.ts
+ starting (group 5)
+ proposed 2 writes (4.31s, 67 tokens)
+   ALLOWED add-health-check → src/app.controller.ts
+   ALLOWED add-health-check → src/app.module.ts
+[acg_planned_full_context/local] wrote experiments/realworld/runs_blind_openrouter_seeds/seed3/eval_run_acg_full_context.json — completed=6/6, evidence=proposed_write_set, overlaps=3, oob=0, blocked=2, wall=21.216s
+ starting (group 1)
+ starting (group 1)
+ proposed 2 writes (1.80s, 74 tokens)
+   ALLOWED add-rate-limiting → src/main.ts
+   ALLOWED add-rate-limiting → src/app.module.ts
+ proposed 3 writes (2.38s, 119 tokens)
+   ALLOWED extend-tag-crud → src/tag/tag.controller.ts
+   ALLOWED extend-tag-crud → src/tag/tag.service.ts
+   ALLOWED extend-tag-crud → src/tag/tag.controller.spec.ts
+ starting (group 2)
+ proposed 5 writes (2.59s, 163 tokens)
+   ALLOWED add-user-roles → src/user/user.entity.ts
+   ALLOWED add-user-roles → src/user/user.interface.ts
+   ALLOWED add-user-roles → src/user/auth.middleware.ts
+   ALLOWED add-user-roles → src/user/user.service.ts
+   ALLOWED add-user-roles → src/app.module.ts
+ starting (group 3)
+ proposed 4 writes (2.31s, 144 tokens)
+   ALLOWED add-article-bookmarks → src/article/article.entity.ts
+   ALLOWED add-article-bookmarks → src/user/user.entity.ts
+   ALLOWED add-article-bookmarks → src/article/article.service.ts
+   ALLOWED add-article-bookmarks → src/article/article.controller.ts
+ starting (group 4)
+ proposed 4 writes (1.91s, 126 tokens)
+   ALLOWED add-article-search → src/article/article.interface.ts
+   ALLOWED add-article-search → src/article/dto/index.ts
+   ALLOWED add-article-search → src/article/article.service.ts
+   ALLOWED add-article-search → src/article/article.controller.ts
+ starting (group 5)
+ proposed 2 writes (1.34s, 79 tokens)
+   ALLOWED add-health-check → src/app.controller.ts
+   ALLOWED add-health-check → src/app.module.ts
+[acg_planned/local] wrote experiments/realworld/runs_blind_openrouter_seeds/seed3/eval_run_acg.json — completed=6/6, evidence=proposed_write_set, overlaps=5, oob=0, blocked=0, wall=10.547s
+[combined] wrote experiments/realworld/runs_blind_openrouter_seeds/seed3/eval_run_combined.json

@@ -10,12 +10,16 @@ Backends:
   ``predicted_writes`` so the artifact is CI-friendly.
 - ``local`` — fans out via :func:`acg.runtime.run_worker` against whatever
   ``ACG_LLM_URL`` points at (GX10 in the canonical setup).
+- ``applied-diff`` — reads a generic sidecar that identifies per-task
+  branches, heads, or worktrees, then records ``git diff --name-only`` as
+  actual changed files.
 - ``devin-manual`` — reads a sidecar JSON of human-collected Devin session
   outputs (used when API extraction is partial).
 - ``devin-api`` — direct Devin API integration; stubbed until credentials
   and endpoint contract are confirmed.
 
-The harness never mutates files in ``experiments/greenhouse/checkout/``; it
-is a propose-and-validate evaluation, not a real apply step. Patch
-application is reserved for the live Devin/GX10 spike.
+The ``mock`` and ``local`` backends never mutate files in
+``experiments/greenhouse/checkout/``; they are propose-and-validate
+evaluations. ``applied-diff`` / Devin backends consume externally applied
+patches and score their real diff files against the same lockfile contract.
 """

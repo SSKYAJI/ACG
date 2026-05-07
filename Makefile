@@ -1,4 +1,4 @@
-.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse eval-greenhouse-mock eval-greenhouse-local eval-greenhouse-devin-manual eval-greenhouse-devin-api eval-greenhouse-tight-mock eval-greenhouse-report mcp-serve cascade-hook-test setup-realworld compile-realworld compile-realworld-blind setup-python-fastapi compile-python-fastapi eval-python-fastapi-mock analyze-python-fastapi-mock eval-realworld-local eval-realworld-blind-local eval-realworld-blind-openrouter-ablation eval-realworld-mock analyze-realworld analyze-realworld-blind analyze-realworld-blind-openrouter
+.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse eval-greenhouse-mock eval-greenhouse-local eval-greenhouse-applied-diff eval-greenhouse-devin-manual eval-greenhouse-devin-api eval-greenhouse-tight-mock eval-greenhouse-report mcp-serve cascade-hook-test setup-realworld compile-realworld compile-realworld-blind setup-python-fastapi compile-python-fastapi eval-python-fastapi-mock analyze-python-fastapi-mock eval-realworld-local eval-realworld-blind-local eval-realworld-blind-openrouter-ablation eval-realworld-tight-openrouter eval-realworld-mock analyze-realworld analyze-realworld-blind analyze-realworld-blind-openrouter
 
 # Override these on the command line if your ASUS hostname / port differ:
 #   make compile-gemma GEMMA_HOST=100.x.y.z GEMMA_PORT=8080
@@ -114,6 +114,25 @@ eval-greenhouse-local: compile-greenhouse
 	  --backend local \
 	  --strategy both \
 	  --out-dir experiments/greenhouse/runs
+
+# Generic applied-diff sidecars — each sidecar can name repo_path/base_ref
+# plus per-task branch/head_ref/worktree details. The harness records
+# git diff changed files as the primary collision evidence.
+APPLIED_DIFF_RESULTS_NAIVE ?= experiments/greenhouse/runs/applied_diff_naive_raw.json
+APPLIED_DIFF_RESULTS_ACG   ?= experiments/greenhouse/runs/applied_diff_acg_raw.json
+eval-greenhouse-applied-diff: compile-greenhouse
+	./.venv/bin/python -m experiments.greenhouse.headtohead \
+	  --lock experiments/greenhouse/agent_lock.json \
+	  --tasks experiments/greenhouse/tasks.json \
+	  --backend applied-diff --strategy naive_parallel \
+	  --diff-results $(APPLIED_DIFF_RESULTS_NAIVE) \
+	  --out experiments/greenhouse/runs/eval_run_applied_diff_naive.json
+	./.venv/bin/python -m experiments.greenhouse.headtohead \
+	  --lock experiments/greenhouse/agent_lock.json \
+	  --tasks experiments/greenhouse/tasks.json \
+	  --backend applied-diff --strategy acg_planned \
+	  --diff-results $(APPLIED_DIFF_RESULTS_ACG) \
+	  --out experiments/greenhouse/runs/eval_run_applied_diff_acg.json
 
 # Live Devin v3 API — submits real sessions against your Devin org. Reads
 # DEVIN_API_KEY + DEVIN_ORG_ID from .env (or the shell). Set
@@ -255,6 +274,16 @@ eval-realworld-blind-openrouter-ablation:
 	  --backend local --strategy ablation \
 	  --out-dir experiments/realworld/runs_blind_openrouter \
 	  --suite-name realworld-nestjs-blind-openrouter-v2
+
+eval-realworld-tight-openrouter:
+	set -a && . ./.env && set +a && \
+	./.venv/bin/python -m experiments.greenhouse.headtohead \
+	  --lock experiments/realworld/agent_lock_tight.json \
+	  --tasks experiments/realworld/tasks_blind.json \
+	  --repo experiments/realworld/checkout \
+	  --backend local --strategy ablation \
+	  --out-dir experiments/realworld/runs/tight \
+	  --suite-name realworld-nestjs-tight
 
 eval-realworld-mock:
 	./.venv/bin/python -m experiments.greenhouse.headtohead \

@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr-6694",
+      "prompt": "Improve Content-Type parsing performance by caching parsed ContentType objects in ContentTypeParser and reusing those parsed objects from request handling and request.mediaType without changing external behavior."
+    }
+  ]
+}

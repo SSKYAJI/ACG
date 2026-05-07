@@ -73,6 +73,13 @@ make eval-greenhouse-mock
 # Live local LLM (GX10) — same harness, real worker calls.
 make eval-greenhouse-local
 
+# Generic applied diffs — primary paper evidence for file-level collision.
+# Sidecars identify repo_path/base_ref and task branches or heads; the
+# harness records git diff --name-only as actual_changed_files.
+make eval-greenhouse-applied-diff \
+  APPLIED_DIFF_RESULTS_NAIVE=experiments/greenhouse/runs/applied_diff_naive_raw.json \
+  APPLIED_DIFF_RESULTS_ACG=experiments/greenhouse/runs/applied_diff_acg_raw.json
+
 # Manual Devin sidecar — point DEVIN_RESULTS_NAIVE / DEVIN_RESULTS_ACG at
 # JSON files exported from Devin sessions (see devin_adapter.py docstring
 # for the sidecar shape).
@@ -86,12 +93,29 @@ make eval-greenhouse-report
 
 ### Backends
 
-| Backend        | When to use                     | Wires up                                                                                                                                                                             |
-| -------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `mock`         | CI, offline, schema validation  | `LockfileEchoMockLLM` echoes `predicted_writes`                                                                                                                                      |
-| `local`        | Live GX10 numbers               | `acg.runtime.RuntimeLLM` against `ACG_*` env vars                                                                                                                                    |
-| `devin-manual` | Devin sessions exported by hand | reads a sidecar JSON                                                                                                                                                                 |
-| `devin-api`    | **Live Devin v3 API**           | `DevinClient` against `DEVIN_API_KEY` / `DEVIN_ORG_ID`; submits real sessions, polls until terminal, extracts changed files via `pull_requests` + `structured_output` + message scan |
+| Backend        | When to use                           | Wires up                                                                                                                                                                             |
+| -------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `mock`         | CI, offline, schema validation        | `LockfileEchoMockLLM` echoes `predicted_writes`; evidence is `proposed_write_set`                                                                                                    |
+| `local`        | Live OpenAI-compatible proposal runs  | `acg.runtime.RuntimeLLM` against `ACG_*` env vars; evidence is still `proposed_write_set`                                                                                            |
+| `applied-diff` | Primary paper file-collision evidence | generic sidecar + `git diff --name-only`; evidence is `applied_diff`                                                                                                                 |
+| `devin-manual` | Devin sessions exported by hand       | reads the same sidecar shape with Devin metadata; evidence is `applied_diff`                                                                                                         |
+| `devin-api`    | **Live Devin v3 API**                 | `DevinClient` against `DEVIN_API_KEY` / `DEVIN_ORG_ID`; submits real sessions, polls until terminal, extracts changed files via `pull_requests` + `structured_output` + message scan |
+
+### Evidence kinds
+
+`mock` and `local` are proposal-only harnesses. They are useful for
+planning, context-scaling, prompt-token accounting, and validator behavior,
+but their `actual_changed_files` are accepted/proposed write sets, not
+mutated files.
+
+`applied-diff`, `devin-manual`, and `devin-api` are applied-diff evidence.
+They score actual changed files against the same `allowed_paths` contract.
+Use these artifacts for claims about file-level collisions, out-of-bounds
+changed files, and post-hoc blocked/audited writes.
+
+The paper-safe framing is: this harness evaluates file-level coordination,
+not patch correctness. It does not claim ACG improves generated code
+quality or prevents every possible merge conflict.
 
 #### Live Devin API setup (one-time)
 

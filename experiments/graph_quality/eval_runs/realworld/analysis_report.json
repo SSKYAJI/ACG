@@ -1,0 +1,219 @@
+{
+  "overall": {
+    "f1": 0.6567,
+    "precision": 0.4889,
+    "recall": 1.0,
+    "total_blocks": 0,
+    "total_oob": 0,
+    "total_posthoc_oob": 0,
+    "total_proposal_oob": 0
+  },
+  "runs": [
+    {
+      "backend": "local",
+      "blocked_invalid_write_count": 0,
+      "cost_method": "sum_provider_reported_task_costs",
+      "cost_source": "body.usage.cost",
+      "cost_usd_total": 0.0003163,
+      "evidence_kind": "proposed_write_set",
+      "execution_mode": "propose_validate",
+      "out_of_bounds_write_count": 0,
+      "overlapping_write_pairs": 4,
+      "source_path": "experiments/graph_quality/eval_runs/realworld/eval_run_acg.json",
+      "strategy": "acg_planned",
+      "suite_name": "realworld-openrouter-graph-quality-v2",
+      "tasks_completed": 6,
+      "tasks_total": 6,
+      "tested_tasks_completed": 0,
+      "tests_ran_count": 0,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_method": "provider_usage_prompt_tokens",
+      "tokens_prompt_total": 1342
+    }
+  ],
+  "tasks": {
+    "add-article-bookmarks": {
+      "actual_files_seen": [
+        "src/article/article.controller.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/article/bookmark.entity.ts",
+        "src/user/user.entity.ts"
+      ],
+      "allowed_glob_count": 7,
+      "blocked_events_total": 0,
+      "f1": 0.8333,
+      "false_negatives": 0,
+      "false_positives": 2,
+      "out_of_bounds_files": [],
+      "precision": 0.7143,
+      "predicted_files": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/article/bookmark.entity.ts",
+        "src/article/comment.entity.ts",
+        "src/user/user.entity.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 1,
+      "suggestions": [],
+      "task_id": "add-article-bookmarks",
+      "true_positives": 5
+    },
+    "add-article-search": {
+      "actual_files_seen": [
+        "src/article/article.controller.ts",
+        "src/article/article.service.ts",
+        "src/article/dto/search-query.dto.ts"
+      ],
+      "allowed_glob_count": 5,
+      "blocked_events_total": 0,
+      "f1": 0.5455,
+      "false_negatives": 0,
+      "false_positives": 5,
+      "out_of_bounds_files": [],
+      "precision": 0.375,
+      "predicted_files": [
+        "src/article/article.controller.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.service.ts",
+        "src/article/dto/create-article.dto.ts",
+        "src/article/dto/create-comment.ts",
+        "src/article/dto/index.ts",
+        "src/article/dto/search-query.dto.ts",
+        "src/user/dto/create-user.dto.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 1,
+      "suggestions": [
+        "predictor over-predicts (precision=0.38); consider removing ['src/article/article.interface.ts', 'src/article/dto/create-article.dto.ts', 'src/article/dto/create-comment.ts'] from predicted_writes seeds"
+      ],
+      "task_id": "add-article-search",
+      "true_positives": 3
+    },
+    "add-health-check": {
+      "actual_files_seen": [
+        "package.json",
+        "src/health/health.controller.ts",
+        "src/health/health.module.ts"
+      ],
+      "allowed_glob_count": 6,
+      "blocked_events_total": 0,
+      "f1": 0.6667,
+      "false_negatives": 0,
+      "false_positives": 3,
+      "out_of_bounds_files": [],
+      "precision": 0.5,
+      "predicted_files": [
+        "package.js",
+        "package.json",
+        "src/app.module.ts",
+        "src/health/health.controller.ts",
+        "src/health/health.module.ts",
+        "src/main.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 1,
+      "suggestions": [
+        "predictor over-predicts (precision=0.50); consider removing ['package.js', 'src/app.module.ts', 'src/main.ts'] from predicted_writes seeds"
+      ],
+      "task_id": "add-health-check",
+      "true_positives": 3
+    },
+    "add-rate-limiting": {
+      "actual_files_seen": [
+        "package.json",
+        "src/app.module.ts",
+        "src/shared/throttle.config.ts"
+      ],
+      "allowed_glob_count": 8,
+      "blocked_events_total": 0,
+      "f1": 0.5455,
+      "false_negatives": 0,
+      "false_positives": 5,
+      "out_of_bounds_files": [],
+      "precision": 0.375,
+      "predicted_files": [
+        ".env.example",
+        "package.js",
+        "package.json",
+        "src/app.module.ts",
+        "src/main.ts",
+        "src/shared/base.controller.ts",
+        "src/shared/pipes/validation.pipe.ts",
+        "src/shared/throttle.config.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 1,
+      "suggestions": [
+        "predictor over-predicts (precision=0.38); consider removing ['.env.example', 'package.js', 'src/main.ts'] from predicted_writes seeds"
+      ],
+      "task_id": "add-rate-limiting",
+      "true_positives": 3
+    },
+    "add-user-roles": {
+      "actual_files_seen": [
+        "src/app.module.ts",
+        "src/user/roles.decorator.ts",
+        "src/user/roles.guard.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts"
+      ],
+      "allowed_glob_count": 8,
+      "blocked_events_total": 0,
+      "f1": 0.7692,
+      "false_negatives": 0,
+      "false_positives": 3,
+      "out_of_bounds_files": [],
+      "precision": 0.625,
+      "predicted_files": [
+        ".env.example",
+        "src/app.module.ts",
+        "src/article/article.entity.ts",
+        "src/user/roles.decorator.ts",
+        "src/user/roles.guard.ts",
+        "src/user/user.decorator.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 1,
+      "suggestions": [],
+      "task_id": "add-user-roles",
+      "true_positives": 5
+    },
+    "extend-tag-crud": {
+      "actual_files_seen": [
+        "src/tag/dto/create-tag.dto.ts",
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "allowed_glob_count": 6,
+      "blocked_events_total": 0,
+      "f1": 0.5455,
+      "false_negatives": 0,
+      "false_positives": 5,
+      "out_of_bounds_files": [],
+      "precision": 0.375,
+      "predicted_files": [
+        "src/article/dto/create-article.dto.ts",
+        "src/article/dto/create-comment.ts",
+        "src/article/dto/index.ts",
+        "src/tag/dto/create-tag.dto.ts",
+        "src/tag/tag.controller.spec.ts",
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.module.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 1,
+      "suggestions": [
+        "predictor over-predicts (precision=0.38); consider removing ['src/article/dto/create-article.dto.ts', 'src/article/dto/create-comment.ts', 'src/article/dto/index.ts'] from predicted_writes seeds"
+      ],
+      "task_id": "extend-tag-crud",
+      "true_positives": 3
+    }
+  }
+}

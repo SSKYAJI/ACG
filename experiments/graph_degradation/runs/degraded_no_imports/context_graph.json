@@ -1,0 +1,424 @@
+{
+  "configs": [
+    ".env.example",
+    "next.config.js",
+    "package.json",
+    "postcss.config.js",
+    "prisma/schema.prisma",
+    "tsconfig.json"
+  ],
+  "exports": {
+    ".env.example": [],
+    "next.config.js": [],
+    "package.json": [],
+    "postcss.config.js": [],
+    "prisma/schema.prisma": [],
+    "src/app/api/auth/[...nextauth]/route.ts": [
+      "{ GET, POST }"
+    ],
+    "src/app/api/health/route.ts": [
+      "GET"
+    ],
+    "src/app/dashboard/page.tsx": [
+      "DashboardPage",
+      "metadata"
+    ],
+    "src/app/layout.tsx": [
+      "RootLayout",
+      "metadata"
+    ],
+    "src/app/page.tsx": [
+      "HomePage"
+    ],
+    "src/app/profile/page.tsx": [
+      "ProfilePage",
+      "metadata"
+    ],
+    "src/app/projects/page.tsx": [
+      "ProjectsPage",
+      "metadata"
+    ],
+    "src/app/settings/page.tsx": [
+      "SettingsPage",
+      "metadata"
+    ],
+    "src/components/Sidebar.tsx": [
+      "NAV_ITEMS",
+      "Sidebar",
+      "SidebarItem"
+    ],
+    "src/env.js": [
+      "env"
+    ],
+    "src/server/auth/config.ts": [
+      "authConfig"
+    ],
+    "src/server/auth/index.ts": [
+      "auth",
+      "handlers",
+      "signIn",
+      "signOut"
+    ],
+    "src/server/db.ts": [
+      "db"
+    ],
+    "tsconfig.json": []
+  },
+  "files": [
+    {
+      "default_export": null,
+      "exports": [],
+      "imported_by_count": 0,
+      "imports": [],
+      "is_hotspot": false,
+      "path": ".env.example",
+      "symbols": []
+    },
+    {
+      "default_export": "config",
+      "exports": [],
+      "imported_by_count": 0,
+      "imports": [],
+      "is_hotspot": false,
+      "path": "next.config.js",
+      "symbols": [
+        "config"
+      ]
+    },
+    {
+      "default_export": null,
+      "exports": [],
+      "imported_by_count": 0,
+      "imports": [],
+      "is_hotspot": false,
+      "path": "package.json",
+      "symbols": []
+    },
+    {
+      "default_export": null,
+      "exports": [],
+      "imported_by_count": 0,
+      "imports": [],
+      "is_hotspot": false,
+      "path": "postcss.config.js",
+      "symbols": []
+    },
+    {
+      "default_export": null,
+      "exports": [],
+      "imported_by_count": 0,
+      "imports": [],
+      "is_hotspot": true,
+      "path": "prisma/schema.prisma",
+      "symbols": []
+    },
+    {
+      "default_export": null,
+      "exports": [],
+      "imported_by_count": 0,
+      "imports": [],
+      "is_hotspot": false,
+      "path": "src/app/api/auth/[...nextauth]/route.ts",
+      "symbols": [
+        "{ GET, POST }"
+      ]
+    },
+    {
+      "default_export": null,
+      "exports": [],
+      "imported_by_count": 0,
+      "imports": [],
+      "is_hotspot": false,
+      "path": "src/app/api/health/route.ts",
+      "symbols": [
+        "GET"
+      ]
+    },
+    {
+      "default_export": "DashboardPage",
+      "exports": [],
+      "imported_by_count": 0,
+      "imports": [],
+      "is_hotspot": false,
+      "path": "src/app/dashboard/page.tsx",
+      "symbols": [
+        "DashboardPage",
+        "metadata"
+      ]
+    },
+    {
+      "default_export": "RootLayout",
+      "exports": [],
+      "imported_by_count": 0,
+      "imports": [],
+      "is_hotspot": false,
+      "path": "src/app/layout.tsx",
+      "symbols": [
+        "RootLayout",
+        "geist",
+        "metadata"
+      ]
+    },
+    {
+      "default_export": "HomePage",
+      "exports": [],
+      "imported_by_count": 0,
+      "imports": [],
+      "is_hotspot": false,
+      "path": "src/app/page.tsx",
+      "symbols": [
+        "HomePage"
+      ]
+    },
+    {
+      "default_export": "ProfilePage",
+      "exports": [],
+      "imported_by_count": 0,
+      "imports": [],
+      "is_hotspot": false,
+      "path": "src/app/profile/page.tsx",
+      "symbols": [
+        "ProfilePage",
+        "metadata"
+      ]
+    },
+    {
+      "default_export": "ProjectsPage",
+      "exports": [],
+      "imported_by_count": 0,
+      "imports": [],
+      "is_hotspot": false,
+      "path": "src/app/projects/page.tsx",
+      "symbols": [
+        "ProjectsPage",
+        "metadata"
+      ]
+    },
+    {
+      "default_export": "SettingsPage",
+      "exports": [],
+      "imported_by_count": 0,
+      "imports": [],
+      "is_hotspot": false,
+      "path": "src/app/settings/page.tsx",
+      "symbols": [
+        "SettingsPage",
+        "metadata"
+      ]
+    },
+    {
+      "default_export": null,
+      "exports": [],
+      "imported_by_count": 4,
+      "imports": [],
+      "is_hotspot": true,
+      "path": "src/components/Sidebar.tsx",
+      "symbols": [
+        "NAV_ITEMS",
+        "Sidebar",
+        "SidebarItem"
+      ]
+    },
+    {
+      "default_export": null,
+      "exports": [],
+      "imported_by_count": 1,
+      "imports": [],
+      "is_hotspot": false,
+      "path": "src/env.js",
+      "symbols": [
+        "env"
+      ]
+    },
+    {
+      "default_export": null,
+      "exports": [],
+      "imported_by_count": 1,
+      "imports": [],
+      "is_hotspot": false,
+      "path": "src/server/auth/config.ts",
+      "symbols": [
+        "authConfig"
+      ]
+    },
+    {
+      "default_export": null,
+      "exports": [],
+      "imported_by_count": 4,
+      "imports": [],
+      "is_hotspot": true,
+      "path": "src/server/auth/index.ts",
+      "symbols": [
+        "auth",
+        "{ auth: uncachedAuth, handlers, signIn, signOut }"
+      ]
+    },
+    {
+      "default_export": null,
+      "exports": [],
+      "imported_by_count": 4,
+      "imports": [],
+      "is_hotspot": true,
+      "path": "src/server/db.ts",
+      "symbols": [
+        "createPrismaClient",
+        "db",
+        "globalForPrisma"
+      ]
+    },
+    {
+      "default_export": null,
+      "exports": [],
+      "imported_by_count": 0,
+      "imports": [],
+      "is_hotspot": false,
+      "path": "tsconfig.json",
+      "symbols": []
+    }
+  ],
+  "hotspots": [
+    "prisma/schema.prisma",
+    "src/components/Sidebar.tsx",
+    "src/server/auth/index.ts",
+    "src/server/db.ts"
+  ],
+  "imports": {
+    ".env.example": [],
+    "next.config.js": [
+      "./src/env.js"
+    ],
+    "package.json": [],
+    "postcss.config.js": [],
+    "prisma/schema.prisma": [],
+    "src/app/api/auth/[...nextauth]/route.ts": [
+      "~/server/auth"
+    ],
+    "src/app/api/health/route.ts": [
+      "~/server/auth",
+      "~/server/db"
+    ],
+    "src/app/dashboard/page.tsx": [
+      "~/components/Sidebar",
+      "~/server/auth",
+      "~/server/db"
+    ],
+    "src/app/layout.tsx": [
+      "next",
+      "next/font/google",
+      "~/styles/globals.css"
+    ],
+    "src/app/page.tsx": [
+      "next/link"
+    ],
+    "src/app/profile/page.tsx": [
+      "~/components/Sidebar",
+      "~/server/auth"
+    ],
+    "src/app/projects/page.tsx": [
+      "~/components/Sidebar",
+      "~/server/db"
+    ],
+    "src/app/settings/page.tsx": [
+      "~/components/Sidebar"
+    ],
+    "src/components/Sidebar.tsx": [
+      "next/link"
+    ],
+    "src/env.js": [
+      "@t3-oss/env-nextjs",
+      "zod"
+    ],
+    "src/server/auth/config.ts": [
+      "@auth/prisma-adapter",
+      "next-auth",
+      "next-auth/providers/discord",
+      "~/server/db"
+    ],
+    "src/server/auth/index.ts": [
+      "./config",
+      "next-auth",
+      "react"
+    ],
+    "src/server/db.ts": [
+      "../../generated/prisma",
+      "~/env"
+    ],
+    "tsconfig.json": []
+  },
+  "language": "typescript",
+  "languages": [
+    "typescript"
+  ],
+  "root": "/Users/prajit/Desktop/projects/cognition/demo-app",
+  "routes": [
+    {
+      "kind": "api",
+      "path": "src/app/api/auth/[...nextauth]/route.ts",
+      "route": "/api/auth/[...nextauth]"
+    },
+    {
+      "kind": "api",
+      "path": "src/app/api/health/route.ts",
+      "route": "/api/health"
+    },
+    {
+      "kind": "page",
+      "path": "src/app/dashboard/page.tsx",
+      "route": "/dashboard"
+    },
+    {
+      "kind": "layout",
+      "path": "src/app/layout.tsx",
+      "route": "/"
+    },
+    {
+      "kind": "page",
+      "path": "src/app/page.tsx",
+      "route": "/"
+    },
+    {
+      "kind": "page",
+      "path": "src/app/profile/page.tsx",
+      "route": "/profile"
+    },
+    {
+      "kind": "page",
+      "path": "src/app/projects/page.tsx",
+      "route": "/projects"
+    },
+    {
+      "kind": "page",
+      "path": "src/app/settings/page.tsx",
+      "route": "/settings"
+    }
+  ],
+  "scanned_at": "2026-05-07T01:53:44.151Z",
+  "symbols_index": {
+    "DashboardPage": "src/app/dashboard/page.tsx",
+    "GET": "src/app/api/health/route.ts",
+    "HomePage": "src/app/page.tsx",
+    "NAV_ITEMS": "src/components/Sidebar.tsx",
+    "ProfilePage": "src/app/profile/page.tsx",
+    "ProjectsPage": "src/app/projects/page.tsx",
+    "RootLayout": "src/app/layout.tsx",
+    "SettingsPage": "src/app/settings/page.tsx",
+    "Sidebar": "src/components/Sidebar.tsx",
+    "SidebarItem": "src/components/Sidebar.tsx",
+    "auth": "src/server/auth/index.ts",
+    "authConfig": "src/server/auth/config.ts",
+    "config": "next.config.js",
+    "createPrismaClient": "src/server/db.ts",
+    "db": "src/server/db.ts",
+    "env": "src/env.js",
+    "geist": "src/app/layout.tsx",
+    "globalForPrisma": "src/server/db.ts",
+    "handlers": "src/server/auth/index.ts",
+    "metadata": "src/app/dashboard/page.tsx",
+    "signIn": "src/server/auth/index.ts",
+    "signOut": "src/server/auth/index.ts",
+    "{ GET, POST }": "src/app/api/auth/[...nextauth]/route.ts",
+    "{ auth: uncachedAuth, handlers, signIn, signOut }": "src/server/auth/index.ts"
+  },
+  "tests": [],
+  "version": "1.0"
+}

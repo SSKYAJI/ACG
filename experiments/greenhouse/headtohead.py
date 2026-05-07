@@ -30,6 +30,13 @@ python -m experiments.greenhouse.headtohead \
   --backend devin-manual --strategy naive_parallel \
   --devin-results experiments/greenhouse/runs/devin_naive_raw.json \
   --out experiments/greenhouse/eval_run_devin_naive.json
+
+# Generic applied-diff sidecar (task branches/worktrees/PR heads)
+python -m experiments.greenhouse.headtohead \
+  --lock experiments/greenhouse/agent_lock.json \
+  --backend applied-diff --strategy acg_planned \
+  --diff-results experiments/greenhouse/runs/applied_diff_acg_raw.json \
+  --out experiments/greenhouse/eval_run_applied_diff_acg.json
 ```
 """
 
@@ -57,6 +64,7 @@ from .devin_adapter import (
     DevinAPINotConfigured,
     DevinManualError,
     devin_api_run,
+    run_applied_diff_manual,
     run_devin_manual,
 )
 from .eval_schema import EvalRepo, EvalRun, repo_from_path, suite_name_from_lock, write_eval_run
@@ -81,7 +89,7 @@ VALID_STRATEGIES = (
     ACG_PLANNED_FULL_CONTEXT_STRATEGY,
     *STRATEGY_GROUPS.keys(),
 )
-VALID_BACKENDS = ("mock", "local", "devin-manual", "devin-api")
+VALID_BACKENDS = ("mock", "local", "applied-diff", "devin-manual", "devin-api")
 EXIT_OK = 0
 EXIT_USER_ERROR = 1
 EXIT_BACKEND_ERROR = 3
@@ -134,6 +142,15 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         type=Path,
         default=None,
         help="Sidecar JSON of Devin session outputs (required for --backend devin-manual).",
+    )
+    parser.add_argument(
+        "--diff-results",
+        type=Path,
+        default=None,
+        help=(
+            "Generic sidecar JSON of task branches/worktrees used to derive "
+            "git diff changed files (required for --backend applied-diff)."
+        ),
     )
     parser.add_argument(
         "--repo-url",
@@ -281,9 +298,10 @@ def _run_one(
     lockfile_path: str,
     prompts_by_task: dict[str, str],
     sequential_wall_time_seconds: float | None,
+    diff_results: Path | None,
     devin_results: Path | None,
     suite_name: str,
-    repo: EvalRepo,
+    repo: EvalRepo | None,
     devin_api_kwargs: dict | None = None,
 ) -> EvalRun:
     devin_api_kwargs = devin_api_kwargs or {}
@@ -303,6 +321,23 @@ def _run_one(
         raise SystemExit(
             "acg_planned_full_context is only supported by mock/local proposal "
             "backends"
+        )
+    if backend == "applied-diff":
+        results_path = diff_results or devin_results
+        if results_path is None:
+            raise SystemExit(
+                "--backend applied-diff requires --diff-results "
+                "(or --devin-results for compatibility)"
+            )
+        return run_applied_diff_manual(
+            strategy=strategy,
+            lock=lock,
+            lockfile_path=lockfile_path,
+            diff_results_path=results_path,
+            prompts_by_task=prompts_by_task,
+            sequential_wall_time_seconds=sequential_wall_time_seconds,
+            suite_name=suite_name,
+            repo=repo,
         )
     if backend == "devin-manual":
         if devin_results is None:
@@ -353,6 +388,16 @@ def main(argv: list[str] | None = None) -> int:
         repo_url=args.repo_url,
         repo_commit=args.repo_commit,
     )
+    repo_for_run = repo_meta
+    if (
+        args.backend in {"applied-diff", "devin-manual"}
+        and args.repo is None
+        and args.repo_url is None
+        and args.repo_commit is None
+    ):
+        # Let manual/applied-diff sidecars supply their own repo_path metadata
+        # instead of falling back to Greenhouse defaults.
+        repo_for_run = None
     strategies = _selected_strategies(args.strategy)
     outputs = _resolve_outputs(args, strategies)
 
@@ -367,9 +412,10 @@ def main(argv: list[str] | None = None) -> int:
                 lockfile_path=str(args.lock),
                 prompts_by_task=prompts,
                 sequential_wall_time_seconds=args.sequential_wall_time_seconds,
+                diff_results=args.diff_results,
                 devin_results=args.devin_results,
                 suite_name=suite_name,
-                repo=repo_meta,
+                repo=repo_for_run,
                 devin_api_kwargs={
                     "repo_url": args.repo_url,
                     "base_branch": args.base_branch,
@@ -392,6 +438,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"[{strategy}/{args.backend}] wrote {out_path} — "
             f"completed={summary.tasks_completed}/{summary.tasks_total}, "
+            f"evidence={run.evidence_kind}, "
             f"overlaps={summary.overlapping_write_pairs}, "
             f"oob={summary.out_of_bounds_write_count}, "
             f"blocked={summary.blocked_invalid_write_count}, "

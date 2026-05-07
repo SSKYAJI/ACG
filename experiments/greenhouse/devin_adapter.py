@@ -1,7 +1,10 @@
-"""Devin-flavored backends for the Greenhouse harness.
+"""Applied-diff and Devin-flavored backends for the Greenhouse harness.
 
-Two backends live here:
+Three backends live here:
 
+- ``applied-diff``: reads a generic sidecar JSON where each task points at
+  a branch/head/worktree and scores the actual git diff against the lockfile.
+  This is the preferred paper evidence path for file-level collision claims.
 - ``devin-manual``: reads a sidecar JSON (paths defined below) where the
   human author has pasted what came out of one or more Devin sessions —
   changed files, status, optional test result, optional PR/branch URLs.
@@ -15,17 +18,21 @@ Two backends live here:
 Both backends return :class:`EvalRun` instances with the same shape as the
 mock/local backends so :mod:`report` can chart them uniformly.
 
-Devin session-output sidecar JSON (``--devin-results``) format:
+Manual/applied-diff sidecar JSON (``--diff-results`` or
+``--devin-results``) format:
 
 ```jsonc
 {
   "strategy": "naive_parallel",  // or "acg_planned"
   "wall_time_seconds": 1830.0,   // sequential or parallel wall clock
+  "repo_path": "experiments/greenhouse/checkout", // optional git source for diffs
+  "base_ref": "main",            // optional; task entry may override
   "tasks": [
     {
       "task_id": "lambda-rowmapper-account",
       "session_id": "devin-abc123",
       "status": "completed",     // completed | completed_unsafe | failed
+      "branch": "task/lambda-account", // optional; used as git diff head_ref
       "actual_changed_files": [
         "src/main/java/.../JdbcAccountRepository.java",
         "pom.xml"
@@ -41,19 +48,22 @@ Devin session-output sidecar JSON (``--devin-results``) format:
       "started_at": "2026-04-25T18:00:00Z",
       "finished_at": "2026-04-25T18:10:12Z",
       "pr_url": "https://github.com/.../pull/42",
-      "branch": "task/lambda-account",
       "human_interventions": 1
     }
   ]
 }
 ```
 
-Missing keys are tolerated; everything in the schema accepts ``None``.
+Missing keys are tolerated. If ``actual_changed_files`` is omitted and
+``repo_path`` is present, the loader computes it with ``git diff --name-only``
+from ``base_ref`` to the task's ``head_ref``/``branch`` (or to the current
+worktree when no head is supplied).
 """
 
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -92,12 +102,63 @@ def _load_manual(devin_results_path: Path) -> dict[str, Any]:
         ) from exc
 
 
+def _git_text(repo_path: Path, args: list[str]) -> str:
+    """Run a read-only git command and return stdout."""
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo_path), *args],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or "").strip()
+        raise DevinManualError(
+            f"git {' '.join(args)} failed in {repo_path}: {detail}"
+        ) from exc
+    return proc.stdout
+
+
+def _changed_files_from_git_diff(
+    repo_path: Path, *, base_ref: str, head_ref: str | None = None
+) -> list[str]:
+    """Return repo-relative paths changed by ``head_ref`` or the worktree.
+
+    ``head_ref`` is appropriate for committed task branches. When omitted, we
+    compare the current worktree to ``base_ref`` and include untracked files,
+    which makes the helper useful for local agents that edited a checkout but
+    did not commit.
+    """
+    if not repo_path.exists():
+        raise DevinManualError(f"git diff repo_path does not exist: {repo_path}")
+    diff_target = f"{base_ref}...{head_ref}" if head_ref else base_ref
+    changed = {
+        line.strip()
+        for line in _git_text(
+            repo_path,
+            ["diff", "--name-only", "--diff-filter=ACMRTUXB", diff_target, "--"],
+        ).splitlines()
+        if line.strip()
+    }
+    if head_ref is None:
+        changed.update(
+            line.strip()
+            for line in _git_text(
+                repo_path, ["ls-files", "--others", "--exclude-standard"]
+            ).splitlines()
+            if line.strip()
+        )
+    return sorted(changed)
+
+
 def _task_from_manual_entry(
     entry: dict[str, Any],
     lock: AgentLock,
     *,
     strategy: str,
     prompts_by_task: dict[str, str] | None = None,
+    default_repo_path: str | None = None,
+    default_base_ref: str | None = None,
 ) -> EvalTask:
     """Translate one manual-sidecar task dict into an :class:`EvalTask`.
 
@@ -115,7 +176,15 @@ def _task_from_manual_entry(
     )
     eval_task.actual_changed_files_kind = "applied_diff"
     eval_task.session_id = entry.get("session_id")
-    eval_task.actual_changed_files = sorted(set(entry.get("actual_changed_files") or []))
+    actual_changed_files = sorted(set(entry.get("actual_changed_files") or []))
+    repo_path = entry.get("repo_path") or default_repo_path
+    base_ref = entry.get("base_ref") or default_base_ref or "HEAD"
+    head_ref = entry.get("head_ref") or entry.get("branch")
+    if not actual_changed_files and repo_path:
+        actual_changed_files = _changed_files_from_git_diff(
+            Path(repo_path), base_ref=str(base_ref), head_ref=head_ref
+        )
+    eval_task.actual_changed_files = actual_changed_files
     eval_task.timestamps.started_at = entry.get("started_at")
     eval_task.timestamps.finished_at = entry.get("finished_at")
     eval_task.metrics.wall_time_seconds = float(entry.get("wall_time_seconds") or 0.0)
@@ -162,19 +231,22 @@ def _task_from_manual_entry(
     return eval_task
 
 
-def run_devin_manual(
+def _run_manual_sidecar(
     *,
     strategy: str,
     lock: AgentLock,
     lockfile_path: str,
-    devin_results_path: Path,
+    results_path: Path,
     prompts_by_task: dict[str, str] | None = None,
     sequential_wall_time_seconds: float | None = None,
     suite_name: str | None = None,
     repo: EvalRepo | None = None,
+    backend: str,
+    execution_mode: str,
+    model: EvalModel,
 ) -> EvalRun:
-    """Build an :class:`EvalRun` from a human-collected Devin sidecar JSON."""
-    payload = _load_manual(devin_results_path)
+    """Build an :class:`EvalRun` from a manual/applied-diff sidecar JSON."""
+    payload = _load_manual(results_path)
     raw_strategy = payload.get("strategy") or strategy
     if raw_strategy != strategy:
         raise DevinManualError(
@@ -185,7 +257,14 @@ def run_devin_manual(
         raise DevinManualError("sidecar 'tasks' must be a non-empty list")
 
     eval_tasks = [
-        _task_from_manual_entry(entry, lock, strategy=strategy, prompts_by_task=prompts_by_task)
+        _task_from_manual_entry(
+            entry,
+            lock,
+            strategy=strategy,
+            prompts_by_task=prompts_by_task,
+            default_repo_path=payload.get("repo_path"),
+            default_base_ref=payload.get("base_ref") or lock.repo.commit,
+        )
         for entry in raw_tasks
     ]
     annotate_overlaps(eval_tasks)
@@ -198,23 +277,86 @@ def run_devin_manual(
         merge_conflicts=int(payload.get("merge_conflicts") or 0),
     )
     return EvalRun(
-        run_id=make_run_id(strategy, "devin-manual"),
+        run_id=make_run_id(strategy, backend),
         created_at=now_iso(),
         suite_name=suite_name or suite_name_from_lock(lock),
         strategy=strategy,
-        backend="devin-manual",
-        execution_mode="manual_diff",
+        backend=backend,
+        execution_mode=execution_mode,
         evidence_kind="applied_diff",
-        model=EvalModel(provider="devin", model="manual-sidecar"),
+        model=model,
         repo=repo
         or repo_from_path(
-            Path(lock.repo.root) if lock.repo.root else None,
+            Path(payload.get("repo_path") or lock.repo.root)
+            if (payload.get("repo_path") or lock.repo.root)
+            else None,
             repo_url=lock.repo.git_url,
             repo_commit=lock.repo.commit,
         ),
         lockfile=lockfile_path,
         tasks=eval_tasks,
         summary_metrics=summary,
+    )
+
+
+def run_applied_diff_manual(
+    *,
+    strategy: str,
+    lock: AgentLock,
+    lockfile_path: str,
+    diff_results_path: Path,
+    prompts_by_task: dict[str, str] | None = None,
+    sequential_wall_time_seconds: float | None = None,
+    suite_name: str | None = None,
+    repo: EvalRepo | None = None,
+) -> EvalRun:
+    """Build an applied-diff :class:`EvalRun` from task branch/worktree diffs.
+
+    This is intentionally provider-neutral: the sidecar may describe patches
+    produced by any agent or by a local worktree. If ``actual_changed_files``
+    is omitted, the loader computes it with ``git diff --name-only`` from the
+    sidecar's ``repo_path``/``base_ref`` and each task's ``branch`` or
+    ``head_ref``.
+    """
+    return _run_manual_sidecar(
+        strategy=strategy,
+        lock=lock,
+        lockfile_path=lockfile_path,
+        results_path=diff_results_path,
+        prompts_by_task=prompts_by_task,
+        sequential_wall_time_seconds=sequential_wall_time_seconds,
+        suite_name=suite_name,
+        repo=repo,
+        backend="applied-diff",
+        execution_mode="applied_diff",
+        model=EvalModel(provider="manual", model="git-diff-sidecar"),
+    )
+
+
+def run_devin_manual(
+    *,
+    strategy: str,
+    lock: AgentLock,
+    lockfile_path: str,
+    devin_results_path: Path,
+    prompts_by_task: dict[str, str] | None = None,
+    sequential_wall_time_seconds: float | None = None,
+    suite_name: str | None = None,
+    repo: EvalRepo | None = None,
+) -> EvalRun:
+    """Build an :class:`EvalRun` from a human-collected Devin sidecar JSON."""
+    return _run_manual_sidecar(
+        strategy=strategy,
+        lock=lock,
+        lockfile_path=lockfile_path,
+        results_path=devin_results_path,
+        prompts_by_task=prompts_by_task,
+        sequential_wall_time_seconds=sequential_wall_time_seconds,
+        suite_name=suite_name,
+        repo=repo,
+        backend="devin-manual",
+        execution_mode="manual_diff",
+        model=EvalModel(provider="devin", model="manual-sidecar"),
     )
 
 
@@ -526,5 +668,6 @@ __all__ = [
     "DevinAPINotConfigured",
     "DevinManualError",
     "devin_api_run",
+    "run_applied_diff_manual",
     "run_devin_manual",
 ]

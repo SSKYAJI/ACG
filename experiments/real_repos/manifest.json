@@ -1,0 +1,191 @@
+{
+  "selected_at": "2026-05-07T05:16:50Z",
+  "selection_criteria": {
+    "allowed_licenses": ["MIT", "Apache-2.0", "BSD-3-Clause"],
+    "source_file_count_range": [30, 500],
+    "recent_commit_window_days": 365,
+    "required_recent_prs_per_repo": 5,
+    "required_task_prs_per_repo": 3,
+    "task_pr_source_file_range": [2, 8],
+    "languages_required_min_distinct": 2
+  },
+  "repos": [
+    {
+      "short_name": "fastify",
+      "full_name": "fastify/fastify",
+      "clone_url": "https://github.com/fastify/fastify.git",
+      "checkout_path": "experiments/real_repos/fastify/checkout",
+      "default_branch": "main",
+      "language": "JavaScript",
+      "license": "MIT",
+      "source_file_count": 55,
+      "source_file_count_notes": "Counted .js/.ts/.py/.java files excluding tests, docs, examples, fixtures, generated files, node_modules, benchmarks, and .git.",
+      "most_recent_activity_at": "2026-05-06T07:58:08Z",
+      "test_command": "npm test",
+      "baseline_test_result": "passed",
+      "qualification_notes": "Recent merged PR screen found more than five PRs since 2025-11-07 touching at least two non-generated code files when tests and type files are included.",
+      "tasks": [
+        {
+          "pr_number": 6694,
+          "pr_url": "https://github.com/fastify/fastify/pull/6694",
+          "title": "perf: cache parsed ContentType objects in ContentTypeParser",
+          "merged_at": "2026-04-28T06:56:08Z",
+          "merge_commit_sha": "4965daceab71462e38156acdcf8ef535ddf35df0",
+          "parent_commit_sha": "6c69050523defc982e231e616a66be8b291ee73f",
+          "task_prompt": "Improve Content-Type parsing performance by caching parsed ContentType objects in ContentTypeParser and reusing those parsed objects from request handling and request.mediaType without changing external behavior.",
+          "ground_truth_files": [
+            "lib/content-type-parser.js",
+            "lib/handle-request.js",
+            "lib/request.js"
+          ]
+        },
+        {
+          "pr_number": 6692,
+          "pr_url": "https://github.com/fastify/fastify/pull/6692",
+          "title": "perf: defer ContentType parsing in getSchemaSerializer until needed",
+          "merged_at": "2026-04-26T07:30:29Z",
+          "merge_commit_sha": "6c69050523defc982e231e616a66be8b291ee73f",
+          "parent_commit_sha": "21b4c3c101038030e552ad2cfcca3f43a349f464",
+          "task_prompt": "Avoid unnecessary ContentType object creation in getSchemaSerializer by only parsing the response content type for content-type-keyed response schemas, including status-code, fallback, and default lookup paths.",
+          "ground_truth_files": [
+            "lib/content-type-parser.js",
+            "lib/schemas.js"
+          ]
+        },
+        {
+          "pr_number": 6653,
+          "pr_url": "https://github.com/fastify/fastify/pull/6653",
+          "title": "feat: add request.mediaType",
+          "merged_at": "2026-04-14T16:41:54Z",
+          "merge_commit_sha": "890ab7578f14730b2fed6de43acfeee19da1a3e4",
+          "parent_commit_sha": "3983cce8124714242099e8756a7a9a80a0ba0aea",
+          "task_prompt": "Add a readonly request.mediaType property that exposes the parsed request Content-Type media type, cache the parsed ContentType on the request, and update validation and request handling to reuse the parsed value.",
+          "ground_truth_files": [
+            "lib/handle-request.js",
+            "lib/request.js",
+            "lib/symbols.js",
+            "lib/validation.js",
+            "types/request.d.ts"
+          ]
+        }
+      ]
+    },
+    {
+      "short_name": "starlette",
+      "full_name": "Kludex/starlette",
+      "clone_url": "https://github.com/encode/starlette.git",
+      "checkout_path": "experiments/real_repos/starlette/checkout",
+      "default_branch": "main",
+      "language": "Python",
+      "license": "BSD-3-Clause",
+      "source_file_count": 34,
+      "source_file_count_notes": "Counted .js/.ts/.py/.java files excluding tests, docs, examples, fixtures, generated files, node_modules, scripts, and .git.",
+      "most_recent_activity_at": "2026-05-03T06:45:09Z",
+      "test_command": "./.venv/bin/python -m pytest",
+      "baseline_test_result": "passed",
+      "qualification_notes": "Recent merged PR screen found more than five PRs since 2025-11-07 touching at least two non-generated Python code files when regression tests are included.",
+      "tasks": [
+        {
+          "pr_number": 3166,
+          "pr_url": "https://github.com/Kludex/starlette/pull/3166",
+          "title": "Track session access and modification in SessionMiddleware",
+          "merged_at": "2026-03-01T18:21:55Z",
+          "merge_commit_sha": "4647e532bbed7a5f60c9972ddba3f5fb4a79e1f9",
+          "parent_commit_sha": "fb49d243e2082f9bb30b59fd532e6062bbd676b7",
+          "task_prompt": "Change SessionMiddleware so it can distinguish session access from mutation, avoid sending Set-Cookie for unchanged sessions, preserve cookie clearing behavior, and add regression coverage for concurrent/read-only session flows.",
+          "ground_truth_files": [
+            "starlette/middleware/sessions.py",
+            "starlette/requests.py",
+            "tests/middleware/test_session.py"
+          ]
+        },
+        {
+          "pr_number": 3148,
+          "pr_url": "https://github.com/Kludex/starlette/pull/3148",
+          "title": "Enable autoescape by default in Jinja2Templates",
+          "merged_at": "2026-02-22T13:27:33Z",
+          "merge_commit_sha": "496b7106a6223b1bb95785790766ec5e9b9f1c9d",
+          "parent_commit_sha": "41dfca28131c28020ceb78f2b9eb036627a022cd",
+          "task_prompt": "Make Jinja2Templates use Jinja2's select_autoescape default when creating an environment from a template directory, while preserving caller-supplied environments and adding tests for escaping behavior.",
+          "ground_truth_files": [
+            "starlette/templating.py",
+            "tests/test_templates.py"
+          ]
+        },
+        {
+          "pr_number": 3137,
+          "pr_url": "https://github.com/Kludex/starlette/pull/3137",
+          "title": "Return explicit origin in CORS response when credentials are allowed",
+          "merged_at": "2026-02-14T10:33:37Z",
+          "merge_commit_sha": "02b6ed7b18c741c00795010e9d716b58006af2c3",
+          "parent_commit_sha": "2b73aecd8377e0c189943a5f30d3dbab134f6104",
+          "task_prompt": "Update CORSMiddleware so simple responses with allow_origins=['*'] and allow_credentials=True echo the explicit request Origin instead of '*', matching preflight behavior and credentialed CORS requirements.",
+          "ground_truth_files": [
+            "starlette/middleware/cors.py",
+            "tests/middleware/test_cors.py"
+          ]
+        }
+      ]
+    },
+    {
+      "short_name": "black",
+      "full_name": "psf/black",
+      "clone_url": "https://github.com/psf/black.git",
+      "checkout_path": "experiments/real_repos/black/checkout",
+      "default_branch": "main",
+      "language": "Python",
+      "license": "MIT",
+      "source_file_count": 49,
+      "source_file_count_notes": "Counted .js/.ts/.py/.java files excluding tests, docs, examples, fixtures, generated files, node_modules, scripts, and .git.",
+      "most_recent_activity_at": "2026-04-27T21:29:43Z",
+      "test_command": "./.venv/bin/python -m pytest tests -k \"not incompatible_with_mypyc\" -n auto",
+      "baseline_test_result": "passed",
+      "qualification_notes": "Recent merged PR screen found more than five PRs since 2025-11-07 touching at least two non-generated Python code files when regression tests are included.",
+      "tasks": [
+        {
+          "pr_number": 5080,
+          "pr_url": "https://github.com/psf/black/pull/5080",
+          "title": "Fix blackd error handling: split SourceASTParseError from ASTSafetyError",
+          "merged_at": "2026-04-27T14:35:59Z",
+          "merge_commit_sha": "9fd9ea2835973981e3f5dc5b8eb76f2ded46aa61",
+          "parent_commit_sha": "866c350cec7edd999ef55a0edb7b2202aa917f15",
+          "task_prompt": "Separate source AST parse failures from Black internal AST safety errors, map source parse failures to 400 responses in blackd, keep internal safety failures as 500 responses, and update tests around formatting equivalence error handling.",
+          "ground_truth_files": [
+            "src/black/__init__.py",
+            "src/black/parsing.py",
+            "src/blackd/__init__.py",
+            "tests/test_black.py"
+          ]
+        },
+        {
+          "pr_number": 5039,
+          "pr_url": "https://github.com/psf/black/pull/5039",
+          "title": "Harden blackd browser-facing request handling",
+          "merged_at": "2026-03-12T02:57:36Z",
+          "merge_commit_sha": "69973fd6950985fbeb1090d96da717dc4d8380b0",
+          "parent_commit_sha": "4937fe6cf241139ddbfc16b0bdbb5b422798909d",
+          "task_prompt": "Harden blackd by rejecting browser-originated requests unless allowlisted, enforcing request body limits before executor submission, adding middleware support for those checks, and covering CORS/body-limit behavior with tests.",
+          "ground_truth_files": [
+            "src/blackd/__init__.py",
+            "src/blackd/middlewares.py",
+            "tests/test_blackd.py"
+          ]
+        },
+        {
+          "pr_number": 5092,
+          "pr_url": "https://github.com/psf/black/pull/5092",
+          "title": "In stub files, enforce a blank line between a function and a decorated class definition",
+          "merged_at": "2026-04-14T04:55:15Z",
+          "merge_commit_sha": "bdf96a4764e85d0139e39f454e4d33935eacc0fe",
+          "parent_commit_sha": "bf446601d93ed2bab3993b88a88ba452b59df8a8",
+          "task_prompt": "Adjust Black's stub-file formatting so a decorated class definition following a function gets the required blank line separation, keep the behavior gated by the relevant style mode, and add a regression case for decorated classes in .pyi files.",
+          "ground_truth_files": [
+            "src/black/lines.py",
+            "src/black/mode.py",
+            "tests/data/cases/pyi_decorated_class_blank_line.py"
+          ]
+        }
+      ]
+    }
+  ]
+}

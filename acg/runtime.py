@@ -189,6 +189,7 @@ class LLMReply:
     completion_tokens: int
     finish_reason: str
     wall_s: float
+    prompt_tokens: int | None = None
     cost_usd: float | None = None
     cost_source: str | None = None
 
@@ -278,7 +279,12 @@ class RuntimeLLM:
                 reasoning = msg.get("reasoning_content") or ""
                 finish = choice.get("finish_reason") or ""
                 usage = data.get("usage") or {}
-                tokens = int(usage.get("completion_tokens") or 0)
+                prompt_tokens = _optional_token_int(usage.get("prompt_tokens"))
+                if prompt_tokens is None:
+                    prompt_tokens = _optional_token_int(usage.get("input_tokens"))
+                completion_tokens = _optional_token_int(usage.get("completion_tokens"))
+                if completion_tokens is None:
+                    completion_tokens = _optional_token_int(usage.get("output_tokens"))
                 cost_usd, cost_source = _extract_cost_usd(data, response.headers)
             except (KeyError, IndexError, TypeError) as exc:
                 raise RuntimeLLMError(
@@ -287,9 +293,10 @@ class RuntimeLLM:
             return LLMReply(
                 content=content,
                 reasoning=reasoning,
-                completion_tokens=tokens,
+                completion_tokens=completion_tokens or 0,
                 finish_reason=finish,
                 wall_s=time.perf_counter() - start,
+                prompt_tokens=prompt_tokens,
                 cost_usd=cost_usd,
                 cost_source=cost_source,
             )
@@ -311,6 +318,22 @@ def _optional_cost_float(value: Any) -> float | None:
     if isinstance(value, str) and value.strip():
         try:
             return float(value.strip().lstrip("$"))
+        except ValueError:
+            return None
+    return None
+
+
+def _optional_token_int(value: Any) -> int | None:
+    """Parse provider token counters without treating missing data as zero."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return max(0, value)
+    if isinstance(value, float):
+        return max(0, int(value))
+    if isinstance(value, str) and value.strip():
+        try:
+            return max(0, int(float(value.strip())))
         except ValueError:
             return None
     return None
@@ -492,6 +515,7 @@ class WorkerResult:
     allowed_count: int
     blocked_count: int
     error: str | None = None
+    prompt_tokens: int | None = None
     cost_usd: float | None = None
     cost_source: str | None = None
 
@@ -834,6 +858,7 @@ async def run_worker(
             allowed_count=0,
             blocked_count=0,
             error=error,
+            prompt_tokens=None,
         )
 
     raw_proposals = _parse_writes(reply.content)
@@ -897,6 +922,7 @@ async def run_worker(
         allowed_count=allowed_count,
         blocked_count=blocked_count,
         error=error,
+        prompt_tokens=reply.prompt_tokens,
         cost_usd=reply.cost_usd,
         cost_source=reply.cost_source,
     )

@@ -1,0 +1,485 @@
+{
+  "strategies": {
+    "acg_planned": {
+      "backend": "local",
+      "created_at": "2026-05-07T01:59:36Z",
+      "evidence_kind": "proposed_write_set",
+      "execution_mode": "propose_validate",
+      "lockfile": "experiments/greenhouse/agent_lock.json",
+      "model": {
+        "model": "qwen/qwen3-coder-30b-a3b-instruct",
+        "provider": "openai-compatible",
+        "url": "https://openrouter.ai/api/v1"
+      },
+      "repo": {
+        "commit": "174c1c320875a66447deb2a15d04fc86afd07f60",
+        "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/greenhouse/checkout",
+        "url": "https://github.com/spring-attic/greenhouse.git"
+      },
+      "run_id": "greenhouse-local-acg_planned-20260507-015936",
+      "strategy": "acg_planned",
+      "suite_name": "greenhouse-java6-openrouter-seed1",
+      "summary_metrics": {
+        "acus_consumed_total": null,
+        "blocked_invalid_write_count": 0,
+        "cost_method": "sum_provider_reported_task_costs",
+        "cost_source": "body.usage.cost",
+        "cost_usd_total": 0.00022257,
+        "first_run_pass_rate": 0.0,
+        "human_interventions": 0,
+        "merge_conflicts": 0,
+        "out_of_bounds_write_count": 0,
+        "overlapping_write_pairs": 3,
+        "proposal_completion_rate": 1.0,
+        "successful_parallel_speedup": null,
+        "task_completion_rate": 1.0,
+        "tasks_completed": 3,
+        "tasks_completed_per_hour": 1013.4498,
+        "tasks_total": 3,
+        "tested_completion_rate": 0.0,
+        "tested_tasks_completed": 0,
+        "tests_ran_count": 0,
+        "tokens_completion_method": "provider_usage_completion_tokens",
+        "tokens_completion_total": 294,
+        "tokens_orchestrator_overhead": null,
+        "tokens_prompt_method": "provider_usage_prompt_tokens",
+        "tokens_prompt_total": 2018,
+        "wall_time_seconds": 10.6567
+      },
+      "tasks": [
+        {
+          "actual_changed_files": [
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java"
+          ],
+          "actual_changed_files_kind": "proposed_write_set",
+          "allowed_write_globs": [
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/account/**",
+            "src/main/java/com/springsource/greenhouse/invite/**",
+            "src/main/java/com/springsource/greenhouse/members/**"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "cost_source": "body.usage.cost",
+            "cost_usd": 7.987e-05,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 97,
+            "tokens_prompt": 753,
+            "wall_time_seconds": 4.8961
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [
+            "lambda-rowmapper-app",
+            "lambda-rowmapper-invite"
+          ],
+          "predicted_write_files": [
+            "src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java",
+            "src/main/java/com/springsource/greenhouse/members/JdbcProfileRepository.java",
+            "src/main/java/com/springsource/greenhouse/invite/JdbcInviteRepository.java",
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/account/Account.java",
+            "src/main/java/com/springsource/greenhouse/account/AccountException.java",
+            "src/main/java/com/springsource/greenhouse/account/AccountMapper.java",
+            "src/main/java/com/springsource/greenhouse/account/AccountRepository.java"
+          ],
+          "prompt": "In src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java, replace the anonymous RowMapper<PasswordProtectedAccount> inner class (around line 110) with a Java 8 lambda. The mapping logic must remain identical. Bump <java-version> in pom.xml from 1.6 to 1.8 so the lambda compiles. Update imports as needed.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "lambda-rowmapper-account",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-07T01:59:36Z",
+            "started_at": "2026-05-07T01:59:26Z"
+          }
+        },
+        {
+          "actual_changed_files": [
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/invite/JdbcInviteRepository.java"
+          ],
+          "actual_changed_files_kind": "proposed_write_set",
+          "allowed_write_globs": [
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/invite/**",
+            "src/main/java/com/springsource/greenhouse/invite/mail/**",
+            "src/test/java/com/springsource/greenhouse/database/**"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "cost_source": "body.usage.cost",
+            "cost_usd": 6.685e-05,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 96,
+            "tokens_prompt": 571,
+            "wall_time_seconds": 4.0235
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [
+            "lambda-rowmapper-account",
+            "lambda-rowmapper-app"
+          ],
+          "predicted_write_files": [
+            "src/main/java/com/springsource/greenhouse/invite/JdbcInviteRepository.java",
+            "src/main/java/com/springsource/greenhouse/invite/mail/MailInviteService.java",
+            "src/main/java/com/springsource/greenhouse/invite/InviteRepository.java",
+            "src/test/java/com/springsource/greenhouse/database/GreenhouseTestDatabaseBuilder.java",
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/invite/FacebookInviteController.java",
+            "src/main/java/com/springsource/greenhouse/invite/Invite.java",
+            "src/main/java/com/springsource/greenhouse/invite/InviteAcceptAction.java"
+          ],
+          "prompt": "In src/main/java/com/springsource/greenhouse/invite/JdbcInviteRepository.java, replace the anonymous RowMapper<Invite> inner class (around line 87) with a Java 8 lambda. The mapping logic must remain identical. Bump <java-version> in pom.xml from 1.6 to 1.8 so the lambda compiles.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "lambda-rowmapper-invite",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-07T01:59:36Z",
+            "started_at": "2026-05-07T01:59:26Z"
+          }
+        },
+        {
+          "actual_changed_files": [
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/develop/JdbcAppRepository.java"
+          ],
+          "actual_changed_files_kind": "proposed_write_set",
+          "allowed_write_globs": [
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/develop/**"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "cost_source": "body.usage.cost",
+            "cost_usd": 7.585e-05,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 101,
+            "tokens_prompt": 694,
+            "wall_time_seconds": 1.7308
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [
+            "lambda-rowmapper-account",
+            "lambda-rowmapper-invite"
+          ],
+          "predicted_write_files": [
+            "src/main/java/com/springsource/greenhouse/develop/JdbcAppRepository.java",
+            "src/main/java/com/springsource/greenhouse/develop/AppRepository.java",
+            "src/main/java/com/springsource/greenhouse/develop/App.java",
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/develop/AppConnection.java",
+            "src/main/java/com/springsource/greenhouse/develop/AppController.java",
+            "src/main/java/com/springsource/greenhouse/develop/AppForm.java",
+            "src/main/java/com/springsource/greenhouse/develop/AppSummary.java"
+          ],
+          "prompt": "In src/main/java/com/springsource/greenhouse/develop/JdbcAppRepository.java, replace the four anonymous RowMapper inner classes (around lines 113, 158, 166, 172) with Java 8 lambdas. Mapping logic must remain identical. Bump <java-version> in pom.xml from 1.6 to 1.8 so the lambdas compile.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "lambda-rowmapper-app",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-07T01:59:36Z",
+            "started_at": "2026-05-07T01:59:26Z"
+          }
+        }
+      ],
+      "version": "0.1"
+    },
+    "naive_parallel": {
+      "backend": "local",
+      "created_at": "2026-05-07T01:59:26Z",
+      "evidence_kind": "proposed_write_set",
+      "execution_mode": "propose_validate",
+      "lockfile": "experiments/greenhouse/agent_lock.json",
+      "model": {
+        "model": "qwen/qwen3-coder-30b-a3b-instruct",
+        "provider": "openai-compatible",
+        "url": "https://openrouter.ai/api/v1"
+      },
+      "repo": {
+        "commit": "174c1c320875a66447deb2a15d04fc86afd07f60",
+        "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/greenhouse/checkout",
+        "url": "https://github.com/spring-attic/greenhouse.git"
+      },
+      "run_id": "greenhouse-local-naive_parallel-20260507-015926",
+      "strategy": "naive_parallel",
+      "suite_name": "greenhouse-java6-openrouter-seed1",
+      "summary_metrics": {
+        "acus_consumed_total": null,
+        "blocked_invalid_write_count": 0,
+        "cost_method": "sum_provider_reported_task_costs",
+        "cost_source": "body.usage.cost",
+        "cost_usd_total": 0.00023814,
+        "first_run_pass_rate": 0.0,
+        "human_interventions": 0,
+        "merge_conflicts": 0,
+        "out_of_bounds_write_count": 0,
+        "overlapping_write_pairs": 3,
+        "proposal_completion_rate": 1.0,
+        "successful_parallel_speedup": null,
+        "task_completion_rate": 1.0,
+        "tasks_completed": 3,
+        "tasks_completed_per_hour": 2630.4159,
+        "tasks_total": 3,
+        "tested_completion_rate": 0.0,
+        "tested_tasks_completed": 0,
+        "tests_ran_count": 0,
+        "tokens_completion_method": "provider_usage_completion_tokens",
+        "tokens_completion_total": 299,
+        "tokens_orchestrator_overhead": null,
+        "tokens_prompt_method": "provider_usage_prompt_tokens",
+        "tokens_prompt_total": 2235,
+        "wall_time_seconds": 4.1058
+      },
+      "tasks": [
+        {
+          "actual_changed_files": [
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java"
+          ],
+          "actual_changed_files_kind": "proposed_write_set",
+          "allowed_write_globs": [
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/account/**",
+            "src/main/java/com/springsource/greenhouse/invite/**",
+            "src/main/java/com/springsource/greenhouse/members/**"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "cost_source": "body.usage.cost",
+            "cost_usd": 7.903e-05,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 96,
+            "tokens_prompt": 745,
+            "wall_time_seconds": 4.1022
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [
+            "lambda-rowmapper-app",
+            "lambda-rowmapper-invite"
+          ],
+          "predicted_write_files": [
+            "src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java",
+            "src/main/java/com/springsource/greenhouse/members/JdbcProfileRepository.java",
+            "src/main/java/com/springsource/greenhouse/invite/JdbcInviteRepository.java",
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/account/Account.java",
+            "src/main/java/com/springsource/greenhouse/account/AccountException.java",
+            "src/main/java/com/springsource/greenhouse/account/AccountMapper.java",
+            "src/main/java/com/springsource/greenhouse/account/AccountRepository.java"
+          ],
+          "prompt": "In src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java, replace the anonymous RowMapper<PasswordProtectedAccount> inner class (around line 110) with a Java 8 lambda. The mapping logic must remain identical. Bump <java-version> in pom.xml from 1.6 to 1.8 so the lambda compiles. Update imports as needed.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "lambda-rowmapper-account",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-07T01:59:26Z",
+            "started_at": "2026-05-07T01:59:21Z"
+          }
+        },
+        {
+          "actual_changed_files": [
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/invite/JdbcInviteRepository.java"
+          ],
+          "actual_changed_files_kind": "proposed_write_set",
+          "allowed_write_globs": [
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/invite/**",
+            "src/main/java/com/springsource/greenhouse/invite/mail/**",
+            "src/test/java/com/springsource/greenhouse/database/**"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "cost_source": "body.usage.cost",
+            "cost_usd": 7.765e-05,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 96,
+            "tokens_prompt": 739,
+            "wall_time_seconds": 1.7942
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [
+            "lambda-rowmapper-account",
+            "lambda-rowmapper-app"
+          ],
+          "predicted_write_files": [
+            "src/main/java/com/springsource/greenhouse/invite/JdbcInviteRepository.java",
+            "src/main/java/com/springsource/greenhouse/invite/mail/MailInviteService.java",
+            "src/main/java/com/springsource/greenhouse/invite/InviteRepository.java",
+            "src/test/java/com/springsource/greenhouse/database/GreenhouseTestDatabaseBuilder.java",
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/invite/FacebookInviteController.java",
+            "src/main/java/com/springsource/greenhouse/invite/Invite.java",
+            "src/main/java/com/springsource/greenhouse/invite/InviteAcceptAction.java"
+          ],
+          "prompt": "In src/main/java/com/springsource/greenhouse/invite/JdbcInviteRepository.java, replace the anonymous RowMapper<Invite> inner class (around line 87) with a Java 8 lambda. The mapping logic must remain identical. Bump <java-version> in pom.xml from 1.6 to 1.8 so the lambda compiles.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "lambda-rowmapper-invite",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-07T01:59:26Z",
+            "started_at": "2026-05-07T01:59:21Z"
+          }
+        },
+        {
+          "actual_changed_files": [
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/develop/JdbcAppRepository.java"
+          ],
+          "actual_changed_files_kind": "proposed_write_set",
+          "allowed_write_globs": [
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/develop/**"
+          ],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "cost_source": "body.usage.cost",
+            "cost_usd": 8.146e-05,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 107,
+            "tokens_prompt": 751,
+            "wall_time_seconds": 2.3036
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [
+            "lambda-rowmapper-account",
+            "lambda-rowmapper-invite"
+          ],
+          "predicted_write_files": [
+            "src/main/java/com/springsource/greenhouse/develop/JdbcAppRepository.java",
+            "src/main/java/com/springsource/greenhouse/develop/AppRepository.java",
+            "src/main/java/com/springsource/greenhouse/develop/App.java",
+            "pom.xml",
+            "src/main/java/com/springsource/greenhouse/develop/AppConnection.java",
+            "src/main/java/com/springsource/greenhouse/develop/AppController.java",
+            "src/main/java/com/springsource/greenhouse/develop/AppForm.java",
+            "src/main/java/com/springsource/greenhouse/develop/AppSummary.java"
+          ],
+          "prompt": "In src/main/java/com/springsource/greenhouse/develop/JdbcAppRepository.java, replace the four anonymous RowMapper inner classes (around lines 113, 158, 166, 172) with Java 8 lambdas. Mapping logic must remain identical. Bump <java-version> in pom.xml from 1.6 to 1.8 so the lambdas compile.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "lambda-rowmapper-app",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-07T01:59:26Z",
+            "started_at": "2026-05-07T01:59:21Z"
+          }
+        }
+      ],
+      "version": "0.1"
+    }
+  },
+  "version": "0.1"
+}

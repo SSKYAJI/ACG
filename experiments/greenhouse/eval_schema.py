@@ -93,8 +93,10 @@ class EvalTask:
     ``predicted_write_files`` and ``allowed_write_globs`` are taken straight
     from the lockfile so reviewers can audit the mapping. For mock/local
     propose-and-validate runs, ``actual_changed_files`` is the accepted/proposed
-    write set, not a git diff from mutated files. For Devin/manual runs it is
-    the backend-reported applied diff file list.
+    write set, not a git diff from mutated files. For applied-diff / Devin
+    runs it is the backend-reported or git-derived applied diff file list.
+    ``actual_changed_files_kind`` records which interpretation is valid for
+    each task.
     """
 
     task_id: str
@@ -157,11 +159,10 @@ class SummaryMetrics:
     # Sum of per-task ``acus_consumed`` for the ``devin-api`` backend; ``None``
     # when no task reports ACUs (mock/local/devin-manual).
     acus_consumed_total: float | None = None
-    # Sum of per-task ``tokens_prompt`` (estimated input tokens). Populated by
-    # the ``mock`` and ``local`` backends; ``None`` for Devin (the v3 API
-    # does not expose token counts). Estimated as ``chars // 4`` on the
-    # exact prompt strings dispatched to the worker LLM, so naive vs planned
-    # is directly comparable.
+    # Sum of per-task ``tokens_prompt``. OpenAI-compatible providers may
+    # populate this from ``usage.prompt_tokens``; otherwise the harness falls
+    # back to chars//4 on the exact worker prompt strings. ``tokens_prompt_method``
+    # records which path was used.
     tokens_prompt_total: int | None = None
     tokens_prompt_method: str | None = None
     # Sum of per-task ``tokens_completion`` (real output tokens reported by

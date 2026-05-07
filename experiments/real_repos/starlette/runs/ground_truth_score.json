@@ -1,0 +1,414 @@
+{
+  "aggregate": {
+    "agent_match_to_human_macro_by_strategy": {
+      "acg_planned": {
+        "agent_match_to_human": 0.8222222222222223,
+        "f1": 0.8222222222222223,
+        "precision": 1.0,
+        "recall": 0.7222222222222222
+      },
+      "acg_planned_full_context": {
+        "agent_match_to_human": 0.2222222222222222,
+        "f1": 0.2222222222222222,
+        "precision": 0.3333333333333333,
+        "recall": 0.16666666666666666
+      },
+      "naive_parallel": {
+        "agent_match_to_human": 0.38888888888888884,
+        "f1": 0.38888888888888884,
+        "precision": 0.5,
+        "recall": 0.3333333333333333
+      }
+    },
+    "agent_match_to_human_micro_by_strategy": {
+      "acg_planned": {
+        "agent_match_to_human": 0.8333333333333333,
+        "f1": 0.8333333333333333,
+        "false_negatives": 2,
+        "false_positives": 0,
+        "precision": 1.0,
+        "recall": 0.7142857142857143,
+        "true_positives": 5
+      },
+      "acg_planned_full_context": {
+        "agent_match_to_human": 0.25,
+        "f1": 0.25,
+        "false_negatives": 6,
+        "false_positives": 0,
+        "precision": 1.0,
+        "recall": 0.14285714285714285,
+        "true_positives": 1
+      },
+      "naive_parallel": {
+        "agent_match_to_human": 0.2857142857142857,
+        "f1": 0.2857142857142857,
+        "false_negatives": 5,
+        "false_positives": 5,
+        "precision": 0.2857142857142857,
+        "recall": 0.2857142857142857,
+        "true_positives": 2
+      }
+    },
+    "cost_usd_total_recorded": 0.00043471999999999993,
+    "predicted_vs_ground_truth_macro": {
+      "f1": 0.6555555555555556,
+      "precision": 0.5555555555555555,
+      "recall": 0.8888888888888888
+    },
+    "predicted_vs_ground_truth_micro": {
+      "f1": 0.631578947368421,
+      "false_negatives": 1,
+      "false_positives": 6,
+      "precision": 0.5,
+      "recall": 0.8571428571428571,
+      "true_positives": 6
+    }
+  },
+  "full_name": "Kludex/starlette",
+  "repo": "starlette",
+  "score_definition": {
+    "agent_match_to_human": "F1 of proposed_write_files compared with manifest ground_truth_files; for local proposal artifacts, actual_changed_files is the proposed_write_files set",
+    "ground_truth_precision_recall_f1": "predicted_write_files compared with manifest ground_truth_files",
+    "path_normalization": "repo-relative strings with leading ./ and checkout absolute prefixes removed"
+  },
+  "tasks": {
+    "pr3137-cors-credentials-origin": {
+      "agent_match_to_human": 0.6666666666666666,
+      "agent_match_to_human_by_strategy": {
+        "acg_planned": {
+          "agent_f1": 0.6666666666666666,
+          "agent_match_to_human": 0.6666666666666666,
+          "agent_precision": 1.0,
+          "agent_recall": 0.5,
+          "extra_files": [],
+          "f1": 0.6666666666666666,
+          "false_negatives": 1,
+          "false_positives": 0,
+          "matched_files": [
+            "starlette/middleware/cors.py"
+          ],
+          "missed_files": [
+            "tests/middleware/test_cors.py"
+          ],
+          "precision": 1.0,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [
+            "starlette/middleware/cors.py"
+          ],
+          "recall": 0.5,
+          "status": "completed",
+          "true_positives": 1
+        },
+        "acg_planned_full_context": {
+          "agent_f1": 0.6666666666666666,
+          "agent_match_to_human": 0.6666666666666666,
+          "agent_precision": 1.0,
+          "agent_recall": 0.5,
+          "extra_files": [],
+          "f1": 0.6666666666666666,
+          "false_negatives": 1,
+          "false_positives": 0,
+          "matched_files": [
+            "starlette/middleware/cors.py"
+          ],
+          "missed_files": [
+            "tests/middleware/test_cors.py"
+          ],
+          "precision": 1.0,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [
+            "starlette/middleware/cors.py"
+          ],
+          "recall": 0.5,
+          "status": "completed",
+          "true_positives": 1
+        },
+        "naive_parallel": {
+          "agent_f1": 0.6666666666666666,
+          "agent_match_to_human": 0.6666666666666666,
+          "agent_precision": 1.0,
+          "agent_recall": 0.5,
+          "extra_files": [],
+          "f1": 0.6666666666666666,
+          "false_negatives": 1,
+          "false_positives": 0,
+          "matched_files": [
+            "starlette/middleware/cors.py"
+          ],
+          "missed_files": [
+            "tests/middleware/test_cors.py"
+          ],
+          "precision": 1.0,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [
+            "starlette/middleware/cors.py"
+          ],
+          "recall": 0.5,
+          "status": "completed",
+          "true_positives": 1
+        }
+      },
+      "ground_truth_f1": 0.8,
+      "ground_truth_files": [
+        "starlette/middleware/cors.py",
+        "tests/middleware/test_cors.py"
+      ],
+      "ground_truth_precision": 0.6666666666666666,
+      "ground_truth_recall": 1.0,
+      "pr_number": 3137,
+      "predicted_vs_ground_truth": {
+        "extra_files": [
+          "tests/test_staticfiles.py"
+        ],
+        "f1": 0.8,
+        "false_negatives": 0,
+        "false_positives": 1,
+        "matched_files": [
+          "starlette/middleware/cors.py",
+          "tests/middleware/test_cors.py"
+        ],
+        "missed_files": [],
+        "precision": 0.6666666666666666,
+        "recall": 1.0,
+        "true_positives": 2
+      },
+      "predicted_writes": [
+        "starlette/middleware/cors.py",
+        "tests/middleware/test_cors.py",
+        "tests/test_staticfiles.py"
+      ],
+      "task_id": "pr3137-cors-credentials-origin"
+    },
+    "pr3148-jinja2-autoescape": {
+      "agent_match_to_human": 1.0,
+      "agent_match_to_human_by_strategy": {
+        "acg_planned": {
+          "agent_f1": 1.0,
+          "agent_match_to_human": 1.0,
+          "agent_precision": 1.0,
+          "agent_recall": 1.0,
+          "extra_files": [],
+          "f1": 1.0,
+          "false_negatives": 0,
+          "false_positives": 0,
+          "matched_files": [
+            "starlette/templating.py",
+            "tests/test_templates.py"
+          ],
+          "missed_files": [],
+          "precision": 1.0,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [
+            "starlette/templating.py",
+            "tests/test_templates.py"
+          ],
+          "recall": 1.0,
+          "status": "completed",
+          "true_positives": 2
+        },
+        "acg_planned_full_context": {
+          "agent_f1": 0.0,
+          "agent_match_to_human": 0.0,
+          "agent_precision": 0.0,
+          "agent_recall": 0.0,
+          "extra_files": [],
+          "f1": 0.0,
+          "false_negatives": 2,
+          "false_positives": 0,
+          "matched_files": [],
+          "missed_files": [
+            "starlette/templating.py",
+            "tests/test_templates.py"
+          ],
+          "precision": 0.0,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [],
+          "recall": 0.0,
+          "status": "completed",
+          "true_positives": 0
+        },
+        "naive_parallel": {
+          "agent_f1": 0.5,
+          "agent_match_to_human": 0.5,
+          "agent_precision": 0.5,
+          "agent_recall": 0.5,
+          "extra_files": [
+            "tests/test_templating.py"
+          ],
+          "f1": 0.5,
+          "false_negatives": 1,
+          "false_positives": 1,
+          "matched_files": [
+            "starlette/templating.py"
+          ],
+          "missed_files": [
+            "tests/test_templates.py"
+          ],
+          "precision": 0.5,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [
+            "starlette/templating.py",
+            "tests/test_templating.py"
+          ],
+          "recall": 0.5,
+          "status": "completed_unsafe",
+          "true_positives": 1
+        }
+      },
+      "ground_truth_f1": 0.5,
+      "ground_truth_files": [
+        "starlette/templating.py",
+        "tests/test_templates.py"
+      ],
+      "ground_truth_precision": 0.3333333333333333,
+      "ground_truth_recall": 1.0,
+      "pr_number": 3148,
+      "predicted_vs_ground_truth": {
+        "extra_files": [
+          "tests/test_adding.py",
+          "tests/test_environments.py",
+          "tests/test_escaping.py",
+          "tests/test_exceptions.py"
+        ],
+        "f1": 0.5,
+        "false_negatives": 0,
+        "false_positives": 4,
+        "matched_files": [
+          "starlette/templating.py",
+          "tests/test_templates.py"
+        ],
+        "missed_files": [],
+        "precision": 0.3333333333333333,
+        "recall": 1.0,
+        "true_positives": 2
+      },
+      "predicted_writes": [
+        "starlette/templating.py",
+        "tests/test_adding.py",
+        "tests/test_environments.py",
+        "tests/test_escaping.py",
+        "tests/test_exceptions.py",
+        "tests/test_templates.py"
+      ],
+      "task_id": "pr3148-jinja2-autoescape"
+    },
+    "pr3166-session-middleware": {
+      "agent_match_to_human": 0.8,
+      "agent_match_to_human_by_strategy": {
+        "acg_planned": {
+          "agent_f1": 0.8,
+          "agent_match_to_human": 0.8,
+          "agent_precision": 1.0,
+          "agent_recall": 0.6666666666666666,
+          "extra_files": [],
+          "f1": 0.8,
+          "false_negatives": 1,
+          "false_positives": 0,
+          "matched_files": [
+            "starlette/middleware/sessions.py",
+            "tests/middleware/test_session.py"
+          ],
+          "missed_files": [
+            "starlette/requests.py"
+          ],
+          "precision": 1.0,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [
+            "starlette/middleware/sessions.py",
+            "tests/middleware/test_session.py"
+          ],
+          "recall": 0.6666666666666666,
+          "status": "completed",
+          "true_positives": 2
+        },
+        "acg_planned_full_context": {
+          "agent_f1": 0.0,
+          "agent_match_to_human": 0.0,
+          "agent_precision": 0.0,
+          "agent_recall": 0.0,
+          "extra_files": [],
+          "f1": 0.0,
+          "false_negatives": 3,
+          "false_positives": 0,
+          "matched_files": [],
+          "missed_files": [
+            "starlette/middleware/sessions.py",
+            "starlette/requests.py",
+            "tests/middleware/test_session.py"
+          ],
+          "precision": 0.0,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [],
+          "recall": 0.0,
+          "status": "completed",
+          "true_positives": 0
+        },
+        "naive_parallel": {
+          "agent_f1": 0.0,
+          "agent_match_to_human": 0.0,
+          "agent_precision": 0.0,
+          "agent_recall": 0.0,
+          "extra_files": [
+            "starlette/middleware/__init__.py",
+            "starlette/middleware/base.py",
+            "starlette/middleware/session.py",
+            "tests/test_session_middleware.py"
+          ],
+          "f1": 0.0,
+          "false_negatives": 3,
+          "false_positives": 4,
+          "matched_files": [],
+          "missed_files": [
+            "starlette/middleware/sessions.py",
+            "starlette/requests.py",
+            "tests/middleware/test_session.py"
+          ],
+          "precision": 0.0,
+          "proposed_source": "actual_changed_files",
+          "proposed_write_files": [
+            "starlette/middleware/__init__.py",
+            "starlette/middleware/base.py",
+            "starlette/middleware/session.py",
+            "tests/test_session_middleware.py"
+          ],
+          "recall": 0.0,
+          "status": "completed_unsafe",
+          "true_positives": 0
+        }
+      },
+      "ground_truth_f1": 0.6666666666666666,
+      "ground_truth_files": [
+        "starlette/middleware/sessions.py",
+        "starlette/requests.py",
+        "tests/middleware/test_session.py"
+      ],
+      "ground_truth_precision": 0.6666666666666666,
+      "ground_truth_recall": 0.6666666666666666,
+      "pr_number": 3166,
+      "predicted_vs_ground_truth": {
+        "extra_files": [
+          "tests/test_responses.py"
+        ],
+        "f1": 0.6666666666666666,
+        "false_negatives": 1,
+        "false_positives": 1,
+        "matched_files": [
+          "starlette/middleware/sessions.py",
+          "tests/middleware/test_session.py"
+        ],
+        "missed_files": [
+          "starlette/requests.py"
+        ],
+        "precision": 0.6666666666666666,
+        "recall": 0.6666666666666666,
+        "true_positives": 2
+      },
+      "predicted_writes": [
+        "starlette/middleware/sessions.py",
+        "tests/middleware/test_session.py",
+        "tests/test_responses.py"
+      ],
+      "task_id": "pr3166-session-middleware"
+    }
+  }
+}

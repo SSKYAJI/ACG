@@ -1,0 +1,143 @@
+{
+  "overall": {
+    "f1": 0.625,
+    "precision": 0.4545,
+    "recall": 1.0,
+    "total_blocks": 1,
+    "total_oob": 0,
+    "total_posthoc_oob": 0,
+    "total_proposal_oob": 0
+  },
+  "runs": [
+    {
+      "backend": "local",
+      "blocked_invalid_write_count": 1,
+      "cost_method": "sum_provider_reported_task_costs",
+      "cost_source": "body.usage.cost",
+      "cost_usd_total": 0.00015038,
+      "evidence_kind": "proposed_write_set",
+      "execution_mode": "propose_validate",
+      "out_of_bounds_write_count": 0,
+      "overlapping_write_pairs": 2,
+      "source_path": "experiments/graph_quality/eval_runs/demo_app/eval_run_acg.json",
+      "strategy": "acg_planned",
+      "suite_name": "demo-app-openrouter-graph-quality-v2",
+      "tasks_completed": 4,
+      "tasks_total": 4,
+      "tested_tasks_completed": 0,
+      "tests_ran_count": 0,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_method": "provider_usage_prompt_tokens",
+      "tokens_prompt_total": 548
+    }
+  ],
+  "tasks": {
+    "billing": {
+      "actual_files_seen": [
+        "prisma/schema.prisma",
+        "src/app/dashboard/page.tsx",
+        "src/components/Sidebar.tsx"
+      ],
+      "allowed_glob_count": 8,
+      "blocked_events_total": 0,
+      "f1": 0.5455,
+      "false_negatives": 0,
+      "false_positives": 5,
+      "out_of_bounds_files": [],
+      "precision": 0.375,
+      "predicted_files": [
+        ".env.example",
+        "prisma/schema.prisma",
+        "src/app/api/billing/route.ts",
+        "src/app/dashboard/billing/page.tsx",
+        "src/app/dashboard/page.tsx",
+        "src/components/Sidebar.tsx",
+        "src/server/db.ts",
+        "src/server/stripe.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 1,
+      "suggestions": [
+        "predictor over-predicts (precision=0.38); consider removing ['.env.example', 'src/app/api/billing/route.ts', 'src/app/dashboard/billing/page.tsx'] from predicted_writes seeds"
+      ],
+      "task_id": "billing",
+      "true_positives": 3
+    },
+    "oauth": {
+      "actual_files_seen": [
+        ".env.example",
+        "prisma/schema.prisma",
+        "src/app/api/auth/[...nextauth]/route.ts",
+        "src/server/auth/config.ts",
+        "src/server/auth/index.ts"
+      ],
+      "allowed_glob_count": 5,
+      "blocked_events_total": 0,
+      "f1": 0.9091,
+      "false_negatives": 0,
+      "false_positives": 1,
+      "out_of_bounds_files": [],
+      "precision": 0.8333,
+      "predicted_files": [
+        ".env.example",
+        ".env.local",
+        "prisma/schema.prisma",
+        "src/app/api/auth/[...nextauth]/route.ts",
+        "src/server/auth/config.ts",
+        "src/server/auth/index.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 1,
+      "suggestions": [],
+      "task_id": "oauth",
+      "true_positives": 5
+    },
+    "settings": {
+      "actual_files_seen": [
+        "src/app/settings/page.tsx",
+        "src/components/Sidebar.tsx"
+      ],
+      "allowed_glob_count": 3,
+      "blocked_events_total": 0,
+      "f1": 0.8,
+      "false_negatives": 0,
+      "false_positives": 1,
+      "out_of_bounds_files": [],
+      "precision": 0.6667,
+      "predicted_files": [
+        "src/app/dashboard/page.tsx",
+        "src/app/settings/page.tsx",
+        "src/components/Sidebar.tsx"
+      ],
+      "recall": 1.0,
+      "runs_seen": 1,
+      "suggestions": [],
+      "task_id": "settings",
+      "true_positives": 2
+    },
+    "tests": {
+      "actual_files_seen": [],
+      "allowed_glob_count": 5,
+      "blocked_events_total": 1,
+      "f1": 0.0,
+      "false_negatives": 0,
+      "false_positives": 5,
+      "out_of_bounds_files": [],
+      "precision": 0.0,
+      "predicted_files": [
+        ".env.example",
+        "playwright.config.ts",
+        "src/app/api/checkout/route.ts",
+        "src/server/db.ts",
+        "tests/e2e/checkout.spec.ts"
+      ],
+      "recall": 0.0,
+      "runs_seen": 1,
+      "suggestions": [
+        "predictor over-predicts (precision=0.00); consider removing ['.env.example', 'playwright.config.ts', 'src/app/api/checkout/route.ts'] from predicted_writes seeds"
+      ],
+      "task_id": "tests",
+      "true_positives": 0
+    }
+  }
+}

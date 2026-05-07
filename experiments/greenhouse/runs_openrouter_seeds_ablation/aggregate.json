@@ -1,0 +1,318 @@
+{
+  "base_dir": "experiments/greenhouse/runs_openrouter_seeds_ablation",
+  "bootstrap": {
+    "reps": 10000,
+    "seed": 20260506
+  },
+  "metrics": [
+    "tokens_prompt_total",
+    "out_of_bounds_write_count",
+    "blocked_invalid_write_count",
+    "cost_usd_total",
+    "wall_time_seconds"
+  ],
+  "prompt_token_reduction": {
+    "bootstrap_95_ci": null,
+    "full_context_source_by_seed": {
+      "seed1": "acg_planned_full_context",
+      "seed2": "acg_planned_full_context",
+      "seed3": "acg_planned_full_context",
+      "seed4": "acg_planned_full_context",
+      "seed5": "acg_planned_full_context"
+    },
+    "mean": 0.09709172,
+    "missing": 0,
+    "n": 5,
+    "scoped_strategy": "acg_planned",
+    "stdev": 0.0,
+    "values_by_seed": {
+      "seed1": 0.09709172,
+      "seed2": 0.09709172,
+      "seed3": 0.09709172,
+      "seed4": 0.09709172,
+      "seed5": 0.09709172
+    },
+    "variance_treatment": "deterministic"
+  },
+  "seed_count": 5,
+  "seeds": [
+    {
+      "path": "experiments/greenhouse/runs_openrouter_seeds_ablation/seed1",
+      "seed": "seed1"
+    },
+    {
+      "path": "experiments/greenhouse/runs_openrouter_seeds_ablation/seed2",
+      "seed": "seed2"
+    },
+    {
+      "path": "experiments/greenhouse/runs_openrouter_seeds_ablation/seed3",
+      "seed": "seed3"
+    },
+    {
+      "path": "experiments/greenhouse/runs_openrouter_seeds_ablation/seed4",
+      "seed": "seed4"
+    },
+    {
+      "path": "experiments/greenhouse/runs_openrouter_seeds_ablation/seed5",
+      "seed": "seed5"
+    }
+  ],
+  "strategies": {
+    "acg_planned": {
+      "metrics": {
+        "blocked_invalid_write_count": {
+          "bootstrap_95_ci": null,
+          "mean": 0.0,
+          "missing": 0,
+          "n": 5,
+          "stdev": 0.0,
+          "values_by_seed": {
+            "seed1": 0.0,
+            "seed2": 0.0,
+            "seed3": 0.0,
+            "seed4": 0.0,
+            "seed5": 0.0
+          },
+          "variance_treatment": "zero_variance_observation"
+        },
+        "cost_usd_total": {
+          "bootstrap_95_ci": [
+            0.00022065,
+            0.00036617
+          ],
+          "mean": 0.00026934,
+          "missing": 0,
+          "n": 5,
+          "stdev": 0.00010818,
+          "values_by_seed": {
+            "seed1": 0.00022064,
+            "seed2": 0.00022037,
+            "seed3": 0.00022121,
+            "seed4": 0.00046286,
+            "seed5": 0.00022161
+          },
+          "variance_treatment": "stochastic"
+        },
+        "out_of_bounds_write_count": {
+          "bootstrap_95_ci": null,
+          "mean": 0.0,
+          "missing": 0,
+          "n": 5,
+          "stdev": 0.0,
+          "values_by_seed": {
+            "seed1": 0.0,
+            "seed2": 0.0,
+            "seed3": 0.0,
+            "seed4": 0.0,
+            "seed5": 0.0
+          },
+          "variance_treatment": "zero_variance_observation"
+        },
+        "tokens_prompt_total": {
+          "bootstrap_95_ci": null,
+          "mean": 2018.0,
+          "missing": 0,
+          "n": 5,
+          "stdev": 0.0,
+          "values_by_seed": {
+            "seed1": 2018.0,
+            "seed2": 2018.0,
+            "seed3": 2018.0,
+            "seed4": 2018.0,
+            "seed5": 2018.0
+          },
+          "variance_treatment": "deterministic"
+        },
+        "wall_time_seconds": {
+          "bootstrap_95_ci": [
+            6.0102,
+            14.5709
+          ],
+          "mean": 9.67648,
+          "missing": 0,
+          "n": 5,
+          "stdev": 5.5096253,
+          "values_by_seed": {
+            "seed1": 5.6579,
+            "seed2": 5.6999,
+            "seed3": 18.7537,
+            "seed4": 7.3354,
+            "seed5": 10.9355
+          },
+          "variance_treatment": "stochastic"
+        }
+      }
+    },
+    "acg_planned_full_context": {
+      "metrics": {
+        "blocked_invalid_write_count": {
+          "bootstrap_95_ci": null,
+          "mean": 0.0,
+          "missing": 0,
+          "n": 5,
+          "stdev": 0.0,
+          "values_by_seed": {
+            "seed1": 0.0,
+            "seed2": 0.0,
+            "seed3": 0.0,
+            "seed4": 0.0,
+            "seed5": 0.0
+          },
+          "variance_treatment": "zero_variance_observation"
+        },
+        "cost_usd_total": {
+          "bootstrap_95_ci": [
+            0.00023614,
+            0.00023752
+          ],
+          "mean": 0.00023679,
+          "missing": 0,
+          "n": 5,
+          "stdev": 8.9e-07,
+          "values_by_seed": {
+            "seed1": 0.00023725,
+            "seed2": 0.00023802,
+            "seed3": 0.0002363,
+            "seed4": 0.00023571,
+            "seed5": 0.00023667
+          },
+          "variance_treatment": "stochastic"
+        },
+        "out_of_bounds_write_count": {
+          "bootstrap_95_ci": null,
+          "mean": 0.0,
+          "missing": 0,
+          "n": 5,
+          "stdev": 0.0,
+          "values_by_seed": {
+            "seed1": 0.0,
+            "seed2": 0.0,
+            "seed3": 0.0,
+            "seed4": 0.0,
+            "seed5": 0.0
+          },
+          "variance_treatment": "zero_variance_observation"
+        },
+        "tokens_prompt_total": {
+          "bootstrap_95_ci": null,
+          "mean": 2235.0,
+          "missing": 0,
+          "n": 5,
+          "stdev": 0.0,
+          "values_by_seed": {
+            "seed1": 2235.0,
+            "seed2": 2235.0,
+            "seed3": 2235.0,
+            "seed4": 2235.0,
+            "seed5": 2235.0
+          },
+          "variance_treatment": "deterministic"
+        },
+        "wall_time_seconds": {
+          "bootstrap_95_ci": [
+            9.22378,
+            13.00194
+          ],
+          "mean": 11.11286,
+          "missing": 0,
+          "n": 5,
+          "stdev": 2.4147617,
+          "values_by_seed": {
+            "seed1": 13.6628,
+            "seed2": 11.6361,
+            "seed3": 9.1076,
+            "seed4": 8.1338,
+            "seed5": 13.024
+          },
+          "variance_treatment": "stochastic"
+        }
+      }
+    },
+    "naive_parallel": {
+      "metrics": {
+        "blocked_invalid_write_count": {
+          "bootstrap_95_ci": null,
+          "mean": 0.0,
+          "missing": 0,
+          "n": 5,
+          "stdev": 0.0,
+          "values_by_seed": {
+            "seed1": 0.0,
+            "seed2": 0.0,
+            "seed3": 0.0,
+            "seed4": 0.0,
+            "seed5": 0.0
+          },
+          "variance_treatment": "zero_variance_observation"
+        },
+        "cost_usd_total": {
+          "bootstrap_95_ci": [
+            0.00023589,
+            0.00023823
+          ],
+          "mean": 0.00023713,
+          "missing": 0,
+          "n": 5,
+          "stdev": 1.5e-06,
+          "values_by_seed": {
+            "seed1": 0.00023814,
+            "seed2": 0.00023865,
+            "seed3": 0.00023475,
+            "seed4": 0.00023706,
+            "seed5": 0.00023706
+          },
+          "variance_treatment": "stochastic"
+        },
+        "out_of_bounds_write_count": {
+          "bootstrap_95_ci": null,
+          "mean": 0.0,
+          "missing": 0,
+          "n": 5,
+          "stdev": 0.0,
+          "values_by_seed": {
+            "seed1": 0.0,
+            "seed2": 0.0,
+            "seed3": 0.0,
+            "seed4": 0.0,
+            "seed5": 0.0
+          },
+          "variance_treatment": "zero_variance_observation"
+        },
+        "tokens_prompt_total": {
+          "bootstrap_95_ci": null,
+          "mean": 2235.0,
+          "missing": 0,
+          "n": 5,
+          "stdev": 0.0,
+          "values_by_seed": {
+            "seed1": 2235.0,
+            "seed2": 2235.0,
+            "seed3": 2235.0,
+            "seed4": 2235.0,
+            "seed5": 2235.0
+          },
+          "variance_treatment": "deterministic"
+        },
+        "wall_time_seconds": {
+          "bootstrap_95_ci": [
+            3.16424,
+            5.70872
+          ],
+          "mean": 4.51482,
+          "missing": 0,
+          "n": 5,
+          "stdev": 1.69642346,
+          "values_by_seed": {
+            "seed1": 6.0181,
+            "seed2": 6.0018,
+            "seed3": 1.8845,
+            "seed4": 4.1659,
+            "seed5": 4.5038
+          },
+          "variance_treatment": "stochastic"
+        }
+      }
+    }
+  },
+  "version": "0.1"
+}

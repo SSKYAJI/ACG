@@ -25,6 +25,7 @@ from typing import Any
 TABLE_HEADERS = (
     "Strategy",
     "Backend",
+    "Evidence",
     "Tasks completed",
     "Tasks/hour",
     "First-run pass",
@@ -55,6 +56,7 @@ def _row(run: dict[str, Any]) -> list[str]:
     return [
         run.get("strategy", "?"),
         run.get("backend", "?"),
+        run.get("evidence_kind") or run.get("execution_mode", "?"),
         f"{completed}/{total}",
         f"{summary.get('tasks_completed_per_hour', 0.0):.2f}",
         f"{summary.get('first_run_pass_rate', 0.0) * 100:.0f}%",
@@ -70,7 +72,7 @@ def render_markdown_table(runs: list[dict[str, Any]]) -> str:
     if not runs:
         return "_no eval_run files supplied_\n"
     header = "| " + " | ".join(TABLE_HEADERS) + " |"
-    align = "| " + " | ".join([":---", ":---"] + ["---:" for _ in TABLE_HEADERS[2:]]) + " |"
+    align = "| " + " | ".join([":---", ":---", ":---"] + ["---:" for _ in TABLE_HEADERS[3:]]) + " |"
     lines = [header, align]
     for run in runs:
         lines.append("| " + " | ".join(_row(run)) + " |")

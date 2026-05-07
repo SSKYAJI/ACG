@@ -1,0 +1,61 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-07T05:24:55.503177Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "qwen/qwen3-coder-30b-a3b-instruct"
+  },
+  "repo": {
+    "root": "experiments/real_repos/starlette/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "python"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr3166-session-middleware",
+      "prompt": "Change SessionMiddleware so it can distinguish session access from mutation, avoid sending Set-Cookie for unchanged sessions, preserve cookie clearing behavior, and add regression coverage for concurrent/read-only session flows.",
+      "predicted_writes": [
+        {
+          "path": "tests/test_responses.py",
+          "confidence": 0.9998788053937127,
+          "reason": "personalized PageRank rank #6, top symbol matches: SimpleCookie, numbers_for_cleanup, test_delete_cookie.; BM25 lexical match over path, identifiers, imports, docstrings (score 24.28)."
+        },
+        {
+          "path": "starlette/middleware/sessions.py",
+          "confidence": 0.95,
+          "reason": "Task explicitly targets SessionMiddleware implementation changes."
+        },
+        {
+          "path": "tests/middleware/test_session.py",
+          "confidence": 0.9,
+          "reason": "Task requires regression coverage for session flows, implicating test file modification."
+        }
+      ],
+      "allowed_paths": [
+        "starlette/middleware/sessions.py",
+        "tests/middleware/**",
+        "tests/test_responses.py"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr3166-session-middleware"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

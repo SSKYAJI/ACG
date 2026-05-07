@@ -1,0 +1,67 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-07T05:24:33.530577Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "mock-llm-canned"
+  },
+  "repo": {
+    "root": "experiments/real_repos/fastify/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "javascript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-6694",
+      "prompt": "Improve Content-Type parsing performance by caching parsed ContentType objects in ContentTypeParser and reusing those parsed objects from request handling and request.mediaType without changing external behavior.",
+      "predicted_writes": [
+        {
+          "path": "types/content-type-parser.d.ts",
+          "confidence": 0.999999907668651,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 42.23)."
+        },
+        {
+          "path": "test/content-parser.test.js",
+          "confidence": 0.9999996142856368,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 38.65)."
+        },
+        {
+          "path": "lib/content-type-parser.js",
+          "confidence": 0.999998176571155,
+          "reason": "personalized PageRank rank #4, top symbol matches: ContentType, ContentTypeParser, Parser.; BM25 lexical match over path, identifiers, imports, docstrings (score 34.77)."
+        },
+        {
+          "path": "test/logger/logger-test-utils.js",
+          "confidence": 0.85,
+          "reason": "Symbol 'request' referenced in prompt; defined in test/logger/logger-test-utils.js."
+        }
+      ],
+      "allowed_paths": [
+        "lib/content-type-parser.js",
+        "test/content-parser.test.js",
+        "test/logger/logger-test-utils.js",
+        "types/content-type-parser.d.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-6694"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

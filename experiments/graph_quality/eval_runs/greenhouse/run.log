@@ -1,0 +1,16 @@
+ starting (group 1)
+ proposed 2 writes (2.05s, 97 tokens)
+   ALLOWED lambda-rowmapper-account → 
+src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java
+   ALLOWED lambda-rowmapper-account → pom.xml
+ starting (group 2)
+ proposed 2 writes (8.37s, 98 tokens)
+   ALLOWED lambda-rowmapper-invite → 
+src/main/java/com/springsource/greenhouse/invite/JdbcInviteRepository.java
+   ALLOWED lambda-rowmapper-invite → pom.xml
+ starting (group 3)
+ proposed 2 writes (1.85s, 102 tokens)
+   ALLOWED lambda-rowmapper-app → 
+src/main/java/com/springsource/greenhouse/develop/JdbcAppRepository.java
+   ALLOWED lambda-rowmapper-app → pom.xml
+[acg_planned/local] wrote experiments/graph_quality/eval_runs/greenhouse/eval_run_acg.json — completed=3/3, evidence=proposed_write_set, overlaps=3, oob=0, blocked=0, wall=12.277s

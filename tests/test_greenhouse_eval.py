@@ -15,10 +15,12 @@ without GX10 / Devin access.
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
 
+from acg.runtime import LLMReply
 from acg.schema import (
     AgentLock,
     Conflict,
@@ -48,6 +50,7 @@ from experiments.greenhouse.eval_schema import (
 from experiments.greenhouse.strategies import (
     LockfileEchoMockLLM,
     _extract_task_id,
+    _PromptCountingLLM,
     _scoped_repo_graph,
     estimate_prompt_tokens,
     run_strategy,
@@ -502,6 +505,39 @@ def test_extract_task_id_returns_none_for_orchestrator_messages() -> None:
     assert _extract_task_id(msgs) is None
 
 
+def test_prompt_counter_prefers_provider_prompt_tokens() -> None:
+    """OpenRouter/OpenAI-compatible usage.prompt_tokens should beat estimates."""
+    import asyncio
+
+    class ProviderTokenLLM:
+        url = "stub://provider"
+        model = "stub"
+
+        async def complete(self, messages, *, max_tokens=700, temperature=0.2):
+            del messages, max_tokens, temperature
+            return LLMReply(
+                content='{"writes":[]}',
+                reasoning="",
+                completion_tokens=3,
+                finish_reason="stop",
+                wall_s=0.0,
+                prompt_tokens=123,
+            )
+
+        async def aclose(self):
+            return None
+
+    wrapped = _PromptCountingLLM(ProviderTokenLLM())
+    asyncio.run(
+        wrapped.complete(
+            [{"role": "user", "content": "Task id: lambda-rowmapper-account\nTask: x"}]
+        )
+    )
+
+    assert wrapped.tokens_by_task["lambda-rowmapper-account"] == 123
+    assert wrapped.prompt_token_method == "provider_usage_prompt_tokens"
+
+
 def test_scoped_repo_graph_filters_files_to_allowed_paths() -> None:
     """A scoped graph must only contain files inside ``allowed_paths``."""
     lock = _build_lock(serialized=True)
@@ -704,6 +740,106 @@ def test_devin_manual_loads_sidecar_and_flags_oob(tmp_path: Path) -> None:
     assert run.summary_metrics.human_interventions == 1
 
 
+def test_manual_applied_diff_can_extract_changed_files_from_git_diff(tmp_path: Path) -> None:
+    """Generic applied-diff sidecars derive actual files from a task branch."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-b", "main"], cwd=repo, check=True, capture_output=True)
+    service = repo / "src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java"
+    service.parent.mkdir(parents=True)
+    service.write_text("class Before {}\n")
+    (repo / "pom.xml").write_text("<java-version>1.6</java-version>\n")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=ACG Test",
+            "-c",
+            "user.email=acg@example.com",
+            "commit",
+            "-m",
+            "base",
+        ],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "checkout", "-b", "task/account"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    service.write_text("class After {}\n")
+    (repo / "pom.xml").write_text("<java-version>1.8</java-version>\n")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=ACG Test",
+            "-c",
+            "user.email=acg@example.com",
+            "commit",
+            "-m",
+            "task account",
+        ],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+
+    lock = _build_lock(serialized=True)
+    sidecar = tmp_path / "devin_git_diff.json"
+    sidecar.write_text(
+        json.dumps(
+            {
+                "strategy": "acg_planned",
+                "repo_path": str(repo),
+                "base_ref": "main",
+                "wall_time_seconds": 60.0,
+                "tasks": [
+                    {
+                        "task_id": "lambda-rowmapper-account",
+                        "status": "completed",
+                        "branch": "task/account",
+                    }
+                ],
+            }
+        )
+    )
+
+    run = devin_adapter.run_applied_diff_manual(
+        strategy="acg_planned",
+        lock=lock,
+        lockfile_path="agent_lock.json",
+        diff_results_path=sidecar,
+    )
+
+    assert run.backend == "applied-diff"
+    assert run.execution_mode == "applied_diff"
+    assert run.evidence_kind == "applied_diff"
+    task = run.tasks[0]
+    assert task.actual_changed_files_kind == "applied_diff"
+    assert task.actual_changed_files == [
+        "pom.xml",
+        "src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java",
+    ]
+    assert task.out_of_bounds_files == []
+    assert run.summary_metrics.tasks_completed == 1
+    assert run.repo.local_path == str(repo.resolve())
+
+    devin_run = devin_adapter.run_devin_manual(
+        strategy="acg_planned",
+        lock=lock,
+        lockfile_path="agent_lock.json",
+        devin_results_path=sidecar,
+    )
+    assert devin_run.backend == "devin-manual"
+    assert devin_run.tasks[0].actual_changed_files == task.actual_changed_files
+
+
 def test_devin_manual_rejects_strategy_mismatch(tmp_path: Path) -> None:
     lock = _build_lock(serialized=True)
     sidecar = tmp_path / "x.json"
@@ -843,6 +979,55 @@ def test_cli_ablation_writes_all_three_eval_run_files_under_out_dir(
     )
 
 
+def test_cli_applied_diff_backend_writes_applied_diff_artifact(tmp_path: Path) -> None:
+    """`--backend applied-diff` records real-diff evidence, not proposals."""
+    lock = _build_lock(serialized=True)
+    lock_path = tmp_path / "agent_lock.json"
+    lock_path.write_text(lock.model_dump_json(indent=2))
+    sidecar = tmp_path / "applied_diff.json"
+    sidecar.write_text(
+        json.dumps(
+            {
+                "strategy": "acg_planned",
+                "wall_time_seconds": 42.0,
+                "tasks": [
+                    {
+                        "task_id": "lambda-rowmapper-account",
+                        "status": "completed",
+                        "actual_changed_files": [
+                            "src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java",
+                            "pom.xml",
+                        ],
+                    }
+                ],
+            }
+        )
+    )
+    out = tmp_path / "eval_run_applied.json"
+
+    rc = headtohead.main(
+        [
+            "--lock",
+            str(lock_path),
+            "--strategy",
+            "acg_planned",
+            "--backend",
+            "applied-diff",
+            "--diff-results",
+            str(sidecar),
+            "--out",
+            str(out),
+        ]
+    )
+
+    assert rc == 0
+    payload = json.loads(out.read_text())
+    assert payload["backend"] == "applied-diff"
+    assert payload["execution_mode"] == "applied_diff"
+    assert payload["evidence_kind"] == "applied_diff"
+    assert payload["tasks"][0]["actual_changed_files_kind"] == "applied_diff"
+
+
 def test_cli_realworld_like_run_does_not_emit_greenhouse_metadata(tmp_path: Path) -> None:
     """Non-Greenhouse checkouts must carry explicit repo/suite metadata."""
     lock = _build_lock(serialized=True)
@@ -938,6 +1123,7 @@ def test_report_renders_markdown_table_with_both_strategies(tmp_path: Path) -> N
     ]
     table = report.render_markdown_table(runs)
     assert "Strategy" in table and "Tasks completed" in table
+    assert "Evidence" in table and "proposed_write_set" in table
     assert "naive_parallel" in table
     assert "acg_planned" in table
     line = report.render_demo_line(runs)
