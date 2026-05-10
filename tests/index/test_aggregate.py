@@ -68,3 +68,50 @@ def test_top_n_cap_sorts_by_confidence_then_path() -> None:
     )
 
     assert [write.path for write in writes] == ["a.py", "b.py"]
+
+
+def test_graph_expansion_runs_before_final_top_n() -> None:
+    task = TaskInput(id="request", prompt="Update request validation handling")
+    repo_graph = {
+        "files": [
+            {
+                "path": "lib/handle-request.js",
+                "symbols": ["handleRequest"],
+                "resolved_imports": ["lib/validation.js"],
+                "importers": [],
+                "type_links": [],
+            },
+            {
+                "path": "lib/validation.js",
+                "symbols": ["validate"],
+                "resolved_imports": [],
+                "importers": ["lib/handle-request.js"],
+                "type_links": [],
+            },
+        ],
+        "resolved_imports": {"lib/handle-request.js": ["lib/validation.js"]},
+        "importers": {"lib/validation.js": ["lib/handle-request.js"]},
+    }
+    writes = aggregate(
+        task,
+        None,
+        repo_graph,
+        indexers=[
+            StubIndexer(
+                "seed",
+                [
+                    PredictedWrite(
+                        path="lib/handle-request.js",
+                        confidence=0.95,
+                        reason="seed",
+                    )
+                ],
+            )
+        ],
+        top_n=2,
+    )
+
+    assert [write.path for write in writes] == [
+        "lib/handle-request.js",
+        "lib/validation.js",
+    ]

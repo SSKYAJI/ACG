@@ -1,0 +1,103 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-10T04:35:31.266189Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "lockfile-replay"
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/fastify/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-6694",
+      "prompt": "Improve Content-Type parsing performance by caching parsed ContentType objects in ContentTypeParser and reusing those parsed objects from request handling and request.mediaType without changing external behavior.",
+      "predicted_writes": [
+        {
+          "path": "types/content-type-parser.d.ts",
+          "confidence": 0.999999907668651,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 42.23)."
+        },
+        {
+          "path": "test/content-parser.test.js",
+          "confidence": 0.9999996142856368,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 38.65)."
+        },
+        {
+          "path": "lib/content-type-parser.js",
+          "confidence": 0.999998176571155,
+          "reason": "personalized PageRank rank #4, top symbol matches: ContentType, ContentTypeParser, Parser.; BM25 lexical match over path, identifiers, imports, docstrings (score 34.77)."
+        },
+        {
+          "path": "lib/plugin-override.js",
+          "confidence": 0.9999915093043668,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 30.92)."
+        },
+        {
+          "path": "lib/content-type.js",
+          "confidence": 0.9999695126359767,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 27.73)."
+        },
+        {
+          "path": "lib/handle-request.js",
+          "confidence": 0.92,
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/content-type.js."
+        },
+        {
+          "path": "lib/request.js",
+          "confidence": 0.92,
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/plugin-override.js."
+        },
+        {
+          "path": "lib/symbols.js",
+          "confidence": 0.92,
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/content-type-parser.js, lib/plugin-override.js."
+        },
+        {
+          "path": "types/request.d.ts",
+          "confidence": 0.92,
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) types/content-type-parser.d.ts."
+        },
+        {
+          "path": "types/type-provider.d.ts",
+          "confidence": 0.92,
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) types/content-type-parser.d.ts."
+        }
+      ],
+      "allowed_paths": [
+        "lib/content-type-parser.js",
+        "lib/content-type.js",
+        "lib/handle-request.js",
+        "lib/plugin-override.js",
+        "lib/request.js",
+        "lib/symbols.js",
+        "test/content-parser.test.js",
+        "types/content-type-parser.d.ts",
+        "types/request.d.ts",
+        "types/type-provider.d.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-6694"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

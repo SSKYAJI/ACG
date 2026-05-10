@@ -1,0 +1,86 @@
+% ACG pipeline figure for the NeurIPS position paper.
+%
+% Add these to the paper preamble if they are not already present:
+% \usepackage{graphicx}
+% \usepackage{tikz}
+% \usetikzlibrary{arrows.meta,positioning,fit,calc}
+
+\begin{figure}[t]
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
+  font=\footnotesize,
+  >=Latex,
+  node distance=0.75cm and 0.55cm,
+  stage/.style={
+    draw,
+    rounded corners=2pt,
+    align=center,
+    minimum width=2.25cm,
+    minimum height=0.95cm,
+    inner sep=5pt
+  },
+  artifact/.style={
+    draw,
+    rounded corners=2pt,
+    align=center,
+    minimum width=2.25cm,
+    minimum height=0.95cm,
+    inner sep=5pt,
+    fill=gray!10
+  },
+  guard/.style={
+    draw,
+    rounded corners=2pt,
+    align=center,
+    minimum width=2.25cm,
+    minimum height=0.95cm,
+    inner sep=5pt,
+    fill=gray!18
+  },
+  flow/.style={->, line width=0.45pt},
+  blocked/.style={->, dashed, line width=0.45pt}
+]
+
+\node[artifact] (input) {Repository\\+ task list};
+\node[stage, right=of input] (scan) {Repo graph\\imports, symbols,\\hotspots};
+\node[stage, right=of scan] (predict) {Write-set\\predictor\\seeds + rerank};
+\node[stage, right=of predict] (plan) {Compiler\\+ DAG solver\\conflict groups};
+\node[artifact, right=of plan] (lock) {\texttt{agent\_lock.json}\\allowed paths,\\deps, groups};
+
+\node[stage, below=1.05cm of plan] (workers) {Scoped\\coding agents\\one contract\\per task};
+\node[guard, right=of workers] (validator) {Write\\validator\\\texttt{validate\_write()}};
+\node[artifact, below=0.75cm of validator] (blocked-events) {Blocked drift\\invalid-write\\events};
+\node[stage, right=of validator] (merge) {Merge, tests,\\review};
+
+\draw[flow] (input) -- (scan);
+\draw[flow] (scan) -- (predict);
+\draw[flow] (predict) -- (plan);
+\draw[flow] (plan) -- (lock);
+
+\draw[flow] (lock) -- (workers);
+\draw[flow] (workers) -- (validator);
+\draw[flow] (validator) -- (merge);
+\draw[blocked] (validator) -- (blocked-events);
+
+\node[
+  draw,
+  rounded corners=2pt,
+  fit=(scan) (predict) (plan),
+  inner sep=0.18cm,
+  label={[font=\footnotesize]above:Pre-execution planning}
+] {};
+
+\node[
+  draw,
+  rounded corners=2pt,
+  fit=(validator) (workers) (merge) (blocked-events),
+  inner sep=0.22cm,
+  label={[font=\footnotesize]below:Runtime enforcement under the contract}
+] {};
+
+\end{tikzpicture}
+}
+\caption{ACG moves part of multi-agent coding coordination before execution. It scans the repository, predicts per-task write sets, compiles a lockfile containing allowed paths and dependency-aware execution groups, and validates worker writes against that contract before merge-time integration.}
+\label{fig:acg-pipeline}
+\end{figure}

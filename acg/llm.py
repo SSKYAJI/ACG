@@ -208,6 +208,28 @@ class MockLLMClient:
     ) -> str:
         del response_format
         user_blob = "\n".join(m.get("content", "") for m in messages if m.get("role") == "user")
+        system_blob = "\n".join(
+            m.get("content", "") for m in messages if m.get("role") == "system"
+        )
+        if "Decompose one high-level repository goal" in system_blob:
+            return json.dumps(
+                {
+                    "tasks": [
+                        {
+                            "id": "implement-core-change",
+                            "prompt": "Implement the core code changes requested by the high-level goal.",
+                            "hints": {"touches": ["src", "app", "core"]},
+                            "depends_on": [],
+                        },
+                        {
+                            "id": "add-tests",
+                            "prompt": "Add focused tests covering the implemented behavior.",
+                            "hints": {"touches": ["tests"]},
+                            "depends_on": ["implement-core-change"],
+                        },
+                    ]
+                }
+            )
         for task_id, writes in _CANNED_PREDICTIONS.items():
             # The predictor prompt embeds ``Task id: <id>`` so we match on that.
             if f"Task id: {task_id}" in user_blob:

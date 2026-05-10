@@ -23,7 +23,7 @@ def test_normalize_context_graph_adds_structural_indexes(tmp_path: Path) -> None
         "files": [
             {
                 "path": "src/app/api/health/route.ts",
-                "imports": ["@/lib/auth"],
+                "imports": ["../../settings/page"],
                 "exports": ["GET"],
                 "symbols": ["GET"],
                 "is_hotspot": False,
@@ -37,6 +37,8 @@ def test_normalize_context_graph_adds_structural_indexes(tmp_path: Path) -> None
             },
             {"path": "playwright.config.ts"},
             {"path": "tests/e2e/settings.spec.ts"},
+            {"path": "lib/request.js"},
+            {"path": "types/request.d.ts"},
         ],
     }
 
@@ -45,11 +47,26 @@ def test_normalize_context_graph_adds_structural_indexes(tmp_path: Path) -> None
     assert normalized["root"] == str(tmp_path.resolve())
     assert normalized["languages"] == ["typescript"]
     assert normalized["imports"] == {
+        "lib/request.js": [],
         "playwright.config.ts": [],
-        "src/app/api/health/route.ts": ["@/lib/auth"],
+        "src/app/api/health/route.ts": ["../../settings/page"],
         "src/app/settings/page.tsx": [],
         "tests/e2e/settings.spec.ts": [],
+        "types/request.d.ts": [],
     }
+    assert normalized["resolved_imports"]["src/app/api/health/route.ts"] == [
+        "src/app/settings/page.tsx"
+    ]
+    assert normalized["importers"]["src/app/settings/page.tsx"] == [
+        "src/app/api/health/route.ts"
+    ]
+    assert normalized["type_links"]["lib/request.js"] == ["types/request.d.ts"]
+    assert normalized["type_links"]["types/request.d.ts"] == ["lib/request.js"]
+    by_path = {entry["path"]: entry for entry in normalized["files"]}
+    assert by_path["src/app/settings/page.tsx"]["importers"] == [
+        "src/app/api/health/route.ts"
+    ]
+    assert by_path["lib/request.js"]["type_links"] == ["types/request.d.ts"]
     assert normalized["exports"]["src/app/settings/page.tsx"] == ["SettingsPage"]
     assert normalized["symbols_index"]["GET"] == "src/app/api/health/route.ts"
     assert normalized["hotspots"] == ["src/app/settings/page.tsx"]

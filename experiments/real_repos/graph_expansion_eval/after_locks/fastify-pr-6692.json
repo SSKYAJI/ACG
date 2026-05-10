@@ -1,0 +1,103 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-10T04:35:30.971489Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "lockfile-replay"
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/fastify/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-6692",
+      "prompt": "Avoid unnecessary ContentType object creation in getSchemaSerializer by only parsing the response content type for content-type-keyed response schemas, including status-code, fallback, and default lookup paths.",
+      "predicted_writes": [
+        {
+          "path": "lib/schemas.js",
+          "confidence": 0.9999995334194158,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 38.18)."
+        },
+        {
+          "path": "types/content-type-parser.d.ts",
+          "confidence": 0.9999991477356422,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 36.67)."
+        },
+        {
+          "path": "test/internals/reply-serialize.test.js",
+          "confidence": 0.9999989058208376,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 36.05)."
+        },
+        {
+          "path": "lib/content-type-parser.js",
+          "confidence": 0.9999707123060775,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 27.83)."
+        },
+        {
+          "path": "lib/error-handler.js",
+          "confidence": 0.9999631313797397,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 27.25)."
+        },
+        {
+          "path": "types/instance.d.ts",
+          "confidence": 0.9999597193669306,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 27.03)."
+        },
+        {
+          "path": "lib/handle-request.js",
+          "confidence": 0.9999577310215039,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 26.91)."
+        },
+        {
+          "path": "fastify.js",
+          "confidence": 0.92,
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/content-type-parser.js, lib/error-handler.js, types/instance.d.ts."
+        },
+        {
+          "path": "lib/content-type.js",
+          "confidence": 0.92,
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/content-type-parser.js, lib/handle-request.js."
+        },
+        {
+          "path": "lib/error-serializer.js",
+          "confidence": 0.92,
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/error-handler.js."
+        }
+      ],
+      "allowed_paths": [
+        "fastify.js",
+        "lib/content-type-parser.js",
+        "lib/content-type.js",
+        "lib/error-handler.js",
+        "lib/error-serializer.js",
+        "lib/handle-request.js",
+        "lib/schemas.js",
+        "test/internals/reply-serialize.test.js",
+        "types/content-type-parser.d.ts",
+        "types/instance.d.ts"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-6692"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

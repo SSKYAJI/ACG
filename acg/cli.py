@@ -17,9 +17,11 @@ import typer
 from rich.console import Console
 
 from .compiler import compile_lockfile
+from .diff import DiffValidationError, validate_git_diff
 from .enforce import EXIT_ALLOWED, EXIT_BLOCKED, EXIT_USER_ERROR, cli_validate
 from .explain import render
 from .llm import LLMClient
+from .orchestrator import MAX_TASKS_DEFAULT, TaskPlanningError, plan_tasks_from_goal
 from .repo_graph import (
     GraphScanError,
     context_graph_path,
@@ -115,6 +117,64 @@ def cmd_compile(
     )
 
 
+@app.command("plan-tasks")
+def cmd_plan_tasks(
+    repo: Annotated[Path, typer.Option(exists=True, file_okay=False, help="Repository root.")],
+    goal: Annotated[
+        str,
+        typer.Option(
+            "--goal",
+            help="High-level coding goal for the orchestrator to decompose.",
+        ),
+    ],
+    out: Annotated[Path, typer.Option(help="Where to write tasks.json.")],
+    language: Annotated[
+        str,
+        typer.Option(help="Source language to scan: auto, typescript, javascript, or java."),
+    ] = "auto",
+    max_tasks: Annotated[
+        int,
+        typer.Option("--max-tasks", min=1, help="Maximum number of sub-agent tasks."),
+    ] = MAX_TASKS_DEFAULT,
+    use_cached_graph: Annotated[
+        bool,
+        typer.Option(
+            "--use-cached-graph/--rescan-graph",
+            help="Reuse <repo>/.acg/context_graph.json when present.",
+        ),
+    ] = True,
+) -> None:
+    """Use an orchestrator LLM to decompose a goal into ``tasks.json``."""
+    graph_file = context_graph_path(repo)
+    if use_cached_graph and graph_file.exists():
+        repo_graph = _load_repo_graph(repo)
+        _console.print(f"[dim]reusing cached context graph at {graph_file}[/]")
+    else:
+        try:
+            scan_context_graph(repo, language)
+        except (GraphScanError, ValueError) as exc:
+            _err_console.print(f"[red]graph scan failed:[/] {exc}")
+            raise typer.Exit(code=EXIT_USER_ERROR) from exc
+        repo_graph = _load_repo_graph(repo)
+        _console.print(
+            f"[dim]scanned {repo_graph.get('language', 'unknown')} repo → {graph_file}[/]"
+        )
+    if not repo_graph:
+        _err_console.print("[red]graph scan did not produce a readable context graph[/]")
+        raise typer.Exit(code=EXIT_USER_ERROR)
+
+    llm = LLMClient.from_env()
+    try:
+        tasks_input = plan_tasks_from_goal(goal, repo_graph, llm, max_tasks=max_tasks)
+    except TaskPlanningError as exc:
+        _err_console.print(f"[red]task planning failed:[/] {exc}")
+        raise typer.Exit(code=EXIT_USER_ERROR) from exc
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(tasks_input.model_dump_json(indent=2) + "\n")
+    _console.print(f"[green]wrote[/] {out} ({len(tasks_input.tasks)} tasks)")
+
+
 @app.command("init-graph")
 def cmd_init_graph(
     repo: Annotated[Path, typer.Option(exists=True, file_okay=False, help="Repository root.")],
@@ -176,6 +236,77 @@ def cmd_validate_write(
     else:
         _err_console.print(f"[yellow]{message}[/]")
     raise typer.Exit(code=code)
+
+
+@app.command("validate-diff")
+def cmd_validate_diff(
+    lock: Annotated[
+        Path, typer.Option(exists=True, dir_okay=False, help="Path to agent_lock.json.")
+    ],
+    repo: Annotated[Path, typer.Option(exists=True, file_okay=False, help="Repository root.")],
+    task: Annotated[str, typer.Option(help="Task id whose applied diff should be checked.")],
+    base_ref: Annotated[
+        str,
+        typer.Option(
+            "--base-ref",
+            help="Base git ref. Without --head-ref, validate current worktree diff against it.",
+        ),
+    ] = "HEAD",
+    head_ref: Annotated[
+        str | None,
+        typer.Option("--head-ref", help="Optional head git ref or branch to compare."),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Emit machine-readable JSON instead of text."),
+    ] = False,
+) -> None:
+    """Validate actual files changed by a git diff against a task contract."""
+    try:
+        lockfile = AgentLock.model_validate_json(lock.read_text())
+        result = validate_git_diff(
+            lockfile,
+            repo_path=repo,
+            task_id=task,
+            base_ref=base_ref,
+            head_ref=head_ref,
+        )
+    except (OSError, ValueError, DiffValidationError, KeyError) as exc:
+        _err_console.print(f"[red]diff validation failed:[/] {exc}")
+        raise typer.Exit(code=EXIT_USER_ERROR) from exc
+
+    payload = {
+        "task_id": result.task_id,
+        "base_ref": result.base_ref,
+        "head_ref": result.head_ref,
+        "ok": result.ok,
+        "allowed_count": result.allowed_count,
+        "blocked_count": result.blocked_count,
+        "changed_files": result.changed_files,
+        "verdicts": [
+            {
+                "path": verdict.path,
+                "allowed": verdict.allowed,
+                "reason": verdict.reason,
+            }
+            for verdict in result.verdicts
+        ],
+    }
+    if json_output:
+        sys.stdout.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    else:
+        status = "OK" if result.ok else "BLOCKED"
+        color = "green" if result.ok else "red"
+        _console.print(
+            f"[{color}]{status}[/]: {result.allowed_count} allowed, "
+            f"{result.blocked_count} blocked across {len(result.changed_files)} changed files"
+        )
+        for verdict in result.verdicts:
+            if verdict.allowed:
+                _console.print(f"  [green]ALLOWED[/] {verdict.path}")
+            else:
+                _console.print(f"  [red]BLOCKED[/] {verdict.path}: {verdict.reason}")
+    raise typer.Exit(code=EXIT_ALLOWED if result.ok else EXIT_BLOCKED)
 
 
 @app.command("validate-lockfile")

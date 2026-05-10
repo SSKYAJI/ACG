@@ -1,0 +1,4 @@
+phase,command,exit_code,status,passed_count,warnings_count
+after,.venv/bin/pytest tests/test_predictor.py tests/test_repo_graph.py tests/index/test_aggregate.py tests/index/test_pagerank.py tests/index/test_cochange.py -q,0,passed,59,3
+after,.venv/bin/pytest tests/test_cli.py tests/test_analyze.py tests/test_diff.py -q,0,passed,14,
+after,.venv/bin/pytest tests -q,0,passed,223,11

@@ -155,10 +155,22 @@ def _build_symbol_graph(repo_root: Path | None, repo_graph: dict[str, Any]) -> S
     for entry in entries:
         path = entry["path"]
         text = read_rel(repo_root, path)
+        direct_targets = [
+            target
+            for target in entry.get("resolved_imports", [])
+            if isinstance(target, str)
+        ]
+        for target in direct_targets:
+            if target and target != path:
+                graph.add_edge(path, target, weight=graph.get_edge_data(path, target, {}).get("weight", 0) + 2)
         for specifier in list(entry.get("imports") or []) + _imports(text):
             target = _module_to_path(path, specifier, files)
             if target and target != path:
                 graph.add_edge(path, target, weight=graph.get_edge_data(path, target, {}).get("weight", 0) + 2)
+        for target in entry.get("type_links", []) or []:
+            if isinstance(target, str) and target in files and target != path:
+                graph.add_edge(path, target, weight=graph.get_edge_data(path, target, {}).get("weight", 0) + 2)
+                graph.add_edge(target, path, weight=graph.get_edge_data(target, path, {}).get("weight", 0) + 2)
 
     for referrer, counts in references.items():
         for symbol, count in counts.items():

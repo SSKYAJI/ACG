@@ -9,10 +9,12 @@ from typing import Any
 import pytest
 
 from acg.predictor import (
+    MAX_PREDICTIONS,
     _detect_test_layout,
     _env_seed,
     _extract_entity_noun,
     _extract_entity_nouns,
+    _graph_expansion_seed,
     _index_seed,
     _looks_like_test_task,
     _sibling_pattern_seed,
@@ -152,7 +154,7 @@ def test_predictions_are_capped_and_sorted(repo_graph: dict[str, Any]) -> None:
     }
     task = TaskInput(id="big", prompt="Touch many files.", hints=None)
     writes = predict_writes(task, repo_graph, StubLLM(json.dumps(rerank)))
-    assert len(writes) <= 8
+    assert len(writes) <= MAX_PREDICTIONS
     assert all(
         writes[i].confidence >= writes[i + 1].confidence
         for i in range(len(writes) - 1)
@@ -555,3 +557,119 @@ def test_index_seed_unit_filters_below_floor(
     seeds = _index_seed(task, tmp_path, {})
     paths = {seed.path for seed in seeds}
     assert paths == {"keep.ts"}
+
+
+# --------------------------------------------------------------------------- #
+# Graph expansion.
+# --------------------------------------------------------------------------- #
+
+
+def test_graph_expansion_seed_promotes_reverse_import_and_type_links() -> None:
+    task = TaskInput(
+        id="media",
+        prompt="Add request mediaType validation and request handling changes.",
+    )
+    graph = {
+        "files": [
+            {
+                "path": "lib/content-type-parser.js",
+                "symbols": ["ContentTypeParser"],
+                "resolved_imports": ["lib/symbols.js"],
+                "importers": [],
+                "type_links": [],
+            },
+            {
+                "path": "lib/handle-request.js",
+                "symbols": ["handleRequest"],
+                "resolved_imports": ["lib/validation.js", "lib/symbols.js"],
+                "importers": [],
+                "type_links": [],
+            },
+            {
+                "path": "lib/validation.js",
+                "symbols": ["validate"],
+                "resolved_imports": ["lib/symbols.js"],
+                "importers": ["lib/handle-request.js"],
+                "type_links": [],
+            },
+            {
+                "path": "lib/symbols.js",
+                "symbols": ["kRequestCacheValidateFns"],
+                "resolved_imports": [],
+                "importers": ["lib/handle-request.js", "lib/validation.js"],
+                "type_links": [],
+            },
+            {
+                "path": "types/request.d.ts",
+                "symbols": ["FastifyRequest"],
+                "resolved_imports": [],
+                "importers": [],
+                "type_links": ["lib/request.js"],
+            },
+            {
+                "path": "lib/request.js",
+                "symbols": ["Request"],
+                "resolved_imports": ["lib/symbols.js"],
+                "importers": [],
+                "type_links": ["types/request.d.ts"],
+            },
+        ],
+            "resolved_imports": {
+                "lib/content-type-parser.js": ["lib/symbols.js"],
+                "lib/handle-request.js": ["lib/validation.js", "lib/symbols.js"],
+                "lib/validation.js": ["lib/symbols.js"],
+                "lib/request.js": ["lib/symbols.js"],
+        },
+        "importers": {
+            "lib/validation.js": ["lib/handle-request.js"],
+            "lib/symbols.js": ["lib/handle-request.js", "lib/validation.js"],
+        },
+        "type_links": {
+            "types/request.d.ts": ["lib/request.js"],
+            "lib/request.js": ["types/request.d.ts"],
+        },
+    }
+    seeds = [
+        PredictedWrite(path="lib/content-type-parser.js", confidence=0.95, reason="seed"),
+        PredictedWrite(path="lib/handle-request.js", confidence=0.95, reason="seed"),
+        PredictedWrite(path="types/request.d.ts", confidence=0.95, reason="seed"),
+    ]
+
+    expansions = _graph_expansion_seed(task, graph, seeds)
+    by_path = {write.path: write for write in expansions}
+
+    assert "lib/validation.js" in by_path
+    assert "lib/request.js" in by_path
+    assert "lib/symbols.js" in by_path
+    assert by_path["lib/request.js"].confidence >= 0.9
+
+
+def test_predict_writes_expands_graph_before_rerank() -> None:
+    task = TaskInput(id="media", prompt="Refactor handleRequest request handling validation.")
+    graph = {
+        "files": [
+            {
+                "path": "lib/handle-request.js",
+                "symbols": ["handleRequest"],
+                "resolved_imports": ["lib/validation.js"],
+                "importers": [],
+                "type_links": [],
+            },
+            {
+                "path": "lib/validation.js",
+                "symbols": ["validate"],
+                "resolved_imports": [],
+                "importers": ["lib/handle-request.js"],
+                "type_links": [],
+            },
+        ],
+        "symbols_index": {"handleRequest": "lib/handle-request.js"},
+        "resolved_imports": {"lib/handle-request.js": ["lib/validation.js"]},
+        "importers": {"lib/validation.js": ["lib/handle-request.js"]},
+    }
+
+    writes = predict_writes(task, graph, StubLLM(json.dumps({"writes": []})))
+    paths = {write.path for write in writes}
+
+    assert "lib/handle-request.js" in paths
+    assert "lib/validation.js" in paths

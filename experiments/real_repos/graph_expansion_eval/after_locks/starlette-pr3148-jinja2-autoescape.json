@@ -1,0 +1,79 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-10T04:35:33.487983Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "lockfile-replay"
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/starlette/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "unknown"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr3148-jinja2-autoescape",
+      "prompt": "Make Jinja2Templates use Jinja2's select_autoescape default when creating an environment from a template directory, while preserving caller-supplied environments and adding tests for escaping behavior.",
+      "predicted_writes": [
+        {
+          "path": "tests/test_exceptions.py",
+          "confidence": 0.9884642678491234,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 12.87)."
+        },
+        {
+          "path": "starlette/templating.py",
+          "confidence": 0.95,
+          "reason": "The task explicitly mentions modifying Jinja2Templates to use Jinja2's select_autoescape default, directly referencing the templating module."
+        },
+        {
+          "path": "tests/test_templates.py",
+          "confidence": 0.9,
+          "reason": "The task includes adding tests for escaping behavior, and this file is the most relevant test file for templating functionality."
+        },
+        {
+          "path": "tests/test_adding.py",
+          "confidence": 0.85,
+          "reason": "pytest convention: tests/ with .py extension, entity 'adding' from task prompt."
+        },
+        {
+          "path": "tests/test_environments.py",
+          "confidence": 0.85,
+          "reason": "pytest convention: tests/ with .py extension, entity 'environments' from task prompt."
+        },
+        {
+          "path": "tests/test_escaping.py",
+          "confidence": 0.85,
+          "reason": "pytest convention: tests/ with .py extension, entity 'escaping' from task prompt."
+        }
+      ],
+      "allowed_paths": [
+        "starlette/templating.py",
+        "tests/test_adding.py",
+        "tests/test_environments.py",
+        "tests/test_escaping.py",
+        "tests/test_exceptions.py",
+        "tests/test_templates.py"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr3148-jinja2-autoescape"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

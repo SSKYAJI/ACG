@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import posixpath
 import subprocess
 from collections.abc import Iterable
 from pathlib import Path
@@ -168,6 +169,14 @@ def normalize_context_graph(
     symbols_index = _symbols_index(payload.get("symbols_index"), files)
     imports = {entry["path"]: _string_list(entry.get("imports")) for entry in files}
     exports = {entry["path"]: _string_list(entry.get("exports")) for entry in files}
+    resolved_imports = _resolved_imports(imports, files)
+    importers = _reverse_imports(resolved_imports, files)
+    type_links = _type_links(files)
+    for entry in files:
+        path = entry["path"]
+        entry["resolved_imports"] = resolved_imports.get(path, [])
+        entry["importers"] = importers.get(path, [])
+        entry["type_links"] = type_links.get(path, [])
     hotspots = _hotspots(payload.get("hotspots"), files)
 
     payload["version"] = str(payload.get("version") or GRAPH_VERSION)
@@ -180,6 +189,9 @@ def normalize_context_graph(
     payload["files"] = files
     payload["symbols_index"] = symbols_index
     payload["imports"] = imports
+    payload["resolved_imports"] = resolved_imports
+    payload["importers"] = importers
+    payload["type_links"] = type_links
     payload["exports"] = exports
     payload["hotspots"] = hotspots
     payload["routes"] = _routes(payload.get("routes"), files)
@@ -424,3 +436,94 @@ def _is_test_path(path: str) -> bool:
 
 def _unique_sorted(values: Iterable[str]) -> list[str]:
     return sorted({value for value in values if value})
+
+
+def _resolved_imports(
+    imports: dict[str, list[str]], files: list[dict[str, Any]]
+) -> dict[str, list[str]]:
+    paths = {entry["path"] for entry in files}
+    return {
+        path: _unique_sorted(
+            target
+            for specifier in specs
+            for target in [_resolve_import_specifier(path, specifier, paths)]
+            if target and target != path
+        )
+        for path, specs in imports.items()
+    }
+
+
+def _reverse_imports(
+    resolved_imports: dict[str, list[str]], files: list[dict[str, Any]]
+) -> dict[str, list[str]]:
+    out = {entry["path"]: [] for entry in files}
+    for importer, targets in resolved_imports.items():
+        for target in targets:
+            out.setdefault(target, []).append(importer)
+    return {path: _unique_sorted(importers) for path, importers in out.items()}
+
+
+def _resolve_import_specifier(
+    importer: str, specifier: str, paths: set[str]
+) -> str | None:
+    if not specifier or specifier.startswith(("node:", "@")):
+        return None
+    candidates: list[str] = []
+    if specifier.startswith("."):
+        base = Path(importer).parent / specifier
+        candidates.extend(_module_candidates(base.as_posix()))
+    elif specifier.startswith("~/"):
+        raw = specifier[2:]
+        candidates.extend(_module_candidates(raw))
+        candidates.extend(_module_candidates(f"src/{raw}"))
+    else:
+        raw = specifier.replace(".", "/")
+        candidates.extend(_module_candidates(raw))
+    for candidate in candidates:
+        normalized = posixpath.normpath(Path(candidate).as_posix())
+        if normalized in paths:
+            return normalized
+    return None
+
+
+def _module_candidates(raw: str) -> list[str]:
+    path = raw.rstrip("/")
+    suffixes = (
+        "",
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+        ".mjs",
+        ".cjs",
+        ".py",
+        ".java",
+        ".d.ts",
+        "/index.ts",
+        "/index.tsx",
+        "/index.js",
+        "/__init__.py",
+    )
+    return [f"{path}{suffix}" for suffix in suffixes]
+
+
+def _type_links(files: list[dict[str, Any]]) -> dict[str, list[str]]:
+    paths = {entry["path"] for entry in files}
+    out = {entry["path"]: [] for entry in files}
+    for path in sorted(paths):
+        if not path.startswith("types/") or not path.endswith(".d.ts"):
+            continue
+        stem = path[len("types/") : -len(".d.ts")]
+        for candidate in (
+            f"lib/{stem}.js",
+            f"lib/{stem}.ts",
+            f"src/{stem}.js",
+            f"src/{stem}.ts",
+            f"{stem}.js",
+            f"{stem}.ts",
+        ):
+            if candidate not in paths:
+                continue
+            out[path].append(candidate)
+            out[candidate].append(path)
+    return {path: _unique_sorted(links) for path, links in out.items()}

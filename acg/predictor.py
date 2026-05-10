@@ -45,9 +45,12 @@ SEED_INDEX_CONFIDENCE_FLOOR = 0.5
 # hotspots and will happily propose the same auth/db files for every task,
 # which over-serializes the lockfile. Three signals per task keeps the
 # strongest hits while leaving room for task-specific seeds to dominate.
-SEED_INDEX_TOP_N = 3
+SEED_INDEX_TOP_N = 8
+SEED_GRAPH_EXPANSION_CONFIDENCE = 0.92
+SEED_GRAPH_EXPANSION_STRUCTURAL_CONFIDENCE = 0.92
+SEED_GRAPH_EXPANSION_MIN_SEED_CONFIDENCE = 0.85
 TOP_GRAPH_FILES_FOR_LLM = 50
-MAX_PREDICTIONS = 8
+MAX_PREDICTIONS = 10
 
 # Regex for explicit file mentions like ``lib/auth.ts`` or ``prisma/schema.prisma``.
 _FILE_MENTION_RE = re.compile(
@@ -69,7 +72,7 @@ _SYMBOL_RE = re.compile(r"\b([a-z][a-zA-Z0-9]{5,})\b")
 # spending any LLM compute.
 
 _TEST_TASK_KEYWORDS_RE = re.compile(
-    r"\b(tests?|testing|specs?|e2e|playwright|vitest|jest|cypress|pytest)\b",
+    r"\b(tests?|testing|specs?|coverage|regression|e2e|playwright|vitest|jest|cypress|pytest)\b",
     re.IGNORECASE,
 )
 # "tests for [the] checkout" / "specs covering signup" / "tests of [the] api"
@@ -295,9 +298,44 @@ def _index_seed(
         )
     except Exception:
         return []
+    is_test_task = _looks_like_test_task(task.prompt) or bool(
+        task.hints and {"test", "tests", "e2e"} & {hint.lower() for hint in task.hints.touches}
+    )
+    is_docs_task = _looks_like_docs_task(task.prompt) or bool(
+        task.hints
+        and {"doc", "docs", "documentation", "readme"}
+        & {hint.lower() for hint in task.hints.touches}
+    )
     return [
-        pw for pw in candidates if pw.confidence >= SEED_INDEX_CONFIDENCE_FLOOR
+        pw
+        for pw in candidates
+        if pw.confidence >= SEED_INDEX_CONFIDENCE_FLOOR
+        and (is_test_task or not _is_test_prediction(pw.path))
+        and (is_docs_task or not _is_docs_prediction(pw.path))
     ]
+
+
+def _is_test_prediction(path: str) -> bool:
+    parts = path.split("/")
+    return (
+        path.startswith(("test/", "tests/", "__tests__/", "cypress/", "e2e/"))
+        or any(part in {"test", "tests", "__tests__"} for part in parts)
+        or bool(re.search(r"\.(?:test|spec|test-d)\.", path))
+    )
+
+
+def _is_docs_prediction(path: str) -> bool:
+    lower = path.lower()
+    parts = lower.split("/")
+    return (
+        lower in {"readme.md", "changelog.md", "history.md"}
+        or lower.startswith(("docs/", "doc/"))
+        or any(part in {"docs", "doc", "documentation"} for part in parts)
+    )
+
+
+def _looks_like_docs_task(prompt: str) -> bool:
+    return bool(re.search(r"\b(docs?|documentation|readme|changelog|release notes?)\b", prompt, re.IGNORECASE))
 
 
 def _read_testdir_from_js_config(path: Path) -> str | None:
@@ -502,6 +540,118 @@ def _topical_seed(
     return list(out.values())
 
 
+def _path_entries(repo_graph: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        entry.get("path"): entry
+        for entry in repo_graph.get("files", [])
+        if isinstance(entry, dict) and isinstance(entry.get("path"), str)
+    }
+
+
+def _graph_neighbors(
+    path: str, repo_graph: dict[str, Any], entries: dict[str, dict[str, Any]]
+) -> list[str]:
+    entry = entries.get(path, {})
+    out: list[str] = []
+    for key in ("resolved_imports", "importers", "type_links"):
+        value = entry.get(key)
+        if isinstance(value, list):
+            out.extend(item for item in value if isinstance(item, str))
+        mapping = repo_graph.get(key)
+        if isinstance(mapping, dict):
+            mapped = mapping.get(path)
+            if isinstance(mapped, list):
+                out.extend(item for item in mapped if isinstance(item, str))
+    return sorted(dict.fromkeys(out))
+
+
+def _graph_neighbor_edges(
+    path: str, repo_graph: dict[str, Any], entries: dict[str, dict[str, Any]]
+) -> list[tuple[str, str]]:
+    entry = entries.get(path, {})
+    out: list[tuple[str, str]] = []
+    for key, kind in (
+        ("resolved_imports", "import"),
+        ("importers", "importer"),
+        ("type_links", "type"),
+    ):
+        value = entry.get(key)
+        if isinstance(value, list):
+            out.extend((item, kind) for item in value if isinstance(item, str))
+        mapping = repo_graph.get(key)
+        if isinstance(mapping, dict):
+            mapped = mapping.get(path)
+            if isinstance(mapped, list):
+                out.extend((item, kind) for item in mapped if isinstance(item, str))
+    return sorted(dict.fromkeys(out))
+
+
+def _token_set(text: str) -> set[str]:
+    from acg.index.util import tokenize
+
+    return set(tokenize(text))
+
+
+def _task_matches_path(task_tokens: set[str], path: str, entry: dict[str, Any]) -> bool:
+    del entry
+    return bool(_token_set(path) & task_tokens)
+
+
+def _graph_expansion_seed(
+    task: TaskInput,
+    repo_graph: dict[str, Any],
+    seeds: list[PredictedWrite],
+) -> list[PredictedWrite]:
+    entries = _path_entries(repo_graph)
+    if not entries:
+        return []
+    existing = {seed.path for seed in seeds}
+    high_confidence_seeds = [
+        seed for seed in seeds if seed.confidence >= SEED_GRAPH_EXPANSION_MIN_SEED_CONFIDENCE
+    ]
+    if not high_confidence_seeds:
+        return []
+    task_tokens = _token_set(task.prompt)
+    is_test_task = _looks_like_test_task(task.prompt) or bool(
+        task.hints and {"test", "tests", "e2e"} & {hint.lower() for hint in task.hints.touches}
+    )
+    evidence: dict[str, set[str]] = {}
+    edge_kinds: dict[str, set[str]] = {}
+    for seed in high_confidence_seeds:
+        for neighbor, kind in _graph_neighbor_edges(seed.path, repo_graph, entries):
+            if neighbor in existing or neighbor not in entries:
+                continue
+            if not is_test_task and _is_test_prediction(neighbor):
+                continue
+            evidence.setdefault(neighbor, set()).add(seed.path)
+            edge_kinds.setdefault(neighbor, set()).add(kind)
+    expansions: list[PredictedWrite] = []
+    for path, sources in sorted(evidence.items()):
+        entry = entries[path]
+        kinds = edge_kinds.get(path, set())
+        if _task_matches_path(task_tokens, path, entry):
+            confidence = SEED_GRAPH_EXPANSION_CONFIDENCE
+        elif "type" in kinds:
+            confidence = SEED_GRAPH_EXPANSION_STRUCTURAL_CONFIDENCE
+        elif "import" in kinds and len(sources) >= 2:
+            confidence = SEED_GRAPH_EXPANSION_STRUCTURAL_CONFIDENCE
+        elif len(sources) >= 2:
+            continue
+        else:
+            continue
+        expansions.append(
+            PredictedWrite(
+                path=path,
+                confidence=confidence,
+                reason=(
+                    "Graph expansion: local import/importer/type edge from "
+                    f"high-confidence seed(s) {', '.join(sorted(sources)[:3])}."
+                ),
+            )
+        )
+    return expansions
+
+
 def _filter_graph_for_llm(repo_graph: dict[str, Any]) -> dict[str, Any]:
     """Return a compact graph slice safe to embed in an LLM prompt."""
     files = repo_graph.get("files") or []
@@ -652,6 +802,7 @@ def predict_writes(
     seeds += _env_seed(task, repo_root)
     seeds += _sibling_pattern_seed(task, repo_graph)
     seeds += _index_seed(task, repo_root, repo_graph)
+    seeds += _graph_expansion_seed(task, repo_graph, seeds)
     # Deduplicate seeds, keeping the highest-confidence variant per path.
     by_path: dict[str, PredictedWrite] = {}
     for pw in seeds:

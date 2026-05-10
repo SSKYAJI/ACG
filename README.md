@@ -103,15 +103,22 @@ See `examples/lockfile.dag.example.json` for the full demo lockfile and `schema/
 ## CLI surface
 
 ```text
+acg plan-tasks       --repo PATH --goal TEXT --out tasks.json
 acg compile          --repo PATH --tasks FILE --out FILE
 acg explain          --lock FILE
 acg validate-write   --lock FILE --task ID --path PATH
+acg validate-diff    --lock FILE --repo PATH --task ID [--base-ref REF] [--head-ref REF]
 acg report           --naive FILE --planned FILE --out FILE
 acg run-benchmark    --mode {naive,planned} --repo PATH --tasks FILE --out FILE
 acg mcp              [--transport stdio]    # MCP server (requires .[mcp] extra)
 ```
 
-The same four primitives are exposed as MCP tools — see [`docs/MCP_SERVER.md`](docs/MCP_SERVER.md). Compatible with Devin Manage Devins, Claude Code, Cursor, and OpenCode.
+`plan-tasks` is the goal-level orchestrator surface: it turns a high-level repo
+goal into a reviewable `tasks.json` before compilation. `validate-diff` audits
+actual files changed in a `git diff` against the same per-task contract, so ACG
+can score real applied patches in addition to proposal-only runtime traces.
+
+The core ACG primitives are also exposed as MCP tools — see [`docs/MCP_SERVER.md`](docs/MCP_SERVER.md). Compatible with Devin Manage Devins, Claude Code, Cursor, and OpenCode.
 
 ## Architecture
 
