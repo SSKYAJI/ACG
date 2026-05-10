@@ -1,10 +1,12 @@
 {
   "version": "1.0",
-  "generated_at": "2026-05-10T07:15:47.051391Z",
+  "generated_at": "2026-05-10T08:40:16.268182Z",
   "generator": {
     "tool": "acg",
     "version": "0.1.0",
-    "model": "lockfile-replay"
+    "model": "lockfile-replay",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 7796
   },
   "repo": {
     "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/fastify/checkout",
@@ -20,16 +22,21 @@
       "prompt": "Avoid unnecessary ContentType object creation in getSchemaSerializer by only parsing the response content type for content-type-keyed response schemas, including status-code, fallback, and default lookup paths.",
       "predicted_writes": [
         {
+          "path": "lib/content-type-parser.js",
+          "confidence": 0.85,
+          "reason": "Symbol 'ContentType' referenced in prompt; defined in lib/content-type-parser.js. Signals: symbol."
+        },
+        {
           "path": "lib/schemas.js",
           "confidence": 0.85,
           "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 38.18). Signals: bm25, symbol."
         }
       ],
       "allowed_paths": [
+        "lib/content-type-parser.js",
         "lib/schemas.js"
       ],
       "candidate_context_paths": [
-        "types/content-type-parser.d.ts",
         "test/internals/reply-serialize.test.js",
         "examples/shared-schema.js",
         "lib/content-type.js",
@@ -48,10 +55,19 @@
         "lib/symbols.js",
         "types/context.d.ts",
         "types/errors.d.ts",
-        "lib/content-type-parser.js",
-        "lib/schema-controller.js"
+        "lib/schema-controller.js",
+        "types/content-type-parser.d.ts"
       ],
       "file_scopes": [
+        {
+          "path": "lib/content-type-parser.js",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "symbol"
+          ],
+          "reason": "Symbol 'ContentType' referenced in prompt; defined in lib/content-type-parser.js. Signals: symbol."
+        },
         {
           "path": "lib/schemas.js",
           "tier": "must_write",
@@ -61,15 +77,6 @@
             "symbol"
           ],
           "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 38.18). Signals: bm25, symbol."
-        },
-        {
-          "path": "types/content-type-parser.d.ts",
-          "tier": "candidate_context",
-          "score": 0.9999991477356422,
-          "signals": [
-            "bm25"
-          ],
-          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 36.67). Candidate context only; requires replan before write. Signals: bm25."
         },
         {
           "path": "test/internals/reply-serialize.test.js",
@@ -159,7 +166,7 @@
           "signals": [
             "graph"
           ],
-          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) examples/shared-schema.js, lib/context.js, lib/decorate.js. Candidate context only; requires replan before write. Signals: graph."
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) examples/shared-schema.js, lib/content-type-parser.js, lib/context.js. Candidate context only; requires replan before write. Signals: graph."
         },
         {
           "path": "lib/error-handler.js",
@@ -213,7 +220,7 @@
           "signals": [
             "graph"
           ],
-          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/context.js, lib/decorate.js, lib/error-status.js. Candidate context only; requires replan before write. Signals: graph."
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/content-type-parser.js, lib/context.js, lib/decorate.js. Candidate context only; requires replan before write. Signals: graph."
         },
         {
           "path": "types/context.d.ts",
@@ -234,15 +241,6 @@
           "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/errors.js. Candidate context only; requires replan before write. Signals: graph."
         },
         {
-          "path": "lib/content-type-parser.js",
-          "tier": "candidate_context",
-          "score": 0.72,
-          "signals": [
-            "graph"
-          ],
-          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/content-type.js, lib/errors.js. Candidate context only; requires replan before write. Signals: graph."
-        },
-        {
           "path": "lib/schema-controller.js",
           "tier": "candidate_context",
           "score": 0.72,
@@ -250,6 +248,16 @@
             "graph"
           ],
           "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/schemas.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "types/content-type-parser.d.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "bm25",
+            "graph"
+          ],
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 36.67). Candidate context only; requires replan before write. Signals: bm25, graph."
         }
       ],
       "depends_on": [],

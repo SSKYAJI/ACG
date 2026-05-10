@@ -27,7 +27,7 @@ from acg.runtime import (
     run_orchestrator,
     run_worker,
 )
-from acg.schema import AgentLock, ExecutionPlan, Group, Task
+from acg.schema import AgentLock, ExecutionPlan, FileScope, Group, Task
 
 # ---------------------------------------------------------------------------
 # Test doubles.
@@ -254,6 +254,58 @@ def test_runtime_marks_candidate_context_write_as_needs_replan(
     assert proposal.allowed is False
     assert proposal.scope_status == "needs_replan"
     assert proposal.reason and "candidate_context only" in proposal.reason
+
+
+def test_runtime_auto_replan_approves_supported_candidate_context(
+    lock: AgentLock, empty_repo_graph: dict[str, object]
+) -> None:
+    scoped_lock = lock.model_copy(deep=True)
+    oauth_task = next(t for t in scoped_lock.tasks if t.id == "oauth")
+    oauth_task.candidate_context_paths.append("src/server/oauth-provider.ts")
+    oauth_task.file_scopes.append(
+        FileScope(
+            path="src/server/oauth-provider.ts",
+            tier="candidate_context",
+            score=0.86,
+            signals=["scope_review"],
+            reason="Scope review kept this as a supported candidate.",
+        )
+    )
+    sub = StubRuntimeLLM(
+        replies={
+            "oauth": json.dumps(
+                {
+                    "writes": [
+                        {
+                            "file": "src/server/oauth-provider.ts",
+                            "description": "candidate helper",
+                        }
+                    ]
+                }
+            ),
+            "settings": json.dumps({"writes": []}),
+            "billing": json.dumps({"writes": []}),
+            "tests": json.dumps({"writes": []}),
+        }
+    )
+
+    result = asyncio.run(
+        run_lockfile(
+            scoped_lock,
+            empty_repo_graph,
+            StubRuntimeLLM(),
+            sub,
+            lockfile_path="x.json",
+            config=RuntimeConfig(auto_replan=True),
+        )
+    )
+
+    oauth_worker = next(w for w in result.workers if w.task_id == "oauth")
+    proposal = oauth_worker.proposals[0]
+    assert proposal.allowed is True
+    assert proposal.scope_status == "approved_replan"
+    assert oauth_worker.replan_approved_count == 1
+    assert "src/server/oauth-provider.ts" in oauth_task.allowed_paths
 
 
 def test_runtime_allows_writes_within_allowed_paths(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import re
 import subprocess
 from dataclasses import dataclass
@@ -10,7 +11,8 @@ from pathlib import Path
 from typing import Any
 
 from acg.compiler import compile_lockfile
-from acg.repo_graph import load_context_graph
+from acg.llm import LLMClient, MockLLMClient
+from acg.repo_graph import detect_language, load_context_graph, scan_context_graph
 from acg.schema import AgentLock, TasksInput
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -43,6 +45,8 @@ PREDICTOR_FIELDS = [
     "approval_needed_count",
     "hard_conflict_pair_count",
     "candidate_conflict_pair_count",
+    "tokens_planner_total",
+    "tokens_scope_review_total",
     "exact_overlap",
     "predicted_writes",
     "allowed_paths",
@@ -210,6 +214,8 @@ def _metric_row(
     candidate_context: list[str],
     hard_conflict_pair_count: int,
     candidate_conflict_pair_count: int,
+    tokens_planner_total: int | None = None,
+    tokens_scope_review_total: int | None = None,
 ) -> dict[str, str]:
     hard_set = set(predicted)
     candidate_set = hard_set | set(candidate_context)
@@ -243,6 +249,10 @@ def _metric_row(
         "approval_needed_count": str(len(approval_needed)),
         "hard_conflict_pair_count": str(hard_conflict_pair_count),
         "candidate_conflict_pair_count": str(candidate_conflict_pair_count),
+        "tokens_planner_total": "" if tokens_planner_total is None else str(tokens_planner_total),
+        "tokens_scope_review_total": (
+            "" if tokens_scope_review_total is None else str(tokens_scope_review_total)
+        ),
         "exact_overlap": str(hard_set == truth_set).lower(),
         "predicted_writes": ";".join(sorted(hard_set)),
         "allowed_paths": ";".join(sorted(set(allowed))),
@@ -256,9 +266,46 @@ def _metric_row(
     }
 
 
-def write_predictor_csv(mode: str) -> list[dict[str, str]]:
+def _load_dotenv(path: Path = PROJECT_ROOT / ".env") -> None:
+    if not path.exists():
+        return
+    for raw_line in path.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        os.environ[key] = value.strip().strip('"').strip("'")
+
+
+def _output_stem(mode: str, llm_mode: str) -> str:
+    if mode == "after" and llm_mode != "replay":
+        return f"{mode}_{llm_mode}"
+    return mode
+
+
+def _llm_for_eval(llm_mode: str, baseline_lock: AgentLock, task_id: str) -> Any:
+    if llm_mode == "replay":
+        return ReplayLockLLM(_predicted_items_for_task(baseline_lock, task_id))
+    if llm_mode == "mock":
+        return MockLLMClient()
+    if llm_mode == "live":
+        _load_dotenv()
+        llm = LLMClient.from_env()
+        if isinstance(llm, MockLLMClient):
+            raise RuntimeError(
+                "live eval requested but no ACG_LLM_API_KEY/GROQ_API_KEY is configured"
+            )
+        return llm
+    raise ValueError(f"unknown llm_mode: {llm_mode}")
+
+
+def write_predictor_csv(mode: str, llm_mode: str = "replay") -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
-    locks_dir = OUT_DIR / "after_locks"
+    output_stem = _output_stem(mode, llm_mode)
+    locks_dir = OUT_DIR / ("after_locks" if llm_mode == "replay" else f"after_locks_{llm_mode}")
     if mode == "after":
         locks_dir.mkdir(parents=True, exist_ok=True)
     for task in discover_tasks():
@@ -267,8 +314,24 @@ def write_predictor_csv(mode: str) -> list[dict[str, str]]:
         else:
             baseline_lock = AgentLock.model_validate_json(task.lock_path.read_text())
             tasks_input = TasksInput.model_validate_json(task.task_path.read_text())
+            detected_language = detect_language(task.checkout_path)
             repo_graph = load_context_graph(task.checkout_path)
-            llm = ReplayLockLLM(_predicted_items_for_task(baseline_lock, task.task_id))
+            graph_paths = [
+                entry.get("path", "")
+                for entry in repo_graph.get("files", [])
+                if isinstance(entry, dict)
+            ]
+            has_ignored_paths = any(
+                path.startswith((".venv/", "node_modules/", "vendor/"))
+                for path in graph_paths
+            )
+            if (
+                not repo_graph
+                or repo_graph.get("language") != detected_language
+                or has_ignored_paths
+            ):
+                repo_graph = scan_context_graph(task.checkout_path, detected_language)
+            llm = _llm_for_eval(llm_mode, baseline_lock, task.task_id)
             lock = compile_lockfile(task.checkout_path, tasks_input, repo_graph, llm)
             (locks_dir / f"{task.repo}-{task.task_id}.json").write_text(
                 lock.model_dump_json(indent=2) + "\n"
@@ -283,9 +346,19 @@ def write_predictor_csv(mode: str) -> list[dict[str, str]]:
                 candidate_context,
                 hard_conflicts,
                 candidate_conflicts,
+                (
+                    lock.generator.tokens_planner_total
+                    if lock.generator is not None
+                    else None
+                ),
+                (
+                    lock.generator.tokens_scope_review_total
+                    if lock.generator is not None
+                    else None
+                ),
             )
         )
-    out_path = OUT_DIR / f"{mode}_predictor.csv"
+    out_path = OUT_DIR / f"{output_stem}_predictor.csv"
     with out_path.open("w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=PREDICTOR_FIELDS)
         writer.writeheader()
@@ -298,9 +371,9 @@ def _read_csv(path: Path) -> dict[tuple[str, str], dict[str, str]]:
         return {(row["repo"], row["task_id"]): row for row in csv.DictReader(fh)}
 
 
-def write_diff_csv() -> None:
+def write_diff_csv(llm_mode: str = "replay") -> None:
     before_path = OUT_DIR / "before_predictor.csv"
-    after_path = OUT_DIR / "after_predictor.csv"
+    after_path = OUT_DIR / f"{_output_stem('after', llm_mode)}_predictor.csv"
     if not before_path.exists() or not after_path.exists():
         return
     before = _read_csv(before_path)
@@ -370,7 +443,8 @@ def write_diff_csv() -> None:
                 "remaining_false_negatives": new["false_negatives"],
             }
         )
-    with (OUT_DIR / "predictor_diff.csv").open("w", newline="") as fh:
+    diff_name = "predictor_diff.csv" if llm_mode == "replay" else f"predictor_diff_{llm_mode}.csv"
+    with (OUT_DIR / diff_name).open("w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
@@ -413,7 +487,7 @@ def _token_rows_for_task(task: EvalTask) -> list[dict[str, str]]:
     return rows
 
 
-def write_openrouter_tokens_csv(mode: str) -> None:
+def write_openrouter_tokens_csv(mode: str, llm_mode: str = "replay") -> None:
     fields = [
         "repo",
         "task_id",
@@ -442,7 +516,11 @@ def write_openrouter_tokens_csv(mode: str) -> None:
                 "prompt_tokens": "",
                 "completion_tokens": "",
                 "cost_usd": "",
-                "source": "live OpenRouter rerun not available; predictor CSV uses lockfile replay",
+                "source": (
+                    "predictor CSV uses live model compile"
+                    if llm_mode == "live"
+                    else "live OpenRouter rerun not available; predictor CSV uses lockfile replay"
+                ),
             }
         )
     if not rows:
@@ -460,7 +538,8 @@ def write_openrouter_tokens_csv(mode: str) -> None:
                 "source": "no existing OpenRouter eval_run_combined artifacts found",
             }
         ]
-    with (OUT_DIR / f"{mode}_openrouter_tokens.csv").open("w", newline="") as fh:
+    output_stem = _output_stem(mode, llm_mode)
+    with (OUT_DIR / f"{output_stem}_openrouter_tokens.csv").open("w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
@@ -515,13 +594,25 @@ def write_test_results_csv(phase: str, commands: list[str]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=["before", "after"], required=True)
+    parser.add_argument(
+        "--llm-mode",
+        choices=["replay", "live", "mock"],
+        default="replay",
+        help=(
+            "after-mode LLM source. replay isolates deterministic localization; "
+            "live calls ACG_LLM_*; mock uses canned offline writes."
+        ),
+    )
     parser.add_argument("--with-tests", action="append", default=[])
     args = parser.parse_args()
 
-    write_predictor_csv(args.mode)
-    write_openrouter_tokens_csv(args.mode)
+    if args.mode == "before" and args.llm_mode != "replay":
+        raise SystemExit("--llm-mode only applies to --mode after")
+
+    write_predictor_csv(args.mode, args.llm_mode)
+    write_openrouter_tokens_csv(args.mode, args.llm_mode)
     if args.mode == "after":
-        write_diff_csv()
+        write_diff_csv(args.llm_mode)
     if args.with_tests:
         write_test_results_csv(args.mode, args.with_tests)
 

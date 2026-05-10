@@ -113,6 +113,7 @@ class EvalTask:
     actual_changed_files_kind: str = "proposed_write_set"
     out_of_bounds_files: list[str] = field(default_factory=list)
     blocked_write_events: list[BlockedWriteEvent] = field(default_factory=list)
+    approved_replan_files: list[str] = field(default_factory=list)
     overlaps_with: list[str] = field(default_factory=list)
     test: TaskTest = field(default_factory=TaskTest)
     timestamps: TaskTimestamps = field(default_factory=TaskTimestamps)
@@ -191,7 +192,11 @@ class SummaryMetrics:
     # back to chars//4 on the exact worker prompt strings. ``tokens_prompt_method``
     # records which path was used.
     tokens_prompt_total: int | None = None
+    tokens_worker_prompt_total: int | None = None
     tokens_prompt_method: str | None = None
+    tokens_planner_total: int | None = None
+    tokens_scope_review_total: int | None = None
+    tokens_all_in: int | None = None
     # Sum of per-task ``tokens_completion`` (real output tokens reported by
     # the OpenAI-compatible ``usage`` block on the local backend).
     tokens_completion_total: int | None = None
@@ -485,6 +490,8 @@ def compute_summary_metrics(
     sequential_wall_time_seconds: float | None = None,
     merge_conflicts: int = 0,
     tokens_orchestrator_overhead: int | None = None,
+    tokens_planner_total: int | None = None,
+    tokens_scope_review_total: int | None = None,
     tokens_prompt_method: str | None = None,
     tokens_completion_method: str | None = None,
     cost_usd_total: float | None = None,
@@ -535,6 +542,17 @@ def compute_summary_metrics(
     ]
     prompt_total: int | None = sum(prompt_values) if prompt_values else None
     completion_total: int | None = sum(completion_values) if completion_values else None
+    token_parts = [
+        value
+        for value in (
+            prompt_total,
+            tokens_orchestrator_overhead,
+            tokens_planner_total,
+            tokens_scope_review_total,
+        )
+        if value is not None
+    ]
+    tokens_all_in = sum(token_parts) if token_parts else None
     task_cost_values = [t.metrics.cost_usd for t in tasks if t.metrics.cost_usd is not None]
     if cost_usd_total is None and task_cost_values:
         cost_usd_total = round(sum(task_cost_values), 8)
@@ -561,7 +579,11 @@ def compute_summary_metrics(
         wall_time_seconds=round(wall_time_seconds, 4),
         acus_consumed_total=acus_total,
         tokens_prompt_total=prompt_total,
+        tokens_worker_prompt_total=prompt_total,
         tokens_prompt_method=tokens_prompt_method if prompt_total is not None else None,
+        tokens_planner_total=tokens_planner_total,
+        tokens_scope_review_total=tokens_scope_review_total,
+        tokens_all_in=tokens_all_in,
         tokens_completion_total=completion_total,
         tokens_completion_method=(
             tokens_completion_method if completion_total is not None else None

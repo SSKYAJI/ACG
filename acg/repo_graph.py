@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import posixpath
 import subprocess
@@ -16,6 +17,8 @@ LANGUAGE_ALIASES = {
     "js": "javascript",
     "javascript": "javascript",
     "java": "java",
+    "py": "python",
+    "python": "python",
 }
 CONFIG_FILENAMES = {
     ".env.example",
@@ -73,7 +76,7 @@ TEST_SUFFIXES = (
     ".test.ts",
     ".test.tsx",
 )
-CODE_EXTENSIONS = {".java", ".js", ".jsx", ".ts", ".tsx"}
+CODE_EXTENSIONS = {".java", ".js", ".jsx", ".py", ".ts", ".tsx"}
 
 
 class GraphScanError(RuntimeError):
@@ -91,7 +94,7 @@ def normalize_language(language: str | None, *, allow_auto: bool = True) -> str:
         expected = ", ".join(sorted(LANGUAGE_ALIASES))
         raise ValueError(f"unsupported language {language!r}; expected one of: {expected}")
     if normalized == "auto" and not allow_auto:
-        raise ValueError("language must resolve to typescript, javascript, or java")
+        raise ValueError("language must resolve to typescript, javascript, python, or java")
     return normalized
 
 
@@ -104,10 +107,12 @@ def detect_language(repo_root: Path) -> str:
     ):
         return "typescript"
 
-    counts = {"java": 0, "typescript": 0, "javascript": 0}
+    counts = {"java": 0, "python": 0, "typescript": 0, "javascript": 0}
     for path in _walk_code_files(root):
         if path.suffix == ".java":
             counts["java"] += 1
+        elif path.suffix == ".py":
+            counts["python"] += 1
         elif path.suffix in {".ts", ".tsx"}:
             counts["typescript"] += 1
         elif path.suffix in {".js", ".jsx"}:
@@ -115,8 +120,15 @@ def detect_language(repo_root: Path) -> str:
 
     if counts["typescript"]:
         return "typescript"
+    if counts["python"] and (
+        (root / "pyproject.toml").exists()
+        or counts["python"] >= counts["javascript"]
+    ):
+        return "python"
     if counts["javascript"] or (root / "package.json").exists():
         return "javascript"
+    if counts["python"]:
+        return "python"
     if counts["java"]:
         return "java"
     return "typescript"
@@ -146,6 +158,8 @@ def scan_context_graph(
 
     if normalized_language == "java":
         graph = _scan_java(root, out)
+    elif normalized_language == "python":
+        graph = _scan_python(root)
     elif normalized_language in {"typescript", "javascript"}:
         graph = _scan_typescript(root, out)
     else:
@@ -177,6 +191,10 @@ def normalize_context_graph(
         entry["resolved_imports"] = resolved_imports.get(path, [])
         entry["importers"] = importers.get(path, [])
         entry["type_links"] = type_links.get(path, [])
+        entry["imported_by_count"] = max(
+            _int_value(entry.get("imported_by_count")),
+            len(entry["importers"]),
+        )
     hotspots = _hotspots(payload.get("hotspots"), files)
 
     payload["version"] = str(payload.get("version") or GRAPH_VERSION)
@@ -208,6 +226,102 @@ def _scan_java(repo_root: Path, out_path: Path) -> dict[str, Any]:
     from graph_builder import scan_java
 
     return scan_java.write_graph(repo_root, out_path)
+
+
+def _scan_python(repo_root: Path) -> dict[str, Any]:
+    files: list[dict[str, Any]] = []
+    for path in _walk_code_files(repo_root):
+        if path.suffix != ".py":
+            continue
+        rel = path.relative_to(repo_root).as_posix()
+        files.append(_python_file_entry(path, rel))
+    return {
+        "version": GRAPH_VERSION,
+        "root": str(repo_root),
+        "language": "python",
+        "languages": ["python"],
+        "files": files,
+    }
+
+
+def _python_file_entry(path: Path, rel: str) -> dict[str, Any]:
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        text = ""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return {
+            "path": rel,
+            "imports": [],
+            "exports": [],
+            "symbols": [],
+            "is_hotspot": _is_test_path(rel) or _is_config_path(rel),
+        }
+
+    imports: list[str] = []
+    symbols: list[str] = []
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            imports.extend(alias.name for alias in node.names if alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            imports.extend(_python_import_from_specs(node))
+        elif isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            symbols.append(node.name)
+        elif isinstance(node, ast.Assign):
+            symbols.extend(
+                target.id
+                for target in node.targets
+                if isinstance(target, ast.Name) and target.id.isupper()
+            )
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            if node.target.id.isupper():
+                symbols.append(node.target.id)
+
+    exports = _python_exports(tree, symbols)
+    return {
+        "path": rel,
+        "imports": _unique_sorted(imports),
+        "exports": _unique_sorted(exports or symbols),
+        "symbols": _unique_sorted(symbols),
+        "is_hotspot": _is_test_path(rel) or _is_config_path(rel),
+    }
+
+
+def _python_import_from_specs(node: ast.ImportFrom) -> list[str]:
+    if node.module == "__future__":
+        return []
+    module = (node.module or "").replace(".", "/")
+    if node.level <= 0:
+        return [node.module] if node.module else []
+    prefix = "../" * max(0, node.level - 1) + "./"
+    if module:
+        return [f"{prefix}{module}"]
+    return [
+        f"{prefix}{alias.name.replace('.', '/')}"
+        for alias in node.names
+        if alias.name and alias.name != "*"
+    ]
+
+
+def _python_exports(tree: ast.Module, symbols: list[str]) -> list[str]:
+    symbol_set = set(symbols)
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets):
+            continue
+        value = node.value
+        if not isinstance(value, (ast.List, ast.Tuple)):
+            continue
+        exports = [
+            item.value
+            for item in value.elts
+            if isinstance(item, ast.Constant) and isinstance(item.value, str)
+        ]
+        return [item for item in exports if item in symbol_set or item]
+    return []
 
 
 def _scan_typescript(repo_root: Path, out_path: Path) -> dict[str, Any]:
@@ -256,7 +370,22 @@ def _walk_code_files(repo_root: Path) -> list[Path]:
             continue
         rel_parts = path.relative_to(repo_root).parts
         if any(
-            part in {".acg", ".git", ".next", "build", "dist", "node_modules", "target"}
+            part
+            in {
+                ".acg",
+                ".git",
+                ".mypy_cache",
+                ".next",
+                ".pytest_cache",
+                ".ruff_cache",
+                ".venv",
+                "__pycache__",
+                "build",
+                "dist",
+                "node_modules",
+                "target",
+                "vendor",
+            }
             for part in rel_parts
         ):
             continue

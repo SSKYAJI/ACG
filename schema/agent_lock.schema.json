@@ -30,6 +30,16 @@
         "model": {
           "type": ["string", "null"],
           "description": "Identifier of the LLM used for predictor reranking, if any."
+        },
+        "tokens_planner_total": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Estimated prompt tokens spent by the optional task-planning orchestrator."
+        },
+        "tokens_scope_review_total": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Estimated prompt tokens spent by compile-time scope review."
         }
       }
     },

@@ -20,8 +20,10 @@ from acg.predictor import (
     _sibling_pattern_seed,
     _test_scaffold_seed,
     predict_file_scopes,
+    predict_file_scopes_with_usage,
     predict_writes,
 )
+from acg.repo_graph import scan_context_graph
 from acg.schema import PredictedWrite, TaskInput, TaskInputHints
 
 
@@ -90,7 +92,7 @@ def test_symbol_seed_uses_repo_graph(repo_graph: dict[str, Any]) -> None:
     assert "lib/auth.ts" in paths
 
 
-def test_llm_rerank_can_add_files(repo_graph: dict[str, Any]) -> None:
+def test_llm_rerank_only_hard_promotes_grounded_files(repo_graph: dict[str, Any]) -> None:
     task = TaskInput(
         id="settings",
         prompt="Redesign the settings page and tweak the sidebar entry.",
@@ -113,7 +115,7 @@ def test_llm_rerank_can_add_files(repo_graph: dict[str, Any]) -> None:
     llm = StubLLM(json.dumps(rerank))
     writes = predict_writes(task, repo_graph, llm)
     paths = {w.path for w in writes}
-    assert "app/settings/page.tsx" in paths
+    assert "app/settings/page.tsx" not in paths
     assert "components/sidebar.tsx" in paths
 
 
@@ -541,6 +543,86 @@ def test_index_seed_swallows_aggregator_failure(
     paths = {write.path for write in writes}
 
     assert "README.md" in paths
+
+
+def test_planner_suspected_files_are_evidence_not_automatic_hard_scope() -> None:
+    task = TaskInput(
+        id="templates",
+        prompt="Enable Jinja2 autoescape.",
+        hints=TaskInputHints(suspected_files=["starlette/templating.py"]),
+    )
+    graph = {
+        "language": "python",
+        "files": [{"path": "starlette/templating.py", "symbols": ["Jinja2Templates"]}],
+    }
+
+    scopes = predict_file_scopes(task, graph, StubLLM(json.dumps({"writes": []})))
+    scope = next(item for item in scopes if item.path == "starlette/templating.py")
+
+    assert "planner" in scope.signals
+    assert scope.tier == "candidate_context"
+
+
+def test_scope_review_can_promote_only_retrieved_candidates() -> None:
+    task = TaskInput(
+        id="templates",
+        prompt="Enable Jinja2Templates autoescape.",
+        hints=TaskInputHints(suspected_files=["starlette/templating.py"]),
+    )
+    graph = {
+        "language": "python",
+        "files": [{"path": "starlette/templating.py", "symbols": ["Jinja2Templates"]}],
+    }
+    llm = StubLLM(
+        json.dumps(
+            {
+                "must_write_paths": [
+                    "starlette/templating.py",
+                    "tests/test_environments.py",
+                ],
+                "candidate_context_paths": [],
+            }
+        )
+    )
+
+    prediction = predict_file_scopes_with_usage(task, graph, llm)
+    by_path = {scope.path: scope for scope in prediction.scopes}
+
+    assert by_path["starlette/templating.py"].tier == "must_write"
+    assert "tests/test_environments.py" not in by_path
+    assert prediction.scope_review_tokens > 0
+
+
+def test_test_source_mapping_links_existing_starlette_test(tmp_path: Path) -> None:
+    (tmp_path / "starlette").mkdir()
+    (tmp_path / "starlette" / "__init__.py").write_text("")
+    (tmp_path / "starlette" / "templating.py").write_text(
+        "class Jinja2Templates:\n"
+        "    pass\n"
+    )
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_templates.py").write_text(
+        "from starlette.templating import Jinja2Templates\n"
+        "\n"
+        "def test_templates_escape():\n"
+        "    assert Jinja2Templates\n"
+    )
+    graph = scan_context_graph(tmp_path, language="python")
+    task = TaskInput(
+        id="templates",
+        prompt=(
+            "Make Jinja2Templates use select_autoescape and add tests for "
+            "escaping behavior."
+        ),
+        hints=TaskInputHints(suspected_files=["starlette/templating.py"]),
+    )
+
+    scopes = predict_file_scopes(task, graph, StubLLM(json.dumps({"writes": []})), repo_root=tmp_path)
+    by_path = {scope.path: scope for scope in scopes}
+
+    assert "starlette/templating.py" in by_path
+    assert "tests/test_templates.py" in by_path
+    assert "testlink" in by_path["tests/test_templates.py"].signals
 
 
 def test_index_seed_unit_filters_below_floor(

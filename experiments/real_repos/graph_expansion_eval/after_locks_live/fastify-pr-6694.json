@@ -1,0 +1,336 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-10T17:50:30.870551Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 8887
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/fastify/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-6694",
+      "prompt": "Improve Content-Type parsing performance by caching parsed ContentType objects in ContentTypeParser and reusing those parsed objects from request handling and request.mediaType without changing external behavior.",
+      "predicted_writes": [
+        {
+          "path": "lib/content-type-parser.js",
+          "confidence": 0.95,
+          "reason": "Task explicitly mentions caching parsed ContentType objects in ContentTypeParser, and this file defines the parser. Signals: llm, symbol. Scope review promoted this retrieved candidate to must_write."
+        },
+        {
+          "path": "lib/content-type.js",
+          "confidence": 0.86,
+          "reason": "Task involves Content-Type parsing and this file handles ContentType objects. Signals: graph, llm. Scope review promoted this retrieved candidate to must_write."
+        }
+      ],
+      "allowed_paths": [
+        "lib/content-type-parser.js",
+        "lib/content-type.js"
+      ],
+      "candidate_context_paths": [
+        "examples/benchmark/parser.js",
+        "examples/parser.js",
+        "lib/context.js",
+        "lib/decorate.js",
+        "lib/error-handler.js",
+        "lib/error-status.js",
+        "lib/errors.js",
+        "lib/four-oh-four.js",
+        "fastify.js",
+        "test/logger/logger-test-utils.js",
+        "lib/hooks.js",
+        "lib/initial-config-validation.js",
+        "lib/logger-factory.js",
+        "lib/plugin-override.js",
+        "lib/plugin-utils.js",
+        "lib/reply.js",
+        "lib/req-id-gen-factory.js",
+        "lib/route.js",
+        "lib/schemas.js",
+        "lib/server.js",
+        "lib/symbols.js",
+        "lib/warnings.js",
+        "lib/wrap-thenable.js"
+      ],
+      "file_scopes": [
+        {
+          "path": "lib/content-type-parser.js",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "llm",
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "Task explicitly mentions caching parsed ContentType objects in ContentTypeParser, and this file defines the parser. Signals: llm, symbol. Scope review promoted this retrieved candidate to must_write."
+        },
+        {
+          "path": "lib/content-type.js",
+          "tier": "must_write",
+          "score": 0.86,
+          "signals": [
+            "graph",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "Task involves Content-Type parsing and this file handles ContentType objects. Signals: graph, llm. Scope review promoted this retrieved candidate to must_write."
+        },
+        {
+          "path": "examples/benchmark/parser.js",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) fastify.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "examples/parser.js",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) fastify.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/context.js",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) fastify.js, lib/route.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/decorate.js",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) fastify.js, lib/errors.js, lib/plugin-utils.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/error-handler.js",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) fastify.js, lib/route.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/error-status.js",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) lib/error-handler.js, lib/handle-request.js, lib/symbols.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/errors.js",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) fastify.js, lib/content-type-parser.js, lib/route.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/four-oh-four.js",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) fastify.js, lib/context.js, lib/error-handler.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "fastify.js",
+          "tier": "candidate_context",
+          "score": 0.85,
+          "signals": [
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "Symbol 'ContentTypeParser' referenced in prompt; defined in fastify.js. Candidate context only; requires replan before write. Signals: symbol. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "test/logger/logger-test-utils.js",
+          "tier": "candidate_context",
+          "score": 0.85,
+          "signals": [
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "Symbol 'request' referenced in prompt; defined in test/logger/logger-test-utils.js. Candidate context only; requires replan before write. Signals: symbol. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/hooks.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/errors.js, lib/four-oh-four.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/initial-config-validation.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/errors.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/logger-factory.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/errors.js, lib/four-oh-four.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/plugin-override.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/content-type-parser.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/plugin-utils.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/decorate.js, lib/errors.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/reply.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/decorate.js, lib/error-handler.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/req-id-gen-factory.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/four-oh-four.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/route.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/context.js, lib/error-handler.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/schemas.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/error-handler.js, lib/errors.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/server.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/errors.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/symbols.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/content-type-parser.js, lib/context.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/warnings.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/content-type-parser.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "lib/wrap-thenable.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/error-handler.js, lib/error-status.js. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-6694"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

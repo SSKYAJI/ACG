@@ -62,9 +62,10 @@ def cmd_compile(
         typer.Option(
             "--language",
             help=(
-                "Source language of the target repo. "
-                "'typescript' (default) runs graph_builder/scan.ts; "
-                "'java' runs the in-process tree-sitter scanner before compiling."
+            "Source language of the target repo. "
+            "'typescript' (default) runs graph_builder/scan.ts; "
+            "'python' runs the in-process AST scanner; "
+            "'java' runs the in-process tree-sitter scanner before compiling."
             ),
         ),
     ] = "typescript",
@@ -81,10 +82,19 @@ def cmd_compile(
 ) -> None:
     """Compile ``tasks.json`` + repo graph into ``agent_lock.json``."""
     language_normalized = language.strip().lower()
-    if language_normalized not in ("auto", "typescript", "javascript", "ts", "js", "java"):
+    if language_normalized not in (
+        "auto",
+        "typescript",
+        "javascript",
+        "ts",
+        "js",
+        "java",
+        "python",
+        "py",
+    ):
         _err_console.print(
             f"[red]unsupported --language {language!r}; "
-            "expected one of: auto, typescript, javascript, java[/]"
+            "expected one of: auto, typescript, javascript, python, java[/]"
         )
         raise typer.Exit(code=EXIT_USER_ERROR)
 
@@ -182,7 +192,7 @@ def cmd_init_graph(
         str,
         typer.Option(
             "--language",
-            help="Source language to scan: auto, typescript, javascript, or java.",
+            help="Source language to scan: auto, typescript, javascript, python, or java.",
         ),
     ] = "auto",
     out: Annotated[
@@ -580,6 +590,7 @@ def cmd_analyze_runs(
                     "out_of_bounds_write_count": r.out_of_bounds_write_count,
                     "blocked_invalid_write_count": r.blocked_invalid_write_count,
                     "tokens_prompt_total": r.tokens_prompt_total,
+                    "tokens_all_in": r.tokens_all_in,
                     "tokens_prompt_method": r.tokens_prompt_method,
                     "tokens_orchestrator_overhead": r.tokens_orchestrator_overhead,
                     "cost_usd_total": r.cost_usd_total,

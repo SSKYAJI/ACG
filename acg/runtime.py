@@ -48,6 +48,7 @@ from rich.console import Console
 from rich.markup import escape as _rich_escape
 
 from . import enforce
+from .compiler import promote_candidate_paths
 from .perf import PerfRecorder
 from .repo_graph import scan_context_graph
 from .schema import AgentLock, Group, Task
@@ -102,6 +103,7 @@ class RuntimeConfig:
     flash_attn: bool = False
     worker_concurrency: int = 0
     grace_overlap: bool = False
+    auto_replan: bool = False
     model_sha: str = ""
     sequential: bool = False
 
@@ -123,17 +125,19 @@ class RuntimeConfig:
             flash_attn=_env_bool("ACG_LLM_FLASH_ATTN", False),
             worker_concurrency=_env_int("ACG_WORKER_CONCURRENCY", 0),
             grace_overlap=_env_bool("ACG_GRACE_OVERLAP", False),
+            auto_replan=_env_bool("ACG_AUTO_REPLAN", False),
             model_sha=os.environ.get("ACG_LLM_MODEL_SHA", ""),
             sequential=_env_bool("ACG_SEQUENTIAL", False),
         )
 
-    def public(self) -> dict[str, str]:
+    def public(self) -> dict[str, Any]:
         """Return a secret-free dict suitable for embedding in the run trace."""
         return {
             "orch_url": self.orch_url,
             "orch_model": self.orch_model,
             "sub_url": self.sub_url,
             "sub_model": self.sub_model,
+            "auto_replan": self.auto_replan,
         }
 
     def perf_public(self) -> dict[str, Any]:
@@ -146,6 +150,7 @@ class RuntimeConfig:
             "flash_attn": self.flash_attn,
             "worker_concurrency": self.worker_concurrency,
             "grace_overlap": self.grace_overlap,
+            "auto_replan": self.auto_replan,
             "model_id": self.sub_model,
             "model_sha": self.model_sha,
         }
@@ -516,6 +521,7 @@ class WorkerResult:
     allowed_count: int
     blocked_count: int
     needs_replan_count: int = 0
+    replan_approved_count: int = 0
     error: str | None = None
     prompt_tokens: int | None = None
     cost_usd: float | None = None
@@ -554,7 +560,7 @@ class RunResult:
     version: str
     generated_at: str
     lockfile: str
-    config: dict[str, str]
+    config: dict[str, Any]
     orchestrator: OrchestratorResult
     workers: list[WorkerResult]
     groups_executed: list[GroupResult]
@@ -784,6 +790,46 @@ def _is_candidate_context_write(task: Task, path: str) -> bool:
     return candidate in set(task.candidate_context_paths)
 
 
+_AUTO_REPLAN_SIGNALS = {
+    "explicit",
+    "framework",
+    "llm",
+    "planner",
+    "scope_review",
+    "symbol",
+    "testlink",
+}
+
+
+def _candidate_scope(task: Task, path: str) -> Any | None:
+    candidate = path.lstrip("./")
+    for scope in task.file_scopes:
+        if scope.path == candidate:
+            return scope
+    return None
+
+
+def _has_hard_conflict(lock: AgentLock, task: Task, path: str) -> bool:
+    for other in lock.tasks:
+        if other.id == task.id:
+            continue
+        allowed, _reason = enforce.validate_write(lock, other.id, path)
+        if allowed:
+            return True
+    return False
+
+
+def _can_auto_approve_replan(lock: AgentLock, task: Task, path: str) -> bool:
+    scope = _candidate_scope(task, path)
+    if scope is None or scope.tier != "candidate_context":
+        return False
+    if scope.score < 0.72:
+        return False
+    if not (set(scope.signals) & _AUTO_REPLAN_SIGNALS):
+        return False
+    return not _has_hard_conflict(lock, task, path)
+
+
 # ---------------------------------------------------------------------------
 # Async execution primitives.
 # ---------------------------------------------------------------------------
@@ -892,6 +938,7 @@ async def run_worker(
     allowed_count = 0
     blocked_count = 0
     needs_replan_count = 0
+    replan_approved_count = 0
     if cfg.grace_overlap and raw_proposals:
         validation_results = await asyncio.gather(
             *(
@@ -906,11 +953,24 @@ async def run_worker(
     for raw, (allowed, reason) in zip(raw_proposals, validation_results, strict=True):
         scope_status = "allowed" if allowed else "blocked"
         if not allowed and _is_candidate_context_write(task, raw["file"]):
-            scope_status = "needs_replan"
-            reason = (
-                f"path {raw['file']!r} is candidate_context only for task "
-                f"{task.id!r}; replan or approval is required before write"
-            )
+            if cfg.auto_replan and _can_auto_approve_replan(lock, task, raw["file"]):
+                promoted = promote_candidate_paths(
+                    lock,
+                    task.id,
+                    [raw["file"]],
+                    reason="runtime auto-replan approved candidate_context write",
+                )
+                if promoted:
+                    allowed, reason = enforce.validate_write(lock, task.id, raw["file"])
+                    scope_status = "approved_replan" if allowed else "needs_replan"
+                    if allowed:
+                        reason = "candidate_context promoted by runtime auto-replan"
+            if not allowed:
+                scope_status = "needs_replan"
+                reason = (
+                    f"path {raw['file']!r} is candidate_context only for task "
+                    f"{task.id!r}; replan or approval is required before write"
+                )
         proposals.append(
             Proposal(
                 file=raw["file"],
@@ -923,6 +983,8 @@ async def run_worker(
         safe_file = _rich_escape(raw["file"])
         if allowed:
             allowed_count += 1
+            if scope_status == "approved_replan":
+                replan_approved_count += 1
             _console.print(
                 f"  [green][validator][/] ALLOWED {task.id} → {safe_file}"
             )
@@ -951,6 +1013,7 @@ async def run_worker(
         allowed_count=allowed_count,
         blocked_count=blocked_count,
         needs_replan_count=needs_replan_count,
+        replan_approved_count=replan_approved_count,
         error=error,
         prompt_tokens=reply.prompt_tokens,
         cost_usd=reply.cost_usd,
@@ -1092,15 +1155,40 @@ async def run_lockfile(
 
     workers: list[WorkerResult] = []
     groups_executed: list[GroupResult] = []
-    groups = sorted(lock.execution_plan.groups, key=lambda g: g.id)
+    executed_tasks: set[str] = set()
     try:
-        for idx, group in enumerate(groups):
+        while len(executed_tasks) < len(lock.tasks):
+            groups = sorted(lock.execution_plan.groups, key=lambda g: g.id)
+            groups_by_id = {group.id: group for group in groups}
+            group: Group | None = None
+            for candidate in groups:
+                pending = [tid for tid in candidate.tasks if tid not in executed_tasks]
+                if not pending:
+                    continue
+                blockers = {
+                    task_id
+                    for wait_id in candidate.waits_for
+                    for task_id in groups_by_id.get(
+                        wait_id, Group(id=wait_id, tasks=[], type="serial")
+                    ).tasks
+                }
+                if blockers <= executed_tasks:
+                    group = Group(
+                        id=candidate.id,
+                        tasks=pending,
+                        type=candidate.type,
+                        waits_for=candidate.waits_for,
+                    )
+                    break
+            if group is None:
+                break
             group_result, group_workers = await run_group(
                 group, lock, repo_graph, sub, config=cfg, perf=perf
             )
             groups_executed.append(group_result)
             workers.extend(group_workers)
-            if cfg.grace_overlap and idx < len(groups) - 1:
+            executed_tasks.update(worker.task_id for worker in group_workers)
+            if cfg.grace_overlap and len(executed_tasks) < len(lock.tasks):
 
                 async def _rescan() -> None:
                     try:

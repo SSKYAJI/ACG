@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "scanned_at": "2026-05-10T07:30:26.466Z",
+  "scanned_at": "2026-05-10T17:51:32.106Z",
   "root": "/Users/prajit/Desktop/projects/cognition/demo-app",
   "language": "typescript",
   "files": [
@@ -290,7 +290,7 @@
       ],
       "default_export": null,
       "is_hotspot": false,
-      "imported_by_count": 1,
+      "imported_by_count": 2,
       "resolved_imports": [],
       "importers": [
         "next.config.js",

@@ -50,6 +50,10 @@
         "sub_model": {
           "type": "string",
           "description": "Model identifier used by sub-agent workers."
+        },
+        "auto_replan": {
+          "type": "boolean",
+          "description": "Whether candidate_context proposals may be auto-promoted when evidence and conflict checks pass."
         }
       }
     },
@@ -207,6 +211,11 @@
           "minimum": 0,
           "description": "Number of rejected proposals that matched candidate_context and require replan or approval."
         },
+        "replan_approved_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of candidate_context proposals promoted by runtime auto-replan."
+        },
         "error": {
           "type": ["string", "null"],
           "description": "Error message if the worker call failed; null on success."
@@ -235,7 +244,7 @@
           "description": "Validator-supplied reason when blocked; null when allowed."
         },
         "scope_status": {
-          "enum": ["allowed", "needs_replan", "blocked"],
+          "enum": ["allowed", "approved_replan", "needs_replan", "blocked"],
           "description": "Scope classification after validation."
         }
       }

@@ -1,0 +1,336 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-10T17:50:53.127954Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 9783
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/starlette/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "python"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr3148-jinja2-autoescape",
+      "prompt": "Make Jinja2Templates use Jinja2's select_autoescape default when creating an environment from a template directory, while preserving caller-supplied environments and adding tests for escaping behavior.",
+      "predicted_writes": [
+        {
+          "path": "tests/test_templates.py",
+          "confidence": 0.9,
+          "reason": "Task requires adding tests for escaping behavior related to templates. Signals: llm, testlink. Scope review promoted this retrieved candidate to must_write."
+        },
+        {
+          "path": "starlette/templating.py",
+          "confidence": 0.86,
+          "reason": "Task explicitly mentions modifying Jinja2Templates and its environment creation behavior. Signals: env, symbol. Scope review promoted this retrieved candidate to must_write."
+        }
+      ],
+      "allowed_paths": [
+        "starlette/templating.py",
+        "tests/test_templates.py"
+      ],
+      "candidate_context_paths": [
+        "starlette/__init__.py",
+        "starlette/_exception_handler.py",
+        "starlette/_utils.py",
+        "starlette/applications.py",
+        "starlette/authentication.py",
+        "starlette/concurrency.py",
+        "starlette/convertors.py",
+        "starlette/datastructures.py",
+        "tests/conftest.py",
+        "tests/middleware/test_base.py",
+        "tests/middleware/test_cors.py",
+        "tests/middleware/test_errors.py",
+        "tests/middleware/test_gzip.py",
+        "tests/middleware/test_https_redirect.py",
+        "tests/middleware/test_session.py",
+        "tests/middleware/test_trusted_host.py",
+        "tests/middleware/test_wsgi.py",
+        "tests/test__utils.py",
+        "tests/test_applications.py",
+        "tests/test_authentication.py",
+        "tests/test_background.py",
+        "tests/test_concurrency.py",
+        "tests/test_config.py"
+      ],
+      "file_scopes": [
+        {
+          "path": "tests/test_templates.py",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "llm",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Task requires adding tests for escaping behavior related to templates. Signals: llm, testlink. Scope review promoted this retrieved candidate to must_write."
+        },
+        {
+          "path": "starlette/templating.py",
+          "tier": "must_write",
+          "score": 0.86,
+          "signals": [
+            "env",
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "Task explicitly mentions modifying Jinja2Templates and its environment creation behavior. Signals: env, symbol. Scope review promoted this retrieved candidate to must_write."
+        },
+        {
+          "path": "starlette/__init__.py",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) tests/test_responses.py, tests/test_websockets.py. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "starlette/_exception_handler.py",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/requests.py, starlette/routing.py. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "starlette/_utils.py",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/requests.py, starlette/routing.py, starlette/testclient.py. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "starlette/applications.py",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/requests.py, starlette/routing.py, tests/middleware/test_base.py. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "starlette/authentication.py",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/_utils.py, starlette/exceptions.py, starlette/requests.py. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "starlette/concurrency.py",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/_exception_handler.py, starlette/datastructures.py, starlette/responses.py. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "starlette/convertors.py",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/routing.py, tests/test_convertors.py. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "starlette/datastructures.py",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/requests.py, starlette/routing.py, starlette/templating.py. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/conftest.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/middleware/test_base.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/middleware/test_cors.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/middleware/test_errors.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/middleware/test_gzip.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/middleware/test_https_redirect.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/middleware/test_session.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/middleware/test_trusted_host.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/middleware/test_wsgi.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/test__utils.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/test_applications.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/__init__.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/test_authentication.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/test_background.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/test_concurrency.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/test_config.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr3148-jinja2-autoescape"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

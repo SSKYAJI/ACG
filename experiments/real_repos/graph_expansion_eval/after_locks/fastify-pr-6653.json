@@ -1,10 +1,12 @@
 {
   "version": "1.0",
-  "generated_at": "2026-05-10T07:15:46.765937Z",
+  "generated_at": "2026-05-10T08:40:15.097881Z",
   "generator": {
     "tool": "acg",
     "version": "0.1.0",
-    "model": "lockfile-replay"
+    "model": "lockfile-replay",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 9046
   },
   "repo": {
     "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/fastify/checkout",
@@ -18,10 +20,17 @@
     {
       "id": "pr-6653",
       "prompt": "Add a readonly request.mediaType property that exposes the parsed request Content-Type media type, cache the parsed ContentType on the request, and update validation and request handling to reuse the parsed value.",
-      "predicted_writes": [],
-      "allowed_paths": [],
+      "predicted_writes": [
+        {
+          "path": "lib/content-type-parser.js",
+          "confidence": 0.85,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 34.25). Signals: bm25, symbol."
+        }
+      ],
+      "allowed_paths": [
+        "lib/content-type-parser.js"
+      ],
       "candidate_context_paths": [
-        "types/content-type-parser.d.ts",
         "test/content-parser.test.js",
         "lib/context.js",
         "lib/decorate.js",
@@ -41,20 +50,22 @@
         "types/context.d.ts",
         "types/errors.d.ts",
         "types/hooks.d.ts",
-        "lib/content-type-parser.js",
+        "lib/content-type.js",
         "lib/handle-request.js",
         "lib/request.js",
-        "lib/validation.js"
+        "lib/validation.js",
+        "types/content-type-parser.d.ts"
       ],
       "file_scopes": [
         {
-          "path": "types/content-type-parser.d.ts",
-          "tier": "candidate_context",
-          "score": 0.9999999852032609,
+          "path": "lib/content-type-parser.js",
+          "tier": "must_write",
+          "score": 0.85,
           "signals": [
-            "bm25"
+            "bm25",
+            "symbol"
           ],
-          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 46.81). Candidate context only; requires replan before write. Signals: bm25."
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 34.25). Signals: bm25, symbol."
         },
         {
           "path": "test/content-parser.test.js",
@@ -189,7 +200,7 @@
           "signals": [
             "graph"
           ],
-          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/context.js, lib/decorate.js, lib/error-handler.js. Candidate context only; requires replan before write. Signals: graph."
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/content-type-parser.js, lib/context.js, lib/decorate.js. Candidate context only; requires replan before write. Signals: graph."
         },
         {
           "path": "lib/wrap-thenable.js",
@@ -228,14 +239,13 @@
           "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/hooks.js. Candidate context only; requires replan before write. Signals: graph."
         },
         {
-          "path": "lib/content-type-parser.js",
+          "path": "lib/content-type.js",
           "tier": "candidate_context",
           "score": 0.72,
           "signals": [
-            "bm25",
             "graph"
           ],
-          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 34.25). Candidate context only; requires replan before write. Signals: bm25, graph."
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/content-type-parser.js. Candidate context only; requires replan before write. Signals: graph."
         },
         {
           "path": "lib/handle-request.js",
@@ -263,6 +273,16 @@
             "graph"
           ],
           "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/errors.js, test/internals/validation.test.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "types/content-type-parser.d.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "bm25",
+            "graph"
+          ],
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 46.81). Candidate context only; requires replan before write. Signals: bm25, graph."
         }
       ],
       "depends_on": [],

@@ -89,7 +89,8 @@ def _build_planner_prompt(
         "Output ONLY a JSON object with key \"tasks\". Each task must include: "
         "\"id\" (lowercase letters, digits, dash, underscore), \"prompt\" "
         "(specific coding instruction), optional \"hints\" with \"touches\" "
-        "(short feature/path words), and optional \"depends_on\" (task ids)."
+        "(short feature/path words) and \"suspected_files\" (repo-relative "
+        "files worth inspecting), and optional \"depends_on\" (task ids)."
     )
     user = (
         f"High-level goal:\n{goal.strip()}\n\n"
@@ -153,17 +154,29 @@ def _coerce_tasks(payload: dict[str, Any], *, max_tasks: int) -> TasksInput:
 
         hints_payload = item.get("hints")
         touches: list[str] = []
+        suspected_files: list[str] = []
         if isinstance(hints_payload, dict):
             raw_touches = hints_payload.get("touches") or []
             if isinstance(raw_touches, list):
                 touches = [str(t) for t in raw_touches if str(t).strip()]
+            raw_suspected = hints_payload.get("suspected_files") or []
+            if isinstance(raw_suspected, list):
+                suspected_files = [
+                    str(path).strip("./")
+                    for path in raw_suspected
+                    if str(path).strip()
+                ]
         depends_on_raw = item.get("depends_on") or []
         depends_on = [str(dep) for dep in depends_on_raw if isinstance(dep, str)]
         tasks.append(
             TaskInput(
                 id=task_id,
                 prompt=prompt.strip(),
-                hints=TaskInputHints(touches=touches) if touches else None,
+                hints=(
+                    TaskInputHints(touches=touches, suspected_files=suspected_files)
+                    if touches or suspected_files
+                    else None
+                ),
                 depends_on=depends_on,
             )
         )
@@ -195,9 +208,15 @@ def plan_tasks_from_goal(
 ) -> TasksInput:
     """Ask an orchestrator LLM to produce a reviewable ``TasksInput`` artifact."""
     max_tasks = max(1, max_tasks)
-    reply = llm.complete(_build_planner_prompt(goal, repo_graph, max_tasks=max_tasks))
+    messages = _build_planner_prompt(goal, repo_graph, max_tasks=max_tasks)
+    reply = llm.complete(messages)
     payload = _extract_json_object(reply)
-    return _coerce_tasks(payload, max_tasks=max_tasks)
+    tasks = _coerce_tasks(payload, max_tasks=max_tasks)
+    tasks.tokens_planner_total = max(
+        1,
+        sum(len(message.get("content", "") or "") for message in messages) // 4,
+    )
+    return tasks
 
 
 __all__ = [

@@ -142,13 +142,16 @@ def compile_lockfile(
         Schema in ``schema/agent_lock.schema.json``.
     """
     # Late import to keep the schema module dependency-free at import time.
-    from .predictor import predict_file_scopes
+    from .predictor import predict_file_scopes_with_usage
 
     explicit_deps = _explicit_dependencies(tasks_input.tasks)
     heuristic_deps = _heuristic_dependencies(tasks_input.tasks)
     tasks: list[Task] = []
+    scope_review_tokens_total = 0
     for ti in tasks_input.tasks:
-        file_scopes = predict_file_scopes(ti, repo_graph, llm, repo_root=repo_path)
+        prediction = predict_file_scopes_with_usage(ti, repo_graph, llm, repo_root=repo_path)
+        file_scopes = prediction.scopes
+        scope_review_tokens_total += prediction.scope_review_tokens
         writes = _must_writes(file_scopes)
         allowed_paths = _build_allowed_paths(writes)
         tasks.append(
@@ -178,9 +181,76 @@ def compile_lockfile(
     return AgentLock(
         version="1.0",
         generated_at=AgentLock.utcnow(),
-        generator=Generator(tool="acg", version=__version__, model=llm.model),
+        generator=Generator(
+            tool="acg",
+            version=__version__,
+            model=llm.model,
+            tokens_planner_total=tasks_input.tokens_planner_total,
+            tokens_scope_review_total=scope_review_tokens_total or None,
+        ),
         repo=Repo(root=str(repo_path), languages=_detect_languages(repo_graph)),
         tasks=tasks,
         execution_plan=ExecutionPlan(groups=groups),
         conflicts_detected=conflicts,
     )
+
+
+def rebuild_lockfile_plan(lock: AgentLock) -> None:
+    """Recompute conflicts, groups, and parallel_group fields in place."""
+    conflicts = detect_conflicts(lock.tasks)
+    dag = build_dag(lock.tasks)
+    groups = topological_groups(dag)
+    group_by_task = {
+        task_id: group.id
+        for group in groups
+        for task_id in group.tasks
+    }
+    for task in lock.tasks:
+        task.parallel_group = group_by_task.get(task.id)
+    lock.conflicts_detected = conflicts
+    lock.execution_plan = ExecutionPlan(groups=groups)
+
+
+def promote_candidate_paths(
+    lock: AgentLock,
+    task_id: str,
+    paths: list[str],
+    *,
+    reason: str = "runtime replan approved candidate_context path",
+) -> list[str]:
+    """Promote candidate-context paths to hard write authority, then rebuild DAG."""
+    promoted: list[str] = []
+    task = next((item for item in lock.tasks if item.id == task_id), None)
+    if task is None:
+        return promoted
+    candidate_set = set(task.candidate_context_paths)
+    existing_writes = {write.path for write in task.predicted_writes}
+    for raw_path in paths:
+        path = raw_path.strip("./")
+        if path not in candidate_set or path in existing_writes:
+            continue
+        scope = next((item for item in task.file_scopes if item.path == path), None)
+        confidence = scope.score if scope is not None else 0.72
+        task.predicted_writes.append(
+            PredictedWrite(path=path, confidence=confidence, reason=reason)
+        )
+        if scope is not None:
+            scope.tier = "must_write"
+            scope.score = max(scope.score, confidence)
+            signals = set(scope.signals)
+            signals.add("approved_replan")
+            scope.signals = sorted(signals)
+            scope.reason = f"{scope.reason} Replan approved write authority."
+        promoted.append(path)
+        existing_writes.add(path)
+    if not promoted:
+        return promoted
+    task.predicted_writes = sorted(
+        task.predicted_writes, key=lambda write: (-write.confidence, write.path)
+    )
+    task.candidate_context_paths = [
+        path for path in task.candidate_context_paths if path not in set(promoted)
+    ]
+    task.allowed_paths = _build_allowed_paths(task.predicted_writes)
+    rebuild_lockfile_plan(lock)
+    return promoted

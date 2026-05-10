@@ -28,6 +28,7 @@ class TaskInputHints(_StrictModel):
     """Optional task hints that bias the predictor toward feature areas."""
 
     touches: list[str] = Field(default_factory=list)
+    suspected_files: list[str] = Field(default_factory=list)
 
 
 class TaskInput(_StrictModel):
@@ -55,6 +56,7 @@ class TasksInput(_StrictModel):
 
     version: Literal["1.0"] = "1.0"
     tasks: list[TaskInput]
+    tokens_planner_total: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -132,6 +134,8 @@ class Generator(_StrictModel):
     tool: str
     version: str
     model: str | None = None
+    tokens_planner_total: int | None = None
+    tokens_scope_review_total: int | None = None
 
 
 class AgentLock(_StrictModel):

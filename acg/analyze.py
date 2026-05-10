@@ -107,6 +107,7 @@ class RunSummary:
     out_of_bounds_write_count: int
     blocked_invalid_write_count: int
     tokens_prompt_total: int | None
+    tokens_all_in: int | None
     tokens_prompt_method: str | None
     tokens_orchestrator_overhead: int | None
     cost_usd_total: float | None
@@ -257,6 +258,7 @@ def analyze_paths(paths: Iterable[Path]) -> AnalysisReport:
                         "blocked_invalid_write_count", 0
                     ),
                     tokens_prompt_total=summary_metrics.get("tokens_prompt_total"),
+                    tokens_all_in=summary_metrics.get("tokens_all_in"),
                     tokens_prompt_method=summary_metrics.get("tokens_prompt_method"),
                     tokens_orchestrator_overhead=summary_metrics.get(
                         "tokens_orchestrator_overhead"
@@ -381,6 +383,7 @@ def format_markdown(report: AnalysisReport) -> str:
                 str(r.out_of_bounds_write_count) if _is_applied_diff_run(r) else "0",
                 str(r.blocked_invalid_write_count),
                 "—" if r.tokens_prompt_total is None else str(r.tokens_prompt_total),
+                "—" if r.tokens_all_in is None else str(r.tokens_all_in),
                 r.tokens_prompt_method or "—",
                 "not recorded" if r.cost_usd_total is None else f"{r.cost_usd_total:.6f}",
             ]
@@ -401,6 +404,7 @@ def format_markdown(report: AnalysisReport) -> str:
                     "posthoc_diff_oob",
                     "validator_blocked",
                     "prompt_tokens",
+                    "all_in_tokens",
                     "prompt_token_method",
                     "cost_usd",
                 ],

@@ -32,7 +32,10 @@ def test_plan_tasks_from_goal_returns_valid_tasks_input() -> None:
                 {
                     "id": "add-oauth",
                     "prompt": "Add OAuth provider support in the auth config.",
-                    "hints": {"touches": ["auth", "oauth"]},
+                    "hints": {
+                        "touches": ["auth", "oauth"],
+                        "suspected_files": ["src/server/auth/config.ts"],
+                    },
                 },
                 {
                     "id": "add-tests",
@@ -54,7 +57,9 @@ def test_plan_tasks_from_goal_returns_valid_tasks_input() -> None:
     assert [task.id for task in tasks.tasks] == ["add-oauth", "add-tests"]
     assert tasks.tasks[0].hints is not None
     assert tasks.tasks[0].hints.touches == ["auth", "oauth"]
+    assert tasks.tasks[0].hints.suspected_files == ["src/server/auth/config.ts"]
     assert tasks.tasks[1].depends_on == ["add-oauth"]
+    assert tasks.tokens_planner_total is not None
     assert llm.messages is not None
     assert "High-level goal" in llm.messages[1]["content"]
 

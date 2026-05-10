@@ -51,10 +51,12 @@ LOCKFILE_ECHO_TOP_K = 8
 NAIVE_STRATEGY = "naive_parallel"
 ACG_PLANNED_STRATEGY = "acg_planned"
 ACG_PLANNED_FULL_CONTEXT_STRATEGY = "acg_planned_full_context"
+ACG_PLANNED_REPLAN_STRATEGY = "acg_planned_replan"
 LOCAL_STRATEGIES = (
     NAIVE_STRATEGY,
     ACG_PLANNED_STRATEGY,
     ACG_PLANNED_FULL_CONTEXT_STRATEGY,
+    ACG_PLANNED_REPLAN_STRATEGY,
 )
 
 # Fallback ratio for converting prompt characters to estimated input tokens.
@@ -312,6 +314,9 @@ def _proposals_to_planned_eval_task(
     """
     eval_task = task_from_lock(lock_task, prompt=prompt)
     eval_task.actual_changed_files = sorted({p.file for p in worker.proposals if p.allowed})
+    eval_task.approved_replan_files = sorted(
+        {p.file for p in worker.proposals if p.scope_status == "approved_replan"}
+    )
     eval_task.blocked_write_events = [
         BlockedWriteEvent(
             file=p.file,
@@ -428,6 +433,7 @@ async def _run_acg_planned(
     prompts_by_task: dict[str, str] | None = None,
     cap_parallelism: int | None = None,
     scope_repo_graph: bool = True,
+    auto_replan: bool = False,
 ) -> tuple[list[EvalTask], float, str]:
     """Walk ``execution_plan.groups`` with optional per-task scoped repo graphs.
 
@@ -452,6 +458,10 @@ async def _run_acg_planned(
 
     sub_inner = sub_factory()
     counting_sub = _PromptCountingLLM(sub_inner)
+    from acg.runtime import RuntimeConfig
+
+    runtime_config = RuntimeConfig.from_env()
+    runtime_config.auto_replan = auto_replan
 
     tasks_by_id = {t.id: t for t in lock.tasks}
     worker_results: list[WorkerResult] = []
@@ -478,6 +488,7 @@ async def _run_acg_planned(
                         task_graph,
                         counting_sub,
                         group.id,
+                        config=runtime_config,
                     )
                 )
             results = await _gather_capped(coros, cap_parallelism)
@@ -597,7 +608,10 @@ def run_strategy(
                 lockfile_path=lockfile_path,
                 prompts_by_task=prompts_by_task,
                 cap_parallelism=cap_parallelism,
-                scope_repo_graph=(strategy == ACG_PLANNED_STRATEGY),
+                scope_repo_graph=(
+                    strategy in {ACG_PLANNED_STRATEGY, ACG_PLANNED_REPLAN_STRATEGY}
+                ),
+                auto_replan=(strategy == ACG_PLANNED_REPLAN_STRATEGY),
             )
         )
         orch_overhead = None
@@ -607,6 +621,16 @@ def run_strategy(
         wall_time_seconds=wall_s,
         sequential_wall_time_seconds=sequential_wall_time_seconds,
         tokens_orchestrator_overhead=orch_overhead,
+        tokens_planner_total=(
+            lock.generator.tokens_planner_total
+            if lock.generator is not None
+            else None
+        ),
+        tokens_scope_review_total=(
+            lock.generator.tokens_scope_review_total
+            if lock.generator is not None
+            else None
+        ),
         tokens_prompt_method=prompt_token_method,
         tokens_completion_method=(
             "provider_usage_completion_tokens" if backend == "local" else "mock_reply_completion_tokens"
@@ -635,6 +659,7 @@ def run_strategy(
 
 __all__ = [
     "ACG_PLANNED_FULL_CONTEXT_STRATEGY",
+    "ACG_PLANNED_REPLAN_STRATEGY",
     "ACG_PLANNED_STRATEGY",
     "LOCKFILE_ECHO_TOP_K",
     "LockfileEchoMockLLM",

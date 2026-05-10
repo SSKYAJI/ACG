@@ -70,6 +70,7 @@ from .devin_adapter import (
 from .eval_schema import EvalRepo, EvalRun, repo_from_path, suite_name_from_lock, write_eval_run
 from .strategies import (
     ACG_PLANNED_FULL_CONTEXT_STRATEGY,
+    ACG_PLANNED_REPLAN_STRATEGY,
     ACG_PLANNED_STRATEGY,
     NAIVE_STRATEGY,
     run_strategy,
@@ -81,6 +82,12 @@ STRATEGY_GROUPS = {
         NAIVE_STRATEGY,
         ACG_PLANNED_FULL_CONTEXT_STRATEGY,
         ACG_PLANNED_STRATEGY,
+    ],
+    "ablation_replan": [
+        NAIVE_STRATEGY,
+        ACG_PLANNED_FULL_CONTEXT_STRATEGY,
+        ACG_PLANNED_STRATEGY,
+        ACG_PLANNED_REPLAN_STRATEGY,
     ],
 }
 VALID_STRATEGIES = (
@@ -279,6 +286,7 @@ def _short_name(strategy: str) -> str:
         NAIVE_STRATEGY: "naive",
         ACG_PLANNED_STRATEGY: "acg",
         ACG_PLANNED_FULL_CONTEXT_STRATEGY: "acg_full_context",
+        ACG_PLANNED_REPLAN_STRATEGY: "acg_replan",
     }.get(strategy, strategy)
 
 

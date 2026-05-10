@@ -1,17 +1,19 @@
 {
   "version": "1.0",
-  "generated_at": "2026-05-10T07:15:50.691944Z",
+  "generated_at": "2026-05-10T08:40:18.025929Z",
   "generator": {
     "tool": "acg",
     "version": "0.1.0",
-    "model": "lockfile-replay"
+    "model": "lockfile-replay",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 9688
   },
   "repo": {
     "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/starlette/checkout",
     "git_url": null,
     "commit": null,
     "languages": [
-      "unknown"
+      "python"
     ]
   },
   "tasks": [
@@ -22,12 +24,12 @@
         {
           "path": "starlette/middleware/sessions.py",
           "confidence": 0.95,
-          "reason": "Task explicitly targets SessionMiddleware implementation changes. Signals: llm."
+          "reason": "Task explicitly targets SessionMiddleware implementation changes. Signals: llm, symbol."
         },
         {
           "path": "tests/middleware/test_session.py",
           "confidence": 0.9,
-          "reason": "Task requires regression coverage for session flows, implicating test file modification. Signals: llm."
+          "reason": "Task requires regression coverage for session flows, implicating test file modification. Signals: llm, testlink."
         }
       ],
       "allowed_paths": [
@@ -35,13 +37,29 @@
         "tests/middleware/**"
       ],
       "candidate_context_paths": [
-        "starlette/requests.py",
-        "starlette/routing.py",
-        "starlette/testclient.py",
+        "starlette/__init__.py",
+        "starlette/_exception_handler.py",
+        "starlette/_utils.py",
+        "starlette/applications.py",
+        "starlette/authentication.py",
+        "starlette/concurrency.py",
+        "starlette/datastructures.py",
+        "starlette/endpoints.py",
+        "tests/conftest.py",
         "tests/middleware/test_base.py",
-        "tests/test_responses.py",
-        "tests/test_routing.py",
-        "tests/test_pr3166-session-middleware.py"
+        "tests/middleware/test_cors.py",
+        "tests/middleware/test_errors.py",
+        "tests/middleware/test_gzip.py",
+        "tests/middleware/test_https_redirect.py",
+        "tests/middleware/test_trusted_host.py",
+        "tests/middleware/test_wsgi.py",
+        "tests/test__utils.py",
+        "tests/test_applications.py",
+        "tests/test_authentication.py",
+        "tests/test_background.py",
+        "tests/test_concurrency.py",
+        "tests/test_config.py",
+        "tests/test_convertors.py"
       ],
       "file_scopes": [
         {
@@ -49,83 +67,227 @@
           "tier": "must_write",
           "score": 0.95,
           "signals": [
-            "llm"
+            "llm",
+            "symbol"
           ],
-          "reason": "Task explicitly targets SessionMiddleware implementation changes. Signals: llm."
+          "reason": "Task explicitly targets SessionMiddleware implementation changes. Signals: llm, symbol."
         },
         {
           "path": "tests/middleware/test_session.py",
           "tier": "must_write",
           "score": 0.9,
           "signals": [
-            "llm"
+            "llm",
+            "testlink"
           ],
-          "reason": "Task requires regression coverage for session flows, implicating test file modification. Signals: llm."
+          "reason": "Task requires regression coverage for session flows, implicating test file modification. Signals: llm, testlink."
         },
         {
-          "path": "starlette/requests.py",
+          "path": "starlette/__init__.py",
           "tier": "candidate_context",
-          "score": 0.9,
+          "score": 0.92,
           "signals": [
-            "pagerank"
+            "graph"
           ],
-          "reason": "personalized PageRank rank #1, top symbol matches: _get_form, cookie_parser, cookies. Candidate context only; requires replan before write. Signals: pagerank."
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) tests/test_applications.py, tests/test_responses.py. Candidate context only; requires replan before write. Signals: graph."
         },
         {
-          "path": "starlette/routing.py",
+          "path": "starlette/_exception_handler.py",
           "tier": "candidate_context",
-          "score": 0.9,
+          "score": 0.92,
           "signals": [
-            "pagerank"
+            "graph"
           ],
-          "reason": "personalized PageRank rank #3, top symbol matches: add_route, add_websocket_route, url_path_for. Candidate context only; requires replan before write. Signals: pagerank."
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/requests.py, starlette/routing.py. Candidate context only; requires replan before write. Signals: graph."
         },
         {
-          "path": "starlette/testclient.py",
+          "path": "starlette/_utils.py",
           "tier": "candidate_context",
-          "score": 0.9,
+          "score": 0.92,
           "signals": [
-            "pagerank"
+            "graph"
           ],
-          "reason": "personalized PageRank rank #6, top symbol matches: WebSocketTestSession. Candidate context only; requires replan before write. Signals: pagerank."
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/background.py, starlette/requests.py, starlette/routing.py. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "starlette/applications.py",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/requests.py, starlette/routing.py, tests/middleware/test_base.py. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "starlette/authentication.py",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/_utils.py, starlette/exceptions.py, starlette/middleware/authentication.py. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "starlette/concurrency.py",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/background.py, starlette/routing.py. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "starlette/datastructures.py",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/middleware/sessions.py, starlette/requests.py, starlette/routing.py. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "starlette/endpoints.py",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/requests.py, tests/test_applications.py. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "tests/conftest.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink."
         },
         {
           "path": "tests/middleware/test_base.py",
           "tier": "candidate_context",
-          "score": 0.9,
+          "score": 0.82,
           "signals": [
-            "bm25",
-            "pagerank"
+            "testlink"
           ],
-          "reason": "personalized PageRank rank #2, top symbol matches: ConsumingMiddleware, ContextManagerMiddleware, CustomMiddleware.; BM25 lexical match over path, identifiers, imports, docstrings (score 18.00). Candidate context only; requires replan before write. Signals: bm25, pagerank."
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink."
         },
         {
-          "path": "tests/test_responses.py",
+          "path": "tests/middleware/test_cors.py",
           "tier": "candidate_context",
-          "score": 0.9,
+          "score": 0.82,
           "signals": [
-            "bm25",
-            "pagerank"
+            "testlink"
           ],
-          "reason": "personalized PageRank rank #6, top symbol matches: SimpleCookie, numbers_for_cleanup, test_delete_cookie.; BM25 lexical match over path, identifiers, imports, docstrings (score 24.28). Candidate context only; requires replan before write. Signals: bm25, pagerank."
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink."
         },
         {
-          "path": "tests/test_routing.py",
+          "path": "tests/middleware/test_errors.py",
           "tier": "candidate_context",
-          "score": 0.9,
+          "score": 0.82,
           "signals": [
-            "pagerank"
+            "testlink"
           ],
-          "reason": "personalized PageRank rank #4, top symbol matches: AddHeadersMiddleware, CustomMiddleware, NamedMiddleware. Candidate context only; requires replan before write. Signals: pagerank."
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink."
         },
         {
-          "path": "tests/test_pr3166-session-middleware.py",
+          "path": "tests/middleware/test_gzip.py",
           "tier": "candidate_context",
-          "score": 0.85,
+          "score": 0.82,
           "signals": [
-            "framework"
+            "testlink"
           ],
-          "reason": "pytest convention: tests/ with .py extension, entity 'pr3166-session-middleware' from task prompt. Candidate context only; requires replan before write. Signals: framework."
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/middleware/test_https_redirect.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/middleware/test_trusted_host.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/middleware/test_wsgi.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/test__utils.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/test_applications.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/__init__.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/test_authentication.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/test_background.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/test_concurrency.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/test_config.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/test_convertors.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/__init__.py. Candidate context only; requires replan before write. Signals: testlink."
         }
       ],
       "depends_on": [],
