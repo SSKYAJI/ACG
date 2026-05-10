@@ -91,8 +91,10 @@ To watch the enforcement layer block an out-of-bounds write:
 A committable, human-reviewable, schema-validated artifact that declares for each task:
 
 - `prompt` — the natural-language task
-- `predicted_writes[]` — every file the task is expected to modify, with confidence and reason
-- `allowed_paths[]` — globs the task is permitted to write
+- `predicted_writes[]` — high-confidence `must_write` files that define hard write scope
+- `allowed_paths[]` — globs derived only from `must_write` files and enforced by the validator
+- `candidate_context_paths[]` — wider localization hits shown as context, not write authority
+- `file_scopes[]` — tiered localization records with `must_write`, `candidate_context`, or `needs_replan`
 - `depends_on[]` — explicit upstream tasks
 - `parallel_group` — which DAG level this task belongs to
 

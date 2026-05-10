@@ -16,7 +16,7 @@ from .pagerank import PageRankIndexer
 from .types import Indexer
 from .util import clamp_confidence, task_text, tokenize
 
-GRAPH_EXPANSION_MIN_CONFIDENCE = 0.85
+GRAPH_EXPANSION_MIN_CONFIDENCE = 0.72
 GRAPH_EXPANSION_CONFIDENCE = 0.72
 GRAPH_EXPANSION_MATCH_CONFIDENCE = 0.92
 GRAPH_EXPANSION_MULTI_SOURCE_CONFIDENCE = 0.92

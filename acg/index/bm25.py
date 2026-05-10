@@ -101,10 +101,14 @@ class BM25Indexer:
 
         out: list[PredictedWrite] = []
         for score, path in ranked[: self.top_n]:
+            # BM25 is a localization signal, not a calibrated write
+            # probability. Keep it below the hard-scope band so lexical hits
+            # need another signal before becoming write authority.
+            confidence = min(0.78, 0.25 + math.log1p(score) / 5.5)
             out.append(
                 PredictedWrite(
                     path=path,
-                    confidence=math.tanh(score / 5.0),
+                    confidence=confidence,
                     reason=f"BM25 lexical match over path, identifiers, imports, docstrings (score {score:.2f}).",
                 )
             )

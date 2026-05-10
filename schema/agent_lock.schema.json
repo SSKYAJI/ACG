@@ -111,6 +111,19 @@
             "description": "A repo-relative glob pattern (e.g. 'src/app/**/*.ts')."
           }
         },
+        "candidate_context_paths": {
+          "type": "array",
+          "description": "Repo-relative files that may be relevant context but do not grant write authority without replan or approval.",
+          "items": {
+            "type": "string",
+            "description": "A repo-relative file path surfaced for context."
+          }
+        },
+        "file_scopes": {
+          "type": "array",
+          "description": "Tiered localization results used to separate hard write scope from candidate context.",
+          "items": { "$ref": "#/$defs/FileScope" }
+        },
         "depends_on": {
           "type": "array",
           "description": "Upstream task ids that must finish before this task starts.",
@@ -127,6 +140,39 @@
         "rationale": {
           "type": ["string", "null"],
           "description": "Optional human-facing note explaining the task's scope or risk."
+        }
+      }
+    },
+    "FileScope": {
+      "type": "object",
+      "description": "A localized file with its lockfile tier and supporting signals.",
+      "required": ["path", "tier", "score", "signals", "reason"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Repo-relative file path."
+        },
+        "tier": {
+          "enum": ["must_write", "candidate_context", "needs_replan"],
+          "description": "How ACG should treat this file: hard write authority, context only, or approval-needed expansion."
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Localization score on [0, 1]."
+        },
+        "signals": {
+          "type": "array",
+          "description": "Signal families supporting this scope decision.",
+          "items": {
+            "type": "string",
+            "description": "Signal family name such as llm, bm25, graph, symbol, or cochange."
+          }
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable rationale for the tier decision."
         }
       }
     },

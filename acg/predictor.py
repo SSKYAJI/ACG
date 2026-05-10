@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from .llm import LLMProtocol
-from .schema import PredictedWrite, TaskInput
+from .schema import FileScope, PredictedWrite, TaskInput
 
 # Tunable thresholds (no magic numbers in module bodies).
 SEED_FILE_CONFIDENCE = 0.95
@@ -46,11 +46,18 @@ SEED_INDEX_CONFIDENCE_FLOOR = 0.5
 # which over-serializes the lockfile. Three signals per task keeps the
 # strongest hits while leaving room for task-specific seeds to dominate.
 SEED_INDEX_TOP_N = 8
-SEED_GRAPH_EXPANSION_CONFIDENCE = 0.92
-SEED_GRAPH_EXPANSION_STRUCTURAL_CONFIDENCE = 0.92
-SEED_GRAPH_EXPANSION_MIN_SEED_CONFIDENCE = 0.85
+SEED_GRAPH_EXPANSION_CONFIDENCE = 0.72
+SEED_GRAPH_EXPANSION_STRUCTURAL_CONFIDENCE = 0.78
+SEED_GRAPH_EXPANSION_MIN_SEED_CONFIDENCE = 0.72
 TOP_GRAPH_FILES_FOR_LLM = 50
 MAX_PREDICTIONS = 10
+MAX_CONTEXT_PREDICTIONS = 25
+HUB_IMPORTER_THRESHOLD = 20
+HUB_IMPORT_THRESHOLD = 15
+HUB_TOTAL_DEGREE_THRESHOLD = 30
+
+HIGH_PRECISION_SIGNALS = {"explicit", "env", "framework", "llm", "sibling", "symbol"}
+CONTEXT_ONLY_SIGNALS = {"bm25", "cochange", "graph", "hint", "pagerank"}
 
 # Regex for explicit file mentions like ``lib/auth.ts`` or ``prisma/schema.prisma``.
 _FILE_MENTION_RE = re.compile(
@@ -766,10 +773,242 @@ def _merge(
             merged[pw.path] = pw
             continue
         new_reason = pw.reason or existing.reason
+        confidence = (
+            existing.confidence if _deterministic_reason(pw.reason) else pw.confidence
+        )
         merged[pw.path] = PredictedWrite(
-            path=pw.path, confidence=pw.confidence, reason=new_reason
+            path=pw.path, confidence=confidence, reason=new_reason
         )
     return sorted(merged.values(), key=lambda p: (-p.confidence, p.path))
+
+
+def _signals_for_reason(reason: str) -> set[str]:
+    lower = reason.lower()
+    signals: set[str] = set()
+    if "explicit file mention" in lower or "path mentioned verbatim" in lower:
+        signals.add("explicit")
+    if lower.startswith("symbol "):
+        signals.add("symbol")
+    if lower.startswith("hint "):
+        signals.add("hint")
+    if (
+        "test scaffold" in lower
+        or " convention:" in lower
+        or "config file inferred" in lower
+        or "framework" in lower
+    ):
+        signals.add("framework")
+    if ".env" in lower or "environment" in lower or "credential" in lower:
+        signals.add("env")
+    if "sibling pattern" in lower or "sibling-pattern" in lower:
+        signals.add("sibling")
+    if "bm25" in lower:
+        signals.add("bm25")
+    if "pagerank" in lower:
+        signals.add("pagerank")
+    if "rose co-change" in lower or "co-change" in lower:
+        signals.add("cochange")
+    if "graph expansion" in lower:
+        signals.add("graph")
+    return signals
+
+
+def _deterministic_reason(reason: str) -> bool:
+    return bool(_signals_for_reason(reason))
+
+
+def _graph_degree(path: str, entries: dict[str, dict[str, Any]]) -> tuple[int, int, int]:
+    entry = entries.get(path, {})
+    imports = entry.get("resolved_imports")
+    importers = entry.get("importers")
+    type_links = entry.get("type_links")
+    return (
+        len(imports) if isinstance(imports, list) else 0,
+        len(importers) if isinstance(importers, list) else 0,
+        len(type_links) if isinstance(type_links, list) else 0,
+    )
+
+
+def _is_graph_hub(path: str, entries: dict[str, dict[str, Any]]) -> bool:
+    imports, importers, type_links = _graph_degree(path, entries)
+    return (
+        imports >= HUB_IMPORT_THRESHOLD
+        or importers >= HUB_IMPORTER_THRESHOLD
+        or imports + importers + type_links >= HUB_TOTAL_DEGREE_THRESHOLD
+    )
+
+
+def _reason_mentions_tests(reason: str) -> bool:
+    return bool(re.search(r"\b(tests?|specs?|regression|coverage)\b", reason, re.I))
+
+
+def _is_context_only_path(
+    task: TaskInput,
+    path: str,
+    reason: str,
+    signals: set[str],
+    entries: dict[str, dict[str, Any]],
+) -> bool:
+    task_is_testy = _looks_like_test_task(task.prompt) or (
+        "llm" in signals and _reason_mentions_tests(reason)
+    )
+    if _is_test_prediction(path) and not task_is_testy and "explicit" not in signals:
+        return True
+    if _is_graph_hub(path, entries) and "explicit" not in signals:
+        return True
+    return False
+
+
+def _is_must_write(
+    task: TaskInput,
+    write: PredictedWrite,
+    signals: set[str],
+    entries: dict[str, dict[str, Any]],
+) -> bool:
+    if not signals:
+        return False
+    if "explicit" in signals:
+        return True
+    if _is_context_only_path(task, write.path, write.reason, signals, entries):
+        return False
+    if (
+        _is_test_prediction(write.path)
+        and not (signals & {"explicit", "framework", "llm"})
+    ):
+        return False
+    task_tokens = _token_set(task.prompt)
+    if {"bm25", "pagerank"} <= signals and write.confidence >= 0.75:
+        return _task_matches_path(task_tokens, write.path, entries.get(write.path, {}))
+    if signals <= CONTEXT_ONLY_SIGNALS:
+        return False
+    if "graph" in signals and not (signals & (HIGH_PRECISION_SIGNALS - {"framework"})):
+        return False
+    if "env" in signals and write.confidence >= SEED_ENV_LOCAL_CONFIDENCE:
+        return True
+    if (
+        "framework" in signals
+        and write.confidence >= SEED_TEST_SCAFFOLD_CONFIDENCE
+        and any(keyword in task.prompt.lower() for keyword in _FRAMEWORK_KEYWORD_PRIORITY)
+    ):
+        return True
+    if "llm" in signals and write.confidence >= 0.85:
+        return True
+    if (
+        "sibling" in signals
+        and write.confidence >= SEED_SIBLING_PATTERN_PRIMARY_CONFIDENCE
+    ):
+        return _task_matches_path(task_tokens, write.path, entries.get(write.path, {}))
+    if len(signals & HIGH_PRECISION_SIGNALS) >= 2 and write.confidence >= 0.8:
+        return True
+    if "symbol" in signals and write.confidence >= SEED_SYMBOL_CONFIDENCE:
+        return _task_matches_path(task_tokens, write.path, entries.get(write.path, {}))
+    return False
+
+
+def _scope_reason(write: PredictedWrite, signals: set[str], tier: str) -> str:
+    signal_text = ", ".join(sorted(signals)) or "unknown"
+    if tier == "must_write":
+        return f"{write.reason} Signals: {signal_text}."
+    return (
+        f"{write.reason} Candidate context only; requires replan before write. "
+        f"Signals: {signal_text}."
+    )
+
+
+def _build_file_scopes(
+    task: TaskInput,
+    repo_graph: dict[str, Any],
+    writes: list[PredictedWrite],
+    signal_map: dict[str, set[str]],
+) -> list[FileScope]:
+    entries = _path_entries(repo_graph)
+    scopes: list[FileScope] = []
+    for write in writes[:MAX_CONTEXT_PREDICTIONS]:
+        signals = signal_map.get(write.path, set()) or _signals_for_reason(write.reason)
+        tier = (
+            "must_write"
+            if _is_must_write(task, write, signals, entries)
+            else "candidate_context"
+        )
+        scopes.append(
+            FileScope(
+                path=write.path,
+                tier=tier,
+                score=write.confidence,
+                signals=sorted(signals),
+                reason=_scope_reason(write, signals, tier),
+            )
+        )
+    tier_order = {"must_write": 0, "candidate_context": 1, "needs_replan": 2}
+    return sorted(
+        scopes, key=lambda scope: (tier_order[scope.tier], -scope.score, scope.path)
+    )
+
+
+def _to_predicted_write(scope: FileScope) -> PredictedWrite:
+    return PredictedWrite(path=scope.path, confidence=scope.score, reason=scope.reason)
+
+
+def _predict_scoped_candidates(
+    task: TaskInput,
+    repo_graph: dict[str, Any],
+    llm: LLMProtocol,
+    repo_root: Path | None = None,
+) -> tuple[list[PredictedWrite], dict[str, set[str]]]:
+    seeds = _static_seed(task.prompt)
+    seeds += _symbol_seed(task.prompt, repo_graph)
+    if task.hints and task.hints.touches:
+        seeds += _topical_seed(list(task.hints.touches), repo_graph)
+    seeds += _test_scaffold_seed(task, repo_root)
+    seeds += _env_seed(task, repo_root)
+    seeds += _sibling_pattern_seed(task, repo_graph)
+    seeds += _index_seed(task, repo_root, repo_graph)
+    seeds += _graph_expansion_seed(task, repo_graph, seeds)
+
+    signal_map: dict[str, set[str]] = {}
+    for pw in seeds:
+        signal_map.setdefault(pw.path, set()).update(_signals_for_reason(pw.reason))
+
+    # Deduplicate seeds, keeping the highest-confidence variant per path.
+    by_path: dict[str, PredictedWrite] = {}
+    for pw in seeds:
+        cur = by_path.get(pw.path)
+        if cur is None or pw.confidence > cur.confidence:
+            by_path[pw.path] = pw
+    seeds = list(by_path.values())
+
+    rerank: list[PredictedWrite] = []
+    try:
+        reply = llm.complete(_build_prompt(task, repo_graph, seeds))
+        rerank = _parse_llm_writes(reply)
+    except Exception:
+        # Failing closed: keep seeds. Logging is the CLI layer's responsibility.
+        rerank = []
+    for pw in rerank:
+        signals = _signals_for_reason(pw.reason)
+        if not _deterministic_reason(pw.reason):
+            signals.add("llm")
+        signal_map.setdefault(pw.path, set()).update(signals)
+
+    return _merge(seeds, rerank), signal_map
+
+
+def predict_file_scopes(
+    task: TaskInput,
+    repo_graph: dict[str, Any],
+    llm: LLMProtocol,
+    repo_root: Path | None = None,
+) -> list[FileScope]:
+    """Predict tiered file scope for a task.
+
+    ``must_write`` entries are the only paths intended to become hard
+    ``allowed_paths``. Wider graph/index/localization hits stay in
+    ``candidate_context`` so workers can see them without receiving write
+    authority.
+    """
+
+    writes, signal_map = _predict_scoped_candidates(task, repo_graph, llm, repo_root)
+    return _build_file_scopes(task, repo_graph, writes, signal_map)
 
 
 def predict_writes(
@@ -794,30 +1033,9 @@ def predict_writes(
         Up to :data:`MAX_PREDICTIONS` :class:`PredictedWrite` items, sorted by
         descending confidence.
     """
-    seeds = _static_seed(task.prompt)
-    seeds += _symbol_seed(task.prompt, repo_graph)
-    if task.hints and task.hints.touches:
-        seeds += _topical_seed(list(task.hints.touches), repo_graph)
-    seeds += _test_scaffold_seed(task, repo_root)
-    seeds += _env_seed(task, repo_root)
-    seeds += _sibling_pattern_seed(task, repo_graph)
-    seeds += _index_seed(task, repo_root, repo_graph)
-    seeds += _graph_expansion_seed(task, repo_graph, seeds)
-    # Deduplicate seeds, keeping the highest-confidence variant per path.
-    by_path: dict[str, PredictedWrite] = {}
-    for pw in seeds:
-        cur = by_path.get(pw.path)
-        if cur is None or pw.confidence > cur.confidence:
-            by_path[pw.path] = pw
-    seeds = list(by_path.values())
-
-    rerank: list[PredictedWrite] = []
-    try:
-        reply = llm.complete(_build_prompt(task, repo_graph, seeds))
-        rerank = _parse_llm_writes(reply)
-    except Exception:
-        # Failing closed: keep seeds. Logging is the CLI layer's responsibility.
-        rerank = []
-
-    merged = _merge(seeds, rerank)
-    return merged[:MAX_PREDICTIONS]
+    scopes = predict_file_scopes(task, repo_graph, llm, repo_root=repo_root)
+    return [
+        _to_predicted_write(scope)
+        for scope in scopes
+        if scope.tier == "must_write"
+    ][:MAX_PREDICTIONS]

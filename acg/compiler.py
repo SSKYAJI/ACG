@@ -16,6 +16,7 @@ from .llm import LLMProtocol
 from .schema import (
     AgentLock,
     ExecutionPlan,
+    FileScope,
     Generator,
     PredictedWrite,
     Repo,
@@ -58,6 +59,27 @@ def _build_allowed_paths(writes: list[PredictedWrite]) -> list[str]:
     for write in writes:
         seen.add(_to_allowed_path(write))
     return sorted(seen)
+
+
+def _must_writes(scopes: list[FileScope]) -> list[PredictedWrite]:
+    """Convert must-write scopes into legacy ``predicted_writes`` entries."""
+    return [
+        PredictedWrite(path=scope.path, confidence=scope.score, reason=scope.reason)
+        for scope in scopes
+        if scope.tier == "must_write"
+    ]
+
+
+def _candidate_context_paths(scopes: list[FileScope]) -> list[str]:
+    """Return exact candidate-context paths, excluding hard write authority."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for scope in scopes:
+        if scope.tier != "candidate_context" or scope.path in seen:
+            continue
+        seen.add(scope.path)
+        out.append(scope.path)
+    return out
 
 
 def _is_test_task(task: TaskInput) -> bool:
@@ -120,13 +142,14 @@ def compile_lockfile(
         Schema in ``schema/agent_lock.schema.json``.
     """
     # Late import to keep the schema module dependency-free at import time.
-    from .predictor import predict_writes
+    from .predictor import predict_file_scopes
 
     explicit_deps = _explicit_dependencies(tasks_input.tasks)
     heuristic_deps = _heuristic_dependencies(tasks_input.tasks)
     tasks: list[Task] = []
     for ti in tasks_input.tasks:
-        writes = predict_writes(ti, repo_graph, llm, repo_root=repo_path)
+        file_scopes = predict_file_scopes(ti, repo_graph, llm, repo_root=repo_path)
+        writes = _must_writes(file_scopes)
         allowed_paths = _build_allowed_paths(writes)
         tasks.append(
             Task(
@@ -134,6 +157,8 @@ def compile_lockfile(
                 prompt=ti.prompt,
                 predicted_writes=writes,
                 allowed_paths=allowed_paths,
+                candidate_context_paths=_candidate_context_paths(file_scopes),
+                file_scopes=file_scopes,
                 depends_on=explicit_deps.get(ti.id, []),
             )
         )

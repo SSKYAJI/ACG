@@ -214,6 +214,46 @@ def test_runtime_blocks_writes_outside_allowed_paths(
     assert len(blocked) == 1
     assert blocked[0].file == "src/utils/random.ts"
     assert blocked[0].reason and "src/utils/random.ts" in blocked[0].reason
+    assert blocked[0].scope_status == "blocked"
+
+
+def test_runtime_marks_candidate_context_write_as_needs_replan(
+    lock: AgentLock, empty_repo_graph: dict[str, object]
+) -> None:
+    """Candidate context is visible to workers but still not write authority."""
+    scoped_lock = lock.model_copy(deep=True)
+    oauth_task = next(t for t in scoped_lock.tasks if t.id == "oauth")
+    oauth_task.candidate_context_paths.append("src/server/oauth-provider.ts")
+    sub = StubRuntimeLLM(
+        replies={
+            "oauth": json.dumps(
+                {
+                    "writes": [
+                        {
+                            "file": "src/server/oauth-provider.ts",
+                            "description": "candidate-only helper",
+                        }
+                    ]
+                }
+            ),
+            "settings": json.dumps({"writes": []}),
+            "billing": json.dumps({"writes": []}),
+            "tests": json.dumps({"writes": []}),
+        }
+    )
+    orch = StubRuntimeLLM()
+
+    result = asyncio.run(
+        run_lockfile(scoped_lock, empty_repo_graph, orch, sub, lockfile_path="x.json")
+    )
+
+    oauth_worker = next(w for w in result.workers if w.task_id == "oauth")
+    proposal = oauth_worker.proposals[0]
+    assert oauth_worker.needs_replan_count == 1
+    assert oauth_worker.blocked_count == 1
+    assert proposal.allowed is False
+    assert proposal.scope_status == "needs_replan"
+    assert proposal.reason and "candidate_context only" in proposal.reason
 
 
 def test_runtime_allows_writes_within_allowed_paths(

@@ -70,6 +70,16 @@ class PredictedWrite(_StrictModel):
     reason: str = ""
 
 
+class FileScope(_StrictModel):
+    """A localized file with its lockfile tier and supporting signals."""
+
+    path: str
+    tier: Literal["must_write", "candidate_context", "needs_replan"]
+    score: float = Field(ge=0.0, le=1.0)
+    signals: list[str] = Field(default_factory=list)
+    reason: str = ""
+
+
 class Task(_StrictModel):
     """A task as serialized into the lockfile."""
 
@@ -77,6 +87,8 @@ class Task(_StrictModel):
     prompt: str
     predicted_writes: list[PredictedWrite]
     allowed_paths: list[str]
+    candidate_context_paths: list[str] = Field(default_factory=list)
+    file_scopes: list[FileScope] = Field(default_factory=list)
     depends_on: list[str] = Field(default_factory=list)
     parallel_group: int | None = Field(default=None, ge=1)
     rationale: str | None = None

@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-05-10T04:35:34.600059Z",
+  "generated_at": "2026-05-10T07:15:50.691944Z",
   "generator": {
     "tool": "acg",
     "version": "0.1.0",
@@ -20,41 +20,113 @@
       "prompt": "Change SessionMiddleware so it can distinguish session access from mutation, avoid sending Set-Cookie for unchanged sessions, preserve cookie clearing behavior, and add regression coverage for concurrent/read-only session flows.",
       "predicted_writes": [
         {
-          "path": "tests/test_responses.py",
-          "confidence": 0.9998788053937127,
-          "reason": "personalized PageRank rank #6, top symbol matches: SimpleCookie, numbers_for_cleanup, test_delete_cookie.; BM25 lexical match over path, identifiers, imports, docstrings (score 24.28)."
-        },
-        {
-          "path": "tests/middleware/test_base.py",
-          "confidence": 0.9985071511865101,
-          "reason": "personalized PageRank rank #2, top symbol matches: ConsumingMiddleware, ContextManagerMiddleware, CustomMiddleware.; BM25 lexical match over path, identifiers, imports, docstrings (score 18.00)."
-        },
-        {
-          "path": "tests/middleware/test_cors.py",
-          "confidence": 0.997259137438032,
-          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 16.48)."
-        },
-        {
           "path": "starlette/middleware/sessions.py",
           "confidence": 0.95,
-          "reason": "Task explicitly targets SessionMiddleware implementation changes."
+          "reason": "Task explicitly targets SessionMiddleware implementation changes. Signals: llm."
         },
         {
           "path": "tests/middleware/test_session.py",
           "confidence": 0.9,
-          "reason": "Task requires regression coverage for session flows, implicating test file modification."
-        },
-        {
-          "path": "tests/test_pr3166-session-middleware.py",
-          "confidence": 0.85,
-          "reason": "pytest convention: tests/ with .py extension, entity 'pr3166-session-middleware' from task prompt."
+          "reason": "Task requires regression coverage for session flows, implicating test file modification. Signals: llm."
         }
       ],
       "allowed_paths": [
         "starlette/middleware/sessions.py",
-        "tests/middleware/**",
-        "tests/test_pr3166-session-middleware.py",
-        "tests/test_responses.py"
+        "tests/middleware/**"
+      ],
+      "candidate_context_paths": [
+        "starlette/requests.py",
+        "starlette/routing.py",
+        "starlette/testclient.py",
+        "tests/middleware/test_base.py",
+        "tests/test_responses.py",
+        "tests/test_routing.py",
+        "tests/test_pr3166-session-middleware.py"
+      ],
+      "file_scopes": [
+        {
+          "path": "starlette/middleware/sessions.py",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "llm"
+          ],
+          "reason": "Task explicitly targets SessionMiddleware implementation changes. Signals: llm."
+        },
+        {
+          "path": "tests/middleware/test_session.py",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "llm"
+          ],
+          "reason": "Task requires regression coverage for session flows, implicating test file modification. Signals: llm."
+        },
+        {
+          "path": "starlette/requests.py",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank"
+          ],
+          "reason": "personalized PageRank rank #1, top symbol matches: _get_form, cookie_parser, cookies. Candidate context only; requires replan before write. Signals: pagerank."
+        },
+        {
+          "path": "starlette/routing.py",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank"
+          ],
+          "reason": "personalized PageRank rank #3, top symbol matches: add_route, add_websocket_route, url_path_for. Candidate context only; requires replan before write. Signals: pagerank."
+        },
+        {
+          "path": "starlette/testclient.py",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank"
+          ],
+          "reason": "personalized PageRank rank #6, top symbol matches: WebSocketTestSession. Candidate context only; requires replan before write. Signals: pagerank."
+        },
+        {
+          "path": "tests/middleware/test_base.py",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "pagerank"
+          ],
+          "reason": "personalized PageRank rank #2, top symbol matches: ConsumingMiddleware, ContextManagerMiddleware, CustomMiddleware.; BM25 lexical match over path, identifiers, imports, docstrings (score 18.00). Candidate context only; requires replan before write. Signals: bm25, pagerank."
+        },
+        {
+          "path": "tests/test_responses.py",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "pagerank"
+          ],
+          "reason": "personalized PageRank rank #6, top symbol matches: SimpleCookie, numbers_for_cleanup, test_delete_cookie.; BM25 lexical match over path, identifiers, imports, docstrings (score 24.28). Candidate context only; requires replan before write. Signals: bm25, pagerank."
+        },
+        {
+          "path": "tests/test_routing.py",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank"
+          ],
+          "reason": "personalized PageRank rank #4, top symbol matches: AddHeadersMiddleware, CustomMiddleware, NamedMiddleware. Candidate context only; requires replan before write. Signals: pagerank."
+        },
+        {
+          "path": "tests/test_pr3166-session-middleware.py",
+          "tier": "candidate_context",
+          "score": 0.85,
+          "signals": [
+            "framework"
+          ],
+          "reason": "pytest convention: tests/ with .py extension, entity 'pr3166-session-middleware' from task prompt. Candidate context only; requires replan before write. Signals: framework."
+        }
       ],
       "depends_on": [],
       "parallel_group": 1,

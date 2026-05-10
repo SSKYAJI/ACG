@@ -19,6 +19,7 @@ from acg.predictor import (
     _looks_like_test_task,
     _sibling_pattern_seed,
     _test_scaffold_seed,
+    predict_file_scopes,
     predict_writes,
 )
 from acg.schema import PredictedWrite, TaskInput, TaskInputHints
@@ -475,7 +476,7 @@ def test_predict_writes_composes_env_sibling_and_multi_entity_seeds(tmp_path: Pa
 def test_index_seed_passes_through_aggregator_predictions(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Aggregator predictions above the floor surface in predict_writes output."""
+    """Aggregator predictions above the floor surface become candidate context."""
     fake_predictions = [
         PredictedWrite(
             path="src/lib/cross-indexer-hit.ts",
@@ -495,13 +496,13 @@ def test_index_seed_passes_through_aggregator_predictions(
     monkeypatch.setattr("acg.index.aggregate", fake_aggregate)
 
     task = TaskInput(id="x", prompt="Add a feature.")
-    writes = predict_writes(
+    scopes = predict_file_scopes(
         task, {}, StubLLM(json.dumps({"writes": []})), repo_root=tmp_path
     )
-    paths = {write.path for write in writes}
+    by_path = {scope.path: scope for scope in scopes}
 
-    assert "src/lib/cross-indexer-hit.ts" in paths
-    assert "src/lib/below-floor.ts" not in paths
+    assert by_path["src/lib/cross-indexer-hit.ts"].tier == "candidate_context"
+    assert "src/lib/below-floor.ts" not in by_path
 
 
 def test_index_seed_skipped_without_repo_root(
@@ -641,10 +642,10 @@ def test_graph_expansion_seed_promotes_reverse_import_and_type_links() -> None:
     assert "lib/validation.js" in by_path
     assert "lib/request.js" in by_path
     assert "lib/symbols.js" in by_path
-    assert by_path["lib/request.js"].confidence >= 0.9
+    assert by_path["lib/request.js"].confidence >= 0.7
 
 
-def test_predict_writes_expands_graph_before_rerank() -> None:
+def test_predict_file_scopes_keeps_graph_expansion_as_candidate_context() -> None:
     task = TaskInput(id="media", prompt="Refactor handleRequest request handling validation.")
     graph = {
         "files": [
@@ -668,8 +669,8 @@ def test_predict_writes_expands_graph_before_rerank() -> None:
         "importers": {"lib/validation.js": ["lib/handle-request.js"]},
     }
 
-    writes = predict_writes(task, graph, StubLLM(json.dumps({"writes": []})))
-    paths = {write.path for write in writes}
+    scopes = predict_file_scopes(task, graph, StubLLM(json.dumps({"writes": []})))
+    by_path = {scope.path: scope for scope in scopes}
 
-    assert "lib/handle-request.js" in paths
-    assert "lib/validation.js" in paths
+    assert by_path["lib/handle-request.js"].tier == "must_write"
+    assert by_path["lib/validation.js"].tier == "candidate_context"

@@ -31,12 +31,28 @@ PREDICTOR_FIELDS = [
     "recall",
     "precision",
     "f1",
+    "hard_recall",
+    "hard_precision",
+    "hard_f1",
+    "candidate_context_count",
+    "candidate_recall",
+    "candidate_precision",
+    "candidate_f1",
+    "hard_fp_per_task",
+    "blocked_true_positive_count",
+    "approval_needed_count",
+    "hard_conflict_pair_count",
+    "candidate_conflict_pair_count",
     "exact_overlap",
     "predicted_writes",
     "allowed_paths",
+    "candidate_context_paths",
+    "must_write_paths",
     "ground_truth_files",
     "false_positives",
     "false_negatives",
+    "candidate_false_positives",
+    "candidate_false_negatives",
 ]
 
 
@@ -104,14 +120,22 @@ def discover_tasks() -> list[EvalTask]:
     return sorted(tasks, key=lambda task: (task.repo, task.pr_number, task.task_id))
 
 
-def _predicted_for_task(lock: AgentLock, task_id: str) -> tuple[list[str], list[str]]:
+def _predicted_for_task(lock: AgentLock, task_id: str) -> tuple[list[str], list[str], list[str]]:
     for task in lock.tasks:
         if task.id == task_id:
-            return [write.path for write in task.predicted_writes], list(task.allowed_paths)
+            return (
+                [write.path for write in task.predicted_writes],
+                list(task.allowed_paths),
+                list(task.candidate_context_paths),
+            )
     if len(lock.tasks) == 1:
         task = lock.tasks[0]
-        return [write.path for write in task.predicted_writes], list(task.allowed_paths)
-    return [], []
+        return (
+            [write.path for write in task.predicted_writes],
+            list(task.allowed_paths),
+            list(task.candidate_context_paths),
+        )
+    return [], [], []
 
 
 def _predicted_items_for_task(lock: AgentLock, task_id: str) -> list[dict[str, Any]]:
@@ -146,21 +170,60 @@ class ReplayLockLLM:
         return json.dumps({"writes": self._writes})
 
 
-def _metric_row(task: EvalTask, predicted: list[str], allowed: list[str]) -> dict[str, str]:
-    predicted_set = set(predicted)
-    truth_set = set(task.ground_truth)
+def _prf(
+    predicted_set: set[str],
+    truth_set: set[str],
+) -> tuple[list[str], list[str], list[str], float, float, float]:
     tp = sorted(predicted_set & truth_set)
     fp = sorted(predicted_set - truth_set)
     fn = sorted(truth_set - predicted_set)
     recall = len(tp) / len(truth_set) if truth_set else 0.0
     precision = len(tp) / len(predicted_set) if predicted_set else 0.0
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+    return tp, fp, fn, recall, precision, f1
+
+
+def _conflict_pair_counts(lock: AgentLock) -> tuple[int, int]:
+    hard_sets = [
+        {write.path for write in task.predicted_writes}
+        for task in lock.tasks
+    ]
+    candidate_sets = [
+        hard | set(task.candidate_context_paths)
+        for hard, task in zip(hard_sets, lock.tasks, strict=True)
+    ]
+    hard_pairs = 0
+    candidate_pairs = 0
+    for idx, hard in enumerate(hard_sets):
+        for other_idx in range(idx + 1, len(hard_sets)):
+            if hard & hard_sets[other_idx]:
+                hard_pairs += 1
+            if candidate_sets[idx] & candidate_sets[other_idx]:
+                candidate_pairs += 1
+    return hard_pairs, candidate_pairs
+
+
+def _metric_row(
+    task: EvalTask,
+    predicted: list[str],
+    allowed: list[str],
+    candidate_context: list[str],
+    hard_conflict_pair_count: int,
+    candidate_conflict_pair_count: int,
+) -> dict[str, str]:
+    hard_set = set(predicted)
+    candidate_set = hard_set | set(candidate_context)
+    truth_set = set(task.ground_truth)
+    tp, fp, fn, recall, precision, f1 = _prf(hard_set, truth_set)
+    ctp, cfp, cfn, crecall, cprecision, cf1 = _prf(candidate_set, truth_set)
+    del ctp
+    approval_needed = sorted((truth_set & set(candidate_context)) - hard_set)
     return {
         "repo": task.repo,
         "task_id": task.task_id,
         "pr_number": task.pr_number,
         "ground_truth_count": str(len(truth_set)),
-        "predicted_count": str(len(predicted_set)),
+        "predicted_count": str(len(hard_set)),
         "allowed_path_count": str(len(set(allowed))),
         "true_positive_count": str(len(tp)),
         "false_positive_count": str(len(fp)),
@@ -168,12 +231,28 @@ def _metric_row(task: EvalTask, predicted: list[str], allowed: list[str]) -> dic
         "recall": f"{recall:.6f}",
         "precision": f"{precision:.6f}",
         "f1": f"{f1:.6f}",
-        "exact_overlap": str(predicted_set == truth_set).lower(),
-        "predicted_writes": ";".join(sorted(predicted_set)),
+        "hard_recall": f"{recall:.6f}",
+        "hard_precision": f"{precision:.6f}",
+        "hard_f1": f"{f1:.6f}",
+        "candidate_context_count": str(len(set(candidate_context))),
+        "candidate_recall": f"{crecall:.6f}",
+        "candidate_precision": f"{cprecision:.6f}",
+        "candidate_f1": f"{cf1:.6f}",
+        "hard_fp_per_task": str(len(fp)),
+        "blocked_true_positive_count": str(len(truth_set - hard_set)),
+        "approval_needed_count": str(len(approval_needed)),
+        "hard_conflict_pair_count": str(hard_conflict_pair_count),
+        "candidate_conflict_pair_count": str(candidate_conflict_pair_count),
+        "exact_overlap": str(hard_set == truth_set).lower(),
+        "predicted_writes": ";".join(sorted(hard_set)),
         "allowed_paths": ";".join(sorted(set(allowed))),
+        "candidate_context_paths": ";".join(sorted(set(candidate_context))),
+        "must_write_paths": ";".join(sorted(hard_set)),
         "ground_truth_files": ";".join(sorted(truth_set)),
         "false_positives": ";".join(fp),
         "false_negatives": ";".join(fn),
+        "candidate_false_positives": ";".join(cfp),
+        "candidate_false_negatives": ";".join(cfn),
     }
 
 
@@ -194,8 +273,18 @@ def write_predictor_csv(mode: str) -> list[dict[str, str]]:
             (locks_dir / f"{task.repo}-{task.task_id}.json").write_text(
                 lock.model_dump_json(indent=2) + "\n"
             )
-        predicted, allowed = _predicted_for_task(lock, task.task_id)
-        rows.append(_metric_row(task, predicted, allowed))
+        hard_conflicts, candidate_conflicts = _conflict_pair_counts(lock)
+        predicted, allowed, candidate_context = _predicted_for_task(lock, task.task_id)
+        rows.append(
+            _metric_row(
+                task,
+                predicted,
+                allowed,
+                candidate_context,
+                hard_conflicts,
+                candidate_conflicts,
+            )
+        )
     out_path = OUT_DIR / f"{mode}_predictor.csv"
     with out_path.open("w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=PREDICTOR_FIELDS)
@@ -229,6 +318,12 @@ def write_diff_csv() -> None:
         "f1_before",
         "f1_after",
         "f1_delta",
+        "candidate_recall_before",
+        "candidate_recall_after",
+        "candidate_precision_before",
+        "candidate_precision_after",
+        "approval_needed_before",
+        "approval_needed_after",
         "predicted_count_before",
         "predicted_count_after",
         "allowed_path_count_before",
@@ -260,6 +355,12 @@ def write_diff_csv() -> None:
                 "f1_before": old["f1"],
                 "f1_after": new["f1"],
                 "f1_delta": f"{float(new['f1']) - float(old['f1']):.6f}",
+                "candidate_recall_before": old.get("candidate_recall", ""),
+                "candidate_recall_after": new.get("candidate_recall", ""),
+                "candidate_precision_before": old.get("candidate_precision", ""),
+                "candidate_precision_after": new.get("candidate_precision", ""),
+                "approval_needed_before": old.get("approval_needed_count", ""),
+                "approval_needed_after": new.get("approval_needed_count", ""),
                 "predicted_count_before": old["predicted_count"],
                 "predicted_count_after": new["predicted_count"],
                 "allowed_path_count_before": old["allowed_path_count"],

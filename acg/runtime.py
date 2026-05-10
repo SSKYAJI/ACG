@@ -497,6 +497,7 @@ class Proposal:
     description: str
     allowed: bool
     reason: str | None
+    scope_status: str = "blocked"
 
 
 @dataclass
@@ -514,6 +515,7 @@ class WorkerResult:
     proposals: list[Proposal]
     allowed_count: int
     blocked_count: int
+    needs_replan_count: int = 0
     error: str | None = None
     prompt_tokens: int | None = None
     cost_usd: float | None = None
@@ -735,12 +737,16 @@ def _build_worker_prompt(
 ) -> list[dict[str, str]]:
     """Construct the worker messages.
 
-    Workers are intentionally NOT told their ``allowed_paths`` — see
-    ``HANDOFF_NEXT.md`` ("Do NOT tell the worker its allowed_paths"). This
-    keeps the validator honest and produces occasional BLOCKED moments.
+    Workers see hard predicted writes and candidate context, but not the
+    concrete ``allowed_paths`` globs. Candidate context is explicitly
+    read/replan-only; the validator remains the source of write authority.
     """
     files = _top_files(repo_graph)
     file_block = "\n".join(f"  - {p}" for p in files) or "  (graph empty)"
+    hard_paths = [pw.path for pw in task.predicted_writes]
+    hard_block = "\n".join(f"  - {p}" for p in hard_paths) or "  (none)"
+    candidate_paths = list(task.candidate_context_paths)[:20]
+    candidate_block = "\n".join(f"  - {p}" for p in candidate_paths) or "  (none)"
 
     extra_hint = ""
     for pw in task.predicted_writes:
@@ -760,6 +766,10 @@ def _build_worker_prompt(
     user = (
         f"Task id: {task.id}\n"
         f"Task: {task.prompt}\n"
+        "Predicted writable files:\n"
+        f"{hard_block}\n"
+        "Candidate context files (read-only unless a replan expands scope):\n"
+        f"{candidate_block}\n"
         f"Available files in this repo (top {len(files)} by importance):\n"
         f"{file_block}{extra_hint}"
     )
@@ -767,6 +777,11 @@ def _build_worker_prompt(
         {"role": "system", "content": system},
         {"role": "user", "content": user},
     ]
+
+
+def _is_candidate_context_write(task: Task, path: str) -> bool:
+    candidate = path.lstrip("./")
+    return candidate in set(task.candidate_context_paths)
 
 
 # ---------------------------------------------------------------------------
@@ -876,6 +891,7 @@ async def run_worker(
     proposals: list[Proposal] = []
     allowed_count = 0
     blocked_count = 0
+    needs_replan_count = 0
     if cfg.grace_overlap and raw_proposals:
         validation_results = await asyncio.gather(
             *(
@@ -888,12 +904,20 @@ async def run_worker(
             enforce.validate_write(lock, task.id, raw["file"]) for raw in raw_proposals
         ]
     for raw, (allowed, reason) in zip(raw_proposals, validation_results, strict=True):
+        scope_status = "allowed" if allowed else "blocked"
+        if not allowed and _is_candidate_context_write(task, raw["file"]):
+            scope_status = "needs_replan"
+            reason = (
+                f"path {raw['file']!r} is candidate_context only for task "
+                f"{task.id!r}; replan or approval is required before write"
+            )
         proposals.append(
             Proposal(
                 file=raw["file"],
                 description=raw.get("description", ""),
                 allowed=allowed,
                 reason=reason,
+                scope_status=scope_status,
             )
         )
         safe_file = _rich_escape(raw["file"])
@@ -904,9 +928,14 @@ async def run_worker(
             )
         else:
             blocked_count += 1
+            if scope_status == "needs_replan":
+                needs_replan_count += 1
             safe_reason = _rich_escape(reason or "outside allowed_paths")
+            label = "NEEDS_REPLAN" if scope_status == "needs_replan" else "BLOCKED"
+            color = "yellow" if scope_status == "needs_replan" else "red"
             _console.print(
-                f"  [red][validator][/] BLOCKED {task.id} → {safe_file}: {safe_reason}"
+                f"  [{color}][validator][/] {label} {task.id} → "
+                f"{safe_file}: {safe_reason}"
             )
 
     return WorkerResult(
@@ -921,6 +950,7 @@ async def run_worker(
         proposals=proposals,
         allowed_count=allowed_count,
         blocked_count=blocked_count,
+        needs_replan_count=needs_replan_count,
         error=error,
         prompt_tokens=reply.prompt_tokens,
         cost_usd=reply.cost_usd,

@@ -1,0 +1,290 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-10T07:28:33.265745Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "qwen/qwen3-coder-30b-a3b-instruct"
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/fastify/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-6653",
+      "prompt": "Add a readonly request.mediaType property that exposes the parsed request Content-Type media type, cache the parsed ContentType on the request, and update validation and request handling to reuse the parsed value.",
+      "predicted_writes": [
+        {
+          "path": "lib/content-type-parser.js",
+          "confidence": 0.9,
+          "reason": "Task involves caching parsed Content-Type, and this file handles content type parsing. Signals: graph, llm."
+        },
+        {
+          "path": "lib/content-type.js",
+          "confidence": 0.85,
+          "reason": "Task involves parsing and exposing Content-Type media type, and this file likely contains related content type logic. Signals: llm."
+        }
+      ],
+      "allowed_paths": [
+        "lib/content-type-parser.js",
+        "lib/content-type.js"
+      ],
+      "candidate_context_paths": [
+        "lib/context.js",
+        "lib/decorate.js",
+        "lib/error-handler.js",
+        "lib/error-status.js",
+        "lib/errors.js",
+        "lib/four-oh-four.js",
+        "lib/hooks.js",
+        "lib/initial-config-validation.js",
+        "test/internals/validation.test.js",
+        "test/logger/logger-test-utils.js",
+        "lib/request.js",
+        "lib/logger-factory.js",
+        "lib/reply.js",
+        "lib/schemas.js",
+        "lib/symbols.js",
+        "lib/wrap-thenable.js",
+        "types/context.d.ts",
+        "types/errors.d.ts",
+        "types/hooks.d.ts",
+        "lib/handle-request.js",
+        "lib/validation.js"
+      ],
+      "file_scopes": [
+        {
+          "path": "lib/content-type-parser.js",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "graph",
+            "llm"
+          ],
+          "reason": "Task involves caching parsed Content-Type, and this file handles content type parsing. Signals: graph, llm."
+        },
+        {
+          "path": "lib/content-type.js",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "llm"
+          ],
+          "reason": "Task involves parsing and exposing Content-Type media type, and this file likely contains related content type logic. Signals: llm."
+        },
+        {
+          "path": "lib/context.js",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) fastify.js, lib/route.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/decorate.js",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) fastify.js, lib/reply.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/error-handler.js",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) fastify.js, lib/reply.js, lib/route.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/error-status.js",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) lib/error-handler.js, lib/handle-request.js, lib/symbols.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/errors.js",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) fastify.js, lib/content-type-parser.js, lib/handle-request.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/four-oh-four.js",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) fastify.js, lib/reply.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/hooks.js",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) fastify.js, lib/handle-request.js, lib/reply.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/initial-config-validation.js",
+          "tier": "candidate_context",
+          "score": 0.92,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) fastify.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "test/internals/validation.test.js",
+          "tier": "candidate_context",
+          "score": 0.85,
+          "signals": [
+            "symbol"
+          ],
+          "reason": "Symbol 'validation' referenced in prompt; defined in test/internals/validation.test.js. Candidate context only; requires replan before write. Signals: symbol."
+        },
+        {
+          "path": "test/logger/logger-test-utils.js",
+          "tier": "candidate_context",
+          "score": 0.85,
+          "signals": [
+            "symbol"
+          ],
+          "reason": "Symbol 'request' referenced in prompt; defined in test/logger/logger-test-utils.js. Candidate context only; requires replan before write. Signals: symbol."
+        },
+        {
+          "path": "lib/request.js",
+          "tier": "candidate_context",
+          "score": 0.8,
+          "signals": [
+            "graph",
+            "llm"
+          ],
+          "reason": "Task modifies request object to add readonly mediaType property, so request implementation will need changes. Candidate context only; requires replan before write. Signals: graph, llm."
+        },
+        {
+          "path": "lib/logger-factory.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/errors.js, lib/four-oh-four.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/reply.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/decorate.js, lib/error-handler.js, lib/errors.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/schemas.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/error-handler.js, lib/errors.js, test/internals/validation.test.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/symbols.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/context.js, lib/decorate.js, lib/error-handler.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/wrap-thenable.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/error-handler.js, lib/error-status.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "types/context.d.ts",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/context.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "types/errors.d.ts",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/errors.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "types/hooks.d.ts",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/hooks.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/handle-request.js",
+          "tier": "candidate_context",
+          "score": 0.75,
+          "signals": [
+            "graph",
+            "llm"
+          ],
+          "reason": "Task involves request handling and validation, and this file manages request processing. Candidate context only; requires replan before write. Signals: graph, llm."
+        },
+        {
+          "path": "lib/validation.js",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/errors.js, test/internals/validation.test.js. Candidate context only; requires replan before write. Signals: graph."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-6653"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

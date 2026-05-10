@@ -202,6 +202,11 @@
           "minimum": 0,
           "description": "Number of proposals that validate_write() rejected."
         },
+        "needs_replan_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of rejected proposals that matched candidate_context and require replan or approval."
+        },
         "error": {
           "type": ["string", "null"],
           "description": "Error message if the worker call failed; null on success."
@@ -228,6 +233,10 @@
         "reason": {
           "type": ["string", "null"],
           "description": "Validator-supplied reason when blocked; null when allowed."
+        },
+        "scope_status": {
+          "enum": ["allowed", "needs_replan", "blocked"],
+          "description": "Scope classification after validation."
         }
       }
     },
