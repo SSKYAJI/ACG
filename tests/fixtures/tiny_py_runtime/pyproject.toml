@@ -1,0 +1,4 @@
+[project]
+name = "tiny_py_runtime"
+version = "0.0.1"
+dependencies = ["fastapi"]

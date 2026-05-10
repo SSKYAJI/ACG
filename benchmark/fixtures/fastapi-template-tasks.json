@@ -1,0 +1,26 @@
+[
+  {
+    "id": "health-endpoint",
+    "prompt": "Add a /health endpoint to the FastAPI application and a route test that exercises it.",
+    "hints": {"touches": ["api", "health", "route"]},
+    "ground_truth_paths": ["backend/app/api/main.py", "backend/app/tests/api/routes/test_health.py"]
+  },
+  {
+    "id": "user-model-field",
+    "prompt": "Add a phone number field to the User model and update the user CRUD layer.",
+    "hints": {"touches": ["models", "user"]},
+    "ground_truth_paths": ["backend/app/models.py", "backend/app/crud.py"]
+  },
+  {
+    "id": "smtp-settings",
+    "prompt": "Add SMTP timeout and TLS configuration entries to the application settings.",
+    "hints": {"touches": ["core", "config", "settings"]},
+    "ground_truth_paths": ["backend/app/core/config.py"]
+  },
+  {
+    "id": "items-pagination",
+    "prompt": "Add a pagination helper to the items API route and cover it with route tests.",
+    "hints": {"touches": ["api", "routes", "items"]},
+    "ground_truth_paths": ["backend/app/api/routes/items.py", "backend/app/tests/api/routes/test_items.py"]
+  }
+]

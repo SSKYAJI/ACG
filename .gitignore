@@ -27,6 +27,12 @@ demo-app/.acg/*
 
 # Greenhouse experiment: the upstream Java repo is cloned at runtime.
 experiments/greenhouse/checkout/
+experiments/python_fastapi/checkout/
+
+# Python scanner fixtures: scan output goes to tests/fixtures/*/.acg/ when
+# the smoke-test CLI is run by hand; tests use tmp_path so this is only
+# defensive cleanup.
+tests/fixtures/tiny_py_*/.acg/
 experiments/greenhouse/agent_lock.json
 # Per-run eval artifacts. Promote individual files into docs/ when worth pinning.
 experiments/greenhouse/runs/
@@ -40,6 +46,8 @@ experiments/microservice/tasks.json
 experiments/microservice/tasks_nest.json
 experiments/microservice/runs/
 experiments/microservice/runs_nest/
+experiments/python_fastapi/runs_mock/eval_run_naive.json
+experiments/python_fastapi/runs_mock/eval_run_acg.json
 # Devin probe traces contain session ids and may include bearer-token-flavored
 # auth headers; never commit them.
 scripts/diagnostics/devin_probe_output*.json

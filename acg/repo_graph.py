@@ -15,6 +15,7 @@ LANGUAGE_ALIASES = {
     "js": "javascript",
     "javascript": "javascript",
     "java": "java",
+    "python": "python",
 }
 CONFIG_FILENAMES = {
     ".env.example",
@@ -27,20 +28,29 @@ CONFIG_FILENAMES = {
     "jest.config.js",
     "jest.config.mjs",
     "jest.config.ts",
+    "manage.py",
     "next.config.js",
     "next.config.mjs",
     "next.config.ts",
     "package.json",
+    "Pipfile",
+    "Pipfile.lock",
     "playwright.config.js",
     "playwright.config.mjs",
     "playwright.config.ts",
+    "poetry.lock",
     "pom.xml",
     "postcss.config.cjs",
     "postcss.config.js",
     "pyproject.toml",
+    "pytest.ini",
+    "requirements.txt",
     "settings.gradle",
+    "setup.cfg",
+    "setup.py",
     "tailwind.config.js",
     "tailwind.config.ts",
+    "tox.ini",
     "tsconfig.json",
     "vite.config.js",
     "vite.config.mjs",
@@ -72,7 +82,8 @@ TEST_SUFFIXES = (
     ".test.ts",
     ".test.tsx",
 )
-CODE_EXTENSIONS = {".java", ".js", ".jsx", ".ts", ".tsx"}
+PYTHON_TEST_FILENAMES = {"conftest.py"}
+CODE_EXTENSIONS = {".java", ".js", ".jsx", ".py", ".ts", ".tsx"}
 
 
 class GraphScanError(RuntimeError):
@@ -102,8 +113,13 @@ def detect_language(repo_root: Path) -> str:
         (root / name).exists() for name in ("tsconfig.json", "next.config.ts", "vite.config.ts")
     ):
         return "typescript"
+    if any(
+        (root / name).exists()
+        for name in ("pyproject.toml", "setup.py", "setup.cfg", "Pipfile", "manage.py")
+    ):
+        return "python"
 
-    counts = {"java": 0, "typescript": 0, "javascript": 0}
+    counts = {"java": 0, "typescript": 0, "javascript": 0, "python": 0}
     for path in _walk_code_files(root):
         if path.suffix == ".java":
             counts["java"] += 1
@@ -111,6 +127,8 @@ def detect_language(repo_root: Path) -> str:
             counts["typescript"] += 1
         elif path.suffix in {".js", ".jsx"}:
             counts["javascript"] += 1
+        elif path.suffix == ".py":
+            counts["python"] += 1
 
     if counts["typescript"]:
         return "typescript"
@@ -118,6 +136,8 @@ def detect_language(repo_root: Path) -> str:
         return "javascript"
     if counts["java"]:
         return "java"
+    if counts["python"]:
+        return "python"
     return "typescript"
 
 
@@ -145,6 +165,8 @@ def scan_context_graph(
 
     if normalized_language == "java":
         graph = _scan_java(root, out)
+    elif normalized_language == "python":
+        graph = _scan_python(root, out)
     elif normalized_language in {"typescript", "javascript"}:
         graph = _scan_typescript(root, out)
     else:
@@ -198,6 +220,12 @@ def _scan_java(repo_root: Path, out_path: Path) -> dict[str, Any]:
     return scan_java.write_graph(repo_root, out_path)
 
 
+def _scan_python(repo_root: Path, out_path: Path) -> dict[str, Any]:
+    from graph_builder import scan_python
+
+    return scan_python.write_graph(repo_root, out_path)
+
+
 def _scan_typescript(repo_root: Path, out_path: Path) -> dict[str, Any]:
     builder = PROJECT_ROOT / "graph_builder"
     if not builder.exists():
@@ -235,6 +263,25 @@ def _write_context_graph(path: Path, graph: dict[str, Any]) -> None:
     path.write_text(json.dumps(graph, indent=2, sort_keys=False) + "\n")
 
 
+_PYTHON_IGNORE_DIRS = {
+    ".acg",
+    ".eggs",
+    ".git",
+    ".mypy_cache",
+    ".next",
+    ".pytest_cache",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "target",
+    "venv",
+}
+
+
 def _walk_code_files(repo_root: Path) -> list[Path]:
     if not repo_root.exists():
         return []
@@ -243,10 +290,9 @@ def _walk_code_files(repo_root: Path) -> list[Path]:
         if not path.is_file() or path.suffix not in CODE_EXTENSIONS:
             continue
         rel_parts = path.relative_to(repo_root).parts
-        if any(
-            part in {".acg", ".git", ".next", "build", "dist", "node_modules", "target"}
-            for part in rel_parts
-        ):
+        if any(part in _PYTHON_IGNORE_DIRS for part in rel_parts):
+            continue
+        if any(part.endswith(".egg-info") for part in rel_parts):
             continue
         out.append(path)
     return sorted(out)
@@ -418,6 +464,11 @@ def _is_test_path(path: str) -> bool:
     if any(part in TEST_DIRS for part in parts):
         return True
     if path.startswith("src/test/java/"):
+        return True
+    name = parts[-1]
+    if name in PYTHON_TEST_FILENAMES:
+        return True
+    if name.endswith(".py") and (name.startswith("test_") or name.endswith("_test.py")):
         return True
     return path.endswith(TEST_SUFFIXES)
 

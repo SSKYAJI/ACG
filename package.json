@@ -1,0 +1,25 @@
+{
+  "name": "acg",
+  "version": "0.1.0",
+  "description": "Repo-local write guards for coding agents",
+  "type": "module",
+  "bin": {
+    "acg": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

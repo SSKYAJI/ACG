@@ -12,5 +12,11 @@
         "show_output": true
       }
     ]
-  }
+  },
+  "pre_write_code": [
+    {
+      "command": "npx acg guard --platform windsurf",
+      "acgManaged": true
+    }
+  ]
 }

@@ -118,7 +118,39 @@ def build_server() -> FastMCP:
     return server
 
 
+def _load_dotenv_if_present() -> None:
+    """Best-effort: load ``.env`` from CWD or the repo root before booting.
+
+    MCP hosts (Windsurf, Devin) launch this process in an arbitrary CWD and
+    pass through only the env they're told about. Auto-loading lets the
+    operator keep ``ACG_LLM_*`` in the repo's gitignored ``.env`` instead of
+    pasting the API key into every host's MCP config. ``override=False`` so
+    explicit env from the host still wins.
+    """
+    try:
+        from dotenv import load_dotenv
+    except ImportError:  # pragma: no cover - python-dotenv is a hard dep, but stay defensive
+        return
+    candidates = [Path.cwd() / ".env", Path(__file__).resolve().parents[2] / ".env"]
+    for candidate in candidates:
+        if candidate.is_file():
+            load_dotenv(candidate, override=False)
+            return
+
+
 def run_stdio() -> None:
-    """Boot the MCP server on stdio — the standard transport for tool hosts."""
+    """Boot the MCP server on stdio — the standard transport for local tool hosts (Windsurf, Claude Desktop, Cursor)."""
+    _load_dotenv_if_present()
     server = build_server()
     server.run()
+
+
+def run_http(host: str = "0.0.0.0", port: int = 8080) -> None:
+    """Boot the MCP server over Streamable HTTP — for remote MCP hosts (Devin Marketplace, hosted Cursor, etc.).
+
+    Uses FastMCP's built-in Streamable HTTP transport. Endpoint is ``http://<host>:<port>/mcp``.
+    Pair with a reverse proxy (or Modal/Fly/Cloudflare Tunnel) for TLS + auth in production.
+    """
+    _load_dotenv_if_present()
+    server = build_server()
+    server.run(transport="streamable-http", host=host, port=port)

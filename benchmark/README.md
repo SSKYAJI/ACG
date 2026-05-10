@@ -7,8 +7,9 @@ Recall/precision evaluation harness for the deterministic indexer fusion in
 ./.venv/bin/python benchmark/predictor_eval.py
 ```
 
-This will (re-)evaluate three fixture datasets — `demo-app`, `t3-app`, and
-`express` — and overwrite `benchmark/results.json`.
+This will (re-)evaluate five fixture datasets — `demo-app`, `t3-app`,
+`express`, `fastapi-template`, and `click` — and overwrite
+`benchmark/results.json`.
 
 ## `results.json` schema (PR 7+)
 
@@ -35,3 +36,17 @@ embeddings), and the latter includes a per-dataset `Δrecall@5` column so
 regressions are obvious at a glance. The "Δrecall@5 ≥ 0 on ≥ 2/3 fixtures"
 gate is the correctness floor for the embeddings indexer — see
 `docs/plans/acg-index-rewrite.md` §5 for the roadmap entry.
+
+To generate a figure from the current benchmark JSON:
+
+```bash
+./.venv/bin/python benchmark/plot_results.py \
+  --results benchmark/results.json \
+  --out docs/benchmark_predictor.png
+```
+
+The output plot includes:
+
+- recall / precision / F1 for every dataset
+- Python-only secondary metrics (`conflicts_detected`,
+  `blocked_bad_write_rate`) for `fastapi-template` and `click`

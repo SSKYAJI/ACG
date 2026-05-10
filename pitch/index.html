@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ACG — Agent Context Graph</title>
+    <meta name="description" content="A static, committable write-contract for parallel coding agents. package-lock.json for multi-agent code generation." />
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --bg: #ffffff;
+        --bg-soft: #f7f7f8;
+        --bg-cream: #f5f1e8; /* matches benchmark image background */
+        --fg: #0a0a0f;
+        --fg-soft: #1f2024;
+        --muted: #6b7280;
+        --line: #e7e7ea;
+        --line-soft: #f0f0f2;
+        --accent: #00b7a4;       /* Windsurf heritage teal */
+        --accent-soft: #e6f7f4;
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        font-family: "Inter", system-ui, -apple-system, sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        letter-spacing: -0.011em;
+      }
+      .mono { font-family: "JetBrains Mono", ui-monospace, monospace; letter-spacing: 0; }
+      .deck { scroll-snap-type: y mandatory; height: 100vh; overflow-y: scroll; }
+      section.slide {
+        scroll-snap-align: start;
+        scroll-snap-stop: always;
+        min-height: 100vh;
+        position: relative;
+        padding: 96px 48px 96px;
+      }
+      .deck::-webkit-scrollbar { width: 0; }
+      .deck { scrollbar-width: none; }
+
+      .pill {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 6px 12px; border-radius: 999px;
+        border: 1px solid var(--line); background: var(--bg);
+        color: var(--muted); font-size: 11px; font-weight: 600;
+        letter-spacing: 0.12em; text-transform: uppercase;
+      }
+      .pill-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); }
+      .pill.accent { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+      .card {
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 28px;
+      }
+      .card-soft { background: var(--bg-soft); border-color: var(--line); }
+      .card-accent {
+        background: var(--accent-soft);
+        border: 1px solid var(--accent);
+        border-radius: 14px;
+        padding: 28px;
+      }
+
+      .progress-track {
+        position: fixed; inset: 0 0 auto 0; height: 2px;
+        background: var(--line-soft); z-index: 60;
+      }
+      .progress-bar {
+        height: 100%; width: 0%;
+        background: var(--accent);
+        transition: width 80ms linear;
+      }
+      .topnav {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+        backdrop-filter: saturate(180%) blur(8px);
+        background: rgba(255,255,255,0.72);
+        border-bottom: 1px solid var(--line-soft);
+      }
+
+      .dotline-soft {
+        background-image: radial-gradient(circle, rgba(10,10,15,.10) 1px, transparent 1.5px);
+        background-size: 10px 10px;
+      }
+
+      .reveal {
+        opacity: 0;
+        transform: translateY(14px);
+        transition: opacity 700ms cubic-bezier(.2,.7,.2,1), transform 700ms cubic-bezier(.2,.7,.2,1);
+      }
+      .reveal.visible { opacity: 1; transform: translateY(0); }
+      .reveal[data-d="1"] { transition-delay: 80ms; }
+      .reveal[data-d="2"] { transition-delay: 160ms; }
+      .reveal[data-d="3"] { transition-delay: 240ms; }
+      .reveal[data-d="4"] { transition-delay: 320ms; }
+      .reveal[data-d="5"] { transition-delay: 400ms; }
+      .reveal[data-d="6"] { transition-delay: 480ms; }
+
+      .slide-meta {
+        position: absolute; bottom: 28px; left: 48px; right: 48px;
+        display: flex; align-items: center; justify-content: space-between;
+        color: var(--muted); font-size: 12px; letter-spacing: 0.08em;
+      }
+      .slide-num { font-variant-numeric: tabular-nums; }
+
+      kbd {
+        font-family: "JetBrains Mono", monospace; font-size: 11px;
+        background: var(--bg-soft); border: 1px solid var(--line);
+        border-bottom-width: 2px; border-radius: 6px;
+        padding: 2px 6px; color: var(--fg-soft);
+      }
+
+      /* Layer card */
+      .layer {
+        position: relative;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 20px;
+        transition: border-color 200ms, transform 200ms;
+      }
+      .layer:hover { border-color: var(--accent); transform: translateY(-2px); }
+      .layer .lnum {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px; color: var(--muted);
+        letter-spacing: 0.08em;
+      }
+      .layer .lname { font-size: 16px; font-weight: 700; margin-top: 4px; }
+      .layer .lrole { font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+      .layer .ltag {
+        display: inline-block; margin-top: 12px;
+        font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      /* Code block */
+      .codeblock {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 13px;
+        line-height: 1.7;
+        background: var(--bg-soft);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 24px;
+        color: var(--fg-soft);
+        overflow: auto;
+      }
+      .codeblock .k { color: var(--accent); font-weight: 600; }
+      .codeblock .c { color: var(--muted); }
+
+      /* Benchmark image frame — picks up the cream background of the chart PNGs */
+      .chart-frame {
+        background: var(--bg-cream);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .chart-frame img {
+        width: 100%;
+        max-height: 64vh;
+        object-fit: contain;
+        display: block;
+      }
+
+      @media (max-width: 768px) {
+        .deck { scroll-snap-type: none; height: auto; overflow-y: visible; }
+        body { overflow-y: auto; }
+        section.slide { min-height: auto; padding: 64px 24px; }
+        .slide-meta { position: static; margin-top: 32px; }
+        .chart-frame img { max-height: none; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="progress-track"><div id="progress" class="progress-bar"></div></div>
+
+    <header class="topnav">
+      <div class="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
+        <a href="#hero" class="flex items-center gap-3">
+          <svg viewBox="0 0 32 32" class="w-6 h-6" aria-hidden="true">
+            <path d="M3 11 C 7 23, 11 23, 14 11 C 17 23, 21 23, 24 11 M 24 11 C 26 19, 28 21, 29 21"
+              fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <span class="font-bold tracking-tight">ACG</span>
+          <span class="text-xs text-[color:var(--muted)] font-medium tracking-wider uppercase ml-2">Agent Context Graph</span>
+        </a>
+      </div>
+    </header>
+
+    <main class="deck" id="deck">
+
+      <!-- ─────────────── 01 · HERO ─────────────── -->
+      <section id="hero" class="slide flex items-center">
+        <div class="mx-auto max-w-6xl w-full">
+          <h1 class="reveal text-[clamp(48px,9vw,144px)] leading-[0.92] font-extrabold tracking-tight" data-d="1">
+            Two schools.<br/>
+            <span class="text-[color:var(--muted)]">One question.</span>
+          </h1>
+          <p class="reveal mt-10 text-xl md:text-2xl text-[color:var(--fg-soft)] max-w-3xl leading-snug" data-d="2">
+            What stops two agents from writing the same file?
+          </p>
+          <div class="reveal mt-14 flex items-center gap-3 text-[color:var(--muted)] text-sm" data-d="3">
+            <span>Scroll</span>
+            <svg viewBox="0 0 16 16" class="w-4 h-4 animate-bounce" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10m-4-4 4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+        <div class="slide-meta"><span>Today's landscape</span><span class="slide-num">01 / 13</span></div>
+      </section>
+
+      <!-- ─────────────── 02 · SCHOOL A ─────────────── -->
+      <section class="slide flex items-center">
+        <div class="mx-auto max-w-6xl w-full grid md:grid-cols-12 gap-12 items-center">
+          <div class="md:col-span-5">
+            <h2 class="reveal text-5xl md:text-6xl font-extrabold leading-[1.05] tracking-tight" data-d="1">
+              Centralized<br/>orchestrator.
+            </h2>
+            <p class="reveal mt-6 text-lg text-[color:var(--muted)]" data-d="2">
+              Hub-and-spoke. Polls, dispatches, repastes state.
+            </p>
+            <div class="reveal mt-8 flex flex-wrap gap-2" data-d="3">
+              <span class="pill">Devin "Manage Devins"</span>
+              <span class="pill">LangGraph supervisor</span>
+              <span class="pill">OpenAI Swarm</span>
+            </div>
+          </div>
+          <div class="md:col-span-7">
+            <div class="reveal card relative overflow-hidden" data-d="2" style="aspect-ratio: 4/3;">
+              <div class="absolute inset-0 dotline-soft opacity-50"></div>
+              <svg viewBox="0 0 400 300" class="absolute inset-0 w-full h-full">
+                <g stroke="#cfcfd2" stroke-width="1.2" stroke-dasharray="3 3" fill="none">
+                  <path d="M200 90 L80 215" />
+                  <path d="M200 90 L150 240" />
+                  <path d="M200 90 L250 240" />
+                  <path d="M200 90 L320 215" />
+                </g>
+                <g stroke="#00b7a4" stroke-width="1.4" fill="none" opacity="0.85">
+                  <path d="M85 210 L195 100" marker-end="url(#a1)" />
+                  <path d="M205 100 L315 210" marker-end="url(#a1)" />
+                </g>
+                <defs>
+                  <marker id="a1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M0 0 L10 5 L0 10 z" fill="#00b7a4"/>
+                  </marker>
+                </defs>
+                <g>
+                  <rect x="140" y="50" width="120" height="56" rx="10" fill="#fff" stroke="#00b7a4" stroke-width="1.5"/>
+                  <text x="200" y="74" text-anchor="middle" font-family="Inter" font-weight="700" font-size="13" fill="#0a0a0f">Orchestrator</text>
+                  <text x="200" y="92" text-anchor="middle" font-family="Inter" font-weight="500" font-size="10" fill="#6b7280">context grows ↑</text>
+                </g>
+                <g font-family="Inter" font-weight="600" font-size="12" fill="#0a0a0f">
+                  <g><rect x="40" y="200" width="80" height="40" rx="8" fill="#fff" stroke="#e7e7ea"/><text x="80" y="225" text-anchor="middle">W1</text></g>
+                  <g><rect x="125" y="225" width="80" height="40" rx="8" fill="#fff" stroke="#e7e7ea"/><text x="165" y="250" text-anchor="middle">W2</text></g>
+                  <g><rect x="215" y="225" width="80" height="40" rx="8" fill="#fff" stroke="#e7e7ea"/><text x="255" y="250" text-anchor="middle">W3</text></g>
+                  <g><rect x="300" y="200" width="80" height="40" rx="8" fill="#fff" stroke="#e7e7ea"/><text x="340" y="225" text-anchor="middle">W4</text></g>
+                </g>
+                <text x="200" y="288" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#9ca3af">collisions discovered late</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="slide-meta"><span>School A · centralized</span><span class="slide-num">02 / 13</span></div>
+      </section>
+
+      <!-- ─────────────── 03 · SCHOOL B ─────────────── -->
+      <section class="slide flex items-center">
+        <div class="mx-auto max-w-6xl w-full grid md:grid-cols-12 gap-12 items-center">
+          <div class="md:col-span-5">
+            <h2 class="reveal text-5xl md:text-6xl font-extrabold leading-[1.05] tracking-tight" data-d="1">
+              Peer-to-peer<br/>/ CRDT.
+            </h2>
+            <p class="reveal mt-6 text-lg text-[color:var(--muted)]" data-d="2">
+              No central authority. Every agent observes every other.
+            </p>
+            <div class="reveal mt-8 flex flex-wrap gap-2" data-d="3">
+              <span class="pill">CodeCRDT</span>
+              <span class="pill">OpenCode multi-agent</span>
+              <span class="pill">Cursor handoffs</span>
+              <span class="pill">MetaGPT</span>
+            </div>
+          </div>
+          <div class="md:col-span-7">
+            <div class="reveal card relative overflow-hidden" data-d="2" style="aspect-ratio: 4/3;">
+              <div class="absolute inset-0 dotline-soft opacity-50"></div>
+              <svg viewBox="0 0 400 300" class="absolute inset-0 w-full h-full">
+                <g stroke="#00b7a4" stroke-width="1.2" stroke-dasharray="3 3" fill="none" opacity="0.7">
+                  <path d="M90 90 L310 90" />
+                  <path d="M90 210 L310 210" />
+                  <path d="M90 90 L90 210" />
+                  <path d="M310 90 L310 210" />
+                  <path d="M90 90 L310 210" />
+                  <path d="M310 90 L90 210" />
+                </g>
+                <g font-family="Inter" font-weight="600" font-size="13" fill="#0a0a0f">
+                  <g><rect x="50" y="65" width="80" height="50" rx="10" fill="#fff" stroke="#00b7a4" stroke-width="1.5"/><text x="90" y="95" text-anchor="middle">W1</text></g>
+                  <g><rect x="270" y="65" width="80" height="50" rx="10" fill="#fff" stroke="#00b7a4" stroke-width="1.5"/><text x="310" y="95" text-anchor="middle">W2</text></g>
+                  <g><rect x="50" y="185" width="80" height="50" rx="10" fill="#fff" stroke="#00b7a4" stroke-width="1.5"/><text x="90" y="215" text-anchor="middle">W3</text></g>
+                  <g><rect x="270" y="185" width="80" height="50" rx="10" fill="#fff" stroke="#00b7a4" stroke-width="1.5"/><text x="310" y="215" text-anchor="middle">W4</text></g>
+                </g>
+                <text x="200" y="160" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#6b7280">n × (n − 1) observations</text>
+                <text x="200" y="288" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#9ca3af">retry storms · variance</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="slide-meta"><span>School B · peer-to-peer</span><span class="slide-num">03 / 13</span></div>
+      </section>
+
+      <!-- ─────────────── 04 · SHARED FLAW (TRANSITION) ─────────────── -->
+      <section class="slide flex items-center">
+        <div class="mx-auto max-w-5xl w-full">
+          <h2 class="reveal text-[clamp(40px,7vw,104px)] font-extrabold leading-[1.0] tracking-tight" data-d="1">
+            Both ask<br/>at <span class="text-[color:var(--accent)]">runtime</span>.
+          </h2>
+          <p class="reveal mt-10 text-xl md:text-2xl text-[color:var(--fg-soft)] max-w-2xl leading-snug" data-d="2">
+            Every round. Every agent. Re-derived from scratch — and paid for in tokens.
+          </p>
+          <p class="reveal mt-14 text-base text-[color:var(--muted)]" data-d="3">
+            So we measured the bill.
+          </p>
+        </div>
+        <div class="slide-meta"><span>Same question · different topology</span><span class="slide-num">04 / 13</span></div>
+      </section>
+
+      <!-- ─────────────── 05 · ACG HERO ─────────────── -->
+      <section class="slide flex items-center">
+        <div class="mx-auto max-w-6xl w-full">
+          <h2 class="reveal text-[clamp(56px,11vw,176px)] leading-[0.9] font-extrabold tracking-tight" data-d="1">
+            ACG.
+          </h2>
+          <p class="reveal mt-10 text-2xl md:text-3xl text-[color:var(--fg-soft)] max-w-3xl leading-snug font-medium" data-d="2">
+            <span class="mono text-[color:var(--accent)]">package-lock.json</span><br/>
+            for parallel coding agents.
+          </p>
+          <p class="reveal mt-8 text-lg text-[color:var(--muted)] max-w-2xl" data-d="3">
+            Move the conflict question from runtime to compile time.
+          </p>
+        </div>
+        <div class="slide-meta"><span>Agent Context Graph</span><span class="slide-num">05 / 13</span></div>
+      </section>
+
+      <!-- ─────────────── 08 · PIPELINE ─────────────── -->
+      <section class="slide flex items-center">
+        <div class="mx-auto max-w-6xl w-full">
+          <h2 class="reveal text-5xl md:text-6xl font-extrabold leading-[1.05] tracking-tight" data-d="1">
+            Compile once.<br/>Run in lanes.
+          </h2>
+
+          <div class="reveal mt-12 card-soft card" data-d="2">
+            <div class="text-xs uppercase tracking-wider font-semibold text-[color:var(--muted)] mb-5">Compile time · deterministic + 1 LLM/task</div>
+            <div class="flex items-center gap-2 flex-wrap text-sm font-semibold">
+              <div class="px-4 py-3 rounded-lg border border-[color:var(--line)] bg-white">repo + tasks.json</div>
+              <span class="text-[color:var(--muted)]">→</span>
+              <div class="px-4 py-3 rounded-lg border border-[color:var(--line)] bg-white">scan</div>
+              <span class="text-[color:var(--muted)]">→</span>
+              <div class="px-4 py-3 rounded-lg border border-[color:var(--line)] bg-white">indexers</div>
+              <span class="text-[color:var(--muted)]">→</span>
+              <div class="px-4 py-3 rounded-lg border border-[color:var(--line)] bg-white">predictor</div>
+              <span class="text-[color:var(--muted)]">→</span>
+              <div class="px-4 py-3 rounded-lg border border-[color:var(--line)] bg-white">solver</div>
+              <span class="text-[color:var(--muted)]">→</span>
+              <div class="px-4 py-3 rounded-lg border border-[color:var(--accent)] bg-[color:var(--accent-soft)] text-[color:var(--accent)] mono">agent_lock.json</div>
+            </div>
+          </div>
+
+          <div class="reveal mt-6 card-soft card" data-d="3">
+            <div class="text-xs uppercase tracking-wider font-semibold text-[color:var(--muted)] mb-5">Run time · parallel groups · validator-gated · no peer comms</div>
+            <div class="flex items-center gap-3 flex-wrap text-sm font-semibold">
+              <div class="px-4 py-3 rounded-lg border border-[color:var(--accent)] bg-[color:var(--accent-soft)] text-[color:var(--accent)] mono">agent_lock.json</div>
+              <span class="text-[color:var(--muted)]">→</span>
+              <div class="flex gap-2">
+                <div class="px-3 py-2 rounded-lg border border-[color:var(--line)] bg-white">W1</div>
+                <div class="px-3 py-2 rounded-lg border border-[color:var(--line)] bg-white">W2</div>
+              </div>
+              <span class="text-[color:var(--muted)]">·</span>
+              <div class="flex gap-2">
+                <div class="px-3 py-2 rounded-lg border border-[color:var(--line)] bg-white">W3</div>
+              </div>
+              <span class="text-[color:var(--muted)]">·</span>
+              <div class="flex gap-2">
+                <div class="px-3 py-2 rounded-lg border border-[color:var(--line)] bg-white">W4</div>
+              </div>
+              <span class="text-[color:var(--muted)]">→</span>
+              <div class="px-4 py-3 rounded-lg border border-[color:var(--line)] bg-white">validate_write <span class="text-[color:var(--muted)] font-normal">(glob · 0/1/2)</span></div>
+              <span class="text-[color:var(--muted)]">→</span>
+              <div class="px-4 py-3 rounded-lg border border-[color:var(--line)] bg-white">repo</div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-meta"><span>Compile · run · validate</span><span class="slide-num">06 / 13</span></div>
+      </section>
+
+      <!-- ─────────────── 09 · THE ARTIFACT ─────────────── -->
+      <section class="slide flex items-center">
+        <div class="mx-auto max-w-6xl w-full grid md:grid-cols-12 gap-12 items-center">
+          <div class="md:col-span-5">
+            <h2 class="reveal text-5xl md:text-6xl font-extrabold leading-[1.05] tracking-tight" data-d="1">
+              <span class="mono text-4xl md:text-5xl">agent_<wbr>lock.<wbr>json</span>
+            </h2>
+            <p class="reveal mt-6 text-lg text-[color:var(--muted)]" data-d="2">
+              Per task: <span class="mono text-sm text-[color:var(--fg-soft)]">predicted_writes</span>, <span class="mono text-sm text-[color:var(--fg-soft)]">allowed_paths</span>, <span class="mono text-sm text-[color:var(--fg-soft)]">depends_on</span>.
+            </p>
+            <ul class="reveal mt-8 space-y-2 text-[color:var(--fg-soft)]" data-d="3">
+              <li class="flex items-start gap-3"><span class="text-[color:var(--accent)] font-bold mt-0.5">·</span> Reviewable in PR</li>
+              <li class="flex items-start gap-3"><span class="text-[color:var(--accent)] font-bold mt-0.5">·</span> Diffable. Versionable. Signable.</li>
+              <li class="flex items-start gap-3"><span class="text-[color:var(--accent)] font-bold mt-0.5">·</span> Strict schema · Pydantic v2</li>
+            </ul>
+          </div>
+          <div class="md:col-span-7">
+            <div class="reveal codeblock" data-d="2">
+<span class="c">// agent_lock.json — abbreviated</span>
+{
+  <span class="k">"version"</span>: <span class="k">"1.0"</span>,
+  <span class="k">"repo"</span>: { root, commit, languages },
+  <span class="k">"tasks"</span>: [
+    {
+      <span class="k">"id"</span>: <span class="k">"oauth"</span>,
+      <span class="k">"predicted_writes"</span>: [...],
+      <span class="k">"allowed_paths"</span>: [
+        <span class="k">"src/server/auth/**"</span>,
+        <span class="k">".env.example"</span>
+      ],
+      <span class="k">"depends_on"</span>: []
+    }
+  ],
+  <span class="k">"execution_plan"</span>: {
+    <span class="k">"groups"</span>: [
+      { id: 1, tasks: [oauth, settings], type: <span class="k">"parallel"</span> },
+      { id: 2, tasks: [billing],          waits_for: [1] },
+      { id: 3, tasks: [tests],            waits_for: [2] }
+    ]
+  }
+}
+            </div>
+          </div>
+        </div>
+        <div class="slide-meta"><span>Committable artifact</span><span class="slide-num">07 / 13</span></div>
+      </section>
+
+      <!-- ─────────────── 10 · EIGHT LAYERS ─────────────── -->
+      <section class="slide flex items-center">
+        <div class="mx-auto max-w-6xl w-full">
+          <h2 class="reveal text-5xl md:text-6xl font-extrabold leading-[1.05] tracking-tight" data-d="1">
+            Eight layers.<br/>
+            <span class="text-[color:var(--muted)]">One LLM call per task.</span>
+          </h2>
+
+          <div class="mt-10 grid md:grid-cols-4 gap-4">
+            <div class="reveal layer" data-d="2">
+              <div class="lnum">L1</div>
+              <div class="lname">Static analysis</div>
+              <div class="lrole">Repo graph + framework / PageRank / BM25 / co-change.</div>
+              <div class="ltag">Deterministic</div>
+            </div>
+            <div class="reveal layer" data-d="2">
+              <div class="lnum">L2</div>
+              <div class="lname">Predictor</div>
+              <div class="lrole">7 seeds + LLM rerank. Falls back to seeds on error.</div>
+              <div class="ltag">1 LLM / task</div>
+            </div>
+            <div class="reveal layer" data-d="3">
+              <div class="lnum">L3</div>
+              <div class="lname">Compiler</div>
+              <div class="lrole">Glob broadening, test heuristic, allowed_paths.</div>
+              <div class="ltag">Deterministic</div>
+            </div>
+            <div class="reveal layer" data-d="3">
+              <div class="lnum">L4</div>
+              <div class="lname">Solver</div>
+              <div class="lrole">Conflict detection → DAG → parallel/serial groups.</div>
+              <div class="ltag">Pure</div>
+            </div>
+            <div class="reveal layer" data-d="4">
+              <div class="lnum">L5</div>
+              <div class="lname">Lockfile</div>
+              <div class="lrole">agent_lock.json — strict schema, version-pinned.</div>
+              <div class="ltag">Committable</div>
+            </div>
+            <div class="reveal layer" data-d="4">
+              <div class="lnum">L6</div>
+              <div class="lname">Runtime</div>
+              <div class="lrole">Async orchestrator + workers. Concurrency lanes.</div>
+              <div class="ltag">Validator-gated</div>
+            </div>
+            <div class="reveal layer" data-d="5">
+              <div class="lnum">L7</div>
+              <div class="lname">Enforcement</div>
+              <div class="lrole">Glob match. Pre-emption (Cascade) or post-hoc (Devin).</div>
+              <div class="ltag">No LLM</div>
+            </div>
+            <div class="reveal layer" data-d="5">
+              <div class="lnum">L8</div>
+              <div class="lname">Integration</div>
+              <div class="lrole">FastMCP server (4 tools) + CLI (10 commands).</div>
+              <div class="ltag">MCP · CLI</div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-meta"><span>Eight layers · one LLM call per task</span><span class="slide-num">08 / 13</span></div>
+      </section>
+
+      <!-- ─────────────── 10 · EXAMPLE 1 · demo-app ─────────────── -->
+      <section class="slide flex items-center">
+        <div class="mx-auto max-w-7xl w-full">
+          <h2 class="reveal text-4xl md:text-5xl font-extrabold leading-[1.05] tracking-tight" data-d="1">
+            demo-app.
+          </h2>
+          <div class="reveal mt-8 chart-frame" data-d="2">
+            <img src="img/slide_demo_app.png" alt="demo-app — overlapping writes, prompt tokens, projected cost. Naive vs ACG." />
+          </div>
+        </div>
+        <div class="slide-meta"><span>Next.js 14 · Prisma · tRPC · NextAuth</span><span class="slide-num">09 / 13</span></div>
+      </section>
+
+      <!-- ─────────────── 10 · BENCHMARK · COLLISION VS PARALLELISM ─────────────── -->
+      <section class="slide flex items-center">
+        <div class="mx-auto max-w-7xl w-full">
+          <h2 class="reveal text-4xl md:text-5xl font-extrabold leading-[1.05] tracking-tight" data-d="1">
+            Conflicts scale with parallelism.<br/>
+            <span class="text-[color:var(--accent)]">ACG stays at zero.</span>
+          </h2>
+          <div class="reveal mt-10 chart-frame" data-d="2">
+            <img src="img/collision_vs_parallelism.png" alt="Predicted-conflict pair concurrency vs N. Naive grows linearly; ACG planned stays at 0." />
+          </div>
+        </div>
+        <div class="slide-meta"><span>Mechanical from lockfile · lower is safer</span><span class="slide-num">10 / 13</span></div>
+      </section>
+
+      <!-- ─────────────── 11 · EXAMPLE 2 · Brocoders NestJS ─────────────── -->
+      <section class="slide flex items-center">
+        <div class="mx-auto max-w-7xl w-full">
+          <h2 class="reveal text-4xl md:text-5xl font-extrabold leading-[1.05] tracking-tight" data-d="1">
+            Brocoders NestJS.
+          </h2>
+          <div class="reveal mt-8 chart-frame" data-d="2">
+            <img src="img/slide_microservice.png" alt="Brocoders NestJS — overlapping writes, prompt tokens, projected cost. Naive vs ACG." />
+          </div>
+        </div>
+        <div class="slide-meta"><span>NestJS · TypeORM · PostgreSQL · MongoDB</span><span class="slide-num">11 / 13</span></div>
+      </section>
+
+      <!-- ─────────────── 12 · EXAMPLE 3 · Greenhouse ─────────────── -->
+      <section class="slide flex items-center">
+        <div class="mx-auto max-w-7xl w-full">
+          <h2 class="reveal text-4xl md:text-5xl font-extrabold leading-[1.05] tracking-tight" data-d="1">
+            Greenhouse.
+          </h2>
+          <div class="reveal mt-8 chart-frame" data-d="2">
+            <img src="img/slide_greenhouse.png" alt="Greenhouse — Spring Java 6 to 8 modernization. Overlapping writes, prompt tokens, projected cost. Naive vs ACG." />
+          </div>
+        </div>
+        <div class="slide-meta"><span>Spring · Java 6 → 8 modernization</span><span class="slide-num">12 / 13</span></div>
+      </section>
+
+      <!-- ─────────────── 13 · MANTRA ─────────────── -->
+      <section class="slide flex items-center">
+        <div class="mx-auto max-w-5xl w-full">
+          <h2 class="reveal text-[clamp(36px,5.5vw,80px)] font-extrabold leading-[1.06] tracking-tight" data-d="1">
+            <span class="text-[color:var(--accent)]">Static contract.</span><br/>
+            Committable artifact.<br/>
+            Provider-agnostic enforcement.
+          </h2>
+          <p class="reveal mt-12 text-xl text-[color:var(--fg-soft)] max-w-3xl leading-snug" data-d="2">
+            One file. One review. <em>N</em> agents in their own lanes.
+          </p>
+        </div>
+        <div class="slide-meta"><span>End · agent_lock.json for parallel coding agents</span><span class="slide-num">13 / 13</span></div>
+      </section>
+
+    </main>
+
+    <script>
+      const deck = document.getElementById("deck");
+      const bar = document.getElementById("progress");
+      function updateProgress() {
+        const max = deck.scrollHeight - deck.clientHeight;
+        const pct = max > 0 ? (deck.scrollTop / max) * 100 : 0;
+        bar.style.width = pct + "%";
+      }
+      deck.addEventListener("scroll", updateProgress, { passive: true });
+      updateProgress();
+
+      const slides = document.querySelectorAll("section.slide");
+      const io = new IntersectionObserver((entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.querySelectorAll(".reveal").forEach((el) => el.classList.add("visible"));
+          }
+        });
+      }, { threshold: 0.3 });
+      slides.forEach((s) => io.observe(s));
+
+      const sections = Array.from(slides);
+      function currentIndex() {
+        const top = deck.scrollTop;
+        let idx = 0;
+        sections.forEach((s, i) => { if (s.offsetTop - 80 <= top) idx = i; });
+        return idx;
+      }
+      function go(i) {
+        const t = Math.max(0, Math.min(sections.length - 1, i));
+        sections[t].scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      window.addEventListener("keydown", (ev) => {
+        if (["ArrowDown", "PageDown", " ", "j"].includes(ev.key)) { ev.preventDefault(); go(currentIndex() + 1); }
+        else if (["ArrowUp", "PageUp", "k"].includes(ev.key)) { ev.preventDefault(); go(currentIndex() - 1); }
+        else if (ev.key === "Home") { ev.preventDefault(); go(0); }
+        else if (ev.key === "End") { ev.preventDefault(); go(sections.length - 1); }
+      });
+    </script>
+  </body>
+</html>

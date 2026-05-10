@@ -62,45 +62,39 @@ def cmd_compile(
             help=(
                 "Source language of the target repo. "
                 "'typescript' (default) runs graph_builder/scan.ts; "
-                "'java' runs the in-process tree-sitter scanner before compiling."
+                "'java' runs the in-process tree-sitter scanner; "
+                "'python' runs the LibCST scanner before compiling."
             ),
         ),
     ] = "typescript",
-    use_cached_graph: Annotated[
-        bool,
-        typer.Option(
-            "--use-cached-graph/--rescan-graph",
-            help=(
-                "Reuse <repo>/.acg/context_graph.json when present (default). "
-                "Pass --rescan-graph to force a fresh ts-morph / tree-sitter scan."
-            ),
-        ),
-    ] = True,
 ) -> None:
     """Compile ``tasks.json`` + repo graph into ``agent_lock.json``."""
     language_normalized = language.strip().lower()
-    if language_normalized not in ("auto", "typescript", "javascript", "ts", "js", "java"):
+    if language_normalized not in (
+        "auto",
+        "typescript",
+        "javascript",
+        "ts",
+        "js",
+        "java",
+        "python",
+    ):
         _err_console.print(
             f"[red]unsupported --language {language!r}; "
-            "expected one of: auto, typescript, javascript, java[/]"
+            "expected one of: auto, typescript, javascript, java, python[/]"
         )
         raise typer.Exit(code=EXIT_USER_ERROR)
 
     tasks_input = _load_tasks(tasks)
-    graph_file = context_graph_path(repo)
-    if use_cached_graph and graph_file.exists():
-        repo_graph = _load_repo_graph(repo)
-        _console.print(f"[dim]reusing cached context graph at {graph_file}[/]")
-    else:
-        try:
-            scan_context_graph(repo, language_normalized)
-        except (GraphScanError, ValueError) as exc:
-            _err_console.print(f"[red]graph scan failed:[/] {exc}")
-            raise typer.Exit(code=EXIT_USER_ERROR) from exc
-        repo_graph = _load_repo_graph(repo)
-        _console.print(
-            f"[dim]scanned {repo_graph.get('language', 'unknown')} repo → {graph_file}[/]"
-        )
+    try:
+        repo_graph = scan_context_graph(repo, language_normalized)
+    except (GraphScanError, ValueError) as exc:
+        _err_console.print(f"[red]graph scan failed:[/] {exc}")
+        raise typer.Exit(code=EXIT_USER_ERROR) from exc
+    _console.print(
+        f"[dim]scanned {repo_graph.get('language', 'unknown')} repo → {context_graph_path(repo)}[/]"
+    )
+    repo_graph = _load_repo_graph(repo)
     if not repo_graph:
         _err_console.print("[red]graph scan did not produce a readable context graph[/]")
         raise typer.Exit(code=EXIT_USER_ERROR)
@@ -122,7 +116,7 @@ def cmd_init_graph(
         str,
         typer.Option(
             "--language",
-            help="Source language to scan: auto, typescript, javascript, or java.",
+            help="Source language to scan: auto, typescript, javascript, java, or python.",
         ),
     ] = "auto",
     out: Annotated[
@@ -439,21 +433,13 @@ def cmd_analyze_runs(
                     "strategy": r.strategy,
                     "backend": r.backend,
                     "suite_name": r.suite_name,
-                    "execution_mode": r.execution_mode,
-                    "evidence_kind": r.evidence_kind,
                     "tasks_total": r.tasks_total,
                     "tasks_completed": r.tasks_completed,
-                    "tests_ran_count": r.tests_ran_count,
-                    "tested_tasks_completed": r.tested_tasks_completed,
                     "overlapping_write_pairs": r.overlapping_write_pairs,
                     "out_of_bounds_write_count": r.out_of_bounds_write_count,
                     "blocked_invalid_write_count": r.blocked_invalid_write_count,
                     "tokens_prompt_total": r.tokens_prompt_total,
-                    "tokens_prompt_method": r.tokens_prompt_method,
                     "tokens_orchestrator_overhead": r.tokens_orchestrator_overhead,
-                    "cost_usd_total": r.cost_usd_total,
-                    "cost_method": r.cost_method,
-                    "cost_source": r.cost_source,
                 }
                 for r in report.runs
             ],
@@ -482,8 +468,6 @@ def cmd_analyze_runs(
                 "f1": round(report.overall_f1, 4),
                 "total_blocks": report.total_blocks,
                 "total_oob": report.total_oob,
-                "total_proposal_oob": report.total_proposal_oob,
-                "total_posthoc_oob": report.total_posthoc_oob,
             },
         }
         json_out.parent.mkdir(parents=True, exist_ok=True)
@@ -495,24 +479,38 @@ def cmd_analyze_runs(
 def cmd_mcp(
     transport: Annotated[
         str,
-        typer.Option(help="MCP transport. Only 'stdio' is supported today."),
+        typer.Option(help="MCP transport: 'stdio' (default) or 'http' (Streamable HTTP)."),
     ] = "stdio",
+    host: Annotated[
+        str,
+        typer.Option(help="Bind host (http transport only)."),
+    ] = "0.0.0.0",
+    port: Annotated[
+        int,
+        typer.Option(help="Bind port (http transport only)."),
+    ] = 8080,
 ) -> None:
     """Run the ACG MCP server (requires the `mcp` extra: pip install -e .[mcp])."""
-    if transport != "stdio":
-        _err_console.print(f"[red]unsupported --transport {transport!r}; expected 'stdio'[/]")
+    transport_norm = transport.lower().replace("-", "_")
+    if transport_norm not in {"stdio", "http", "streamable_http"}:
+        _err_console.print(
+            f"[red]unsupported --transport {transport!r}; expected 'stdio' or 'http'[/]"
+        )
         raise typer.Exit(code=EXIT_USER_ERROR)
     try:
         import fastmcp  # noqa: F401
 
-        from acg.mcp import run_stdio
+        from acg.mcp import run_http, run_stdio
     except ImportError as exc:
         _err_console.print(
             r"[red]MCP extra not installed.[/] Run: "
             r"[bold]pip install -e '.\[mcp]'[/]"
         )
         raise typer.Exit(code=EXIT_USER_ERROR) from exc
-    run_stdio()
+    if transport_norm == "stdio":
+        run_stdio()
+    else:
+        run_http(host=host, port=port)
 
 
 def main() -> None:  # pragma: no cover - convenience entry-point.

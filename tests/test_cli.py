@@ -184,3 +184,75 @@ def test_compile_initializes_repo_graph_before_compiling(
     assert result.exit_code == 0, result.output
     assert calls == [("auto", None)]
     assert out.exists()
+
+
+FIXTURE_ROOT = Path(__file__).parent / "fixtures"
+
+
+def test_init_graph_python_runtime_fixture(tmp_path: Path) -> None:
+    """End-to-end smoke: ``acg init-graph --language python`` on a real fixture."""
+
+    out = tmp_path / "graph.json"
+    result = runner.invoke(
+        app,
+        [
+            "init-graph",
+            "--repo",
+            str(FIXTURE_ROOT / "tiny_py_runtime"),
+            "--language",
+            "python",
+            "--out",
+            str(out),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "language=python" in result.output
+    payload = json.loads(out.read_text())
+    assert payload["language"] == "python"
+    assert any(r["route"] == "/health" for r in payload["routes"])
+
+
+def test_init_graph_python_lib_fixture(tmp_path: Path) -> None:
+    out = tmp_path / "graph.json"
+    result = runner.invoke(
+        app,
+        [
+            "init-graph",
+            "--repo",
+            str(FIXTURE_ROOT / "tiny_py_lib"),
+            "--language",
+            "python",
+            "--out",
+            str(out),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out.read_text())
+    assert payload["language"] == "python"
+    assert payload["routes"] == []
+    assert payload["exports"]["src/tinypkg/__init__.py"] == ["greet", "slugify"]
+
+
+def test_compile_rejects_unsupported_language(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    tasks = tmp_path / "tasks.json"
+    tasks.write_text(json.dumps({"version": "1.0", "tasks": []}))
+    out = tmp_path / "agent_lock.json"
+
+    result = runner.invoke(
+        app,
+        [
+            "compile",
+            "--repo",
+            str(repo),
+            "--tasks",
+            str(tasks),
+            "--out",
+            str(out),
+            "--language",
+            "rust",
+        ],
+    )
+    assert result.exit_code == 1, result.output  # EXIT_USER_ERROR
+    assert "python" in result.output  # the help message lists allowed languages

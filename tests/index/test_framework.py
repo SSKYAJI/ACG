@@ -73,3 +73,35 @@ def test_fastapi_route(tmp_path: Path) -> None:
 
 def test_no_fingerprint_returns_no_predictions(tmp_path: Path) -> None:
     assert paths_for(tmp_path, "Add billing API endpoint") == set()
+
+
+def test_flask_route_with_blueprints_dir(tmp_path: Path) -> None:
+    touch(tmp_path, "requirements.txt", "flask==3.0\n")
+    touch(tmp_path, "app/__init__.py", "from flask import Flask\napp = Flask(__name__)\n")
+    touch(tmp_path, "app/blueprints/__init__.py")
+    touch(tmp_path, "app/blueprints/users.py", "from flask import Blueprint\nbp = Blueprint('u', __name__)\n")
+
+    paths = paths_for(tmp_path, "Add billing route")
+    assert "flask" in detect_frameworks(tmp_path, {})
+    assert "app/blueprints/billing.py" in paths
+    assert "tests/test_billing.py" in paths
+
+
+def test_flask_route_falls_back_to_app_py(tmp_path: Path) -> None:
+    # Single-module Flask app: no blueprints dir, just app.py.
+    touch(
+        tmp_path,
+        "app.py",
+        "from flask import Flask\napp = Flask(__name__)\n",
+    )
+    touch(tmp_path, "requirements.txt", "flask\n")
+
+    paths = paths_for(tmp_path, "Add health route")
+    assert "flask" in detect_frameworks(tmp_path, {})
+    assert "app.py" in paths
+
+
+def test_flask_detected_from_module_signal_only(tmp_path: Path) -> None:
+    # No requirements/pyproject mention; Flask detected from import signal.
+    touch(tmp_path, "wsgi.py", "from flask import Flask\napp = Flask(__name__)\n")
+    assert "flask" in detect_frameworks(tmp_path, {})

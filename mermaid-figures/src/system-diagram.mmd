@@ -1,0 +1,28 @@
+flowchart LR
+    A["Task decomposition"] --> B{"How are writes coordinated?"}
+
+    subgraph R["Runtime Coordination"]
+        C1["Agents start in parallel"]
+        C2["Overlap discovered during execution"]
+        C3["Manager, merge, or repair"]
+        C4["Higher token and integration cost"]
+        C1 --> C2 --> C3 --> C4
+    end
+
+    subgraph P["Pre-Execution Write Contract"]
+        D1["Predict task write sets"]
+        D2["Compile lockfile: allowed paths and execution groups"]
+        D3["Run workers with scoped context"]
+        D4["Validator blocks invalid writes"]
+        D5["Lower prompt load and explicit parallelism"]
+        D1 --> D2 --> D3 --> D4 --> D5
+    end
+
+    B --> C1
+    B --> D1
+
+    classDef accent fill:#EEF3FF,stroke:#B7C9FF,color:#334155,stroke-width:1px;
+    classDef soft fill:#F8FAFC,stroke:#D7E3F4,color:#475569,stroke-width:1px;
+
+    class A,B,D1,D2,D3,D4,D5 accent;
+    class C1,C2,C3,C4 soft;

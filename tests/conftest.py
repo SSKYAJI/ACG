@@ -17,6 +17,11 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# Fixture directories may contain real ``test_*.py`` files (e.g. the Python
+# scanner fixtures under ``tests/fixtures/tiny_py_*/``). Those are *fixtures*,
+# not tests for the ACG package, so pytest should not try to collect them.
+collect_ignore_glob = ["fixtures/*/tests/*", "fixtures/*/*/tests/*"]
+
 
 @pytest.fixture
 def schema_path() -> Path:

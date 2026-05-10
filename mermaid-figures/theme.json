@@ -1,0 +1,37 @@
+{
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "Inter, ui-sans-serif, system-ui, sans-serif",
+    "background": "#FFFFFF",
+    "primaryColor": "#EEF3FF",
+    "primaryBorderColor": "#B7C9FF",
+    "primaryTextColor": "#334155",
+    "secondaryColor": "#F8FAFC",
+    "secondaryBorderColor": "#D7E3F4",
+    "secondaryTextColor": "#475569",
+    "tertiaryColor": "#FFFFFF",
+    "lineColor": "#94A3B8",
+    "textColor": "#334155",
+    "mainBkg": "#EEF3FF",
+    "nodeBorder": "#B7C9FF",
+    "clusterBkg": "#F8FAFC",
+    "clusterBorder": "#D7E3F4",
+    "titleColor": "#334155",
+    "cScale0": "#B7C9FF",
+    "cScale1": "#B7C9FF",
+    "cScale2": "#B7C9FF",
+    "xyChart": {
+      "backgroundColor": "#FFFFFF",
+      "titleColor": "#334155",
+      "xAxisLabelColor": "#64748B",
+      "xAxisTitleColor": "#475569",
+      "xAxisTickColor": "#E2E8F0",
+      "xAxisLineColor": "#CBD5E1",
+      "yAxisLabelColor": "#64748B",
+      "yAxisTitleColor": "#475569",
+      "yAxisTickColor": "#E2E8F0",
+      "yAxisLineColor": "#CBD5E1",
+      "plotColorPalette": "#B7C9FF"
+    }
+  }
+}

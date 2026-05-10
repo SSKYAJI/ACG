@@ -10,6 +10,6 @@ Designed to be consumed by:
 - OpenCode (per-task lock subsystem requested in issue #4278)
 """
 
-from .server import build_server, run_stdio
+from .server import build_server, run_http, run_stdio
 
-__all__ = ["build_server", "run_stdio"]
+__all__ = ["build_server", "run_http", "run_stdio"]

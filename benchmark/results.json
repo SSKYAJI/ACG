@@ -1,36 +1,58 @@
 {
   "base": {
+    "click": {
+      "f1@5": 0.5,
+      "language": "python",
+      "precision@5": 0.35000000000000003,
+      "recall@5": 0.875,
+      "wall_s": 0.33920312486588955
+    },
     "demo-app": {
+      "f1@5": 0.4496047430830039,
+      "language": "typescript",
       "precision@5": 0.325,
       "recall@5": 0.7291666666666666,
-      "wall_s": 0.20285383499998488
+      "wall_s": 0.058953708969056606
     },
     "express": {
+      "f1@5": 0.31424581005586594,
+      "language": "javascript",
       "precision@5": 0.225,
       "recall@5": 0.5208333333333333,
-      "wall_s": 2.345269873999996
+      "wall_s": 1.0587907498702407
+    },
+    "fastapi-template": {
+      "f1@5": 0.23076923076923078,
+      "language": "python",
+      "precision@5": 0.15000000000000002,
+      "recall@5": 0.5,
+      "wall_s": 0.15697599994018674
     },
     "t3-app": {
+      "f1@5": 0.2789855072463768,
+      "language": "typescript",
       "precision@5": 0.175,
       "recall@5": 0.6875,
-      "wall_s": 5.304883036999968
+      "wall_s": 2.06823820900172
     }
   },
-  "with_embeddings": {
-    "demo-app": {
-      "precision@5": 0.325,
-      "recall@5": 0.7291666666666666,
-      "wall_s": 1.4858365350000327
+  "pinned_refs": {
+    "click": "8.1.7",
+    "fastapi-template": "master"
+  },
+  "secondary": {
+    "click": {
+      "bad_write_attempts": 24.0,
+      "blocked_bad_write_rate": 0.9166666666666666,
+      "conflicts_detected": 2.0,
+      "pinned_ref": "8.1.7"
     },
-    "express": {
-      "precision@5": 0.225,
-      "recall@5": 0.5208333333333333,
-      "wall_s": 3.1240486019999594
-    },
-    "t3-app": {
-      "precision@5": 0.175,
-      "recall@5": 0.6875,
-      "wall_s": 6.886374318000037
+    "fastapi-template": {
+      "bad_write_attempts": 21.0,
+      "blocked_bad_write_rate": 0.8571428571428571,
+      "conflicts_detected": 4.0,
+      "pinned_ref": "master"
     }
-  }
+  },
+  "with_embeddings": {}
 }

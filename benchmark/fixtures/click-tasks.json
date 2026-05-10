@@ -1,0 +1,26 @@
+[
+  {
+    "id": "option-type-validator",
+    "prompt": "Add a custom validator hook to the IntRange option type and cover it in the options test suite.",
+    "hints": {"touches": ["types", "options"]},
+    "ground_truth_paths": ["src/click/types.py", "tests/test_options.py"]
+  },
+  {
+    "id": "decorator-pass-context",
+    "prompt": "Add a new pass_context decorator helper and add a context test that exercises it.",
+    "hints": {"touches": ["decorators", "context"]},
+    "ground_truth_paths": ["src/click/decorators.py", "tests/test_context.py"]
+  },
+  {
+    "id": "parser-flag-style",
+    "prompt": "Update the parser to support a new short flag style and back it with parser tests.",
+    "hints": {"touches": ["parser", "tests"]},
+    "ground_truth_paths": ["src/click/parser.py", "tests/test_parser.py"]
+  },
+  {
+    "id": "formatting-help",
+    "prompt": "Improve help text wrapping and width detection in the formatter and update the basic tests.",
+    "hints": {"touches": ["formatting", "termui"]},
+    "ground_truth_paths": ["src/click/formatting.py", "tests/test_basic.py"]
+  }
+]

@@ -1,11 +1,20 @@
 {
   "version": "1.0",
-  "scanned_at": "2026-04-26T12:47:24.352Z",
-  "root": "/Users/prajit/Desktop/projects/cognition/demo-app",
+  "scanned_at": "2026-05-06T05:06:57.417Z",
+  "root": "/Users/shashank/Desktop/Learning Project/Cognition Winning project/demo-app",
   "language": "typescript",
   "files": [
     {
       "path": ".env.example",
+      "imports": [],
+      "exports": [],
+      "symbols": [],
+      "default_export": null,
+      "is_hotspot": false,
+      "imported_by_count": 0
+    },
+    {
+      "path": "next-env.d.ts",
       "imports": [],
       "exports": [],
       "symbols": [],
@@ -330,6 +339,7 @@
   ],
   "imports": {
     ".env.example": [],
+    "next-env.d.ts": [],
     "next.config.js": [
       "./src/env.js"
     ],
@@ -393,6 +403,7 @@
   },
   "exports": {
     ".env.example": [],
+    "next-env.d.ts": [],
     "next.config.js": [],
     "package.json": [],
     "postcss.config.js": [],

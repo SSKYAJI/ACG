@@ -40,7 +40,9 @@ NestJS microservice benchmark, are in
 
 ## Demo
 
-![Agent coordination tax — naive vs ACG-planned](docs/benchmark.png)
+![Overlapping writes — naive 4 → ACG 1](docs/benchmark_overlap.png)
+![Prompt tokens / task — naive 224 → ACG 128](docs/benchmark_tokens.png)
+![Projected cost @ N=10,000 tasks — naive $1.32 → ACG $0.76](docs/benchmark_cost.png)
 
 Same 4 tasks (`oauth`, `billing`, `settings`, `tests`) on the same `demo-app`, two strategies:
 
@@ -73,7 +75,7 @@ make demo              # scan + compile + benchmark + chart in one shot
 - `demo-app/.acg/context_graph.json` — ts-morph repo graph (16 files, 3 hotspots)
 - `demo-app/agent_lock.json` — committable plan (4 tasks, 3 groups, 2 conflicts)
 - `.acg/run_naive.json` + `.acg/run_acg.json` — benchmark metrics
-- `docs/benchmark.png` — the chart shown above
+- `docs/benchmark_overlap.png`, `docs/benchmark_tokens.png`, `docs/benchmark_cost.png` — the three charts shown above
 
 To watch the enforcement layer block an out-of-bounds write:
 
@@ -101,6 +103,40 @@ A committable, human-reviewable, schema-validated artifact that declares for eac
 See `examples/lockfile.dag.example.json` for the full demo lockfile and `schema/agent_lock.schema.json` for the JSON Schema.
 
 ## CLI surface
+
+### npx guard quickstart
+
+```bash
+npx acg init
+npx acg status
+npx acg disable
+npx acg enable
+npx acg delete
+```
+
+The npm CLI installs repo-level write guards for Claude Code and Windsurf.
+The default mode is `warn`: Claude Code receives a `PreToolUse` `ask`
+decision for out-of-scope writes, so you see a permission prompt instead of a
+silent allow or hard block. The guard reads `.acg/agent_lock.json` locally and
+enforces `allowed_paths` for the configured task; it does not send code to a
+server, modify codemap logic, or change write-set prediction.
+
+After `init`, run `/hooks` in Claude Code or restart Claude Code if the hook
+does not appear immediately. To test the Claude guard manually:
+
+```bash
+echo '{"cwd":"'"$PWD"'","tool_name":"Write","tool_input":{"file_path":"src/routes/billing.tsx"}}' \
+  | npx acg guard --platform claude
+# permissionDecision: allow
+
+echo '{"cwd":"'"$PWD"'","tool_name":"Write","tool_input":{"file_path":"src/routes/profile.tsx"}}' \
+  | npx acg guard --platform claude
+# permissionDecision: ask
+```
+
+To test hard blocking, set `"mode": "block"` in `.acg/acg.config.json` and
+rerun the `profile.tsx` command; Claude should receive
+`permissionDecision: deny`.
 
 ```text
 acg compile          --repo PATH --tasks FILE --out FILE

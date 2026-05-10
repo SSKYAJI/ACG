@@ -84,8 +84,11 @@ def detect_frameworks(repo_root: Path | None, repo_graph: dict[str, Any]) -> lis
     frameworks: list[str] = []
     package_json = _read_file(repo_root, "package.json")
     pyproject = _read_file(repo_root, "pyproject.toml")
+    requirements = _read_file(repo_root, "requirements.txt")
+    pipfile = _read_file(repo_root, "Pipfile")
     gemfile = _read_file(repo_root, "Gemfile")
     pom_xml = _read_file(repo_root, "pom.xml")
+    python_manifests = (pyproject + "\n" + requirements + "\n" + pipfile).lower()
 
     has_next = _has_any(files, ("next.config.js", "next.config.ts", "next.config.mjs")) or (
         '"next"' in package_json
@@ -96,7 +99,7 @@ def detect_frameworks(repo_root: Path | None, repo_graph: dict[str, Any]) -> lis
         frameworks.append("next_app_router")
     if has_next and (has_trpc or has_prisma):
         frameworks.append("t3")
-    if "manage.py" in files or "django" in pyproject.lower():
+    if "manage.py" in files or "django" in python_manifests:
         frameworks.append("django")
     if (
         "Gemfile" in files
@@ -108,10 +111,26 @@ def detect_frameworks(repo_root: Path | None, repo_graph: dict[str, Any]) -> lis
         or '"vite"' in package_json
     ):
         frameworks.append("vite")
-    if "fastapi" in pyproject.lower() or any(path.endswith("main.py") for path in files):
-        text = pyproject.lower() + "\n".join(_read_file(repo_root, path).lower() for path in files if path.endswith("main.py"))
+    if "fastapi" in python_manifests or any(path.endswith("main.py") for path in files):
+        text = python_manifests + "\n".join(_read_file(repo_root, path).lower() for path in files if path.endswith("main.py"))
         if "fastapi" in text:
             frameworks.append("fastapi")
+    flask_entrypoints = {
+        "app.py",
+        "wsgi.py",
+        "application.py",
+        "main.py",
+        "__init__.py",
+    }
+    flask_candidates = [
+        path
+        for path in files
+        if path.endswith(".py") and path.rsplit("/", 1)[-1] in flask_entrypoints
+    ]
+    if "flask" in python_manifests or any(
+        _flask_signal(_read_file(repo_root, path)) for path in flask_candidates[:8]
+    ):
+        frameworks.append("flask")
     if "pom.xml" in files and "spring-boot" in pom_xml:
         frameworks.append("spring_boot")
     return frameworks
@@ -124,6 +143,17 @@ def _read_file(repo_root: Path | None, rel_path: str) -> str:
         return (repo_root / rel_path).read_text(encoding="utf-8", errors="ignore")
     except OSError:
         return ""
+
+
+def _flask_signal(text: str) -> bool:
+    """Heuristic: a module imports Flask or instantiates ``Flask(__name__)``."""
+
+    if not text:
+        return False
+    lowered = text.lower()
+    if "from flask" in lowered or "import flask" in lowered:
+        return True
+    return "flask(__name__)" in lowered.replace(" ", "")
 
 
 def _slug(value: str) -> str:
@@ -268,6 +298,32 @@ def _fastapi_route(entity: str, ctx: FrameworkContext) -> list[str]:
     return [f"app/api/{_snake(entity)}.py"]
 
 
+def _flask_blueprint_dirs(ctx: FrameworkContext) -> list[str]:
+    """Return repo-rooted directories likely to host Flask Blueprint modules."""
+
+    candidates: set[str] = set()
+    for path in ctx.files:
+        if not path.endswith(".py"):
+            continue
+        parts = path.split("/")
+        for idx, part in enumerate(parts[:-1]):
+            if part in {"blueprints", "views", "routes"}:
+                candidates.add("/".join(parts[: idx + 1]))
+    return sorted(candidates)
+
+
+def _flask_route(entity: str, ctx: FrameworkContext) -> list[str]:
+    blueprint_dirs = _flask_blueprint_dirs(ctx)
+    snake = _snake(entity)
+    if blueprint_dirs:
+        return [f"{blueprint_dirs[0]}/{snake}.py", f"tests/test_{snake}.py"]
+    if any(path == "app.py" for path in ctx.files):
+        return ["app.py", f"tests/test_{snake}.py"]
+    if any(path.startswith("app/") for path in ctx.files):
+        return [f"app/{snake}.py", f"tests/test_{snake}.py"]
+    return [f"{snake}.py", f"tests/test_{snake}.py"]
+
+
 def _spring_controller(entity: str, ctx: FrameworkContext) -> list[str]:
     return [f"{_spring_package(ctx)}/controllers/{_camel(entity)}Controller.java"]
 
@@ -302,6 +358,10 @@ TEMPLATES: dict[str, dict[str, Template]] = {
     "fastapi": {
         "route": _fastapi_route,
         "api": _fastapi_route,
+    },
+    "flask": {
+        "route": _flask_route,
+        "api": _flask_route,
     },
     "spring_boot": {
         "controller": _spring_controller,
