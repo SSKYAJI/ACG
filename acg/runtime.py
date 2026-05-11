@@ -510,6 +510,8 @@ class Proposal:
     allowed: bool
     reason: str | None
     scope_status: str = "blocked"
+    # Full proposed file body when the worker JSON includes a ``content`` key.
+    content: str | None = None
 
 
 @dataclass
@@ -581,12 +583,12 @@ class RunResult:
 # ---------------------------------------------------------------------------
 
 
-def _parse_writes(raw: str) -> list[dict[str, str]]:
-    """Best-effort parse of an LLM reply into a list of ``{file, description}``.
+def _parse_writes(raw: str) -> list[dict[str, Any]]:
+    """Best-effort parse of an LLM reply into write dicts.
 
-    Tolerates ``json``-fenced blocks, leading/trailing prose, and replies that
-    are bare arrays instead of ``{"writes": [...]}`` objects. Returns ``[]`` if
-    no recognisable structure is found.
+    Each item is at least ``{file, description}``. When the model includes a
+    string ``content`` field (full file body), it is preserved for applied-diff
+    runners. Legacy replies without ``content`` omit the key.
     """
     if not raw or not raw.strip():
         return []
@@ -622,7 +624,7 @@ def _parse_writes(raw: str) -> list[dict[str, str]]:
     else:
         items = []
 
-    out: list[dict[str, str]] = []
+    out: list[dict[str, Any]] = []
     for item in items:
         if not isinstance(item, dict):
             continue
@@ -633,7 +635,11 @@ def _parse_writes(raw: str) -> list[dict[str, str]]:
         description = item.get("description") or item.get("reason") or ""
         if not isinstance(description, str):
             description = str(description)
-        out.append({"file": file_path.strip(), "description": description.strip()})
+        row: dict[str, Any] = {"file": file_path.strip(), "description": description.strip()}
+        wc = item.get("content")
+        if isinstance(wc, str):
+            row["content"] = wc
+        out.append(row)
     return out
 
 
@@ -771,9 +777,13 @@ def _build_worker_prompt(task: Task, repo_graph: dict[str, Any]) -> list[dict[st
 
     system = (
         "You are a coding agent assigned a single task. Output ONLY a JSON "
-        'object with key "writes": an array of objects with keys "file" '
-        '(repository-relative path) and "description" (one short sentence). '
-        "Do not include prose, code fences, or any other text."
+        'object with key "writes": an array of objects. Each object must have '
+        'keys "file" (repository-relative path) and "description" (one short '
+        'sentence). When you are ready to supply full implementations, also '
+        'include a string key "content" whose value is the complete new file '
+        "body for that path (UTF-8 text). Omit \"content\" when you only want "
+        "to name paths. Do not include prose, code fences, or any other text "
+        "outside the JSON object."
     )
     user = (
         f"Task id: {task.id}\n"
@@ -1008,6 +1018,8 @@ async def run_worker(
             _console.print(
                 "[candidate_replan] " + json.dumps(candidate_replan_state, sort_keys=True)
             )
+        wc = raw.get("content")
+        file_content = wc if isinstance(wc, str) else None
         proposals.append(
             Proposal(
                 file=raw["file"],
@@ -1015,6 +1027,7 @@ async def run_worker(
                 allowed=allowed,
                 reason=reason,
                 scope_status=scope_status,
+                content=file_content,
             )
         )
         safe_file = _rich_escape(raw["file"])
