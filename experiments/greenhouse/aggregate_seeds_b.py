@@ -17,9 +17,9 @@ from pathlib import Path
 from typing import Any
 
 import matplotlib
-import matplotlib.pyplot as plt
 
 matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 METRICS = (
     "tokens_prompt_total",
