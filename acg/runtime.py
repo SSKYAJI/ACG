@@ -512,6 +512,8 @@ class Proposal:
     scope_status: str = "blocked"
     # Full proposed file body when the worker JSON includes a ``content`` key.
     content: str | None = None
+    # OpenAI apply_patch mini-envelope for this file (Begin/End + one file op).
+    envelope: str | None = None
 
 
 @dataclass
@@ -640,6 +642,63 @@ def _parse_writes(raw: str) -> list[dict[str, Any]]:
         if isinstance(wc, str):
             row["content"] = wc
         out.append(row)
+    return out
+
+
+_PATCH_BEGIN = "*** Begin Patch"
+_PATCH_END = "*** End Patch"
+
+
+def _strip_llm_code_fence(text: str) -> str:
+    t = text.strip()
+    if not t.startswith("```"):
+        return t
+    t = re.sub(r"^```(?:[a-zA-Z0-9_-]+)?\s*", "", t)
+    t = re.sub(r"\s*```\s*$", "", t)
+    return t.strip()
+
+
+def _parse_apply_envelope(raw: str) -> list[dict[str, Any]]:
+    """Parse an LLM reply into per-file apply_patch records.
+
+    Each dict has ``file``, ``description`` (``Update`` / ``Add`` / ``Delete``),
+    and ``envelope`` (a standalone ``*** Begin Patch`` … ``*** End Patch`` block).
+
+    When no apply_patch envelope is present, returns ``[]`` so callers can fall
+    back to legacy JSON ``writes`` parsing (mock backends).
+    """
+    text = _strip_llm_code_fence(raw or "")
+    if _PATCH_BEGIN not in text:
+        return []
+    out: list[dict[str, Any]] = []
+    search_from = 0
+    while True:
+        bi = text.find(_PATCH_BEGIN, search_from)
+        if bi == -1:
+            break
+        ei = text.find(_PATCH_END, bi)
+        if ei == -1:
+            return []
+        full = text[bi : ei + len(_PATCH_END)]
+        search_from = ei + len(_PATCH_END)
+        inner = full[len(_PATCH_BEGIN) : -len(_PATCH_END)].strip()
+        if not inner:
+            continue
+        header = re.compile(
+            r"(?m)^\*\*\* (Update|Add|Delete) File: (.+?)\s*$",
+        )
+        matches = list(header.finditer(inner))
+        if not matches:
+            continue
+        for idx, m in enumerate(matches):
+            start = m.start()
+            end = matches[idx + 1].start() if idx + 1 < len(matches) else len(inner)
+            chunk = inner[start:end].strip()
+            kind = m.group(1)
+            path = m.group(2).strip()
+            desc = {"Update": "Update", "Add": "Add", "Delete": "Delete"}[kind]
+            mini = f"{_PATCH_BEGIN}\n{chunk}\n{_PATCH_END}"
+            out.append({"file": path, "description": desc, "envelope": mini})
     return out
 
 
@@ -776,14 +835,25 @@ def _build_worker_prompt(task: Task, repo_graph: dict[str, Any]) -> list[dict[st
             break
 
     system = (
-        "You are a coding agent assigned a single task. Output ONLY a JSON "
-        'object with key "writes": an array of objects. Each object must have '
-        'keys "file" (repository-relative path) and "description" (one short '
-        'sentence). When you are ready to supply full implementations, also '
-        'include a string key "content" whose value is the complete new file '
-        "body for that path (UTF-8 text). Omit \"content\" when you only want "
-        "to name paths. Do not include prose, code fences, or any other text "
-        "outside the JSON object."
+        "You are a coding agent assigned a single task. Output ONLY an OpenAI "
+        "apply_patch envelope that captures every change required to complete "
+        "the task. Use this exact format:\n\n"
+        "*** Begin Patch\n"
+        "*** Update File: <relative/path>\n"
+        "@@\n"
+        "- removed line\n"
+        "+ added line\n"
+        " context line\n"
+        "*** Add File: <relative/path>\n"
+        "+ entire new file body, every line prefixed with '+'\n"
+        "*** End Patch\n\n"
+        "Rules:\n"
+        "- Use *** Update File for existing files, *** Add File for new files.\n"
+        "- Updates require enough surrounding context that the hunk is unambiguous.\n"
+        "- Do NOT emit any prose, code fences, or commentary outside the envelope.\n"
+        '- Do NOT include "writes": ... JSON. The envelope is the only output.\n'
+        "- You MUST produce a patch. An empty *** Begin Patch / *** End Patch is "
+        "treated as task failure."
     )
     user = (
         f"Task id: {task.id}\n"
@@ -960,7 +1030,9 @@ async def run_worker(
             prompt_tokens=None,
         )
 
-    raw_proposals = _parse_writes(reply.content)
+    raw_proposals = _parse_apply_envelope(reply.content)
+    if not raw_proposals:
+        raw_proposals = _parse_writes(reply.content)
     if perf:
         perf.mark_task_end(
             task.id,
@@ -1020,6 +1092,8 @@ async def run_worker(
             )
         wc = raw.get("content")
         file_content = wc if isinstance(wc, str) else None
+        env_raw = raw.get("envelope")
+        envelope_val = env_raw.strip() if isinstance(env_raw, str) and env_raw.strip() else None
         proposals.append(
             Proposal(
                 file=raw["file"],
@@ -1028,6 +1102,7 @@ async def run_worker(
                 reason=reason,
                 scope_status=scope_status,
                 content=file_content,
+                envelope=envelope_val,
             )
         )
         safe_file = _rich_escape(raw["file"])

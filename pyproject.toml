@@ -10,6 +10,7 @@ authors = [
   { name = "Prajit" },
 ]
 dependencies = [
+  "codex-apply-patch>=0.4,<0.5",
   "typer>=0.12,<1.0",
   "pydantic>=2.7,<3.0",
   "httpx>=0.27,<1.0",
