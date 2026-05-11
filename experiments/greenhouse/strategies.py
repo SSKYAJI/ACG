@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import subprocess
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -56,12 +57,14 @@ NAIVE_STRATEGY = "naive_parallel"
 ACG_PLANNED_STRATEGY = "acg_planned"
 ACG_PLANNED_FULL_CONTEXT_STRATEGY = "acg_planned_full_context"
 ACG_PLANNED_REPLAN_STRATEGY = "acg_planned_replan"
+ACG_PLANNED_APPLIED_STRATEGY = "acg_planned_applied"
 LOCAL_STRATEGIES = (
     SINGLE_AGENT_STRATEGY,
     NAIVE_STRATEGY,
     ACG_PLANNED_STRATEGY,
     ACG_PLANNED_FULL_CONTEXT_STRATEGY,
     ACG_PLANNED_REPLAN_STRATEGY,
+    ACG_PLANNED_APPLIED_STRATEGY,
 )
 
 # Fallback ratio for converting prompt characters to estimated input tokens.
@@ -212,6 +215,7 @@ class LockfileEchoMockLLM:
         *,
         role: str = "worker",
         top_k: int = LOCKFILE_ECHO_TOP_K,
+        echo_write_content: bool = False,
     ) -> None:
         self.role = role
         self.url = f"mock-lockfile://{role}"
@@ -220,13 +224,16 @@ class LockfileEchoMockLLM:
         self._predictions: dict[str, list[dict[str, str]]] = {}
         for task in lock.tasks:
             sorted_writes = sorted(task.predicted_writes, key=lambda pw: -pw.confidence)[:top_k]
-            self._predictions[task.id] = [
-                {
+            rows: list[dict[str, str]] = []
+            for pw in sorted_writes:
+                row = {
                     "file": pw.path,
                     "description": (pw.reason or "predicted write").splitlines()[0][:160],
                 }
-                for pw in sorted_writes
-            ]
+                if echo_write_content:
+                    row["content"] = f"// TODO acg-applied: {task.id}\n"
+                rows.append(row)
+            self._predictions[task.id] = rows
 
     async def complete(
         self,
@@ -436,6 +443,131 @@ def _proposals_to_planned_eval_task(
     eval_task.metrics.cost_source = worker.cost_source
     eval_task.metrics.model_calls = 1
     return eval_task
+
+
+def _proposals_to_planned_applied_eval_task(
+    worker: WorkerResult,
+    lock_task: Task,
+    *,
+    started_at: str,
+    finished_at: str,
+    prompt: str | None,
+    git_changed_files: list[str],
+) -> EvalTask:
+    """Like :func:`_proposals_to_planned_eval_task` but ``actual_changed_files`` is git-derived."""
+    eval_task = task_from_lock(lock_task, prompt=prompt)
+    eval_task.actual_changed_files = sorted(git_changed_files)
+    eval_task.actual_changed_files_kind = "applied_diff"
+    eval_task.approved_replan_files = sorted(
+        {p.file for p in worker.proposals if p.scope_status == "approved_replan"}
+    )
+    eval_task.blocked_write_events = [
+        BlockedWriteEvent(
+            file=p.file,
+            description=p.description,
+            reason=p.reason or "outside allowed_paths",
+        )
+        for p in worker.proposals
+        if not p.allowed
+    ]
+    if worker.error:
+        eval_task.status = "failed"
+        eval_task.failure_reason = "AGENT_FAIL"
+    elif not eval_task.actual_changed_files and eval_task.blocked_write_events:
+        eval_task.status = "blocked"
+        eval_task.failure_reason = "BLOCKED_BY_SCOPE"
+    else:
+        eval_task.status = "completed"
+    eval_task.timestamps.started_at = started_at
+    eval_task.timestamps.finished_at = finished_at
+    eval_task.metrics.wall_time_seconds = round(worker.wall_s, 4)
+    eval_task.metrics.tokens_completion = worker.completion_tokens or None
+    eval_task.metrics.cost_usd = worker.cost_usd
+    eval_task.metrics.cost_source = worker.cost_source
+    eval_task.metrics.model_calls = 1
+    return eval_task
+
+
+def _sanitize_applied_branch_task_id(task_id: str) -> str:
+    return "".join(c if c.isalnum() or c in "-_" else "-" for c in task_id)
+
+
+def _git_identity_args() -> list[str]:
+    return [
+        "-c",
+        "user.name=ACG Eval",
+        "-c",
+        "user.email=acg-eval@users.noreply.localhost",
+    ]
+
+
+def _apply_planned_writes_git_sync(
+    checkout: Path,
+    base_sha: str,
+    lock: AgentLock,
+    task: Task,
+    wr: WorkerResult,
+) -> list[str]:
+    """Create ``acg-applied/<task>`` from ``base_sha``, write allowed bodies, commit, return diff names."""
+    repo = str(checkout.resolve())
+    branch = f"acg-applied/{_sanitize_applied_branch_task_id(task.id)}"
+    subprocess.run(
+        ["git", "-C", repo, "branch", "-f", branch, base_sha],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", repo, "checkout", "--quiet", branch],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    try:
+        root = checkout.resolve()
+        for prop in wr.proposals:
+            if not prop.allowed or prop.content is None:
+                continue
+            allowed, _reason = validate_write(lock, task.id, prop.file)
+            if not allowed:
+                continue
+            rel = prop.file.lstrip("./")
+            dest = (checkout / rel).resolve()
+            try:
+                dest.relative_to(root)
+            except ValueError:
+                continue
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(prop.content, encoding="utf-8")
+        subprocess.run(["git", "-C", repo, "add", "-A"], check=True, capture_output=True, text=True)
+        st = subprocess.run(
+            ["git", "-C", repo, "status", "--porcelain"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        if st.stdout.strip():
+            subprocess.run(
+                ["git", "-C", repo, *_git_identity_args(), "commit", "-m", f"acg(applied): {task.id}"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        diff = subprocess.run(
+            ["git", "-C", repo, "diff", "--name-only", base_sha, branch],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        names = [line.strip() for line in diff.stdout.splitlines() if line.strip()]
+        return sorted(set(names))
+    finally:
+        subprocess.run(
+            ["git", "-C", repo, "checkout", "--quiet", "--detach", base_sha],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -850,15 +982,134 @@ async def _run_acg_planned(
     return tasks, wall_s, counting_sub.prompt_token_method
 
 
+async def _run_acg_planned_applied(
+    lock: AgentLock,
+    repo_graph: dict[str, Any],
+    sub_factory: Callable[[], RuntimeLLMProtocol],
+    *,
+    checkout_path: Path,
+    lockfile_path: str,
+    prompts_by_task: dict[str, str] | None = None,
+    cap_parallelism: int | None = None,
+    scope_repo_graph: bool = True,
+    auto_replan: bool = False,
+) -> tuple[list[EvalTask], float, str]:
+    """Planned workers + git-backed writes for proposals that carry ``content``."""
+    del lockfile_path
+    checkout = checkout_path.resolve()
+    probe = subprocess.run(
+        ["git", "-C", str(checkout), "rev-parse", "--is-inside-work-tree"],
+        capture_output=True,
+        text=True,
+    )
+    if probe.returncode != 0 or probe.stdout.strip() != "true":
+        raise ValueError(f"applied branch writes require a git checkout: {checkout}")
+    if lock.repo and (lock.repo.commit or "").strip():
+        pin = lock.repo.commit.strip()
+        base_sha = subprocess.run(
+            ["git", "-C", str(checkout), "rev-parse", "--verify", pin],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    else:
+        base_sha = subprocess.run(
+            ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    sub_inner = sub_factory()
+    counting_sub = _PromptCountingLLM(sub_inner)
+    from acg.runtime import RuntimeConfig
+
+    runtime_config = RuntimeConfig.from_env()
+    runtime_config.auto_replan = auto_replan
+
+    tasks_by_id = {t.id: t for t in lock.tasks}
+    worker_results: list[WorkerResult] = []
+    changed_by_task: dict[str, list[str]] = {}
+    git_lock = asyncio.Lock()
+    started = now_iso()
+    t0 = time.perf_counter()
+
+    async def _apply_one(wr: WorkerResult) -> None:
+        task = tasks_by_id.get(wr.task_id)
+        if task is None:
+            return
+        async with git_lock:
+            names = await asyncio.to_thread(
+                _apply_planned_writes_git_sync,
+                checkout,
+                base_sha,
+                lock,
+                task,
+                wr,
+            )
+        changed_by_task[wr.task_id] = names
+
+    try:
+        for group in sorted(lock.execution_plan.groups, key=lambda g: g.id):
+            group_tasks = [tasks_by_id[tid] for tid in group.tasks if tid in tasks_by_id]
+            if not group_tasks:
+                continue
+            coros = []
+            for task in group_tasks:
+                task_graph = (
+                    _scoped_repo_graph(repo_graph, lock, task.id)
+                    if scope_repo_graph
+                    else repo_graph
+                )
+                coros.append(
+                    run_worker(
+                        task,
+                        lock,
+                        task_graph,
+                        counting_sub,
+                        group.id,
+                        config=runtime_config,
+                    )
+                )
+            results = await _gather_capped(coros, cap_parallelism)
+            for wr in results:
+                await _apply_one(wr)
+            worker_results.extend(results)
+    finally:
+        await counting_sub.aclose()
+    wall_s = time.perf_counter() - t0
+    finished = now_iso()
+
+    tasks: list[EvalTask] = []
+    for wr in worker_results:
+        if wr.task_id not in tasks_by_id:
+            continue
+        et = _proposals_to_planned_applied_eval_task(
+            wr,
+            tasks_by_id[wr.task_id],
+            started_at=started,
+            finished_at=finished,
+            prompt=(prompts_by_task or {}).get(wr.task_id),
+            git_changed_files=changed_by_task.get(wr.task_id, []),
+        )
+        et.metrics.tokens_prompt = counting_sub.tokens_by_task.get(wr.task_id)
+        tasks.append(et)
+    annotate_overlaps(tasks)
+    return tasks, wall_s, counting_sub.prompt_token_method
+
+
 # ---------------------------------------------------------------------------
 # Backend → factory wiring.
 # ---------------------------------------------------------------------------
 
 
-def _mock_factory(lock: AgentLock) -> tuple[Callable[[], RuntimeLLMProtocol], EvalModel]:
+def _mock_factory(
+    lock: AgentLock, *, echo_write_content: bool = False
+) -> tuple[Callable[[], RuntimeLLMProtocol], EvalModel]:
     """Build a worker factory for the mock backend."""
+
     def sub_factory() -> RuntimeLLMProtocol:
-        return LockfileEchoMockLLM(lock, role="worker")
+        return LockfileEchoMockLLM(lock, role="worker", echo_write_content=echo_write_content)
 
     return sub_factory, EvalModel(provider="mock", model="lockfile-echo", url="mock://local")
 
@@ -913,6 +1164,7 @@ def run_strategy(
     cap_parallelism: int | None = None,
     suite_name: str | None = None,
     repo: EvalRepo | None = None,
+    applied_diff_live: bool = False,
 ) -> EvalRun:
     """Execute one (strategy, backend) pair and return the populated :class:`EvalRun`.
 
@@ -929,11 +1181,26 @@ def run_strategy(
             "devin-manual / devin-api."
         )
 
+    eval_repo = repo or repo_from_path(
+        Path(lock.repo.root) if lock.repo and lock.repo.root else None,
+        repo_url=lock.repo.git_url if lock.repo else None,
+        repo_commit=lock.repo.commit if lock.repo else None,
+    )
+    use_applied = strategy == ACG_PLANNED_APPLIED_STRATEGY or (
+        applied_diff_live
+        and strategy in (ACG_PLANNED_STRATEGY, ACG_PLANNED_REPLAN_STRATEGY)
+    )
+    if applied_diff_live and strategy == ACG_PLANNED_FULL_CONTEXT_STRATEGY:
+        raise ValueError(
+            "--applied-diff-live is not supported for acg_planned_full_context "
+            "(use acg_planned, acg_planned_replan, or acg_planned_applied)"
+        )
+
     if backend == "mock":
         if strategy == SINGLE_AGENT_STRATEGY:
             sub_factory, model = _single_agent_mock_factory()
         else:
-            sub_factory, model = _mock_factory(lock)
+            sub_factory, model = _mock_factory(lock, echo_write_content=use_applied)
     else:
         sub_factory, model = _local_factory()
 
@@ -963,6 +1230,24 @@ def run_strategy(
         orch_overhead = None
         execution_mode = "propose_validate"
         evidence_kind = "proposed_write_set"
+    elif use_applied:
+        checkout = Path(eval_repo.local_path).resolve()
+        tasks, wall_s, prompt_token_method = asyncio.run(
+            _run_acg_planned_applied(
+                lock,
+                repo_graph,
+                sub_factory,
+                checkout_path=checkout,
+                lockfile_path=lockfile_path,
+                prompts_by_task=prompts_by_task,
+                cap_parallelism=cap_parallelism,
+                scope_repo_graph=True,
+                auto_replan=(strategy == ACG_PLANNED_REPLAN_STRATEGY),
+            )
+        )
+        orch_overhead = None
+        execution_mode = "applied_diff_live"
+        evidence_kind = "applied_diff"
     else:
         tasks, wall_s, prompt_token_method = asyncio.run(
             _run_acg_planned(
@@ -1011,12 +1296,7 @@ def run_strategy(
         execution_mode=execution_mode,
         evidence_kind=evidence_kind,
         model=model,
-        repo=repo
-        or repo_from_path(
-            Path(lock.repo.root) if lock.repo.root else None,
-            repo_url=lock.repo.git_url,
-            repo_commit=lock.repo.commit,
-        ),
+        repo=eval_repo,
         lockfile=lockfile_path,
         tasks=tasks,
         summary_metrics=summary,
@@ -1024,6 +1304,7 @@ def run_strategy(
 
 
 __all__ = [
+    "ACG_PLANNED_APPLIED_STRATEGY",
     "ACG_PLANNED_FULL_CONTEXT_STRATEGY",
     "ACG_PLANNED_REPLAN_STRATEGY",
     "ACG_PLANNED_STRATEGY",

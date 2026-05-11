@@ -69,6 +69,7 @@ from .devin_adapter import (
 )
 from .eval_schema import EvalRepo, EvalRun, repo_from_path, suite_name_from_lock, write_eval_run
 from .strategies import (
+    ACG_PLANNED_APPLIED_STRATEGY,
     ACG_PLANNED_FULL_CONTEXT_STRATEGY,
     ACG_PLANNED_REPLAN_STRATEGY,
     ACG_PLANNED_STRATEGY,
@@ -103,6 +104,7 @@ VALID_STRATEGIES = (
     ACG_PLANNED_STRATEGY,
     ACG_PLANNED_FULL_CONTEXT_STRATEGY,
     ACG_PLANNED_REPLAN_STRATEGY,
+    ACG_PLANNED_APPLIED_STRATEGY,
     *STRATEGY_GROUPS.keys(),
 )
 VALID_BACKENDS = ("mock", "local", "applied-diff", "devin-manual", "devin-api")
@@ -246,6 +248,15 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
             "summary_metrics.successful_parallel_speedup."
         ),
     )
+    parser.add_argument(
+        "--applied-diff-live",
+        action="store_true",
+        help=(
+            "For acg_planned / acg_planned_replan with mock or local backends, "
+            "materialize allowed worker ``content`` proposals as git commits on "
+            "per-task branches and set evidence_kind=applied_diff."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -297,6 +308,7 @@ def _short_name(strategy: str) -> str:
         ACG_PLANNED_STRATEGY: "acg",
         ACG_PLANNED_FULL_CONTEXT_STRATEGY: "acg_full_context",
         ACG_PLANNED_REPLAN_STRATEGY: "acg_replan",
+        ACG_PLANNED_APPLIED_STRATEGY: "acg_planned_applied",
     }.get(strategy, strategy)
 
 
@@ -321,6 +333,7 @@ def _run_one(
     suite_name: str,
     repo: EvalRepo | None,
     devin_api_kwargs: dict | None = None,
+    applied_diff_live: bool = False,
 ) -> EvalRun:
     devin_api_kwargs = devin_api_kwargs or {}
     if backend in ("mock", "local"):
@@ -334,6 +347,7 @@ def _run_one(
             sequential_wall_time_seconds=sequential_wall_time_seconds,
             suite_name=suite_name,
             repo=repo,
+            applied_diff_live=applied_diff_live,
         )
     if strategy == ACG_PLANNED_FULL_CONTEXT_STRATEGY:
         raise SystemExit(
@@ -419,6 +433,27 @@ def main(argv: list[str] | None = None) -> int:
     strategies = _selected_strategies(args.strategy)
     outputs = _resolve_outputs(args, strategies)
 
+    if args.applied_diff_live:
+        if len(strategies) > 1:
+            print(
+                "error: --applied-diff-live requires a single concrete strategy "
+                "(not a group like both or ablation)",
+                file=sys.stderr,
+            )
+            return EXIT_USER_ERROR
+        allowed_applied = {
+            ACG_PLANNED_STRATEGY,
+            ACG_PLANNED_REPLAN_STRATEGY,
+            ACG_PLANNED_APPLIED_STRATEGY,
+        }
+        if strategies[0] not in allowed_applied:
+            print(
+                "error: --applied-diff-live is only valid with "
+                "acg_planned, acg_planned_replan, or acg_planned_applied",
+                file=sys.stderr,
+            )
+            return EXIT_USER_ERROR
+
     written: list[Path] = []
     for strategy in strategies:
         try:
@@ -434,6 +469,7 @@ def main(argv: list[str] | None = None) -> int:
                 devin_results=args.devin_results,
                 suite_name=suite_name,
                 repo=repo_for_run,
+                applied_diff_live=args.applied_diff_live,
                 devin_api_kwargs={
                     "repo_url": args.repo_url,
                     "base_branch": args.base_branch,
