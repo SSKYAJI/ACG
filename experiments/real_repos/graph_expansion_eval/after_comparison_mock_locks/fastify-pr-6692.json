@@ -1,0 +1,251 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-11T03:40:52.898085Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "lockfile-replay",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 7182
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/fastify/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-6692",
+      "prompt": "Avoid unnecessary ContentType object creation in getSchemaSerializer by only parsing the response content type for content-type-keyed response schemas, including status-code, fallback, and default lookup paths.",
+      "predicted_writes": [
+        {
+          "path": "lib/content-type-parser.js",
+          "confidence": 0.85,
+          "reason": "Symbol 'ContentType' referenced in prompt; defined in lib/content-type-parser.js. Signals: symbol."
+        },
+        {
+          "path": "lib/schemas.js",
+          "confidence": 0.85,
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 38.18). Signals: bm25, symbol."
+        }
+      ],
+      "allowed_paths": [
+        "lib/content-type-parser.js",
+        "lib/schemas.js"
+      ],
+      "candidate_context_paths": [
+        "lib/route.js",
+        "lib/context.js",
+        "lib/error-handler.js",
+        "lib/errors.js",
+        "lib/hooks.js",
+        "lib/logger-factory.js",
+        "lib/plugin-override.js",
+        "lib/reply.js",
+        "lib/req-id-gen-factory.js",
+        "lib/symbols.js",
+        "lib/warnings.js",
+        "types/route.d.ts",
+        "examples/shared-schema.js",
+        "lib/content-type.js",
+        "lib/schema-controller.js",
+        "types/content-type-parser.d.ts",
+        "types/schema.d.ts"
+      ],
+      "file_scopes": [
+        {
+          "path": "lib/content-type-parser.js",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "symbol"
+          ],
+          "reason": "Symbol 'ContentType' referenced in prompt; defined in lib/content-type-parser.js. Signals: symbol."
+        },
+        {
+          "path": "lib/schemas.js",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "bm25",
+            "symbol"
+          ],
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 38.18). Signals: bm25, symbol."
+        },
+        {
+          "path": "lib/route.js",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank"
+          ],
+          "reason": "personalized PageRank rank #6, top symbol matches: Context, context, fourOhFour. Candidate context only; requires replan before write. Signals: pagerank."
+        },
+        {
+          "path": "lib/context.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/route.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/error-handler.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/route.js, lib/schemas.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/errors.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/content-type-parser.js, lib/route.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/hooks.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/route.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/logger-factory.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/route.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/plugin-override.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/content-type-parser.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/reply.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/schemas.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/req-id-gen-factory.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/route.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/symbols.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/content-type-parser.js, lib/route.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/warnings.js",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/content-type-parser.js, lib/route.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "types/route.d.ts",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/route.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "examples/shared-schema.js",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/content-type.js",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) lib/content-type-parser.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "lib/schema-controller.js",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js, lib/schemas.js. Candidate context only; requires replan before write. Signals: graph."
+        },
+        {
+          "path": "types/content-type-parser.d.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "bm25",
+            "graph"
+          ],
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 36.67). Candidate context only; requires replan before write. Signals: bm25, graph."
+        },
+        {
+          "path": "types/schema.d.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "graph"
+          ],
+          "reason": "Graph expansion: local import/importer/type edge from high-confidence seed(s) fastify.js. Candidate context only; requires replan before write. Signals: graph."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-6692"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

@@ -1,0 +1,91 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-11T03:52:57.683142Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 7519
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/fastify/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-6694",
+      "prompt": "Improve Content-Type parsing performance by caching parsed ContentType objects in ContentTypeParser and reusing those parsed objects from request handling and request.mediaType without changing external behavior.",
+      "predicted_writes": [
+        {
+          "path": "lib/content-type-parser.js",
+          "confidence": 0.9,
+          "reason": "Task explicitly mentions caching parsed ContentType objects in ContentTypeParser. Signals: llm, pagerank, symbol. Scope review kept this file at its existing tier."
+        }
+      ],
+      "allowed_paths": [
+        "lib/content-type-parser.js"
+      ],
+      "candidate_context_paths": [
+        "fastify.js",
+        "lib/content-type.js"
+      ],
+      "file_scopes": [
+        {
+          "path": "lib/content-type-parser.js",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "llm",
+            "pagerank",
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "Task explicitly mentions caching parsed ContentType objects in ContentTypeParser. Signals: llm, pagerank, symbol. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "fastify.js",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank",
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "personalized PageRank rank #1, top symbol matches: ContentTypeParser, Context, Request. Candidate context only; requires replan before write. Signals: pagerank, symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "lib/content-type.js",
+          "tier": "candidate_context",
+          "score": 0.8,
+          "signals": [
+            "graph",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "Content-Type parsing logic is centralized in this file and closely related to the parser. Candidate context only; requires replan before write. Signals: graph, llm. Scope review kept this file at its existing tier."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-6694"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

@@ -73,6 +73,7 @@ from .strategies import (
     ACG_PLANNED_REPLAN_STRATEGY,
     ACG_PLANNED_STRATEGY,
     NAIVE_STRATEGY,
+    SINGLE_AGENT_STRATEGY,
     run_strategy,
 )
 
@@ -89,11 +90,19 @@ STRATEGY_GROUPS = {
         ACG_PLANNED_STRATEGY,
         ACG_PLANNED_REPLAN_STRATEGY,
     ],
+    "comparison": [
+        SINGLE_AGENT_STRATEGY,
+        NAIVE_STRATEGY,
+        ACG_PLANNED_FULL_CONTEXT_STRATEGY,
+        ACG_PLANNED_STRATEGY,
+    ],
 }
 VALID_STRATEGIES = (
+    SINGLE_AGENT_STRATEGY,
     NAIVE_STRATEGY,
     ACG_PLANNED_STRATEGY,
     ACG_PLANNED_FULL_CONTEXT_STRATEGY,
+    ACG_PLANNED_REPLAN_STRATEGY,
     *STRATEGY_GROUPS.keys(),
 )
 VALID_BACKENDS = ("mock", "local", "applied-diff", "devin-manual", "devin-api")
@@ -283,6 +292,7 @@ def _resolve_outputs(
 
 def _short_name(strategy: str) -> str:
     return {
+        SINGLE_AGENT_STRATEGY: "single_agent",
         NAIVE_STRATEGY: "naive",
         ACG_PLANNED_STRATEGY: "acg",
         ACG_PLANNED_FULL_CONTEXT_STRATEGY: "acg_full_context",

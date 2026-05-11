@@ -47,6 +47,7 @@ PREDICTOR_FIELDS = [
     "candidate_conflict_pair_count",
     "tokens_planner_total",
     "tokens_scope_review_total",
+    "tokens_localization_total",
     "exact_overlap",
     "predicted_writes",
     "allowed_paths",
@@ -57,6 +58,31 @@ PREDICTOR_FIELDS = [
     "false_negatives",
     "candidate_false_positives",
     "candidate_false_negatives",
+    "localization_backend",
+    "ablation_name",
+    "scip_status",
+    "scip_definition_file_count",
+    "scip_reference_file_count",
+    "scip_signal_scope_count",
+    "scip_signal_must_write_count",
+    "scip_signal_candidate_context_count",
+    "scip_signal_needs_replan_count",
+    "scip_signal_true_positive_count",
+    "scip_signal_false_positive_count",
+    "scip_signal_false_negative_count",
+    "scip_index_path",
+    "scip_file_count",
+    "scip_symbol_count",
+    "scip_reference_count",
+    "scip_candidate_count",
+    "scip_true_positive_count",
+    "scip_false_positive_count",
+    "scip_false_negative_count",
+    "scip_recall",
+    "scip_precision",
+    "scip_f1",
+    "candidate_recall_delta_vs_native",
+    "hard_recall_delta_vs_native",
 ]
 
 
@@ -151,6 +177,15 @@ def _predicted_items_for_task(lock: AgentLock, task_id: str) -> list[dict[str, A
     return []
 
 
+def _file_scopes_for_task(lock: AgentLock, task_id: str) -> list[Any]:
+    for task in lock.tasks:
+        if task.id == task_id:
+            return list(task.file_scopes)
+    if len(lock.tasks) == 1:
+        return list(lock.tasks[0].file_scopes)
+    return []
+
+
 class ReplayLockLLM:
     """Replay the baseline lockfile's LLM writes to isolate graph expansion.
 
@@ -216,6 +251,11 @@ def _metric_row(
     candidate_conflict_pair_count: int,
     tokens_planner_total: int | None = None,
     tokens_scope_review_total: int | None = None,
+    *,
+    localization_backend: str = "native",
+    ablation_name: str = "",
+    repo_graph: dict[str, Any] | None = None,
+    file_scopes: list[Any] | None = None,
 ) -> dict[str, str]:
     hard_set = set(predicted)
     candidate_set = hard_set | set(candidate_context)
@@ -224,6 +264,12 @@ def _metric_row(
     ctp, cfp, cfn, crecall, cprecision, cf1 = _prf(candidate_set, truth_set)
     del ctp
     approval_needed = sorted((truth_set & set(candidate_context)) - hard_set)
+    scip_metrics = _scip_metrics(repo_graph or {}, file_scopes or [], truth_set)
+    tokens_localization_total = (
+        None
+        if tokens_planner_total is None and tokens_scope_review_total is None
+        else (tokens_planner_total or 0) + (tokens_scope_review_total or 0)
+    )
     return {
         "repo": task.repo,
         "task_id": task.task_id,
@@ -253,6 +299,9 @@ def _metric_row(
         "tokens_scope_review_total": (
             "" if tokens_scope_review_total is None else str(tokens_scope_review_total)
         ),
+        "tokens_localization_total": (
+            "" if tokens_localization_total is None else str(tokens_localization_total)
+        ),
         "exact_overlap": str(hard_set == truth_set).lower(),
         "predicted_writes": ";".join(sorted(hard_set)),
         "allowed_paths": ";".join(sorted(set(allowed))),
@@ -263,7 +312,126 @@ def _metric_row(
         "false_negatives": ";".join(fn),
         "candidate_false_positives": ";".join(cfp),
         "candidate_false_negatives": ";".join(cfn),
+        "localization_backend": localization_backend,
+        "ablation_name": ablation_name,
+        **scip_metrics,
     }
+
+
+def _scip_metrics(
+    repo_graph: dict[str, Any],
+    file_scopes: list[Any],
+    truth_set: set[str],
+) -> dict[str, str]:
+    files = repo_graph.get("files") if isinstance(repo_graph, dict) else []
+    definition_file_count = 0
+    reference_file_count = 0
+    if isinstance(files, list):
+        for entry in files:
+            if not isinstance(entry, dict):
+                continue
+            if _safe_int(entry.get("scip_definition_count")) > 0:
+                definition_file_count += 1
+            if _safe_int(entry.get("scip_reference_count")) > 0:
+                reference_file_count += 1
+
+    scip_paths: set[str] = set()
+    tier_counts = {"must_write": 0, "candidate_context": 0, "needs_replan": 0}
+    for scope in file_scopes:
+        path = getattr(scope, "path", "")
+        tier = getattr(scope, "tier", "")
+        signals = getattr(scope, "signals", [])
+        if not isinstance(signals, list):
+            continue
+        if not any(
+            isinstance(signal, str) and signal.lower().startswith("scip")
+            for signal in signals
+        ):
+            continue
+        if isinstance(path, str) and path:
+            scip_paths.add(path)
+        if tier in tier_counts:
+            tier_counts[tier] += 1
+
+    status = repo_graph.get("scip_status") if isinstance(repo_graph, dict) else None
+    if isinstance(status, dict):
+        status_text = str(status.get("status") or "")
+        index_path = str(status.get("index_path") or "")
+    elif status is None:
+        status_text = ""
+        index_path = ""
+    else:
+        status_text = str(status)
+        index_path = ""
+    summary = repo_graph.get("scip_summary") if isinstance(repo_graph, dict) else None
+    if isinstance(summary, dict):
+        scip_file_count = _safe_int(summary.get("file_count"))
+        scip_symbol_count = _safe_int(summary.get("symbol_count"))
+        scip_reference_count = _safe_int(summary.get("reference_count"))
+    else:
+        scip_file_count = 0
+        scip_symbol_count = 0
+        scip_reference_count = 0
+    if not scip_file_count:
+        scip_file_count = len(
+            {
+                str(entity.get("path"))
+                for entity in repo_graph.get("scip_entities", [])
+                if isinstance(entity, dict) and entity.get("path")
+            }
+            | {
+                str(reference.get("path"))
+                for reference in repo_graph.get("scip_references", [])
+                if isinstance(reference, dict) and reference.get("path")
+            }
+        )
+    if not scip_symbol_count:
+        scip_symbol_count = len(repo_graph.get("scip_entities", []) or [])
+    if not scip_reference_count:
+        scip_reference_count = len(repo_graph.get("scip_references", []) or [])
+
+    scip_tp, scip_fp, scip_fn, scip_recall, scip_precision, scip_f1 = _prf(
+        scip_paths,
+        truth_set,
+    )
+    return {
+        "scip_status": status_text,
+        "scip_definition_file_count": str(definition_file_count),
+        "scip_reference_file_count": str(reference_file_count),
+        "scip_signal_scope_count": str(len(scip_paths)),
+        "scip_signal_must_write_count": str(tier_counts["must_write"]),
+        "scip_signal_candidate_context_count": str(tier_counts["candidate_context"]),
+        "scip_signal_needs_replan_count": str(tier_counts["needs_replan"]),
+        "scip_signal_true_positive_count": str(len(scip_paths & truth_set)),
+        "scip_signal_false_positive_count": str(len(scip_paths - truth_set)),
+        "scip_signal_false_negative_count": str(len(truth_set - scip_paths)),
+        "scip_index_path": index_path,
+        "scip_file_count": str(scip_file_count),
+        "scip_symbol_count": str(scip_symbol_count),
+        "scip_reference_count": str(scip_reference_count),
+        "scip_candidate_count": str(len(scip_paths)),
+        "scip_true_positive_count": str(len(scip_tp)),
+        "scip_false_positive_count": str(len(scip_fp)),
+        "scip_false_negative_count": str(len(scip_fn)),
+        "scip_recall": f"{scip_recall:.6f}",
+        "scip_precision": f"{scip_precision:.6f}",
+        "scip_f1": f"{scip_f1:.6f}",
+        "candidate_recall_delta_vs_native": "",
+        "hard_recall_delta_vs_native": "",
+    }
+
+
+def _safe_int(value: Any) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return 0
+    return 0
 
 
 def _load_dotenv(path: Path = PROJECT_ROOT / ".env") -> None:
@@ -280,10 +448,47 @@ def _load_dotenv(path: Path = PROJECT_ROOT / ".env") -> None:
         os.environ[key] = value.strip().strip('"').strip("'")
 
 
-def _output_stem(mode: str, llm_mode: str) -> str:
+def _output_stem(
+    mode: str,
+    llm_mode: str,
+    localization_backend: str = "native",
+    ablation_name: str = "",
+) -> str:
+    parts = [mode]
+    label = (ablation_name or "").strip().lower().replace("-", "_")
+    backend = localization_backend.strip().lower()
+    if backend != "native":
+        parts.append(backend)
+    if label:
+        parts.append(label)
     if mode == "after" and llm_mode != "replay":
-        return f"{mode}_{llm_mode}"
-    return mode
+        parts.append(llm_mode)
+    return "_".join(parts)
+
+
+def _diff_name(
+    llm_mode: str,
+    localization_backend: str = "native",
+    ablation_name: str = "",
+) -> str:
+    backend = localization_backend.strip().lower()
+    label = (ablation_name or "").strip().lower().replace("-", "_")
+    parts = ["predictor_diff"]
+    if backend != "native":
+        parts.append(backend)
+    if label:
+        parts.append(label)
+    if llm_mode != "replay":
+        parts.append(llm_mode)
+    return "_".join(parts) + ".csv"
+
+
+def _locks_dir_name(output_stem: str, llm_mode: str) -> str:
+    if output_stem == "after":
+        return "after_locks"
+    if output_stem == f"after_{llm_mode}":
+        return f"after_locks_{llm_mode}"
+    return f"{output_stem}_locks"
 
 
 def _llm_for_eval(llm_mode: str, baseline_lock: AgentLock, task_id: str) -> Any:
@@ -302,20 +507,25 @@ def _llm_for_eval(llm_mode: str, baseline_lock: AgentLock, task_id: str) -> Any:
     raise ValueError(f"unknown llm_mode: {llm_mode}")
 
 
-def write_predictor_csv(mode: str, llm_mode: str = "replay") -> list[dict[str, str]]:
+def write_predictor_csv(
+    mode: str,
+    llm_mode: str = "replay",
+    localization_backend: str = "native",
+    ablation_name: str = "",
+) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
-    output_stem = _output_stem(mode, llm_mode)
-    locks_dir = OUT_DIR / ("after_locks" if llm_mode == "replay" else f"after_locks_{llm_mode}")
+    output_stem = _output_stem(mode, llm_mode, localization_backend, ablation_name)
+    locks_dir = OUT_DIR / _locks_dir_name(output_stem, llm_mode)
     if mode == "after":
         locks_dir.mkdir(parents=True, exist_ok=True)
     for task in discover_tasks():
+        repo_graph = load_context_graph(task.checkout_path)
         if mode == "before":
             lock = AgentLock.model_validate_json(task.lock_path.read_text())
         else:
             baseline_lock = AgentLock.model_validate_json(task.lock_path.read_text())
             tasks_input = TasksInput.model_validate_json(task.task_path.read_text())
             detected_language = detect_language(task.checkout_path)
-            repo_graph = load_context_graph(task.checkout_path)
             graph_paths = [
                 entry.get("path", "")
                 for entry in repo_graph.get("files", [])
@@ -325,12 +535,28 @@ def write_predictor_csv(mode: str, llm_mode: str = "replay") -> list[dict[str, s
                 path.startswith((".venv/", "node_modules/", "vendor/"))
                 for path in graph_paths
             )
+            graph_backend = repo_graph.get("localization_backend") or "native"
+            backend_mismatch = graph_backend != localization_backend
+            status = repo_graph.get("scip_status")
+            scip_unavailable = (
+                localization_backend in {"scip", "auto"}
+                and (
+                    not isinstance(status, dict)
+                    or status.get("status") != "ok"
+                )
+            )
             if (
                 not repo_graph
                 or repo_graph.get("language") != detected_language
                 or has_ignored_paths
+                or backend_mismatch
+                or scip_unavailable
             ):
-                repo_graph = scan_context_graph(task.checkout_path, detected_language)
+                repo_graph = scan_context_graph(
+                    task.checkout_path,
+                    detected_language,
+                    localization_backend=localization_backend,
+                )
             llm = _llm_for_eval(llm_mode, baseline_lock, task.task_id)
             lock = compile_lockfile(task.checkout_path, tasks_input, repo_graph, llm)
             (locks_dir / f"{task.repo}-{task.task_id}.json").write_text(
@@ -338,6 +564,7 @@ def write_predictor_csv(mode: str, llm_mode: str = "replay") -> list[dict[str, s
             )
         hard_conflicts, candidate_conflicts = _conflict_pair_counts(lock)
         predicted, allowed, candidate_context = _predicted_for_task(lock, task.task_id)
+        file_scopes = _file_scopes_for_task(lock, task.task_id)
         rows.append(
             _metric_row(
                 task,
@@ -356,9 +583,14 @@ def write_predictor_csv(mode: str, llm_mode: str = "replay") -> list[dict[str, s
                     if lock.generator is not None
                     else None
                 ),
+                localization_backend=localization_backend,
+                ablation_name=ablation_name,
+                repo_graph=repo_graph,
+                file_scopes=file_scopes,
             )
         )
     out_path = OUT_DIR / f"{output_stem}_predictor.csv"
+    _attach_native_deltas(rows, mode, llm_mode, localization_backend, ablation_name)
     with out_path.open("w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=PREDICTOR_FIELDS)
         writer.writeheader()
@@ -371,9 +603,57 @@ def _read_csv(path: Path) -> dict[tuple[str, str], dict[str, str]]:
         return {(row["repo"], row["task_id"]): row for row in csv.DictReader(fh)}
 
 
-def write_diff_csv(llm_mode: str = "replay") -> None:
+def _attach_native_deltas(
+    rows: list[dict[str, str]],
+    mode: str,
+    llm_mode: str,
+    localization_backend: str,
+    ablation_name: str,
+) -> None:
+    if not rows:
+        return
+    backend = localization_backend.strip().lower()
+    label = (ablation_name or "").strip()
+    if mode != "after" or (backend == "native" and not label):
+        for row in rows:
+            row["candidate_recall_delta_vs_native"] = "0.000000"
+            row["hard_recall_delta_vs_native"] = "0.000000"
+        return
+
+    native_path = OUT_DIR / f"{_output_stem('after', llm_mode, 'native', '')}_predictor.csv"
+    if not native_path.exists():
+        return
+    native_rows = _read_csv(native_path)
+    for row in rows:
+        native = native_rows.get((row["repo"], row["task_id"]))
+        if native is None:
+            continue
+        row["candidate_recall_delta_vs_native"] = _float_delta(
+            row.get("candidate_recall", ""),
+            native.get("candidate_recall", ""),
+        )
+        row["hard_recall_delta_vs_native"] = _float_delta(
+            row.get("hard_recall", ""),
+            native.get("hard_recall", ""),
+        )
+
+
+def _float_delta(new_value: str, old_value: str) -> str:
+    try:
+        return f"{float(new_value) - float(old_value):.6f}"
+    except (TypeError, ValueError):
+        return ""
+
+
+def write_diff_csv(
+    llm_mode: str = "replay",
+    localization_backend: str = "native",
+    ablation_name: str = "",
+) -> None:
     before_path = OUT_DIR / "before_predictor.csv"
-    after_path = OUT_DIR / f"{_output_stem('after', llm_mode)}_predictor.csv"
+    after_path = OUT_DIR / (
+        f"{_output_stem('after', llm_mode, localization_backend, ablation_name)}_predictor.csv"
+    )
     if not before_path.exists() or not after_path.exists():
         return
     before = _read_csv(before_path)
@@ -443,7 +723,7 @@ def write_diff_csv(llm_mode: str = "replay") -> None:
                 "remaining_false_negatives": new["false_negatives"],
             }
         )
-    diff_name = "predictor_diff.csv" if llm_mode == "replay" else f"predictor_diff_{llm_mode}.csv"
+    diff_name = _diff_name(llm_mode, localization_backend, ablation_name)
     with (OUT_DIR / diff_name).open("w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fields)
         writer.writeheader()
@@ -487,7 +767,12 @@ def _token_rows_for_task(task: EvalTask) -> list[dict[str, str]]:
     return rows
 
 
-def write_openrouter_tokens_csv(mode: str, llm_mode: str = "replay") -> None:
+def write_openrouter_tokens_csv(
+    mode: str,
+    llm_mode: str = "replay",
+    localization_backend: str = "native",
+    ablation_name: str = "",
+) -> None:
     fields = [
         "repo",
         "task_id",
@@ -538,11 +823,285 @@ def write_openrouter_tokens_csv(mode: str, llm_mode: str = "replay") -> None:
                 "source": "no existing OpenRouter eval_run_combined artifacts found",
             }
         ]
-    output_stem = _output_stem(mode, llm_mode)
+    output_stem = _output_stem(mode, llm_mode, localization_backend, ablation_name)
     with (OUT_DIR / f"{output_stem}_openrouter_tokens.csv").open("w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
+
+
+STRATEGY_SCORE_FIELDS = [
+    "repo",
+    "task_id",
+    "pr_number",
+    "run_set",
+    "strategy",
+    "backend",
+    "source",
+    "localization_backend",
+    "ablation_name",
+    "status",
+    "ground_truth_count",
+    "actual_changed_count",
+    "true_positive_count",
+    "false_positive_count",
+    "false_negative_count",
+    "recall",
+    "precision",
+    "f1",
+    "actual_changed_files",
+    "ground_truth_files",
+    "false_positives",
+    "false_negatives",
+    "out_of_bounds_count",
+    "blocked_write_count",
+    "approved_replan_count",
+    "overlapping_write_pairs",
+    "tokens_prompt_total",
+    "tokens_completion_total",
+    "tokens_all_in",
+    "cost_usd_total",
+    "f1_delta_vs_acg_planned",
+    "recall_delta_vs_acg_planned",
+    "precision_delta_vs_acg_planned",
+    "tokens_all_in_delta_vs_acg_planned",
+]
+
+STRATEGY_SUMMARY_FIELDS = [
+    "repo",
+    "run_set",
+    "strategy",
+    "task_count",
+    "macro_recall",
+    "macro_precision",
+    "macro_f1",
+    "micro_recall",
+    "micro_precision",
+    "micro_f1",
+    "total_out_of_bounds",
+    "total_blocked_invalid",
+    "total_tokens_all_in",
+    "total_cost_usd",
+    "macro_f1_delta_vs_acg_planned",
+]
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _number_text(value: Any) -> str:
+    return "" if value is None else str(value)
+
+
+def _float_or_none(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _task_payload_for(run: dict[str, Any], task_id: str) -> dict[str, Any] | None:
+    tasks = run.get("tasks")
+    if not isinstance(tasks, list):
+        return None
+    for item in tasks:
+        if isinstance(item, dict) and item.get("task_id") == task_id:
+            return item
+    return None
+
+
+def _task_actual_files(task_payload: dict[str, Any] | None) -> list[str]:
+    if not task_payload:
+        return []
+    value = task_payload.get("actual_changed_files")
+    if not isinstance(value, list):
+        return []
+    return sorted({str(path).strip("./") for path in value if str(path).strip()})
+
+
+def _strategy_score_rows_for_task(
+    task: EvalTask,
+    *,
+    localization_backend: str,
+    ablation_name: str,
+) -> list[dict[str, str]]:
+    repo_dir = REAL_REPOS / task.repo
+    rows: list[dict[str, str]] = []
+    for path in sorted(repo_dir.glob(f"runs*/{task.task_id}/eval_run_combined.json")):
+        payload = _load_json(path)
+        strategies = payload.get("strategies")
+        if not isinstance(strategies, dict):
+            continue
+        run_set = path.relative_to(repo_dir).parts[0]
+        truth_set = set(task.ground_truth)
+        for strategy, run in sorted(strategies.items()):
+            if not isinstance(run, dict):
+                continue
+            task_payload = _task_payload_for(run, task.task_id)
+            actual = _task_actual_files(task_payload)
+            actual_set = set(actual)
+            tp, fp, fn, recall, precision, f1 = _prf(actual_set, truth_set)
+            summary = run.get("summary_metrics")
+            if not isinstance(summary, dict):
+                summary = {}
+            blocked_events = []
+            approved_replans = []
+            out_of_bounds = []
+            status = "missing_task"
+            if isinstance(task_payload, dict):
+                status = str(task_payload.get("status") or "")
+                blocked_events = task_payload.get("blocked_write_events") or []
+                approved_replans = task_payload.get("approved_replan_files") or []
+                out_of_bounds = task_payload.get("out_of_bounds_files") or []
+            rows.append(
+                {
+                    "repo": task.repo,
+                    "task_id": task.task_id,
+                    "pr_number": task.pr_number,
+                    "run_set": run_set,
+                    "strategy": str(strategy),
+                    "backend": str(run.get("backend") or ""),
+                    "source": _display_path(path),
+                    "localization_backend": localization_backend,
+                    "ablation_name": ablation_name,
+                    "status": status,
+                    "ground_truth_count": str(len(truth_set)),
+                    "actual_changed_count": str(len(actual_set)),
+                    "true_positive_count": str(len(tp)),
+                    "false_positive_count": str(len(fp)),
+                    "false_negative_count": str(len(fn)),
+                    "recall": f"{recall:.6f}",
+                    "precision": f"{precision:.6f}",
+                    "f1": f"{f1:.6f}",
+                    "actual_changed_files": ";".join(actual),
+                    "ground_truth_files": ";".join(sorted(truth_set)),
+                    "false_positives": ";".join(fp),
+                    "false_negatives": ";".join(fn),
+                    "out_of_bounds_count": str(len(out_of_bounds) if isinstance(out_of_bounds, list) else 0),
+                    "blocked_write_count": str(len(blocked_events) if isinstance(blocked_events, list) else 0),
+                    "approved_replan_count": str(len(approved_replans) if isinstance(approved_replans, list) else 0),
+                    "overlapping_write_pairs": _number_text(summary.get("overlapping_write_pairs")),
+                    "tokens_prompt_total": _number_text(summary.get("tokens_prompt_total")),
+                    "tokens_completion_total": _number_text(summary.get("tokens_completion_total")),
+                    "tokens_all_in": _number_text(summary.get("tokens_all_in")),
+                    "cost_usd_total": _number_text(summary.get("cost_usd_total")),
+                    "f1_delta_vs_acg_planned": "",
+                    "recall_delta_vs_acg_planned": "",
+                    "precision_delta_vs_acg_planned": "",
+                    "tokens_all_in_delta_vs_acg_planned": "",
+                }
+            )
+    return rows
+
+
+def _attach_strategy_deltas(rows: list[dict[str, str]]) -> None:
+    baselines = {
+        (row["repo"], row["task_id"], row["run_set"]): row
+        for row in rows
+        if row["strategy"] == "acg_planned"
+    }
+    for row in rows:
+        baseline = baselines.get((row["repo"], row["task_id"], row["run_set"]))
+        if baseline is None:
+            continue
+        row["f1_delta_vs_acg_planned"] = _float_delta(row["f1"], baseline["f1"])
+        row["recall_delta_vs_acg_planned"] = _float_delta(row["recall"], baseline["recall"])
+        row["precision_delta_vs_acg_planned"] = _float_delta(row["precision"], baseline["precision"])
+        row["tokens_all_in_delta_vs_acg_planned"] = _float_delta(
+            row["tokens_all_in"],
+            baseline["tokens_all_in"],
+        )
+
+
+def _strategy_summary_rows(score_rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    groups: dict[tuple[str, str, str], list[dict[str, str]]] = {}
+    for row in score_rows:
+        groups.setdefault((row["repo"], row["run_set"], row["strategy"]), []).append(row)
+    summary_rows: list[dict[str, str]] = []
+    macro_f1_by_group: dict[tuple[str, str, str], float] = {}
+    for key, rows in sorted(groups.items()):
+        repo, run_set, strategy = key
+        task_count = len(rows)
+        recall_values = [float(row["recall"]) for row in rows]
+        precision_values = [float(row["precision"]) for row in rows]
+        f1_values = [float(row["f1"]) for row in rows]
+        tp = sum(_safe_int(row["true_positive_count"]) for row in rows)
+        fp = sum(_safe_int(row["false_positive_count"]) for row in rows)
+        fn = sum(_safe_int(row["false_negative_count"]) for row in rows)
+        micro_recall = tp / (tp + fn) if tp + fn else 0.0
+        micro_precision = tp / (tp + fp) if tp + fp else 0.0
+        micro_f1 = (
+            2 * micro_precision * micro_recall / (micro_precision + micro_recall)
+            if micro_precision + micro_recall
+            else 0.0
+        )
+        total_tokens = sum(
+            value for row in rows if (value := _float_or_none(row["tokens_all_in"])) is not None
+        )
+        total_cost = sum(
+            value for row in rows if (value := _float_or_none(row["cost_usd_total"])) is not None
+        )
+        macro_f1 = sum(f1_values) / task_count if task_count else 0.0
+        macro_f1_by_group[key] = macro_f1
+        summary_rows.append(
+            {
+                "repo": repo,
+                "run_set": run_set,
+                "strategy": strategy,
+                "task_count": str(task_count),
+                "macro_recall": f"{(sum(recall_values) / task_count if task_count else 0.0):.6f}",
+                "macro_precision": f"{(sum(precision_values) / task_count if task_count else 0.0):.6f}",
+                "macro_f1": f"{macro_f1:.6f}",
+                "micro_recall": f"{micro_recall:.6f}",
+                "micro_precision": f"{micro_precision:.6f}",
+                "micro_f1": f"{micro_f1:.6f}",
+                "total_out_of_bounds": str(sum(_safe_int(row["out_of_bounds_count"]) for row in rows)),
+                "total_blocked_invalid": str(sum(_safe_int(row["blocked_write_count"]) for row in rows)),
+                "total_tokens_all_in": f"{total_tokens:.0f}" if total_tokens else "",
+                "total_cost_usd": f"{total_cost:.8f}" if total_cost else "",
+                "macro_f1_delta_vs_acg_planned": "",
+            }
+        )
+    for row in summary_rows:
+        baseline = macro_f1_by_group.get((row["repo"], row["run_set"], "acg_planned"))
+        if baseline is not None:
+            row["macro_f1_delta_vs_acg_planned"] = f"{float(row['macro_f1']) - baseline:.6f}"
+    return summary_rows
+
+
+def write_strategy_score_csv(
+    mode: str,
+    llm_mode: str = "replay",
+    localization_backend: str = "native",
+    ablation_name: str = "",
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for task in discover_tasks():
+        rows.extend(
+            _strategy_score_rows_for_task(
+                task,
+                localization_backend=localization_backend,
+                ablation_name=ablation_name,
+            )
+        )
+    _attach_strategy_deltas(rows)
+    summary_rows = _strategy_summary_rows(rows)
+    output_stem = _output_stem(mode, llm_mode, localization_backend, ablation_name)
+    with (OUT_DIR / f"{output_stem}_strategy_scores.csv").open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=STRATEGY_SCORE_FIELDS)
+        writer.writeheader()
+        writer.writerows(rows)
+    with (OUT_DIR / f"{output_stem}_strategy_summary.csv").open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=STRATEGY_SUMMARY_FIELDS)
+        writer.writeheader()
+        writer.writerows(summary_rows)
+    return rows
 
 
 def _count_from_pytest_output(pattern: str, output: str) -> str:
@@ -604,15 +1163,42 @@ def main() -> None:
         ),
     )
     parser.add_argument("--with-tests", action="append", default=[])
+    parser.add_argument(
+        "--localization-backend",
+        choices=["native", "scip", "auto"],
+        default="native",
+        help="Graph localization backend used for after-mode scans.",
+    )
+    parser.add_argument(
+        "--ablation-name",
+        default="",
+        help="Optional output stem label for ablation CSVs and lock dirs.",
+    )
     args = parser.parse_args()
 
     if args.mode == "before" and args.llm_mode != "replay":
         raise SystemExit("--llm-mode only applies to --mode after")
 
-    write_predictor_csv(args.mode, args.llm_mode)
-    write_openrouter_tokens_csv(args.mode, args.llm_mode)
+    write_predictor_csv(
+        args.mode,
+        args.llm_mode,
+        args.localization_backend,
+        args.ablation_name,
+    )
+    write_openrouter_tokens_csv(
+        args.mode,
+        args.llm_mode,
+        args.localization_backend,
+        args.ablation_name,
+    )
+    write_strategy_score_csv(
+        args.mode,
+        args.llm_mode,
+        args.localization_backend,
+        args.ablation_name,
+    )
     if args.mode == "after":
-        write_diff_csv(args.llm_mode)
+        write_diff_csv(args.llm_mode, args.localization_backend, args.ablation_name)
     if args.with_tests:
         write_test_results_csv(args.mode, args.with_tests)
 

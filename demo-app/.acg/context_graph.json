@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "scanned_at": "2026-05-10T17:51:32.106Z",
+  "scanned_at": "2026-05-11T03:51:03.095Z",
   "root": "/Users/prajit/Desktop/projects/cognition/demo-app",
   "language": "typescript",
   "files": [
@@ -14,7 +14,10 @@
       "imported_by_count": 0,
       "resolved_imports": [],
       "importers": [],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "next.config.js",
@@ -32,7 +35,10 @@
         "src/env.js"
       ],
       "importers": [],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "package.json",
@@ -44,7 +50,10 @@
       "imported_by_count": 0,
       "resolved_imports": [],
       "importers": [],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "postcss.config.js",
@@ -56,7 +65,10 @@
       "imported_by_count": 0,
       "resolved_imports": [],
       "importers": [],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "prisma/schema.prisma",
@@ -68,7 +80,10 @@
       "imported_by_count": 0,
       "resolved_imports": [],
       "importers": [],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "src/app/api/auth/[...nextauth]/route.ts",
@@ -88,7 +103,10 @@
         "src/server/auth/index.ts"
       ],
       "importers": [],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "src/app/api/health/route.ts",
@@ -110,7 +128,10 @@
         "src/server/db.ts"
       ],
       "importers": [],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "src/app/dashboard/page.tsx",
@@ -136,7 +157,10 @@
         "src/server/db.ts"
       ],
       "importers": [],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "src/app/layout.tsx",
@@ -159,7 +183,10 @@
       "imported_by_count": 0,
       "resolved_imports": [],
       "importers": [],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "src/app/page.tsx",
@@ -177,7 +204,10 @@
       "imported_by_count": 0,
       "resolved_imports": [],
       "importers": [],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "src/app/profile/page.tsx",
@@ -201,7 +231,10 @@
         "src/server/auth/index.ts"
       ],
       "importers": [],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "src/app/projects/page.tsx",
@@ -225,7 +258,10 @@
         "src/server/db.ts"
       ],
       "importers": [],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "src/app/settings/page.tsx",
@@ -247,7 +283,10 @@
         "src/components/Sidebar.tsx"
       ],
       "importers": [],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "src/components/Sidebar.tsx",
@@ -274,7 +313,10 @@
         "src/app/projects/page.tsx",
         "src/app/settings/page.tsx"
       ],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "src/env.js",
@@ -296,7 +338,10 @@
         "next.config.js",
         "src/server/db.ts"
       ],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "src/server/auth/config.ts",
@@ -321,7 +366,10 @@
       "importers": [
         "src/server/auth/index.ts"
       ],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "src/server/auth/index.ts",
@@ -352,7 +400,10 @@
         "src/app/dashboard/page.tsx",
         "src/app/profile/page.tsx"
       ],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "src/server/db.ts",
@@ -380,7 +431,10 @@
         "src/app/projects/page.tsx",
         "src/server/auth/config.ts"
       ],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     },
     {
       "path": "tsconfig.json",
@@ -392,7 +446,10 @@
       "imported_by_count": 0,
       "resolved_imports": [],
       "importers": [],
-      "type_links": []
+      "type_links": [],
+      "scip_symbols": [],
+      "scip_definition_count": 0,
+      "scip_reference_count": 0
     }
   ],
   "symbols_index": {
@@ -708,5 +765,9 @@
     "prisma/schema.prisma",
     "tsconfig.json"
   ],
-  "tests": []
+  "tests": [],
+  "localization_backend": "native",
+  "scip_status": {
+    "status": "not_requested"
+  }
 }

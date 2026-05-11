@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr-6088",
+      "prompt": "Enhance req.acceptsCharsets handling so charset negotiation works correctly across accepted, missing, and rejected values, and cover the behavior with request charset tests."
+    }
+  ]
+}

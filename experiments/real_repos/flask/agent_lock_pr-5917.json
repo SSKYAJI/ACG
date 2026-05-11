@@ -1,0 +1,73 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-11T03:20:36Z",
+  "generator": {
+    "tool": "manual-pr-history",
+    "version": "1.0",
+    "model": "github-pr-metadata"
+  },
+  "repo": {
+    "root": "experiments/real_repos/flask/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "python"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-5917",
+      "prompt": "Fix provide_automatic_options override handling so route, view, blueprint, and CLI behavior preserve explicit OPTIONS settings, and update the related Flask tests.",
+      "predicted_writes": [
+        {
+          "path": "src/flask/sansio/app.py",
+          "confidence": 1.0,
+          "reason": "Changed source file in Flask PR #5917."
+        },
+        {
+          "path": "tests/test_basic.py",
+          "confidence": 1.0,
+          "reason": "Changed regression test in Flask PR #5917."
+        },
+        {
+          "path": "tests/test_blueprints.py",
+          "confidence": 1.0,
+          "reason": "Changed regression test in Flask PR #5917."
+        },
+        {
+          "path": "tests/test_cli.py",
+          "confidence": 1.0,
+          "reason": "Changed regression test in Flask PR #5917."
+        },
+        {
+          "path": "tests/test_views.py",
+          "confidence": 1.0,
+          "reason": "Changed regression test in Flask PR #5917."
+        }
+      ],
+      "allowed_paths": [
+        "src/flask/sansio/app.py",
+        "tests/test_basic.py",
+        "tests/test_blueprints.py",
+        "tests/test_cli.py",
+        "tests/test_views.py"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-5917"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

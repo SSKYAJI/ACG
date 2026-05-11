@@ -1,0 +1,128 @@
+{
+  "backend": "local",
+  "created_at": "2026-05-11T03:55:51Z",
+  "evidence_kind": "proposed_write_set",
+  "execution_mode": "propose_validate",
+  "lockfile": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/graph_expansion_eval/after_scip_comparison_live_live_locks/axios-pr-10868.json",
+  "model": {
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "provider": "openai-compatible",
+    "url": "https://openrouter.ai/api/v1"
+  },
+  "repo": {
+    "commit": "34adfd90efc9c145488399e1cf7fa96de67080fa",
+    "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/axios/checkout",
+    "url": "https://github.com/axios/axios.git"
+  },
+  "run_id": "greenhouse-local-acg_planned-20260511-035551",
+  "strategy": "acg_planned",
+  "suite_name": "axios-eval",
+  "summary_metrics": {
+    "acus_consumed_total": null,
+    "blocked_invalid_write_count": 0,
+    "cost_method": "sum_provider_reported_task_costs",
+    "cost_source": "body.usage.cost",
+    "cost_usd_total": 4.653e-05,
+    "first_run_pass_rate": 0.0,
+    "human_interventions": 0,
+    "integration_burden": {
+      "blocked_events_total": 0,
+      "changed_file_mentions_total": 2,
+      "changed_lines_added": null,
+      "changed_lines_deleted": null,
+      "changed_lines_total": null,
+      "diff_stats_kind": null,
+      "duplicate_file_touches": 0,
+      "out_of_bounds_files_total": 0,
+      "overlapping_files": [],
+      "overlapping_task_pairs": 0,
+      "review_file_mentions_total": 2,
+      "review_unique_files_total": 2,
+      "unique_changed_files": 2
+    },
+    "merge_conflicts": 0,
+    "out_of_bounds_write_count": 0,
+    "overlapping_write_pairs": 0,
+    "proposal_completion_rate": 1.0,
+    "successful_parallel_speedup": null,
+    "task_completion_rate": 1.0,
+    "tasks_completed": 1,
+    "tasks_completed_per_hour": 2053.1564,
+    "tasks_total": 1,
+    "tested_completion_rate": 0.0,
+    "tested_tasks_completed": 0,
+    "tests_ran_count": 0,
+    "tokens_all_in": 7686,
+    "tokens_completion_method": "provider_usage_completion_tokens",
+    "tokens_completion_total": 86,
+    "tokens_orchestrator_overhead": null,
+    "tokens_planner_total": null,
+    "tokens_prompt_method": "provider_usage_prompt_tokens",
+    "tokens_prompt_total": 333,
+    "tokens_scope_review_total": 7353,
+    "tokens_worker_prompt_total": 333,
+    "wall_time_seconds": 1.7534
+  },
+  "tasks": [
+    {
+      "actual_changed_files": [
+        "lib/helpers/progressEventReducer.js",
+        "tests/unit/helpers/progressEventReducer.test.js"
+      ],
+      "actual_changed_files_kind": "proposed_write_set",
+      "allowed_write_globs": [
+        "lib/adapters/xhr.js",
+        "lib/helpers/progressEventReducer.js",
+        "tests/unit/helpers/**"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": "body.usage.cost",
+        "cost_usd": 4.653e-05,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 86,
+        "tokens_prompt": 333,
+        "wall_time_seconds": 1.7516
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "predicted_write_files": [
+        "lib/helpers/progressEventReducer.js",
+        "tests/unit/helpers/progressEventReducer.test.js",
+        "lib/adapters/xhr.js"
+      ],
+      "prompt": "Guard progress event reduction against malformed XHR upload events so progress callbacks do not produce invalid data, and add regression tests for malformed event inputs.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "pr-10868",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-11T03:55:51Z",
+        "started_at": "2026-05-11T03:55:49Z"
+      }
+    }
+  ],
+  "version": "0.1"
+}

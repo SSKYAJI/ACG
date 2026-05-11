@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr-2410",
+      "prompt": "Fix variadic argument and option collection so repeated variadic values are appended instead of replacing earlier values, and add regression coverage for argument and option parsing."
+    }
+  ]
+}

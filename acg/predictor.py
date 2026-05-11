@@ -65,13 +65,12 @@ HIGH_PRECISION_SIGNALS = {
     "framework",
     "llm",
     "planner",
-    "scope_review",
     "sibling",
     "symbol",
     "testlink",
 }
-CONTEXT_ONLY_SIGNALS = {"bm25", "cochange", "graph", "hint", "pagerank"}
-AUTO_REPLAN_SIGNALS = {"explicit", "framework", "llm", "planner", "scope_review", "symbol", "testlink"}
+CONTEXT_ONLY_SIGNALS = {"bm25", "cochange", "entity", "graph", "hint", "pagerank", "scip"}
+AUTO_REPLAN_SIGNALS = {"explicit", "framework", "llm", "planner", "symbol", "testlink"}
 TEST_LINK_STOPWORDS = {
     "middleware",
     "test",
@@ -932,6 +931,10 @@ def _signals_for_reason(reason: str) -> set[str]:
         signals.add("sibling")
     if "bm25" in lower:
         signals.add("bm25")
+    if "scip entity" in lower:
+        signals.update({"scip", "entity"})
+    elif "scip reference" in lower:
+        signals.add("scip")
     if "pagerank" in lower:
         signals.add("pagerank")
     if "rose co-change" in lower or "co-change" in lower:
@@ -1014,8 +1017,6 @@ def _is_must_write(
         return False
     if "graph" in signals and not (signals & (HIGH_PRECISION_SIGNALS - {"framework"})):
         return False
-    if "scope_review" in signals and write.confidence >= 0.7:
-        return True
     if "env" in signals and write.confidence >= SEED_ENV_LOCAL_CONFIDENCE:
         return True
     if (
@@ -1036,6 +1037,95 @@ def _is_must_write(
     if "symbol" in signals and write.confidence >= SEED_SYMBOL_CONFIDENCE:
         return True
     return False
+
+
+def _task_evidence_tokens(task: TaskInput) -> set[str]:
+    hints = task.hints.touches if task.hints else []
+    return _token_set(" ".join([task.id, task.prompt, *hints]))
+
+
+def _entry_matches_task_tokens(entry: dict[str, Any], task_tokens: set[str]) -> bool:
+    fields: list[str] = []
+    for key in ("symbols", "exports", "imports", "resolved_imports"):
+        value = entry.get(key)
+        if isinstance(value, list):
+            fields.extend(item for item in value if isinstance(item, str))
+    return bool(_token_set(" ".join(fields)) & task_tokens)
+
+
+def _scip_matches_task_tokens(
+    repo_graph: dict[str, Any], path: str, task_tokens: set[str]
+) -> bool:
+    entities = _scip_entities_for_path(repo_graph, path)
+    if not entities:
+        return False
+    text = " ".join(
+        item
+        for entity in entities
+        for item in (entity.get("name", ""), entity.get("symbol", ""))
+        if item
+    )
+    return bool(_token_set(text) & task_tokens)
+
+
+def _has_candidate_context_evidence(
+    task: TaskInput,
+    repo_graph: dict[str, Any],
+    path: str,
+    entry: dict[str, Any],
+) -> bool:
+    task_tokens = _task_evidence_tokens(task)
+    return (
+        _task_matches_path(task_tokens, path, entry)
+        or _entry_matches_task_tokens(entry, task_tokens)
+        or _scip_matches_task_tokens(repo_graph, path, task_tokens)
+    )
+
+
+def _passes_structural_candidate_context_gate(
+    task: TaskInput,
+    repo_graph: dict[str, Any],
+    write: PredictedWrite,
+    signals: set[str],
+    entries: dict[str, dict[str, Any]],
+) -> bool:
+    """Drop weak structural retrieval hits before they become worker context."""
+    evidence_signals = signals - {"scope_review", "approved_replan"}
+    if not evidence_signals:
+        return False
+    entry = entries.get(write.path)
+    path_exists = entry is not None
+    task_is_testy = _looks_like_test_task(task.prompt) or (
+        "llm" in evidence_signals and _reason_mentions_tests(write.reason)
+    )
+    if _is_test_prediction(write.path) and not task_is_testy:
+        if evidence_signals <= {"symbol"} or evidence_signals <= {"testlink"}:
+            return False
+        if not evidence_signals & HIGH_PRECISION_SIGNALS:
+            return False
+
+    high_precision = evidence_signals & HIGH_PRECISION_SIGNALS
+    if high_precision:
+        return True
+
+    structural_signals = evidence_signals & CONTEXT_ONLY_SIGNALS
+    if not structural_signals:
+        return path_exists
+    if entry is None:
+        return False
+    has_task_evidence = _has_candidate_context_evidence(task, repo_graph, write.path, entry)
+
+    if len(structural_signals) >= 2 and write.confidence >= 0.8:
+        return True
+    if structural_signals <= {"pagerank", "cochange"}:
+        if _is_graph_hub(write.path, entries):
+            return False
+        return has_task_evidence
+    if "graph" in structural_signals and len(structural_signals) == 1:
+        return write.confidence >= SEED_GRAPH_EXPANSION_STRUCTURAL_CONFIDENCE or has_task_evidence
+    if "scip" in structural_signals or "bm25" in structural_signals or "hint" in structural_signals:
+        return has_task_evidence
+    return has_task_evidence
 
 
 def _scope_reason(write: PredictedWrite, signals: set[str], tier: str) -> str:
@@ -1063,6 +1153,10 @@ def _build_file_scopes(
             if _is_must_write(task, write, signals, entries)
             else "candidate_context"
         )
+        if tier == "candidate_context" and not _passes_structural_candidate_context_gate(
+            task, repo_graph, write, signals, entries
+        ):
+            continue
         scopes.append(
             FileScope(
                 path=write.path,
@@ -1085,6 +1179,70 @@ def _to_predicted_write(scope: FileScope) -> PredictedWrite:
 def _estimate_tokens(messages: list[dict[str, str]]) -> int:
     chars = sum(len(message.get("content", "") or "") for message in messages)
     return max(1, chars // 4)
+
+
+def _value(obj: Any, *keys: str) -> Any:
+    for key in keys:
+        if isinstance(obj, dict):
+            value = obj.get(key)
+        else:
+            value = getattr(obj, key, None)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _path_value(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip("./")
+    if isinstance(value, dict):
+        return str(
+            value.get("path") or value.get("file_path") or value.get("file") or ""
+        ).strip("./")
+    return str(
+        getattr(value, "path", None)
+        or getattr(value, "file_path", None)
+        or getattr(value, "file", "")
+    ).strip("./")
+
+
+def _scip_reference_paths(entity: Any) -> list[str]:
+    paths: list[str] = []
+    for key in (
+        "references",
+        "reference_paths",
+        "ref_paths",
+        "referenced_by",
+        "reference_locations",
+    ):
+        value = _value(entity, key)
+        if not value:
+            continue
+        items = value if isinstance(value, list | tuple | set) else [value]
+        paths.extend(path for item in items if (path := _path_value(item)))
+    return list(dict.fromkeys(paths))
+
+
+def _scip_entities_for_path(repo_graph: dict[str, Any], path: str) -> list[dict[str, str]]:
+    out: list[dict[str, str]] = []
+    entities = repo_graph.get("scip_entities")
+    if not isinstance(entities, list):
+        return out
+    for entity in entities:
+        symbol = str(_value(entity, "symbol", "scip_symbol", "descriptor") or "")
+        name = str(
+            _value(entity, "name", "display_name", "identifier")
+            or symbol.rsplit(".", 1)[-1]
+        )
+        definition_path = _path_value(
+            _value(entity, "path", "file_path", "file", "definition_path", "relative_path")
+        ) or _path_value(_value(entity, "definition", "definition_location", "location"))
+        references = _scip_reference_paths(entity)
+        if definition_path == path:
+            out.append({"name": name, "symbol": symbol, "role": "definition"})
+        elif path in references:
+            out.append({"name": name, "symbol": symbol, "role": "reference"})
+    return out
 
 
 def _scope_review_evidence(
@@ -1112,6 +1270,7 @@ def _scope_review_evidence(
                 "signals": list(scope.signals),
                 "reason": scope.reason[:240],
                 "symbols": (entry.get("symbols") or [])[:8],
+                "scip_entities": _scip_entities_for_path(repo_graph, scope.path)[:8],
                 "exports": (entry.get("exports") or [])[:8],
                 "imports": (entry.get("resolved_imports") or entry.get("imports") or [])[:8],
                 "importers": (entry.get("importers") or [])[:8],
@@ -1129,11 +1288,10 @@ def _build_scope_review_prompt(
     repo_root: Path | None,
 ) -> list[dict[str, str]]:
     system = (
-        "You are ACG's scope reviewer. Decide which already-retrieved files "
-        "are likely write targets for a coding task. You may only choose paths "
-        "from the provided candidates. Put low-certainty or read-only files in "
-        "candidate_context. Output ONLY JSON with keys must_write_paths, "
-        "candidate_context_paths, and rationale."
+        "You are ACG's scope pruner. Review already-retrieved files for a "
+        "coding task. You may only choose paths from the provided candidates. "
+        "Output ONLY JSON with keys keep_paths, drop_paths, promote_paths, "
+        "and rationale."
     )
     user = (
         f"Task id: {task.id}\n"
@@ -1143,19 +1301,22 @@ def _build_scope_review_prompt(
         "Candidate file evidence:\n"
         f"{json.dumps(_scope_review_evidence(scopes, repo_graph, repo_root), sort_keys=True)}\n\n"
         "Rules:\n"
-        "- must_write_paths must be high-confidence edit targets.\n"
+        "- keep_paths retain a candidate at its current tier.\n"
+        "- drop_paths remove weak or read-only context from the final scope.\n"
+        "- promote_paths are only for candidates whose non-review evidence already supports write authority.\n"
         "- Do not add paths outside Candidate file evidence.\n"
         "- Tests are must_write only when the task explicitly asks for tests or the evidence links them to a source change.\n"
-        "- Graph/PageRank/BM25-only files should usually remain candidate_context.\n"
+        "- Graph/PageRank/BM25-only files should usually be dropped unless they are directly task-grounded.\n"
+        "- Scope review is not itself a reason to make a file must_write.\n"
         "Return JSON only."
     )
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def _parse_scope_review(raw: str) -> tuple[set[str], set[str]]:
+def _parse_scope_review(raw: str) -> tuple[set[str], set[str], set[str]]:
     text = (raw or "").strip()
     if not text:
-        return set(), set()
+        return set(), set(), set()
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text)
         text = re.sub(r"\s*```\s*$", "", text)
@@ -1165,50 +1326,114 @@ def _parse_scope_review(raw: str) -> tuple[set[str], set[str]]:
         start = text.find("{")
         end = text.rfind("}")
         if start == -1 or end == -1 or end <= start:
-            return set(), set()
+            return set(), set(), set()
         try:
             payload = json.loads(text[start : end + 1])
         except json.JSONDecodeError:
-            return set(), set()
+            return set(), set(), set()
     if not isinstance(payload, dict):
-        return set(), set()
+        return set(), set(), set()
 
-    def _paths(key: str) -> set[str]:
-        value = payload.get(key)
-        if not isinstance(value, list):
-            return set()
-        return {str(path).strip("./") for path in value if str(path).strip()}
+    def _paths(*keys: str) -> set[str]:
+        out: set[str] = set()
+        for key in keys:
+            value = payload.get(key)
+            if not isinstance(value, list):
+                continue
+            out.update(path for item in value if (path := _path_value(item)))
+        return out
 
-    return _paths("must_write_paths"), _paths("candidate_context_paths")
+    keep_paths = _paths("keep_paths", "keep", "candidate_context_paths")
+    drop_paths = _paths("drop_paths", "drop")
+    promote_paths = _paths("promote_paths", "promote", "must_write_paths")
+    return keep_paths, drop_paths, promote_paths
+
+
+def _add_scope_review_signal(signals: list[str]) -> list[str]:
+    if "scope_review" not in signals:
+        signals.append("scope_review")
+    return sorted(set(signals))
+
+
+def _scope_review_can_promote(
+    task: TaskInput,
+    scope: FileScope,
+    promoted_score: float,
+    entries: dict[str, dict[str, Any]],
+) -> bool:
+    non_review_signals = set(scope.signals) - {"scope_review"}
+    if not non_review_signals:
+        return False
+    return _is_must_write(
+        task,
+        PredictedWrite(
+            path=scope.path,
+            confidence=promoted_score,
+            reason=scope.reason,
+        ),
+        non_review_signals,
+        entries,
+    )
+
+
+def _scope_review_can_drop(scope: FileScope) -> bool:
+    if scope.tier == "must_write":
+        return False
+    evidence_signals = set(scope.signals) - {"scope_review", "approved_replan"}
+    high_precision = evidence_signals & HIGH_PRECISION_SIGNALS
+    if not high_precision:
+        return True
+    if _is_test_prediction(scope.path) and high_precision <= {"symbol", "testlink"}:
+        return True
+    return False
 
 
 def _apply_scope_review(
+    task: TaskInput,
+    repo_graph: dict[str, Any],
     scopes: list[FileScope],
-    must_write_paths: set[str],
-    candidate_context_paths: set[str],
+    keep_paths: set[str],
+    drop_paths: set[str],
+    promote_paths: set[str],
 ) -> list[FileScope]:
-    if not must_write_paths and not candidate_context_paths:
+    if not keep_paths and not drop_paths and not promote_paths:
         return scopes
     known_paths = {scope.path for scope in scopes}
-    must_write_paths &= known_paths
-    candidate_context_paths &= known_paths
+    keep_paths &= known_paths
+    drop_paths &= known_paths
+    promote_paths &= known_paths
+    drop_paths -= keep_paths | promote_paths
+    entries = _path_entries(repo_graph)
     out: list[FileScope] = []
     for scope in scopes:
+        if scope.path in drop_paths and _scope_review_can_drop(scope):
+            continue
         tier = scope.tier
         signals = list(scope.signals)
         reason = scope.reason
         score = scope.score
-        if scope.path in must_write_paths:
-            tier = "must_write"
-            score = max(score, 0.86)
-            if "scope_review" not in signals:
-                signals.append("scope_review")
-            reason = f"{reason} Scope review promoted this retrieved candidate to must_write."
-        elif scope.path in candidate_context_paths:
-            tier = "candidate_context"
-            if "scope_review" not in signals:
-                signals.append("scope_review")
-            reason = f"{reason} Scope review kept this file as candidate_context."
+        if scope.path in promote_paths:
+            promoted_score = max(score, 0.86)
+            if _scope_review_can_promote(task, scope, promoted_score, entries):
+                tier = "must_write"
+                score = promoted_score
+                signals = _add_scope_review_signal(signals)
+                reason = (
+                    f"{reason} Scope review promoted this retrieved candidate "
+                    "to must_write after non-review signals met hard-scope rules."
+                )
+            else:
+                signals = _add_scope_review_signal(signals)
+                reason = (
+                    f"{reason} Scope review requested promotion, but non-review "
+                    "signals did not justify must_write."
+                )
+        elif scope.path in keep_paths:
+            signals = _add_scope_review_signal(signals)
+            reason = f"{reason} Scope review kept this file at its existing tier."
+        elif scope.path in drop_paths:
+            signals = _add_scope_review_signal(signals)
+            reason = f"{reason} Scope review requested a drop, but protected evidence kept it."
         out.append(
             FileScope(
                 path=scope.path,
@@ -1237,8 +1462,13 @@ def _review_file_scopes(
         reply = llm.complete(messages)
     except Exception:
         return scopes, token_estimate
-    must_write_paths, candidate_context_paths = _parse_scope_review(reply)
-    return _apply_scope_review(scopes, must_write_paths, candidate_context_paths), token_estimate
+    keep_paths, drop_paths, promote_paths = _parse_scope_review(reply)
+    return (
+        _apply_scope_review(
+            task, repo_graph, scopes, keep_paths, drop_paths, promote_paths
+        ),
+        token_estimate,
+    )
 
 
 def _predict_scoped_candidates(

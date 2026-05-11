@@ -51,6 +51,8 @@ from experiments.greenhouse.eval_schema import (
 )
 from experiments.greenhouse.strategies import (
     LockfileEchoMockLLM,
+    SINGLE_AGENT_STRATEGY,
+    _build_single_agent_prompt,
     _extract_task_id,
     _PromptCountingLLM,
     _scoped_repo_graph,
@@ -436,6 +438,42 @@ def test_naive_strategy_records_overlap_on_pom_xml(tmp_path: Path) -> None:
     for task in run.tasks:
         assert "pom.xml" in task.actual_changed_files
         assert task.actual_changed_files_kind == "proposed_write_set"
+
+
+def test_single_agent_prompt_excludes_lockfile_contract_terms() -> None:
+    lock = _build_lock(serialized=True)
+    messages = _build_single_agent_prompt(lock, _greenhouse_repo_graph())
+    blob = "\n".join(message["content"] for message in messages)
+
+    assert "Predicted writable files" not in blob
+    assert "Candidate context" not in blob
+    assert "allowed_paths" not in blob
+    assert "allowed path" not in blob.lower()
+    assert "candidate context" not in blob.lower()
+    assert "execution plan" not in blob.lower()
+
+
+def test_single_agent_strategy_records_suite_level_no_lock_run(tmp_path: Path) -> None:
+    lock = _build_lock(serialized=True)
+    lock_path = tmp_path / "agent_lock.json"
+    lock_path.write_text(lock.model_dump_json(indent=2))
+
+    run = run_strategy(
+        strategy=SINGLE_AGENT_STRATEGY,
+        backend="mock",
+        lock=lock,
+        repo_graph=_greenhouse_repo_graph(),
+        lockfile_path=str(lock_path),
+    )
+
+    assert run.strategy == SINGLE_AGENT_STRATEGY
+    assert run.execution_mode == "single_agent_no_lock"
+    assert run.evidence_kind == "suite_proposed_write_set"
+    assert run.model.model == "mock-no-lock-suite"
+    assert run.summary_metrics.tokens_planner_total is None
+    assert run.summary_metrics.tokens_scope_review_total is None
+    assert run.summary_metrics.tokens_prompt_total is not None
+    assert any(task.actual_changed_files for task in run.tasks)
 
 
 def test_acg_planned_strategy_zero_merge_conflicts_via_serialization(tmp_path: Path) -> None:
@@ -1046,6 +1084,37 @@ def test_cli_ablation_writes_all_three_eval_run_files_under_out_dir(
     assert combo["strategies"]["acg_planned_full_context"]["strategy"] == (
         "acg_planned_full_context"
     )
+
+
+def test_cli_comparison_writes_single_agent_and_acg_runs(tmp_path: Path) -> None:
+    lock = _build_lock(serialized=True)
+    lock_path = tmp_path / "agent_lock.json"
+    lock_path.write_text(lock.model_dump_json(indent=2))
+    out_dir = tmp_path / "runs"
+
+    rc = headtohead.main(
+        [
+            "--lock",
+            str(lock_path),
+            "--strategy",
+            "comparison",
+            "--backend",
+            "mock",
+            "--out-dir",
+            str(out_dir),
+        ]
+    )
+
+    assert rc == 0
+    assert (out_dir / "eval_run_single_agent.json").exists()
+    combo = json.loads((out_dir / "eval_run_combined.json").read_text())
+    assert set(combo["strategies"]) == {
+        "single_agent",
+        "naive_parallel",
+        "acg_planned_full_context",
+        "acg_planned",
+    }
+    assert combo["strategies"]["single_agent"]["execution_mode"] == "single_agent_no_lock"
 
 
 def test_cli_applied_diff_backend_writes_applied_diff_artifact(tmp_path: Path) -> None:

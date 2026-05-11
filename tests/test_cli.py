@@ -81,11 +81,15 @@ def test_init_graph_command_writes_normalized_graph(
     out = tmp_path / "graph.json"
 
     def fake_scan_context_graph(
-        repo_path: Path, language: str, out_path: Path | None
+        repo_path: Path,
+        language: str,
+        out_path: Path | None,
+        localization_backend: str = "native",
     ) -> dict[str, Any]:
         assert repo_path == repo
         assert language == "java"
         assert out_path == out
+        assert localization_backend == "scip"
         out.write_text(json.dumps({"language": "java", "files": [], "hotspots": []}))
         return {"language": "java", "files": [], "hotspots": []}
 
@@ -93,7 +97,17 @@ def test_init_graph_command_writes_normalized_graph(
 
     result = runner.invoke(
         app,
-        ["init-graph", "--repo", str(repo), "--language", "java", "--out", str(out)],
+        [
+            "init-graph",
+            "--repo",
+            str(repo),
+            "--language",
+            "java",
+            "--out",
+            str(out),
+            "--localization-backend",
+            "scip",
+        ],
     )
 
     assert result.exit_code == 0, result.output
@@ -116,12 +130,15 @@ def test_compile_initializes_repo_graph_before_compiling(
         )
     )
     out = tmp_path / "agent_lock.json"
-    calls: list[tuple[str, Path | None]] = []
+    calls: list[tuple[str, Path | None, str]] = []
 
     def fake_scan_context_graph(
-        repo_path: Path, language: str, out_path: Path | None = None
+        repo_path: Path,
+        language: str,
+        out_path: Path | None = None,
+        localization_backend: str = "native",
     ) -> dict[str, Any]:
-        calls.append((language, out_path))
+        calls.append((language, out_path, localization_backend))
         graph_path = repo_path / ".acg" / "context_graph.json"
         graph_path.parent.mkdir(parents=True)
         graph = {
@@ -179,11 +196,13 @@ def test_compile_initializes_repo_graph_before_compiling(
             str(out),
             "--language",
             "auto",
+            "--localization-backend",
+            "auto",
         ],
     )
 
     assert result.exit_code == 0, result.output
-    assert calls == [("auto", None)]
+    assert calls == [("auto", None, "auto")]
     assert out.exists()
 
 
@@ -195,8 +214,12 @@ def test_plan_tasks_command_writes_orchestrated_tasks(
     out = tmp_path / "tasks.json"
 
     def fake_scan_context_graph(
-        repo_path: Path, language: str, out_path: Path | None = None
+        repo_path: Path,
+        language: str,
+        out_path: Path | None = None,
+        localization_backend: str = "native",
     ) -> dict[str, Any]:
+        assert localization_backend == "scip"
         del language, out_path
         graph_path = repo_path / ".acg" / "context_graph.json"
         graph_path.parent.mkdir(parents=True)
@@ -242,6 +265,8 @@ def test_plan_tasks_command_writes_orchestrated_tasks(
             "Add auth support",
             "--out",
             str(out),
+            "--localization-backend",
+            "scip",
         ],
     )
 

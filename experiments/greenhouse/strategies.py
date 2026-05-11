@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -47,12 +48,16 @@ from .eval_schema import (
 # How many predicted writes (sorted by confidence) the mock LLM echoes per task.
 # Capped so that a noisy predictor doesn't drown the eval in noise.
 LOCKFILE_ECHO_TOP_K = 8
+SINGLE_AGENT_TOP_K_FILES = 30
+SINGLE_AGENT_MAX_TOKENS = 1600
 
+SINGLE_AGENT_STRATEGY = "single_agent"
 NAIVE_STRATEGY = "naive_parallel"
 ACG_PLANNED_STRATEGY = "acg_planned"
 ACG_PLANNED_FULL_CONTEXT_STRATEGY = "acg_planned_full_context"
 ACG_PLANNED_REPLAN_STRATEGY = "acg_planned_replan"
 LOCAL_STRATEGIES = (
+    SINGLE_AGENT_STRATEGY,
     NAIVE_STRATEGY,
     ACG_PLANNED_STRATEGY,
     ACG_PLANNED_FULL_CONTEXT_STRATEGY,
@@ -259,6 +264,84 @@ class LockfileEchoMockLLM:
         return None
 
 
+class NoLockSuiteMockLLM:
+    """Deterministic mock for the suite-level ``single_agent`` baseline.
+
+    It only reads file paths explicitly named in task prompts. It deliberately
+    does not inspect the lockfile's predicted writes, allowed paths, execution
+    plan, or candidate context, so tests can keep the baseline honest.
+    """
+
+    url = "mock://single-agent"
+    model = "mock-no-lock-suite"
+
+    async def complete(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        max_tokens: int = SINGLE_AGENT_MAX_TOKENS,
+        temperature: float = 0.2,
+    ) -> LLMReply:
+        del max_tokens, temperature
+        await asyncio.sleep(0)
+        user_blob = "\n".join(
+            m.get("content", "") for m in messages if m.get("role") == "user"
+        )
+        task_prompts: dict[str, str] = {}
+        current_id: str | None = None
+        for line in user_blob.splitlines():
+            if line.startswith("Task id:"):
+                current_id = line[len("Task id:") :].strip() or None
+            elif line.startswith("Task:") and current_id:
+                task_prompts[current_id] = line[len("Task:") :].strip()
+                current_id = None
+
+        tasks = []
+        for task_id, prompt in task_prompts.items():
+            files = _paths_named_in_prompt(prompt)
+            tasks.append(
+                {
+                    "task_id": task_id,
+                    "writes": [
+                        {
+                            "file": path,
+                            "description": "file named in the suite task prompt",
+                        }
+                        for path in files
+                    ],
+                }
+            )
+        write_count = sum(len(task["writes"]) for task in tasks)
+        return LLMReply(
+            content=json.dumps({"tasks": tasks}),
+            reasoning="",
+            completion_tokens=max(8, write_count * 4),
+            finish_reason="stop",
+            wall_s=0.0,
+        )
+
+    async def aclose(self) -> None:
+        return None
+
+
+_PROMPT_PATH_RE = re.compile(
+    r"(?<![\w./-])pom\.xml(?![\w./-])|(?:[\w.-]+/)+[\w.\-\[\]@]+"
+)
+
+
+def _paths_named_in_prompt(prompt: str) -> list[str]:
+    """Return repo-relative-looking file paths explicitly named in ``prompt``."""
+    seen: set[str] = set()
+    paths: list[str] = []
+    for match in _PROMPT_PATH_RE.finditer(prompt):
+        path = match.group(0).strip().strip("`'\".,;:)")
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        paths.append(path)
+    return paths
+
+
 # ---------------------------------------------------------------------------
 # Worker → EvalTask conversion helpers.
 # ---------------------------------------------------------------------------
@@ -420,6 +503,232 @@ async def _run_naive_parallel(
 
 
 # ---------------------------------------------------------------------------
+# Suite-level no-lock single-agent strategy.
+# ---------------------------------------------------------------------------
+
+
+def _repo_graph_file_paths(
+    repo_graph: dict[str, Any], *, k: int = SINGLE_AGENT_TOP_K_FILES
+) -> list[str]:
+    files = repo_graph.get("files") or []
+    if not isinstance(files, list):
+        return []
+    scored: list[tuple[int, str]] = []
+    for entry in files:
+        if not isinstance(entry, dict):
+            continue
+        path = entry.get("path")
+        if not isinstance(path, str) or not path:
+            continue
+        score = entry.get("imported_by_count", entry.get("import_fan_in", 0)) or 0
+        try:
+            score_int = int(score)
+        except (TypeError, ValueError):
+            score_int = 0
+        scored.append((-score_int, path))
+    return [path for _, path in sorted(scored)[:k]]
+
+
+def _build_single_agent_prompt(
+    lock: AgentLock,
+    repo_graph: dict[str, Any],
+    *,
+    prompts_by_task: dict[str, str] | None = None,
+) -> list[dict[str, str]]:
+    files = _repo_graph_file_paths(repo_graph)
+    file_block = "\n".join(f"  - {p}" for p in files) or "  (graph empty)"
+    task_blocks = []
+    for task in lock.tasks:
+        task_blocks.append(
+            f"Task id: {task.id}\n"
+            f"Task: {(prompts_by_task or {}).get(task.id, task.prompt)}"
+        )
+    system = (
+        "You are a single coding agent handling an entire task suite without "
+        "a precomputed file contract. Output ONLY a JSON object with key \"tasks\": an "
+        "array of objects. Each object must have \"task_id\" and \"writes\"; "
+        "\"writes\" is an array of objects with \"file\" and \"description\". "
+        "Do not include prose, code fences, or contract-derived fields."
+    )
+    user = (
+        "Single-agent no-lock suite.\n"
+        "Use only these task descriptions and the repo file list below.\n\n"
+        "Suite tasks:\n"
+        f"{'\n\n'.join(task_blocks)}\n\n"
+        f"Available files in this repo (top {len(files)} by importance):\n"
+        f"{file_block}"
+    )
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
+
+
+def _jsonish_payload(raw: str) -> Any:
+    text = (raw or "").strip()
+    if not text:
+        return None
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```\s*$", "", text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        for opener, closer in (("{", "}"), ("[", "]")):
+            start = text.find(opener)
+            end = text.rfind(closer)
+            if start == -1 or end == -1 or end <= start:
+                continue
+            try:
+                return json.loads(text[start : end + 1])
+            except json.JSONDecodeError:
+                continue
+    return None
+
+
+def _coerce_write_items(value: Any) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    out: list[dict[str, str]] = []
+    for item in value:
+        if isinstance(item, str):
+            file_path = item
+            description = ""
+        elif isinstance(item, dict):
+            file_path = item.get("file") or item.get("path")
+            description = item.get("description") or item.get("reason") or ""
+        else:
+            continue
+        if not isinstance(file_path, str) or not file_path.strip():
+            continue
+        if not isinstance(description, str):
+            description = str(description)
+        out.append(
+            {
+                "file": file_path.strip().lstrip("./"),
+                "description": description.strip(),
+            }
+        )
+    return out
+
+
+def _parse_single_agent_task_writes(
+    raw: str, task_ids: set[str]
+) -> dict[str, list[dict[str, str]]]:
+    payload = _jsonish_payload(raw)
+    parsed: dict[str, list[dict[str, str]]] = {task_id: [] for task_id in task_ids}
+    if isinstance(payload, dict):
+        tasks_payload = payload.get("tasks")
+        if isinstance(tasks_payload, list):
+            for item in tasks_payload:
+                if not isinstance(item, dict):
+                    continue
+                task_id = item.get("task_id") or item.get("id")
+                if not isinstance(task_id, str) or task_id not in task_ids:
+                    continue
+                writes = _coerce_write_items(
+                    item.get("writes")
+                    or item.get("actual_changed_files")
+                    or item.get("files")
+                    or []
+                )
+                parsed[task_id].extend(writes)
+        writes_by_task = payload.get("writes_by_task") or payload.get("tasks_by_id")
+        if isinstance(writes_by_task, dict):
+            for task_id, writes_payload in writes_by_task.items():
+                if task_id in task_ids:
+                    parsed[task_id].extend(_coerce_write_items(writes_payload))
+        for task_id in task_ids:
+            if task_id in payload:
+                parsed[task_id].extend(_coerce_write_items(payload[task_id]))
+    elif isinstance(payload, list):
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            task_id = item.get("task_id") or item.get("id")
+            if isinstance(task_id, str) and task_id in task_ids:
+                parsed[task_id].extend(_coerce_write_items(item.get("writes") or []))
+
+    for task_id, writes in parsed.items():
+        seen: set[str] = set()
+        deduped: list[dict[str, str]] = []
+        for write in writes:
+            path = write["file"]
+            if path in seen:
+                continue
+            seen.add(path)
+            deduped.append(write)
+        parsed[task_id] = deduped
+    return parsed
+
+
+async def _run_single_agent(
+    lock: AgentLock,
+    repo_graph: dict[str, Any],
+    sub_factory: Callable[[], RuntimeLLMProtocol],
+    *,
+    prompts_by_task: dict[str, str] | None = None,
+) -> tuple[list[EvalTask], float, str]:
+    """Run one suite-level agent with no lockfile write contract in prompt."""
+    llm = sub_factory()
+    messages = _build_single_agent_prompt(
+        lock,
+        repo_graph,
+        prompts_by_task=prompts_by_task,
+    )
+    started = now_iso()
+    t0 = time.perf_counter()
+    reply: LLMReply | None = None
+    error: str | None = None
+    try:
+        reply = await llm.complete(messages, max_tokens=SINGLE_AGENT_MAX_TOKENS)
+    except Exception as exc:  # pragma: no cover - exercised by live backends.
+        error = str(exc)
+    finally:
+        await llm.aclose()
+    wall_s = time.perf_counter() - t0
+    finished = now_iso()
+
+    prompt_tokens: int | None = None
+    prompt_method = "estimated_chars_div_4"
+    if reply is not None and reply.prompt_tokens is not None:
+        prompt_tokens = reply.prompt_tokens
+        prompt_method = "provider_usage_prompt_tokens"
+    elif reply is not None:
+        prompt_tokens = estimate_prompt_tokens(messages)
+    parsed = (
+        _parse_single_agent_task_writes(reply.content, {task.id for task in lock.tasks})
+        if reply is not None
+        else {}
+    )
+
+    tasks: list[EvalTask] = []
+    for index, lock_task in enumerate(lock.tasks):
+        eval_task = EvalTask(
+            task_id=lock_task.id,
+            prompt=(prompts_by_task or {}).get(lock_task.id, lock_task.prompt),
+            actual_changed_files_kind="suite_proposed_write_set",
+        )
+        eval_task.actual_changed_files = sorted(
+            {write["file"] for write in parsed.get(lock_task.id, [])}
+        )
+        eval_task.status = "failed" if error else "completed"
+        eval_task.failure_reason = "AGENT_FAIL" if error else None
+        eval_task.timestamps.started_at = started
+        eval_task.timestamps.finished_at = finished
+        eval_task.metrics.wall_time_seconds = round(wall_s if index == 0 else 0.0, 4)
+        eval_task.metrics.model_calls = 1 if index == 0 else 0
+        if index == 0 and reply is not None:
+            eval_task.metrics.tokens_prompt = prompt_tokens
+            eval_task.metrics.tokens_completion = reply.completion_tokens or None
+            eval_task.metrics.cost_usd = reply.cost_usd
+            eval_task.metrics.cost_source = reply.cost_source
+        tasks.append(eval_task)
+    annotate_overlaps(tasks)
+    return tasks, wall_s, prompt_method
+
+
+# ---------------------------------------------------------------------------
 # ACG-planned strategy.
 # ---------------------------------------------------------------------------
 
@@ -528,6 +837,18 @@ def _mock_factory(lock: AgentLock) -> tuple[Callable[[], RuntimeLLMProtocol], Ev
     return sub_factory, EvalModel(provider="mock", model="lockfile-echo", url="mock://local")
 
 
+def _single_agent_mock_factory() -> tuple[Callable[[], RuntimeLLMProtocol], EvalModel]:
+    """Build the no-lock suite mock backend."""
+    def sub_factory() -> RuntimeLLMProtocol:
+        return NoLockSuiteMockLLM()
+
+    return sub_factory, EvalModel(
+        provider="mock",
+        model=NoLockSuiteMockLLM.model,
+        url=NoLockSuiteMockLLM.url,
+    )
+
+
 def _local_factory() -> tuple[Callable[[], RuntimeLLMProtocol], EvalModel]:
     """Build a live :class:`RuntimeLLM` worker factory from ``ACG_*`` env vars."""
     from acg.runtime import RuntimeConfig
@@ -583,12 +904,27 @@ def run_strategy(
         )
 
     if backend == "mock":
-        sub_factory, model = _mock_factory(lock)
+        if strategy == SINGLE_AGENT_STRATEGY:
+            sub_factory, model = _single_agent_mock_factory()
+        else:
+            sub_factory, model = _mock_factory(lock)
     else:
         sub_factory, model = _local_factory()
 
     orch_overhead: int | None
-    if strategy == NAIVE_STRATEGY:
+    if strategy == SINGLE_AGENT_STRATEGY:
+        tasks, wall_s, prompt_token_method = asyncio.run(
+            _run_single_agent(
+                lock,
+                repo_graph,
+                sub_factory,
+                prompts_by_task=prompts_by_task,
+            )
+        )
+        orch_overhead = None
+        execution_mode = "single_agent_no_lock"
+        evidence_kind = "suite_proposed_write_set"
+    elif strategy == NAIVE_STRATEGY:
         tasks, wall_s, prompt_token_method = asyncio.run(
             _run_naive_parallel(
                 lock,
@@ -599,6 +935,8 @@ def run_strategy(
             )
         )
         orch_overhead = None
+        execution_mode = "propose_validate"
+        evidence_kind = "proposed_write_set"
     else:
         tasks, wall_s, prompt_token_method = asyncio.run(
             _run_acg_planned(
@@ -615,6 +953,8 @@ def run_strategy(
             )
         )
         orch_overhead = None
+        execution_mode = "propose_validate"
+        evidence_kind = "proposed_write_set"
 
     summary = compute_summary_metrics(
         tasks,
@@ -623,12 +963,12 @@ def run_strategy(
         tokens_orchestrator_overhead=orch_overhead,
         tokens_planner_total=(
             lock.generator.tokens_planner_total
-            if lock.generator is not None
+            if lock.generator is not None and strategy != SINGLE_AGENT_STRATEGY
             else None
         ),
         tokens_scope_review_total=(
             lock.generator.tokens_scope_review_total
-            if lock.generator is not None
+            if lock.generator is not None and strategy != SINGLE_AGENT_STRATEGY
             else None
         ),
         tokens_prompt_method=prompt_token_method,
@@ -642,8 +982,8 @@ def run_strategy(
         suite_name=suite_name or suite_name_from_lock(lock),
         strategy=strategy,
         backend=backend,
-        execution_mode="propose_validate",
-        evidence_kind="proposed_write_set",
+        execution_mode=execution_mode,
+        evidence_kind=evidence_kind,
         model=model,
         repo=repo
         or repo_from_path(
@@ -665,5 +1005,7 @@ __all__ = [
     "LockfileEchoMockLLM",
     "LOCAL_STRATEGIES",
     "NAIVE_STRATEGY",
+    "NoLockSuiteMockLLM",
+    "SINGLE_AGENT_STRATEGY",
     "run_strategy",
 ]

@@ -1,0 +1,126 @@
+{
+  "backend": "local",
+  "created_at": "2026-05-11T03:56:19Z",
+  "evidence_kind": "proposed_write_set",
+  "execution_mode": "propose_validate",
+  "lockfile": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/graph_expansion_eval/after_scip_comparison_live_live_locks/express-pr-6088.json",
+  "model": {
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "provider": "openai-compatible",
+    "url": "https://openrouter.ai/api/v1"
+  },
+  "repo": {
+    "commit": "f873ac23124ffcff8c040b4bd257b32c29828d53",
+    "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/express/checkout",
+    "url": "https://github.com/expressjs/express.git"
+  },
+  "run_id": "greenhouse-local-naive_parallel-20260511-035619",
+  "strategy": "naive_parallel",
+  "suite_name": "express-eval",
+  "summary_metrics": {
+    "acus_consumed_total": null,
+    "blocked_invalid_write_count": 0,
+    "cost_method": "sum_provider_reported_task_costs",
+    "cost_source": "body.usage.cost",
+    "cost_usd_total": 5.153e-05,
+    "first_run_pass_rate": 0.0,
+    "human_interventions": 0,
+    "integration_burden": {
+      "blocked_events_total": 0,
+      "changed_file_mentions_total": 2,
+      "changed_lines_added": null,
+      "changed_lines_deleted": null,
+      "changed_lines_total": null,
+      "diff_stats_kind": null,
+      "duplicate_file_touches": 0,
+      "out_of_bounds_files_total": 0,
+      "overlapping_files": [],
+      "overlapping_task_pairs": 0,
+      "review_file_mentions_total": 2,
+      "review_unique_files_total": 2,
+      "unique_changed_files": 2
+    },
+    "merge_conflicts": 0,
+    "out_of_bounds_write_count": 0,
+    "overlapping_write_pairs": 0,
+    "proposal_completion_rate": 1.0,
+    "successful_parallel_speedup": null,
+    "task_completion_rate": 1.0,
+    "tasks_completed": 1,
+    "tasks_completed_per_hour": 487.7768,
+    "tasks_total": 1,
+    "tested_completion_rate": 0.0,
+    "tested_tasks_completed": 0,
+    "tests_ran_count": 0,
+    "tokens_all_in": 10897,
+    "tokens_completion_method": "provider_usage_completion_tokens",
+    "tokens_completion_total": 83,
+    "tokens_orchestrator_overhead": null,
+    "tokens_planner_total": null,
+    "tokens_prompt_method": "provider_usage_prompt_tokens",
+    "tokens_prompt_total": 416,
+    "tokens_scope_review_total": 10481,
+    "tokens_worker_prompt_total": 416,
+    "wall_time_seconds": 7.3804
+  },
+  "tasks": [
+    {
+      "actual_changed_files": [
+        "lib/request.js",
+        "test/req.acceptsCharsets.js"
+      ],
+      "actual_changed_files_kind": "proposed_write_set",
+      "allowed_write_globs": [
+        "lib/request.js",
+        "test/req.acceptsCharsets.js"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": "body.usage.cost",
+        "cost_usd": 5.153e-05,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 83,
+        "tokens_prompt": 416,
+        "wall_time_seconds": 7.3755
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "predicted_write_files": [
+        "lib/request.js",
+        "test/req.acceptsCharsets.js"
+      ],
+      "prompt": "Enhance req.acceptsCharsets handling so charset negotiation works correctly across accepted, missing, and rejected values, and cover the behavior with request charset tests.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "pr-6088",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-11T03:56:19Z",
+        "started_at": "2026-05-11T03:56:11Z"
+      }
+    }
+  ],
+  "version": "0.1"
+}

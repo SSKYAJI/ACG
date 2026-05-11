@@ -1,0 +1,293 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-11T03:40:53.968645Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "lockfile-replay",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 8478
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/urllib3/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "python"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-4974",
+      "prompt": "Avoid an infinite loop when HTTPResponse.read_chunked is called with amt=0, and add regression coverage for zero-length chunked reads.",
+      "predicted_writes": [
+        {
+          "path": "src/urllib3/response.py",
+          "confidence": 1.0,
+          "reason": "Changed source file in urllib3 PR #4974. Signals: llm, pagerank."
+        },
+        {
+          "path": "test/test_response.py",
+          "confidence": 1.0,
+          "reason": "Changed regression test in urllib3 PR #4974. Signals: llm, pagerank, testlink."
+        },
+        {
+          "path": "dummyserver/app.py",
+          "confidence": 0.85,
+          "reason": "Symbol 'chunked' referenced in prompt; defined in dummyserver/app.py. Signals: symbol."
+        },
+        {
+          "path": "src/urllib3/__init__.py",
+          "confidence": 0.85,
+          "reason": "Symbol 'HTTPResponse' referenced in prompt; defined in src/urllib3/__init__.py. Signals: symbol."
+        }
+      ],
+      "allowed_paths": [
+        "dummyserver/app.py",
+        "src/urllib3/__init__.py",
+        "src/urllib3/response.py",
+        "test/test_response.py"
+      ],
+      "candidate_context_paths": [
+        "src/urllib3/connection.py",
+        "src/urllib3/http2/connection.py",
+        "test/with_dummyserver/test_socketlevel.py",
+        "test/__init__.py",
+        "test/conftest.py",
+        "test/contrib/emscripten/conftest.py",
+        "test/contrib/emscripten/test_emscripten.py",
+        "test/contrib/test_pyopenssl.py",
+        "test/contrib/test_pyopenssl_dependencies.py",
+        "test/contrib/test_socks.py",
+        "test/port_helpers.py",
+        "test/test_collections.py",
+        "test/test_compatibility.py",
+        "test/test_connection.py",
+        "test/test_connectionpool.py",
+        "test/test_exceptions.py",
+        "test/test_fields.py",
+        "test/test_filepost.py"
+      ],
+      "file_scopes": [
+        {
+          "path": "src/urllib3/response.py",
+          "tier": "must_write",
+          "score": 1.0,
+          "signals": [
+            "llm",
+            "pagerank"
+          ],
+          "reason": "Changed source file in urllib3 PR #4974. Signals: llm, pagerank."
+        },
+        {
+          "path": "test/test_response.py",
+          "tier": "must_write",
+          "score": 1.0,
+          "signals": [
+            "llm",
+            "pagerank",
+            "testlink"
+          ],
+          "reason": "Changed regression test in urllib3 PR #4974. Signals: llm, pagerank, testlink."
+        },
+        {
+          "path": "dummyserver/app.py",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "symbol"
+          ],
+          "reason": "Symbol 'chunked' referenced in prompt; defined in dummyserver/app.py. Signals: symbol."
+        },
+        {
+          "path": "src/urllib3/__init__.py",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "symbol"
+          ],
+          "reason": "Symbol 'HTTPResponse' referenced in prompt; defined in src/urllib3/__init__.py. Signals: symbol."
+        },
+        {
+          "path": "src/urllib3/connection.py",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank"
+          ],
+          "reason": "personalized PageRank rank #8, top symbol matches: _WrappedAndVerifiedSocket, _ssl_wrap_socket_and_match_hostname, is_closed. Candidate context only; requires replan before write. Signals: pagerank."
+        },
+        {
+          "path": "src/urllib3/http2/connection.py",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank"
+          ],
+          "reason": "personalized PageRank rank #5, top symbol matches: HTTP2Response, RE_IS_ILLEGAL_HEADER_VALUE, RE_IS_LEGAL_HEADER_NAME. Candidate context only; requires replan before write. Signals: pagerank."
+        },
+        {
+          "path": "test/with_dummyserver/test_socketlevel.py",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank",
+            "testlink"
+          ],
+          "reason": "personalized PageRank rank #3, top symbol matches: TestBadContentLength, _run_read1_None, _run_read1_amt. Candidate context only; requires replan before write. Signals: pagerank, testlink."
+        },
+        {
+          "path": "test/__init__.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate src/urllib3/__init__.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/conftest.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate src/urllib3/__init__.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/contrib/emscripten/conftest.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate src/urllib3/__init__.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/contrib/emscripten/test_emscripten.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate src/urllib3/__init__.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/contrib/test_pyopenssl.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate dummyserver/app.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/contrib/test_pyopenssl_dependencies.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate src/urllib3/http2/connection.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/contrib/test_socks.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate src/urllib3/__init__.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/port_helpers.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate dummyserver/app.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/test_collections.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate src/urllib3/__init__.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/test_compatibility.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate src/urllib3/__init__.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/test_connection.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate src/urllib3/__init__.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/test_connectionpool.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate src/urllib3/__init__.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/test_exceptions.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate src/urllib3/__init__.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/test_fields.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate dummyserver/app.py. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/test_filepost.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate src/urllib3/__init__.py. Candidate context only; requires replan before write. Signals: testlink."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-4974"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

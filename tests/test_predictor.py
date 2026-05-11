@@ -43,6 +43,24 @@ class StubLLM:
         return self._reply
 
 
+class SequenceLLM:
+    """LLM stand-in returning one JSON reply per call."""
+
+    model = "sequence-stub"
+
+    def __init__(self, replies: list[str]) -> None:
+        self._replies = replies
+        self.calls: list[list[dict[str, str]]] = []
+
+    def complete(
+        self, messages: list[dict[str, str]], response_format: dict[str, Any] | None = None
+    ) -> str:
+        del response_format
+        self.calls.append(messages)
+        index = min(len(self.calls) - 1, len(self._replies) - 1)
+        return self._replies[index]
+
+
 @pytest.fixture
 def repo_graph() -> dict[str, Any]:
     return {
@@ -507,6 +525,41 @@ def test_index_seed_passes_through_aggregator_predictions(
     assert "src/lib/below-floor.ts" not in by_path
 
 
+def test_structural_candidate_context_gate_keeps_only_task_grounded_index_hits(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        "acg.index.aggregate",
+        lambda *_a, **_k: [
+            PredictedWrite(
+                path="src/checkout/validation.ts",
+                confidence=0.82,
+                reason="PageRank rank 1 from repository graph.",
+            ),
+            PredictedWrite(
+                path="src/shared/hotspot.ts",
+                confidence=0.9,
+                reason="PageRank rank 2 from repository graph.",
+            ),
+        ],
+    )
+    task = TaskInput(id="checkout", prompt="Add checkout validation.")
+    graph = {
+        "files": [
+            {"path": "src/checkout/validation.ts", "symbols": ["validateCheckout"]},
+            {"path": "src/shared/hotspot.ts", "symbols": ["sharedHelper"]},
+        ]
+    }
+
+    scopes = predict_file_scopes(
+        task, graph, StubLLM(json.dumps({"writes": []})), repo_root=tmp_path
+    )
+    by_path = {scope.path: scope for scope in scopes}
+
+    assert by_path["src/checkout/validation.ts"].tier == "candidate_context"
+    assert "src/shared/hotspot.ts" not in by_path
+
+
 def test_index_seed_skipped_without_repo_root(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -563,7 +616,47 @@ def test_planner_suspected_files_are_evidence_not_automatic_hard_scope() -> None
     assert scope.tier == "candidate_context"
 
 
-def test_scope_review_can_promote_only_retrieved_candidates() -> None:
+def test_scope_review_pruner_can_drop_candidate_context_paths() -> None:
+    task = TaskInput(
+        id="templates",
+        prompt="Enable Jinja2Templates autoescape.",
+        hints=TaskInputHints(
+            touches=["routing"],
+            suspected_files=["starlette/templating.py"],
+        ),
+    )
+    graph = {
+        "language": "python",
+        "files": [
+            {"path": "starlette/templating.py", "symbols": ["Jinja2Templates"]},
+            {"path": "starlette/routing.py", "symbols": ["Router"]},
+        ],
+    }
+    llm = StubLLM(
+        json.dumps(
+            {
+                "keep_paths": ["starlette/templating.py"],
+                "drop_paths": ["starlette/routing.py", "tests/test_environments.py"],
+                "promote_paths": [],
+                "rationale": "Routing is read-only context for this task.",
+            }
+        )
+    )
+
+    prediction = predict_file_scopes_with_usage(task, graph, llm)
+    by_path = {scope.path: scope for scope in prediction.scopes}
+    scope_review_prompt = llm.calls[-1][1]["content"]
+
+    assert by_path["starlette/templating.py"].tier == "candidate_context"
+    assert "starlette/routing.py" not in by_path
+    assert "tests/test_environments.py" not in by_path
+    assert "keep_paths" in scope_review_prompt
+    assert "drop_paths" in scope_review_prompt
+    assert "promote_paths" in scope_review_prompt
+    assert prediction.scope_review_tokens > 0
+
+
+def test_scope_review_legacy_promote_does_not_override_non_review_signals() -> None:
     task = TaskInput(
         id="templates",
         prompt="Enable Jinja2Templates autoescape.",
@@ -588,9 +681,50 @@ def test_scope_review_can_promote_only_retrieved_candidates() -> None:
     prediction = predict_file_scopes_with_usage(task, graph, llm)
     by_path = {scope.path: scope for scope in prediction.scopes}
 
-    assert by_path["starlette/templating.py"].tier == "must_write"
+    assert by_path["starlette/templating.py"].tier == "candidate_context"
+    assert "non-review signals did not justify must_write" in by_path[
+        "starlette/templating.py"
+    ].reason
     assert "tests/test_environments.py" not in by_path
     assert prediction.scope_review_tokens > 0
+
+
+def test_scope_review_promotes_when_non_review_signals_support_hard_scope() -> None:
+    task = TaskInput(id="settings", prompt="Update sidebar navigation.")
+    graph = {
+        "language": "typescript",
+        "files": [{"path": "components/sidebar.tsx", "symbols": ["Sidebar"]}],
+    }
+    llm = SequenceLLM(
+        [
+            json.dumps(
+                {
+                    "writes": [
+                        {
+                            "path": "components/sidebar.tsx",
+                            "confidence": 0.84,
+                            "reason": "Sidebar navigation needs an edit.",
+                        }
+                    ]
+                }
+            ),
+            json.dumps(
+                {
+                    "keep_paths": [],
+                    "drop_paths": [],
+                    "promote_paths": ["components/sidebar.tsx", "components/missing.tsx"],
+                }
+            ),
+        ]
+    )
+
+    prediction = predict_file_scopes_with_usage(task, graph, llm)
+    by_path = {scope.path: scope for scope in prediction.scopes}
+
+    assert by_path["components/sidebar.tsx"].tier == "must_write"
+    assert by_path["components/sidebar.tsx"].score >= 0.86
+    assert {"llm", "scope_review"} <= set(by_path["components/sidebar.tsx"].signals)
+    assert "components/missing.tsx" not in by_path
 
 
 def test_test_source_mapping_links_existing_starlette_test(tmp_path: Path) -> None:
@@ -640,6 +774,143 @@ def test_index_seed_unit_filters_below_floor(
     seeds = _index_seed(task, tmp_path, {})
     paths = {seed.path for seed in seeds}
     assert paths == {"keep.ts"}
+
+
+def test_predict_file_scopes_keeps_scip_only_candidate_context(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        "acg.index.aggregate",
+        lambda *_a, **_k: [
+            PredictedWrite(
+                path="starlette/templating.py",
+                confidence=0.82,
+                reason=(
+                    "SCIP entity 'Jinja2Templates' "
+                    "(python starlette/templating.py Jinja2Templates#) BM25 matched task; "
+                    "definition in starlette/templating.py."
+                ),
+            )
+        ],
+    )
+    task = TaskInput(id="templates", prompt="Enable Jinja2Templates autoescape.")
+    graph = {
+        "files": [{"path": "starlette/templating.py", "symbols": ["Jinja2Templates"]}],
+        "scip_entities": [
+            {
+                "symbol": "python starlette/templating.py Jinja2Templates#",
+                "name": "Jinja2Templates",
+                "path": "starlette/templating.py",
+            }
+        ],
+    }
+
+    scopes = predict_file_scopes(
+        task, graph, StubLLM(json.dumps({"writes": []})), repo_root=tmp_path
+    )
+    scope = next(item for item in scopes if item.path == "starlette/templating.py")
+
+    assert {"scip", "entity"} <= set(scope.signals)
+    assert scope.tier == "candidate_context"
+
+
+def test_scope_review_cannot_promote_retrieved_scip_candidate_only(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        "acg.index.aggregate",
+        lambda *_a, **_k: [
+            PredictedWrite(
+                path="starlette/templating.py",
+                confidence=0.82,
+                reason=(
+                    "SCIP entity 'Jinja2Templates' "
+                    "(python starlette/templating.py Jinja2Templates#) BM25 matched task; "
+                    "definition in starlette/templating.py."
+                ),
+            )
+        ],
+    )
+    task = TaskInput(id="templates", prompt="Enable Jinja2Templates autoescape.")
+    graph = {
+        "files": [{"path": "starlette/templating.py", "symbols": ["Jinja2Templates"]}],
+        "scip_entities": [
+            {
+                "symbol": "python starlette/templating.py Jinja2Templates#",
+                "name": "Jinja2Templates",
+                "path": "starlette/templating.py",
+            }
+        ],
+    }
+    llm = StubLLM(
+        json.dumps(
+            {
+                "must_write_paths": [
+                    "starlette/templating.py",
+                    "tests/test_templates.py",
+                ],
+                "candidate_context_paths": [],
+            }
+        )
+    )
+
+    prediction = predict_file_scopes_with_usage(task, graph, llm, repo_root=tmp_path)
+    by_path = {scope.path: scope for scope in prediction.scopes}
+    scope_review_prompt = llm.calls[-1][1]["content"]
+
+    assert by_path["starlette/templating.py"].tier == "candidate_context"
+    assert "scope_review" in by_path["starlette/templating.py"].signals
+    assert "non-review signals did not justify must_write" in by_path[
+        "starlette/templating.py"
+    ].reason
+    assert "tests/test_templates.py" not in by_path
+    assert "scip_entities" in scope_review_prompt
+    assert "Jinja2Templates" in scope_review_prompt
+
+
+def test_fastify_scip_hub_candidate_is_not_hard_promoted(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        "acg.index.aggregate",
+        lambda *_a, **_k: [
+            PredictedWrite(
+                path="lib/symbols.js",
+                confidence=0.82,
+                reason=(
+                    "SCIP entity 'kRequestCacheValidateFns' "
+                    "(javascript lib/symbols.js kRequestCacheValidateFns#) BM25 matched task; "
+                    "definition in lib/symbols.js."
+                ),
+            )
+        ],
+    )
+    graph = {
+        "files": [
+            {
+                "path": "lib/symbols.js",
+                "symbols": ["kRequestCacheValidateFns"],
+                "importers": [f"lib/importer-{index}.js" for index in range(25)],
+            }
+        ],
+        "importers": {"lib/symbols.js": [f"lib/importer-{index}.js" for index in range(25)]},
+        "scip_entities": [
+            {
+                "symbol": "javascript lib/symbols.js kRequestCacheValidateFns#",
+                "name": "kRequestCacheValidateFns",
+                "path": "lib/symbols.js",
+            }
+        ],
+    }
+    task = TaskInput(id="request", prompt="Update Fastify request content-type handling.")
+
+    scopes = predict_file_scopes(
+        task, graph, StubLLM(json.dumps({"writes": []})), repo_root=tmp_path
+    )
+    scope = next(item for item in scopes if item.path == "lib/symbols.js")
+
+    assert "scip" in scope.signals
+    assert scope.tier == "candidate_context"
 
 
 # --------------------------------------------------------------------------- #

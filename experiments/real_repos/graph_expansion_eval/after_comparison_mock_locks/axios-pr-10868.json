@@ -1,0 +1,294 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-11T03:40:52.222438Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "lockfile-replay",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 7111
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/axios/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-10868",
+      "prompt": "Guard progress event reduction against malformed XHR upload events so progress callbacks do not produce invalid data, and add regression tests for malformed event inputs.",
+      "predicted_writes": [
+        {
+          "path": "lib/helpers/progressEventReducer.js",
+          "confidence": 1.0,
+          "reason": "Changed source file in Axios PR #10868. Signals: graph, llm."
+        },
+        {
+          "path": "tests/unit/helpers/progressEventReducer.test.js",
+          "confidence": 1.0,
+          "reason": "Changed regression test in Axios PR #10868. Signals: llm, testlink."
+        }
+      ],
+      "allowed_paths": [
+        "lib/helpers/progressEventReducer.js",
+        "tests/unit/helpers/**"
+      ],
+      "candidate_context_paths": [
+        "index.d.ts",
+        "tests/unit/adapters/fetch.test.js",
+        "tests/unit/adapters/http.test.js",
+        "tests/unit/prototypePollution.test.js",
+        "tests/malformed.test.ts",
+        "tests/browser/adapter.browser.test.js",
+        "tests/browser/basicAuth.browser.test.js",
+        "tests/browser/cancel.browser.test.js",
+        "tests/browser/cancelToken.browser.test.js",
+        "tests/browser/cookies.browser.test.js",
+        "tests/browser/defaults.browser.test.js",
+        "tests/browser/formdata.browser.test.js",
+        "tests/browser/headers.browser.test.js",
+        "tests/browser/instance.browser.test.js",
+        "tests/browser/interceptors.browser.test.js",
+        "tests/browser/isURLSameOrigin.browser.test.js",
+        "tests/browser/options.browser.test.js",
+        "tests/browser/progress.browser.test.js",
+        "tests/browser/promise.browser.test.js",
+        "tests/browser/requests.browser.test.js",
+        "tests/browser/settle.browser.test.js"
+      ],
+      "file_scopes": [
+        {
+          "path": "lib/helpers/progressEventReducer.js",
+          "tier": "must_write",
+          "score": 1.0,
+          "signals": [
+            "graph",
+            "llm"
+          ],
+          "reason": "Changed source file in Axios PR #10868. Signals: graph, llm."
+        },
+        {
+          "path": "tests/unit/helpers/progressEventReducer.test.js",
+          "tier": "must_write",
+          "score": 1.0,
+          "signals": [
+            "llm",
+            "testlink"
+          ],
+          "reason": "Changed regression test in Axios PR #10868. Signals: llm, testlink."
+        },
+        {
+          "path": "index.d.ts",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank"
+          ],
+          "reason": "personalized PageRank rank #7, top symbol matches: AxiosProgressEvent, BrowserProgressEvent, FormDataVisitorHelpers. Candidate context only; requires replan before write. Signals: pagerank."
+        },
+        {
+          "path": "tests/unit/adapters/fetch.test.js",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank",
+            "testlink"
+          ],
+          "reason": "personalized PageRank rank #6, top symbol matches: dataUrl, form, originalData. Candidate context only; requires replan before write. Signals: pagerank, testlink."
+        },
+        {
+          "path": "tests/unit/adapters/http.test.js",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank",
+            "testlink"
+          ],
+          "reason": "personalized PageRank rank #1, top symbol matches: CustomFormData, FormDataSpecCompliant, adaptersTestsDir. Candidate context only; requires replan before write. Signals: pagerank, testlink."
+        },
+        {
+          "path": "tests/unit/prototypePollution.test.js",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank",
+            "testlink"
+          ],
+          "reason": "personalized PageRank rank #8, top symbol matches: malformed, malformedPayload. Candidate context only; requires replan before write. Signals: pagerank, testlink."
+        },
+        {
+          "path": "tests/malformed.test.ts",
+          "tier": "candidate_context",
+          "score": 0.85,
+          "signals": [
+            "framework"
+          ],
+          "reason": "vitest convention: tests/ with .test.ts extension, entity 'malformed' from task prompt. Candidate context only; requires replan before write. Signals: framework."
+        },
+        {
+          "path": "tests/browser/adapter.browser.test.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate index.d.ts. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/browser/basicAuth.browser.test.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate index.d.ts. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/browser/cancel.browser.test.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate index.d.ts. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/browser/cancelToken.browser.test.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate index.d.ts. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/browser/cookies.browser.test.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate index.d.ts. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/browser/defaults.browser.test.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate index.d.ts. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/browser/formdata.browser.test.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate index.d.ts. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/browser/headers.browser.test.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate index.d.ts. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/browser/instance.browser.test.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate index.d.ts. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/browser/interceptors.browser.test.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate index.d.ts. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/browser/isURLSameOrigin.browser.test.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate index.d.ts. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/browser/options.browser.test.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate index.d.ts. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/browser/progress.browser.test.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate index.d.ts. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/browser/promise.browser.test.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate index.d.ts. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/browser/requests.browser.test.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate index.d.ts. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "tests/browser/settle.browser.test.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate index.d.ts. Candidate context only; requires replan before write. Signals: testlink."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-10868"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

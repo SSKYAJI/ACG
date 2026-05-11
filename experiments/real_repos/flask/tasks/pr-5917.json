@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr-5917",
+      "prompt": "Fix provide_automatic_options override handling so route, view, blueprint, and CLI behavior preserve explicit OPTIONS settings, and update the related Flask tests."
+    }
+  ]
+}

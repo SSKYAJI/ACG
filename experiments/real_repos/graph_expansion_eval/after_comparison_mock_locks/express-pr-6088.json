@@ -1,0 +1,317 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-11T03:40:52.427711Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "lockfile-replay",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 7422
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/express/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "javascript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-6088",
+      "prompt": "Enhance req.acceptsCharsets handling so charset negotiation works correctly across accepted, missing, and rejected values, and cover the behavior with request charset tests.",
+      "predicted_writes": [
+        {
+          "path": "lib/request.js",
+          "confidence": 1.0,
+          "reason": "Changed source file in Express PR #6088. Signals: llm, pagerank."
+        },
+        {
+          "path": "test/req.acceptsCharsets.js",
+          "confidence": 1.0,
+          "reason": "Changed regression test in Express PR #6088. Signals: llm, testlink."
+        }
+      ],
+      "allowed_paths": [
+        "lib/request.js",
+        "test/req.acceptsCharsets.js"
+      ],
+      "candidate_context_paths": [
+        "lib/response.js",
+        "test/Router.js",
+        "test/express.json.js",
+        "test/express.text.js",
+        "test/express.urlencoded.js",
+        "test/res.sendFile.js",
+        "test/acceptance/auth.js",
+        "test/Route.js",
+        "test/acceptance/content-negotiation.js",
+        "test/acceptance/cookie-sessions.js",
+        "test/acceptance/cookies.js",
+        "test/acceptance/downloads.js",
+        "test/acceptance/ejs.js",
+        "test/acceptance/error-pages.js",
+        "test/acceptance/error.js",
+        "test/acceptance/hello-world.js",
+        "test/acceptance/markdown.js",
+        "test/acceptance/multi-router.js",
+        "test/acceptance/mvc.js",
+        "test/acceptance/params.js",
+        "test/acceptance/resource.js",
+        "test/acceptance/route-map.js",
+        "test/acceptance/route-separation.js"
+      ],
+      "file_scopes": [
+        {
+          "path": "lib/request.js",
+          "tier": "must_write",
+          "score": 1.0,
+          "signals": [
+            "llm",
+            "pagerank"
+          ],
+          "reason": "Changed source file in Express PR #6088. Signals: llm, pagerank."
+        },
+        {
+          "path": "test/req.acceptsCharsets.js",
+          "tier": "must_write",
+          "score": 1.0,
+          "signals": [
+            "llm",
+            "testlink"
+          ],
+          "reason": "Changed regression test in Express PR #6088. Signals: llm, testlink."
+        },
+        {
+          "path": "lib/response.js",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank"
+          ],
+          "reason": "personalized PageRank rank #1, top symbol matches: req, setCharset, value. Candidate context only; requires replan before write. Signals: pagerank."
+        },
+        {
+          "path": "test/Router.js",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank",
+            "testlink"
+          ],
+          "reason": "personalized PageRank rank #2, top symbol matches: req, req1, req2. Candidate context only; requires replan before write. Signals: pagerank, testlink."
+        },
+        {
+          "path": "test/express.json.js",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank",
+            "testlink"
+          ],
+          "reason": "personalized PageRank rank #8, top symbol matches: accept, request, test. Candidate context only; requires replan before write. Signals: pagerank, testlink."
+        },
+        {
+          "path": "test/express.text.js",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank",
+            "testlink"
+          ],
+          "reason": "personalized PageRank rank #4, top symbol matches: accept, charset, request. Candidate context only; requires replan before write. Signals: pagerank, testlink."
+        },
+        {
+          "path": "test/express.urlencoded.js",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank",
+            "testlink"
+          ],
+          "reason": "personalized PageRank rank #5, top symbol matches: accept, request, test. Candidate context only; requires replan before write. Signals: pagerank, testlink."
+        },
+        {
+          "path": "test/res.sendFile.js",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "pagerank",
+            "testlink"
+          ],
+          "reason": "personalized PageRank rank #7, top symbol matches: request, test. Candidate context only; requires replan before write. Signals: pagerank, testlink."
+        },
+        {
+          "path": "test/acceptance/auth.js",
+          "tier": "candidate_context",
+          "score": 0.85,
+          "signals": [
+            "symbol",
+            "testlink"
+          ],
+          "reason": "Symbol 'request' referenced in prompt; defined in test/acceptance/auth.js. Candidate context only; requires replan before write. Signals: symbol, testlink."
+        },
+        {
+          "path": "test/Route.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate lib/request.js. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/acceptance/content-negotiation.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate lib/request.js. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/acceptance/cookie-sessions.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate lib/request.js. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/acceptance/cookies.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate lib/request.js. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/acceptance/downloads.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate lib/request.js. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/acceptance/ejs.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate lib/request.js. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/acceptance/error-pages.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate lib/request.js. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/acceptance/error.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate lib/request.js. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/acceptance/hello-world.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate lib/request.js. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/acceptance/markdown.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate lib/request.js. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/acceptance/multi-router.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate lib/request.js. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/acceptance/mvc.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate lib/request.js. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/acceptance/params.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate lib/request.js. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/acceptance/resource.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate lib/request.js. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/acceptance/route-map.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate lib/request.js. Candidate context only; requires replan before write. Signals: testlink."
+        },
+        {
+          "path": "test/acceptance/route-separation.js",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate lib/request.js. Candidate context only; requires replan before write. Signals: testlink."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-6088"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

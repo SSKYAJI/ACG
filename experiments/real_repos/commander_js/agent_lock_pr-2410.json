@@ -1,0 +1,73 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-11T03:20:36Z",
+  "generator": {
+    "tool": "manual-pr-history",
+    "version": "1.0",
+    "model": "github-pr-metadata"
+  },
+  "repo": {
+    "root": "experiments/real_repos/commander_js/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "javascript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-2410",
+      "prompt": "Fix variadic argument and option collection so repeated variadic values are appended instead of replacing earlier values, and add regression coverage for argument and option parsing.",
+      "predicted_writes": [
+        {
+          "path": "lib/argument.js",
+          "confidence": 1.0,
+          "reason": "Changed source file in commander.js PR #2410."
+        },
+        {
+          "path": "lib/command.js",
+          "confidence": 1.0,
+          "reason": "Changed source file in commander.js PR #2410."
+        },
+        {
+          "path": "lib/option.js",
+          "confidence": 1.0,
+          "reason": "Changed source file in commander.js PR #2410."
+        },
+        {
+          "path": "tests/argument.variadic.test.js",
+          "confidence": 1.0,
+          "reason": "Changed regression test in commander.js PR #2410."
+        },
+        {
+          "path": "tests/options.variadic.test.js",
+          "confidence": 1.0,
+          "reason": "Changed regression test in commander.js PR #2410."
+        }
+      ],
+      "allowed_paths": [
+        "lib/argument.js",
+        "lib/command.js",
+        "lib/option.js",
+        "tests/argument.variadic.test.js",
+        "tests/options.variadic.test.js"
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-2410"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

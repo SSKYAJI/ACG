@@ -1,0 +1,522 @@
+{
+  "strategies": {
+    "acg_planned": {
+      "backend": "local",
+      "created_at": "2026-05-11T03:58:27Z",
+      "evidence_kind": "proposed_write_set",
+      "execution_mode": "propose_validate",
+      "lockfile": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/graph_expansion_eval/after_scip_comparison_live_live_locks/urllib3-pr-4974.json",
+      "model": {
+        "model": "qwen/qwen3-coder-30b-a3b-instruct",
+        "provider": "openai-compatible",
+        "url": "https://openrouter.ai/api/v1"
+      },
+      "repo": {
+        "commit": "e90af45bb006c3a452a3a21644a2681523f5c7fc",
+        "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/urllib3/checkout",
+        "url": "https://github.com/urllib3/urllib3.git"
+      },
+      "run_id": "greenhouse-local-acg_planned-20260511-035827",
+      "strategy": "acg_planned",
+      "suite_name": "urllib3-eval",
+      "summary_metrics": {
+        "acus_consumed_total": null,
+        "blocked_invalid_write_count": 1,
+        "cost_method": "sum_provider_reported_task_costs",
+        "cost_source": "body.usage.cost",
+        "cost_usd_total": 4.827e-05,
+        "first_run_pass_rate": 0.0,
+        "human_interventions": 0,
+        "integration_burden": {
+          "blocked_events_total": 1,
+          "changed_file_mentions_total": 2,
+          "changed_lines_added": null,
+          "changed_lines_deleted": null,
+          "changed_lines_total": null,
+          "diff_stats_kind": null,
+          "duplicate_file_touches": 0,
+          "out_of_bounds_files_total": 0,
+          "overlapping_files": [],
+          "overlapping_task_pairs": 0,
+          "review_file_mentions_total": 3,
+          "review_unique_files_total": 3,
+          "unique_changed_files": 2
+        },
+        "merge_conflicts": 0,
+        "out_of_bounds_write_count": 0,
+        "overlapping_write_pairs": 0,
+        "proposal_completion_rate": 1.0,
+        "successful_parallel_speedup": null,
+        "task_completion_rate": 1.0,
+        "tasks_completed": 1,
+        "tasks_completed_per_hour": 506.5447,
+        "tasks_total": 1,
+        "tested_completion_rate": 0.0,
+        "tested_tasks_completed": 0,
+        "tests_ran_count": 0,
+        "tokens_all_in": 13123,
+        "tokens_completion_method": "provider_usage_completion_tokens",
+        "tokens_completion_total": 122,
+        "tokens_orchestrator_overhead": null,
+        "tokens_planner_total": null,
+        "tokens_prompt_method": "provider_usage_prompt_tokens",
+        "tokens_prompt_total": 219,
+        "tokens_scope_review_total": 12904,
+        "tokens_worker_prompt_total": 219,
+        "wall_time_seconds": 7.107
+      },
+      "tasks": [
+        {
+          "actual_changed_files": [
+            "dummyserver/app.py",
+            "test/with_dummyserver/test_chunked_transfer.py"
+          ],
+          "actual_changed_files_kind": "proposed_write_set",
+          "allowed_write_globs": [
+            "dummyserver/app.py",
+            "src/urllib3/__init__.py",
+            "test/with_dummyserver/test_chunked_transfer.py"
+          ],
+          "approved_replan_files": [],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [
+            {
+              "description": "Fix infinite loop in HTTPResponse.read_chunked when amt=0 by adding proper loop termination condition",
+              "file": "src/urllib3/response.py",
+              "reason": "path 'src/urllib3/response.py' is candidate_context only for task 'pr-4974'; replan or approval is required before write"
+            }
+          ],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "changed_lines_added": null,
+            "changed_lines_deleted": null,
+            "changed_lines_kind": null,
+            "cost_source": "body.usage.cost",
+            "cost_usd": 4.827e-05,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 122,
+            "tokens_prompt": 219,
+            "wall_time_seconds": 7.105
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [],
+          "predicted_write_files": [
+            "test/with_dummyserver/test_chunked_transfer.py",
+            "dummyserver/app.py",
+            "src/urllib3/__init__.py"
+          ],
+          "prompt": "Avoid an infinite loop when HTTPResponse.read_chunked is called with amt=0, and add regression coverage for zero-length chunked reads.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "pr-4974",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-11T03:58:27Z",
+            "started_at": "2026-05-11T03:58:20Z"
+          }
+        }
+      ],
+      "version": "0.1"
+    },
+    "acg_planned_full_context": {
+      "backend": "local",
+      "created_at": "2026-05-11T03:58:20Z",
+      "evidence_kind": "proposed_write_set",
+      "execution_mode": "propose_validate",
+      "lockfile": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/graph_expansion_eval/after_scip_comparison_live_live_locks/urllib3-pr-4974.json",
+      "model": {
+        "model": "qwen/qwen3-coder-30b-a3b-instruct",
+        "provider": "openai-compatible",
+        "url": "https://openrouter.ai/api/v1"
+      },
+      "repo": {
+        "commit": "e90af45bb006c3a452a3a21644a2681523f5c7fc",
+        "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/urllib3/checkout",
+        "url": "https://github.com/urllib3/urllib3.git"
+      },
+      "run_id": "greenhouse-local-acg_planned_full_context-20260511-035820",
+      "strategy": "acg_planned_full_context",
+      "suite_name": "urllib3-eval",
+      "summary_metrics": {
+        "acus_consumed_total": null,
+        "blocked_invalid_write_count": 1,
+        "cost_method": "sum_provider_reported_task_costs",
+        "cost_source": "body.usage.cost",
+        "cost_usd_total": 6.049e-05,
+        "first_run_pass_rate": 0.0,
+        "human_interventions": 0,
+        "integration_burden": {
+          "blocked_events_total": 1,
+          "changed_file_mentions_total": 1,
+          "changed_lines_added": null,
+          "changed_lines_deleted": null,
+          "changed_lines_total": null,
+          "diff_stats_kind": null,
+          "duplicate_file_touches": 0,
+          "out_of_bounds_files_total": 0,
+          "overlapping_files": [],
+          "overlapping_task_pairs": 0,
+          "review_file_mentions_total": 2,
+          "review_unique_files_total": 2,
+          "unique_changed_files": 1
+        },
+        "merge_conflicts": 0,
+        "out_of_bounds_write_count": 0,
+        "overlapping_write_pairs": 0,
+        "proposal_completion_rate": 1.0,
+        "successful_parallel_speedup": null,
+        "task_completion_rate": 1.0,
+        "tasks_completed": 1,
+        "tasks_completed_per_hour": 1978.6031,
+        "tasks_total": 1,
+        "tested_completion_rate": 0.0,
+        "tested_tasks_completed": 0,
+        "tests_ran_count": 0,
+        "tokens_all_in": 13421,
+        "tokens_completion_method": "provider_usage_completion_tokens",
+        "tokens_completion_total": 90,
+        "tokens_orchestrator_overhead": null,
+        "tokens_planner_total": null,
+        "tokens_prompt_method": "provider_usage_prompt_tokens",
+        "tokens_prompt_total": 517,
+        "tokens_scope_review_total": 12904,
+        "tokens_worker_prompt_total": 517,
+        "wall_time_seconds": 1.8195
+      },
+      "tasks": [
+        {
+          "actual_changed_files": [
+            "test/with_dummyserver/test_chunked_transfer.py"
+          ],
+          "actual_changed_files_kind": "proposed_write_set",
+          "allowed_write_globs": [
+            "dummyserver/app.py",
+            "src/urllib3/__init__.py",
+            "test/with_dummyserver/test_chunked_transfer.py"
+          ],
+          "approved_replan_files": [],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [
+            {
+              "description": "Fix infinite loop in HTTPResponse.read_chunked when amt=0 by adding proper loop termination condition.",
+              "file": "src/urllib3/response.py",
+              "reason": "path 'src/urllib3/response.py' is candidate_context only for task 'pr-4974'; replan or approval is required before write"
+            }
+          ],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "changed_lines_added": null,
+            "changed_lines_deleted": null,
+            "changed_lines_kind": null,
+            "cost_source": "body.usage.cost",
+            "cost_usd": 6.049e-05,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 90,
+            "tokens_prompt": 517,
+            "wall_time_seconds": 1.817
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [],
+          "predicted_write_files": [
+            "test/with_dummyserver/test_chunked_transfer.py",
+            "dummyserver/app.py",
+            "src/urllib3/__init__.py"
+          ],
+          "prompt": "Avoid an infinite loop when HTTPResponse.read_chunked is called with amt=0, and add regression coverage for zero-length chunked reads.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "pr-4974",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-11T03:58:20Z",
+            "started_at": "2026-05-11T03:58:19Z"
+          }
+        }
+      ],
+      "version": "0.1"
+    },
+    "naive_parallel": {
+      "backend": "local",
+      "created_at": "2026-05-11T03:58:18Z",
+      "evidence_kind": "proposed_write_set",
+      "execution_mode": "propose_validate",
+      "lockfile": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/graph_expansion_eval/after_scip_comparison_live_live_locks/urllib3-pr-4974.json",
+      "model": {
+        "model": "qwen/qwen3-coder-30b-a3b-instruct",
+        "provider": "openai-compatible",
+        "url": "https://openrouter.ai/api/v1"
+      },
+      "repo": {
+        "commit": "e90af45bb006c3a452a3a21644a2681523f5c7fc",
+        "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/urllib3/checkout",
+        "url": "https://github.com/urllib3/urllib3.git"
+      },
+      "run_id": "greenhouse-local-naive_parallel-20260511-035818",
+      "strategy": "naive_parallel",
+      "suite_name": "urllib3-eval",
+      "summary_metrics": {
+        "acus_consumed_total": null,
+        "blocked_invalid_write_count": 0,
+        "cost_method": "sum_provider_reported_task_costs",
+        "cost_source": "body.usage.cost",
+        "cost_usd_total": 6.049e-05,
+        "first_run_pass_rate": 0.0,
+        "human_interventions": 0,
+        "integration_burden": {
+          "blocked_events_total": 0,
+          "changed_file_mentions_total": 2,
+          "changed_lines_added": null,
+          "changed_lines_deleted": null,
+          "changed_lines_total": null,
+          "diff_stats_kind": null,
+          "duplicate_file_touches": 0,
+          "out_of_bounds_files_total": 1,
+          "overlapping_files": [],
+          "overlapping_task_pairs": 0,
+          "review_file_mentions_total": 2,
+          "review_unique_files_total": 2,
+          "unique_changed_files": 2
+        },
+        "merge_conflicts": 0,
+        "out_of_bounds_write_count": 1,
+        "overlapping_write_pairs": 0,
+        "proposal_completion_rate": 1.0,
+        "successful_parallel_speedup": null,
+        "task_completion_rate": 0.0,
+        "tasks_completed": 0,
+        "tasks_completed_per_hour": 0.0,
+        "tasks_total": 1,
+        "tested_completion_rate": 0.0,
+        "tested_tasks_completed": 0,
+        "tests_ran_count": 0,
+        "tokens_all_in": 13421,
+        "tokens_completion_method": "provider_usage_completion_tokens",
+        "tokens_completion_total": 90,
+        "tokens_orchestrator_overhead": null,
+        "tokens_planner_total": null,
+        "tokens_prompt_method": "provider_usage_prompt_tokens",
+        "tokens_prompt_total": 517,
+        "tokens_scope_review_total": 12904,
+        "tokens_worker_prompt_total": 517,
+        "wall_time_seconds": 2.0726
+      },
+      "tasks": [
+        {
+          "actual_changed_files": [
+            "src/urllib3/response.py",
+            "test/with_dummyserver/test_chunked_transfer.py"
+          ],
+          "actual_changed_files_kind": "proposed_write_set",
+          "allowed_write_globs": [
+            "dummyserver/app.py",
+            "src/urllib3/__init__.py",
+            "test/with_dummyserver/test_chunked_transfer.py"
+          ],
+          "approved_replan_files": [],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "changed_lines_added": null,
+            "changed_lines_deleted": null,
+            "changed_lines_kind": null,
+            "cost_source": "body.usage.cost",
+            "cost_usd": 6.049e-05,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 90,
+            "tokens_prompt": 517,
+            "wall_time_seconds": 2.0654
+          },
+          "out_of_bounds_files": [
+            "src/urllib3/response.py"
+          ],
+          "overlaps_with": [],
+          "predicted_write_files": [
+            "test/with_dummyserver/test_chunked_transfer.py",
+            "dummyserver/app.py",
+            "src/urllib3/__init__.py"
+          ],
+          "prompt": "Avoid an infinite loop when HTTPResponse.read_chunked is called with amt=0, and add regression coverage for zero-length chunked reads.",
+          "session_id": null,
+          "status": "completed_unsafe",
+          "task_id": "pr-4974",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-11T03:58:18Z",
+            "started_at": "2026-05-11T03:58:16Z"
+          }
+        }
+      ],
+      "version": "0.1"
+    },
+    "single_agent": {
+      "backend": "local",
+      "created_at": "2026-05-11T03:58:16Z",
+      "evidence_kind": "suite_proposed_write_set",
+      "execution_mode": "single_agent_no_lock",
+      "lockfile": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/graph_expansion_eval/after_scip_comparison_live_live_locks/urllib3-pr-4974.json",
+      "model": {
+        "model": "qwen/qwen3-coder-30b-a3b-instruct",
+        "provider": "openai-compatible",
+        "url": "https://openrouter.ai/api/v1"
+      },
+      "repo": {
+        "commit": "e90af45bb006c3a452a3a21644a2681523f5c7fc",
+        "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/urllib3/checkout",
+        "url": "https://github.com/urllib3/urllib3.git"
+      },
+      "run_id": "greenhouse-local-single_agent-20260511-035816",
+      "strategy": "single_agent",
+      "suite_name": "urllib3-eval",
+      "summary_metrics": {
+        "acus_consumed_total": null,
+        "blocked_invalid_write_count": 0,
+        "cost_method": "sum_provider_reported_task_costs",
+        "cost_source": "body.usage.cost",
+        "cost_usd_total": 6.363e-05,
+        "first_run_pass_rate": 0.0,
+        "human_interventions": 0,
+        "integration_burden": {
+          "blocked_events_total": 0,
+          "changed_file_mentions_total": 2,
+          "changed_lines_added": null,
+          "changed_lines_deleted": null,
+          "changed_lines_total": null,
+          "diff_stats_kind": null,
+          "duplicate_file_touches": 0,
+          "out_of_bounds_files_total": 0,
+          "overlapping_files": [],
+          "overlapping_task_pairs": 0,
+          "review_file_mentions_total": 2,
+          "review_unique_files_total": 2,
+          "unique_changed_files": 2
+        },
+        "merge_conflicts": 0,
+        "out_of_bounds_write_count": 0,
+        "overlapping_write_pairs": 0,
+        "proposal_completion_rate": 1.0,
+        "successful_parallel_speedup": null,
+        "task_completion_rate": 1.0,
+        "tasks_completed": 1,
+        "tasks_completed_per_hour": 667.8056,
+        "tasks_total": 1,
+        "tested_completion_rate": 0.0,
+        "tested_tasks_completed": 0,
+        "tests_ran_count": 0,
+        "tokens_all_in": 489,
+        "tokens_completion_method": "provider_usage_completion_tokens",
+        "tokens_completion_total": 105,
+        "tokens_orchestrator_overhead": null,
+        "tokens_planner_total": null,
+        "tokens_prompt_method": "provider_usage_prompt_tokens",
+        "tokens_prompt_total": 489,
+        "tokens_scope_review_total": null,
+        "tokens_worker_prompt_total": 489,
+        "wall_time_seconds": 5.3908
+      },
+      "tasks": [
+        {
+          "actual_changed_files": [
+            "src/urllib3/response.py",
+            "test/test_response.py"
+          ],
+          "actual_changed_files_kind": "suite_proposed_write_set",
+          "allowed_write_globs": [],
+          "approved_replan_files": [],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "changed_lines_added": null,
+            "changed_lines_deleted": null,
+            "changed_lines_kind": null,
+            "cost_source": "body.usage.cost",
+            "cost_usd": 6.363e-05,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 105,
+            "tokens_prompt": 489,
+            "wall_time_seconds": 5.3908
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [],
+          "predicted_write_files": [],
+          "prompt": "Avoid an infinite loop when HTTPResponse.read_chunked is called with amt=0, and add regression coverage for zero-length chunked reads.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "pr-4974",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-11T03:58:16Z",
+            "started_at": "2026-05-11T03:58:11Z"
+          }
+        }
+      ],
+      "version": "0.1"
+    }
+  },
+  "version": "0.1"
+}

@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr-10868",
+      "prompt": "Guard progress event reduction against malformed XHR upload events so progress callbacks do not produce invalid data, and add regression tests for malformed event inputs."
+    }
+  ]
+}

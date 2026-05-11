@@ -9,12 +9,17 @@ from typing import Any
 
 from acg.schema import PredictedWrite, TaskInput
 
-from .bm25 import BM25Indexer
 from .cochange import CochangeIndexer
 from .framework import FrameworkIndexer
 from .pagerank import PageRankIndexer
+from .scip import ScipIndexer
 from .types import Indexer
 from .util import clamp_confidence, task_text, tokenize
+
+try:
+    from .bm25 import BM25Indexer
+except ImportError:
+    BM25Indexer = None  # type: ignore[assignment]
 
 GRAPH_EXPANSION_MIN_CONFIDENCE = 0.72
 GRAPH_EXPANSION_CONFIDENCE = 0.72
@@ -43,8 +48,37 @@ def _merge_into(
     )
 
 
-def _default_indexers() -> list[Indexer]:
-    indexers: list[Indexer] = [FrameworkIndexer(), PageRankIndexer(), BM25Indexer()]
+def _is_graph_only(prediction: PredictedWrite) -> bool:
+    reason = prediction.reason.strip().lower()
+    return reason.startswith("graph expansion")
+
+
+def _sort_key(prediction: PredictedWrite) -> tuple[int, float, str]:
+    return (1 if _is_graph_only(prediction) else 0, -prediction.confidence, prediction.path)
+
+
+def _has_scip_metadata(repo_graph: dict[str, Any]) -> bool:
+    if repo_graph.get("scip_entities") or repo_graph.get("scip_summary"):
+        return True
+    return any(
+        isinstance(entry, dict)
+        and (
+            entry.get("scip_symbols")
+            or entry.get("scip_definition_count")
+            or entry.get("scip_reference_count")
+        )
+        for entry in repo_graph.get("files", [])
+    )
+
+
+def _default_indexers(repo_graph: dict[str, Any] | None = None) -> list[Indexer]:
+    indexers: list[Indexer] = [FrameworkIndexer(), PageRankIndexer()]
+    if BM25Indexer is not None:
+        indexers.append(BM25Indexer())
+    scip_flag = os.environ.get("ACG_INDEX_SCIP")
+    graph = repo_graph or {}
+    if scip_flag != "0" and (scip_flag == "1" or _has_scip_metadata(graph)):
+        indexers.append(ScipIndexer())
     if os.environ.get("ACG_INDEX_EMBEDDINGS") == "1":
         try:
             from .embeddings import EmbeddingsIndexer
@@ -184,7 +218,7 @@ def aggregate(
     """Run every indexer, fuse their outputs, return top-N predictions."""
 
     fused: dict[str, PredictedWrite] = {}
-    first_pass = list(indexers) if indexers is not None else _default_indexers()
+    first_pass = list(indexers) if indexers is not None else _default_indexers(repo_graph)
     for indexer in first_pass:
         for prediction in indexer.predict(task, repo_root, repo_graph):
             _merge_into(fused, prediction)
@@ -199,4 +233,4 @@ def aggregate(
 
     _graph_expand(task, repo_graph, fused)
 
-    return sorted(fused.values(), key=lambda write: (-write.confidence, write.path))[:top_n]
+    return sorted(fused.values(), key=_sort_key)[:top_n]

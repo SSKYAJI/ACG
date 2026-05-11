@@ -186,6 +186,162 @@
           ]
         }
       ]
+    },
+    {
+      "short_name": "commander_js",
+      "full_name": "tj/commander.js",
+      "clone_url": "https://github.com/tj/commander.js.git",
+      "checkout_path": "experiments/real_repos/commander_js/checkout",
+      "default_branch": "master",
+      "language": "JavaScript",
+      "license": "MIT",
+      "source_file_count": 13,
+      "source_file_count_notes": "Counted .js/.mjs/.cjs/.ts files excluding tests, docs, examples, fixtures, generated files, node_modules, benchmarks, build/dist, and .git.",
+      "most_recent_activity_at": "2026-01-31T01:45:09Z",
+      "test_command": "npm test",
+      "baseline_test_result": "not_run",
+      "qualification_notes": "Widely used CLI framework. Selected merged PR touches command argument/option source files and regression tests.",
+      "tasks": [
+        {
+          "pr_number": 2410,
+          "pr_url": "https://github.com/tj/commander.js/pull/2410",
+          "title": "Collect variadic",
+          "merged_at": "2025-08-17T05:45:37Z",
+          "merge_commit_sha": "c635fad50bbe19b28cb3f68719f832c73cafe30f",
+          "parent_commit_sha": "201d93249b1d38c0d1b3b5960865fdf4f84990b9",
+          "task_prompt": "Fix variadic argument and option collection so repeated variadic values are appended instead of replacing earlier values, and add regression coverage for argument and option parsing.",
+          "ground_truth_files": [
+            "lib/argument.js",
+            "lib/command.js",
+            "lib/option.js",
+            "tests/argument.variadic.test.js",
+            "tests/options.variadic.test.js"
+          ]
+        }
+      ]
+    },
+    {
+      "short_name": "express",
+      "full_name": "expressjs/express",
+      "clone_url": "https://github.com/expressjs/express.git",
+      "checkout_path": "experiments/real_repos/express/checkout",
+      "default_branch": "master",
+      "language": "JavaScript",
+      "license": "MIT",
+      "source_file_count": 7,
+      "source_file_count_notes": "Counted .js/.mjs/.cjs/.ts files excluding tests, docs, examples, fixtures, generated files, node_modules, benchmarks, build/dist, and .git.",
+      "most_recent_activity_at": "2026-05-04T08:53:41Z",
+      "test_command": "npm test",
+      "baseline_test_result": "not_run",
+      "qualification_notes": "Widely used Node.js web framework. Selected merged PR changes request negotiation logic and matching unit tests.",
+      "tasks": [
+        {
+          "pr_number": 6088,
+          "pr_url": "https://github.com/expressjs/express/pull/6088",
+          "title": "fix: enhance req.acceptsCharsets method",
+          "merged_at": "2026-01-07T14:41:35Z",
+          "merge_commit_sha": "6cd404eb28ff861180f435b3015f8d0c8c0b44d4",
+          "parent_commit_sha": "3e81873b52e107898ed7ba45874959fb0546df3f",
+          "task_prompt": "Enhance req.acceptsCharsets handling so charset negotiation works correctly across accepted, missing, and rejected values, and cover the behavior with request charset tests.",
+          "ground_truth_files": [
+            "lib/request.js",
+            "test/req.acceptsCharsets.js"
+          ]
+        }
+      ]
+    },
+    {
+      "short_name": "axios",
+      "full_name": "axios/axios",
+      "clone_url": "https://github.com/axios/axios.git",
+      "checkout_path": "experiments/real_repos/axios/checkout",
+      "default_branch": "master",
+      "language": "JavaScript",
+      "license": "MIT",
+      "source_file_count": 74,
+      "source_file_count_notes": "Counted .js/.mjs/.cjs/.ts files excluding tests, docs, examples, fixtures, generated files, node_modules, benchmarks, build/dist, and .git.",
+      "most_recent_activity_at": "2026-05-10T06:56:26Z",
+      "test_command": "npm test",
+      "baseline_test_result": "not_run",
+      "qualification_notes": "Widely used HTTP client. Selected merged PR guards malformed XHR upload progress events and adds helper-level regression tests.",
+      "tasks": [
+        {
+          "pr_number": 10868,
+          "pr_url": "https://github.com/axios/axios/pull/10868",
+          "title": "fix(progress): guard malformed XHR upload events",
+          "merged_at": "2026-05-09T17:04:44Z",
+          "merge_commit_sha": "40948863677bb793bfff0293cce7e7b4f8a1b212",
+          "parent_commit_sha": "44f0c5bf73c45df6009365141faa394d73596bd7",
+          "task_prompt": "Guard progress event reduction against malformed XHR upload events so progress callbacks do not produce invalid data, and add regression tests for malformed event inputs.",
+          "ground_truth_files": [
+            "lib/helpers/progressEventReducer.js",
+            "tests/unit/helpers/progressEventReducer.test.js"
+          ]
+        }
+      ]
+    },
+    {
+      "short_name": "flask",
+      "full_name": "pallets/flask",
+      "clone_url": "https://github.com/pallets/flask.git",
+      "checkout_path": "experiments/real_repos/flask/checkout",
+      "default_branch": "main",
+      "language": "Python",
+      "license": "BSD-3-Clause",
+      "source_file_count": 24,
+      "source_file_count_notes": "Counted .py files excluding tests, docs, examples, fixtures, generated files, virtualenvs, benchmarks, build/dist, and .git.",
+      "most_recent_activity_at": "2026-05-02T12:59:12Z",
+      "test_command": "python -m pytest",
+      "baseline_test_result": "not_run",
+      "qualification_notes": "Widely used Python web framework. Selected merged PR changes automatic OPTIONS handling and corresponding Flask behavior tests.",
+      "tasks": [
+        {
+          "pr_number": 5917,
+          "pr_url": "https://github.com/pallets/flask/pull/5917",
+          "title": "fix provide_automatic_options override",
+          "merged_at": "2026-02-12T21:07:51Z",
+          "merge_commit_sha": "12e95c93b488725f80753f34b2e0d24838ca4646",
+          "parent_commit_sha": "d3b78fd18a8d9e224cb9ef58a23cec9b1ffc9ce9",
+          "task_prompt": "Fix provide_automatic_options override handling so route, view, blueprint, and CLI behavior preserve explicit OPTIONS settings, and update the related Flask tests.",
+          "ground_truth_files": [
+            "src/flask/sansio/app.py",
+            "tests/test_basic.py",
+            "tests/test_blueprints.py",
+            "tests/test_cli.py",
+            "tests/test_views.py"
+          ]
+        }
+      ]
+    },
+    {
+      "short_name": "urllib3",
+      "full_name": "urllib3/urllib3",
+      "clone_url": "https://github.com/urllib3/urllib3.git",
+      "checkout_path": "experiments/real_repos/urllib3/checkout",
+      "default_branch": "main",
+      "language": "Python",
+      "license": "MIT",
+      "source_file_count": 43,
+      "source_file_count_notes": "Counted .py files excluding tests, docs, examples, fixtures, generated files, virtualenvs, benchmarks, build/dist, and .git.",
+      "most_recent_activity_at": "2026-04-29T17:28:18Z",
+      "test_command": "python -m pytest",
+      "baseline_test_result": "not_run",
+      "qualification_notes": "Widely used Python HTTP client library. Selected merged PR fixes response chunk reading and adds regression coverage.",
+      "tasks": [
+        {
+          "pr_number": 4974,
+          "pr_url": "https://github.com/urllib3/urllib3/pull/4974",
+          "title": "Avoid infinite loop in `HTTPResponse.read_chunked` when `amt` is zero",
+          "merged_at": "2026-04-29T17:28:19Z",
+          "merge_commit_sha": "e90af45bb006c3a452a3a21644a2681523f5c7fc",
+          "parent_commit_sha": "67ed74fdaec6659a6534621ec8e3aaaa6f976210",
+          "task_prompt": "Avoid an infinite loop when HTTPResponse.read_chunked is called with amt=0, and add regression coverage for zero-length chunked reads.",
+          "ground_truth_files": [
+            "src/urllib3/response.py",
+            "test/test_response.py"
+          ]
+        }
+      ]
     }
   ]
 }

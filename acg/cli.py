@@ -30,6 +30,8 @@ from .repo_graph import (
 )
 from .schema import AgentLock, TasksInput
 
+LOCALIZATION_BACKENDS = ("native", "scip", "auto")
+
 app = typer.Typer(
     add_completion=False,
     help="Agent Context Graph — pre-flight write contract compiler.",
@@ -52,6 +54,19 @@ def _load_tasks(tasks_path: Path) -> TasksInput:
     return TasksInput.model_validate_json(tasks_path.read_text())
 
 
+def _cached_graph_matches_backend(repo_graph: dict, localization_backend: str) -> bool:
+    backend = localization_backend.strip().lower()
+    graph_backend = repo_graph.get("localization_backend") or "native"
+    if backend == "native":
+        return graph_backend == "native"
+    if graph_backend != backend:
+        return False
+    status = repo_graph.get("scip_status")
+    if isinstance(status, dict):
+        return status.get("status") == "ok"
+    return False
+
+
 @app.command("compile")
 def cmd_compile(
     repo: Annotated[Path, typer.Option(exists=True, file_okay=False, help="Repository root.")],
@@ -62,10 +77,10 @@ def cmd_compile(
         typer.Option(
             "--language",
             help=(
-            "Source language of the target repo. "
-            "'typescript' (default) runs graph_builder/scan.ts; "
-            "'python' runs the in-process AST scanner; "
-            "'java' runs the in-process tree-sitter scanner before compiling."
+                "Source language of the target repo. "
+                "'typescript' (default) runs graph_builder/scan.ts; "
+                "'python' runs the in-process AST scanner; "
+                "'java' runs the in-process tree-sitter scanner before compiling."
             ),
         ),
     ] = "typescript",
@@ -79,6 +94,13 @@ def cmd_compile(
             ),
         ),
     ] = True,
+    localization_backend: Annotated[
+        str,
+        typer.Option(
+            "--localization-backend",
+            help="Localization backend for graph scans: native, scip, or auto.",
+        ),
+    ] = "native",
 ) -> None:
     """Compile ``tasks.json`` + repo graph into ``agent_lock.json``."""
     language_normalized = language.strip().lower()
@@ -97,15 +119,32 @@ def cmd_compile(
             "expected one of: auto, typescript, javascript, python, java[/]"
         )
         raise typer.Exit(code=EXIT_USER_ERROR)
+    localization_backend_normalized = localization_backend.strip().lower()
+    if localization_backend_normalized not in LOCALIZATION_BACKENDS:
+        _err_console.print(
+            f"[red]unsupported --localization-backend {localization_backend!r}; "
+            "expected one of: native, scip, auto[/]"
+        )
+        raise typer.Exit(code=EXIT_USER_ERROR)
 
     tasks_input = _load_tasks(tasks)
     graph_file = context_graph_path(repo)
     if use_cached_graph and graph_file.exists():
         repo_graph = _load_repo_graph(repo)
-        _console.print(f"[dim]reusing cached context graph at {graph_file}[/]")
+        if _cached_graph_matches_backend(repo_graph, localization_backend_normalized):
+            _console.print(f"[dim]reusing cached context graph at {graph_file}[/]")
+        else:
+            use_cached_graph = False
     else:
+        repo_graph = {}
+        use_cached_graph = False
+    if not use_cached_graph:
         try:
-            scan_context_graph(repo, language_normalized)
+            scan_context_graph(
+                repo,
+                language_normalized,
+                localization_backend=localization_backend_normalized,
+            )
         except (GraphScanError, ValueError) as exc:
             _err_console.print(f"[red]graph scan failed:[/] {exc}")
             raise typer.Exit(code=EXIT_USER_ERROR) from exc
@@ -153,15 +192,39 @@ def cmd_plan_tasks(
             help="Reuse <repo>/.acg/context_graph.json when present.",
         ),
     ] = True,
+    localization_backend: Annotated[
+        str,
+        typer.Option(
+            "--localization-backend",
+            help="Localization backend for graph scans: native, scip, or auto.",
+        ),
+    ] = "native",
 ) -> None:
     """Use an orchestrator LLM to decompose a goal into ``tasks.json``."""
+    localization_backend_normalized = localization_backend.strip().lower()
+    if localization_backend_normalized not in LOCALIZATION_BACKENDS:
+        _err_console.print(
+            f"[red]unsupported --localization-backend {localization_backend!r}; "
+            "expected one of: native, scip, auto[/]"
+        )
+        raise typer.Exit(code=EXIT_USER_ERROR)
     graph_file = context_graph_path(repo)
     if use_cached_graph and graph_file.exists():
         repo_graph = _load_repo_graph(repo)
-        _console.print(f"[dim]reusing cached context graph at {graph_file}[/]")
+        if _cached_graph_matches_backend(repo_graph, localization_backend_normalized):
+            _console.print(f"[dim]reusing cached context graph at {graph_file}[/]")
+        else:
+            use_cached_graph = False
     else:
+        repo_graph = {}
+        use_cached_graph = False
+    if not use_cached_graph:
         try:
-            scan_context_graph(repo, language)
+            scan_context_graph(
+                repo,
+                language,
+                localization_backend=localization_backend_normalized,
+            )
         except (GraphScanError, ValueError) as exc:
             _err_console.print(f"[red]graph scan failed:[/] {exc}")
             raise typer.Exit(code=EXIT_USER_ERROR) from exc
@@ -201,10 +264,29 @@ def cmd_init_graph(
             help=("Where to write context_graph.json. Defaults to <repo>/.acg/context_graph.json."),
         ),
     ] = None,
+    localization_backend: Annotated[
+        str,
+        typer.Option(
+            "--localization-backend",
+            help="Localization backend for graph scans: native, scip, or auto.",
+        ),
+    ] = "native",
 ) -> None:
     """Initialize a deterministic ``context_graph.json`` for a repository."""
+    localization_backend_normalized = localization_backend.strip().lower()
+    if localization_backend_normalized not in LOCALIZATION_BACKENDS:
+        _err_console.print(
+            f"[red]unsupported --localization-backend {localization_backend!r}; "
+            "expected one of: native, scip, auto[/]"
+        )
+        raise typer.Exit(code=EXIT_USER_ERROR)
     try:
-        graph = scan_context_graph(repo, language, out)
+        graph = scan_context_graph(
+            repo,
+            language,
+            out,
+            localization_backend=localization_backend_normalized,
+        )
     except (GraphScanError, ValueError) as exc:
         _err_console.print(f"[red]graph scan failed:[/] {exc}")
         raise typer.Exit(code=EXIT_USER_ERROR) from exc

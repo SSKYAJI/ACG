@@ -1,0 +1,7 @@
+repo,task_id,pr_number,run_set,strategy,status,prompt_tokens,completion_tokens,cost_usd,source
+fastify,pr-6653,6653,,,unavailable,,,,live OpenRouter rerun not available; predictor CSV uses lockfile replay
+fastify,pr-6692,6692,,,unavailable,,,,live OpenRouter rerun not available; predictor CSV uses lockfile replay
+fastify,pr-6694,6694,,,unavailable,,,,live OpenRouter rerun not available; predictor CSV uses lockfile replay
+starlette,pr3137-cors-credentials-origin,3137,,,unavailable,,,,live OpenRouter rerun not available; predictor CSV uses lockfile replay
+starlette,pr3148-jinja2-autoescape,3148,,,unavailable,,,,live OpenRouter rerun not available; predictor CSV uses lockfile replay
+starlette,pr3166-session-middleware,3166,,,unavailable,,,,live OpenRouter rerun not available; predictor CSV uses lockfile replay

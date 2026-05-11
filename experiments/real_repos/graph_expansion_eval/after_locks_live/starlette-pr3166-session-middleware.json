@@ -1,12 +1,12 @@
 {
   "version": "1.0",
-  "generated_at": "2026-05-10T17:51:04.961153Z",
+  "generated_at": "2026-05-10T21:13:25.129109Z",
   "generator": {
     "tool": "acg",
     "version": "0.1.0",
     "model": "qwen/qwen3-coder-30b-a3b-instruct",
     "tokens_planner_total": null,
-    "tokens_scope_review_total": 9698
+    "tokens_scope_review_total": 10287
   },
   "repo": {
     "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/starlette/checkout",
@@ -24,12 +24,12 @@
         {
           "path": "starlette/middleware/sessions.py",
           "confidence": 0.95,
-          "reason": "Task explicitly requests modifying SessionMiddleware, which is defined in this file. Signals: llm, symbol. Scope review promoted this retrieved candidate to must_write."
+          "reason": "Task explicitly requests changes to SessionMiddleware implementation to distinguish access from mutation and manage Set-Cookie behavior. Signals: llm, symbol. Scope review promoted this retrieved candidate to must_write."
         },
         {
           "path": "tests/middleware/test_session.py",
           "confidence": 0.9,
-          "reason": "Task requires adding regression coverage for session flows, and this file tests session middleware behavior. Signals: llm, testlink. Scope review promoted this retrieved candidate to must_write."
+          "reason": "Task requires regression coverage for concurrent/read-only session flows, and this file tests session middleware functionality. Signals: llm, testlink. Scope review promoted this retrieved candidate to must_write."
         }
       ],
       "allowed_paths": [
@@ -37,29 +37,29 @@
         "tests/middleware/**"
       ],
       "candidate_context_paths": [
-        "starlette/__init__.py",
-        "starlette/_exception_handler.py",
-        "starlette/_utils.py",
-        "starlette/applications.py",
-        "starlette/authentication.py",
-        "starlette/concurrency.py",
-        "starlette/datastructures.py",
-        "starlette/endpoints.py",
-        "tests/conftest.py",
+        "starlette/background.py",
+        "starlette/requests.py",
+        "starlette/routing.py",
+        "starlette/testclient.py",
         "tests/middleware/test_base.py",
+        "tests/test_applications.py",
+        "tests/test_responses.py",
+        "tests/test_routing.py",
+        "tests/conftest.py",
         "tests/middleware/test_cors.py",
         "tests/middleware/test_errors.py",
         "tests/middleware/test_gzip.py",
         "tests/middleware/test_https_redirect.py",
         "tests/middleware/test_trusted_host.py",
         "tests/middleware/test_wsgi.py",
-        "tests/test__utils.py",
-        "tests/test_applications.py",
         "tests/test_authentication.py",
         "tests/test_background.py",
         "tests/test_concurrency.py",
         "tests/test_config.py",
-        "tests/test_convertors.py"
+        "tests/test_convertors.py",
+        "tests/test_datastructures.py",
+        "tests/test_endpoints.py",
+        "tests/test_exceptions.py"
       ],
       "file_scopes": [
         {
@@ -71,7 +71,7 @@
             "scope_review",
             "symbol"
           ],
-          "reason": "Task explicitly requests modifying SessionMiddleware, which is defined in this file. Signals: llm, symbol. Scope review promoted this retrieved candidate to must_write."
+          "reason": "Task explicitly requests changes to SessionMiddleware implementation to distinguish access from mutation and manage Set-Cookie behavior. Signals: llm, symbol. Scope review promoted this retrieved candidate to must_write."
         },
         {
           "path": "tests/middleware/test_session.py",
@@ -82,87 +82,96 @@
             "scope_review",
             "testlink"
           ],
-          "reason": "Task requires adding regression coverage for session flows, and this file tests session middleware behavior. Signals: llm, testlink. Scope review promoted this retrieved candidate to must_write."
+          "reason": "Task requires regression coverage for concurrent/read-only session flows, and this file tests session middleware functionality. Signals: llm, testlink. Scope review promoted this retrieved candidate to must_write."
         },
         {
-          "path": "starlette/__init__.py",
+          "path": "starlette/background.py",
           "tier": "candidate_context",
-          "score": 0.92,
+          "score": 0.9,
           "signals": [
-            "graph",
+            "pagerank",
             "scope_review"
           ],
-          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) tests/test_applications.py, tests/test_responses.py. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+          "reason": "personalized PageRank rank #2, top symbol matches: add_task. Candidate context only; requires replan before write. Signals: pagerank. Scope review kept this file as candidate_context."
         },
         {
-          "path": "starlette/_exception_handler.py",
+          "path": "starlette/requests.py",
           "tier": "candidate_context",
-          "score": 0.92,
+          "score": 0.9,
           "signals": [
-            "graph",
+            "bm25",
+            "pagerank",
             "scope_review"
           ],
-          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/requests.py, starlette/routing.py. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+          "reason": "personalized PageRank rank #1, top symbol matches: _get_form, cookie_parser, cookies.; BM25 lexical match over path, identifiers, imports, docstrings (score 22.98). Candidate context only; requires replan before write. Signals: bm25, pagerank. Scope review kept this file as candidate_context."
         },
         {
-          "path": "starlette/_utils.py",
+          "path": "starlette/routing.py",
           "tier": "candidate_context",
-          "score": 0.92,
+          "score": 0.9,
           "signals": [
-            "graph",
+            "bm25",
+            "pagerank",
             "scope_review"
           ],
-          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/background.py, starlette/requests.py, starlette/routing.py. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+          "reason": "personalized PageRank rank #4, top symbol matches: add_route, add_websocket_route, url_path_for.; BM25 lexical match over path, identifiers, imports, docstrings (score 23.13). Candidate context only; requires replan before write. Signals: bm25, pagerank. Scope review kept this file as candidate_context."
         },
         {
-          "path": "starlette/applications.py",
+          "path": "starlette/testclient.py",
           "tier": "candidate_context",
-          "score": 0.92,
+          "score": 0.9,
           "signals": [
-            "graph",
+            "bm25",
+            "pagerank",
             "scope_review"
           ],
-          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/requests.py, starlette/routing.py, tests/middleware/test_base.py. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+          "reason": "personalized PageRank rank #6, top symbol matches: WebSocketTestSession.; BM25 lexical match over path, identifiers, imports, docstrings (score 22.35). Candidate context only; requires replan before write. Signals: bm25, pagerank. Scope review kept this file as candidate_context."
         },
         {
-          "path": "starlette/authentication.py",
+          "path": "tests/middleware/test_base.py",
           "tier": "candidate_context",
-          "score": 0.92,
+          "score": 0.9,
           "signals": [
-            "graph",
-            "scope_review"
+            "bm25",
+            "pagerank",
+            "scope_review",
+            "testlink"
           ],
-          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/_utils.py, starlette/exceptions.py, starlette/middleware/authentication.py. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+          "reason": "personalized PageRank rank #3, top symbol matches: ConsumingMiddleware, ContextManagerMiddleware, CustomMiddleware.; BM25 lexical match over path, identifiers, imports, docstrings (score 22.75). Candidate context only; requires replan before write. Signals: bm25, pagerank, testlink. Scope review kept this file as candidate_context."
         },
         {
-          "path": "starlette/concurrency.py",
+          "path": "tests/test_applications.py",
           "tier": "candidate_context",
-          "score": 0.92,
+          "score": 0.9,
           "signals": [
-            "graph",
-            "scope_review"
+            "pagerank",
+            "scope_review",
+            "testlink"
           ],
-          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/background.py, starlette/routing.py. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+          "reason": "personalized PageRank rank #8, top symbol matches: MiddlewareWithArgs, NoOpMiddleware, SimpleInitializableMiddleware. Candidate context only; requires replan before write. Signals: pagerank, testlink. Scope review kept this file as candidate_context."
         },
         {
-          "path": "starlette/datastructures.py",
+          "path": "tests/test_responses.py",
           "tier": "candidate_context",
-          "score": 0.92,
+          "score": 0.9,
           "signals": [
-            "graph",
-            "scope_review"
+            "bm25",
+            "pagerank",
+            "scope_review",
+            "testlink"
           ],
-          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/middleware/sessions.py, starlette/requests.py, starlette/routing.py. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+          "reason": "personalized PageRank rank #7, top symbol matches: numbers_for_cleanup, test_delete_cookie, test_expires_on_set_cookie.; BM25 lexical match over path, identifiers, imports, docstrings (score 24.01). Candidate context only; requires replan before write. Signals: bm25, pagerank, testlink. Scope review kept this file as candidate_context."
         },
         {
-          "path": "starlette/endpoints.py",
+          "path": "tests/test_routing.py",
           "tier": "candidate_context",
-          "score": 0.92,
+          "score": 0.9,
           "signals": [
-            "graph",
-            "scope_review"
+            "pagerank",
+            "scope_review",
+            "testlink"
           ],
-          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) starlette/requests.py, tests/test_applications.py. Candidate context only; requires replan before write. Signals: graph. Scope review kept this file as candidate_context."
+          "reason": "personalized PageRank rank #5, top symbol matches: AddHeadersMiddleware, CustomMiddleware, NamedMiddleware. Candidate context only; requires replan before write. Signals: pagerank, testlink. Scope review kept this file as candidate_context."
         },
         {
           "path": "tests/conftest.py",
@@ -172,17 +181,7 @@
             "scope_review",
             "testlink"
           ],
-          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
-        },
-        {
-          "path": "tests/middleware/test_base.py",
-          "tier": "candidate_context",
-          "score": 0.82,
-          "signals": [
-            "scope_review",
-            "testlink"
-          ],
-          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/testclient.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
         },
         {
           "path": "tests/middleware/test_cors.py",
@@ -192,7 +191,7 @@
             "scope_review",
             "testlink"
           ],
-          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/background.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
         },
         {
           "path": "tests/middleware/test_errors.py",
@@ -202,7 +201,7 @@
             "scope_review",
             "testlink"
           ],
-          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/background.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
         },
         {
           "path": "tests/middleware/test_gzip.py",
@@ -212,7 +211,7 @@
             "scope_review",
             "testlink"
           ],
-          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/background.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
         },
         {
           "path": "tests/middleware/test_https_redirect.py",
@@ -222,7 +221,7 @@
             "scope_review",
             "testlink"
           ],
-          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/background.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
         },
         {
           "path": "tests/middleware/test_trusted_host.py",
@@ -232,7 +231,7 @@
             "scope_review",
             "testlink"
           ],
-          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/background.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
         },
         {
           "path": "tests/middleware/test_wsgi.py",
@@ -242,27 +241,7 @@
             "scope_review",
             "testlink"
           ],
-          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
-        },
-        {
-          "path": "tests/test__utils.py",
-          "tier": "candidate_context",
-          "score": 0.82,
-          "signals": [
-            "scope_review",
-            "testlink"
-          ],
-          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
-        },
-        {
-          "path": "tests/test_applications.py",
-          "tier": "candidate_context",
-          "score": 0.82,
-          "signals": [
-            "scope_review",
-            "testlink"
-          ],
-          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/__init__.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/background.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
         },
         {
           "path": "tests/test_authentication.py",
@@ -272,7 +251,7 @@
             "scope_review",
             "testlink"
           ],
-          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/background.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
         },
         {
           "path": "tests/test_background.py",
@@ -282,7 +261,7 @@
             "scope_review",
             "testlink"
           ],
-          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/background.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
         },
         {
           "path": "tests/test_concurrency.py",
@@ -292,7 +271,7 @@
             "scope_review",
             "testlink"
           ],
-          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/requests.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
         },
         {
           "path": "tests/test_config.py",
@@ -302,7 +281,7 @@
             "scope_review",
             "testlink"
           ],
-          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/_utils.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/background.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
         },
         {
           "path": "tests/test_convertors.py",
@@ -312,7 +291,37 @@
             "scope_review",
             "testlink"
           ],
-          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/__init__.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/background.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/test_datastructures.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/background.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/test_endpoints.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/background.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
+        },
+        {
+          "path": "tests/test_exceptions.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/background.py. Candidate context only; requires replan before write. Signals: testlink. Scope review kept this file as candidate_context."
         }
       ],
       "depends_on": [],

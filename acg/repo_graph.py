@@ -149,11 +149,13 @@ def scan_context_graph(
     repo_root: Path,
     language: str = "auto",
     out_path: Path | None = None,
+    localization_backend: str = "native",
 ) -> dict[str, Any]:
     root = Path(repo_root).resolve()
     normalized_language = normalize_language(language)
     if normalized_language == "auto":
         normalized_language = detect_language(root)
+    backend = _normalize_localization_backend(localization_backend)
     out = Path(out_path).resolve() if out_path is not None else context_graph_path(root)
 
     if normalized_language == "java":
@@ -166,6 +168,12 @@ def scan_context_graph(
         raise ValueError(f"unsupported language {language!r}")
 
     normalized = normalize_context_graph(graph, repo_root=root, language=normalized_language)
+    normalized = _merge_localization_metadata(
+        normalized,
+        repo_root=root,
+        language=normalized_language,
+        localization_backend=backend,
+    )
     _write_context_graph(out, normalized)
     return normalized
 
@@ -191,6 +199,9 @@ def normalize_context_graph(
         entry["resolved_imports"] = resolved_imports.get(path, [])
         entry["importers"] = importers.get(path, [])
         entry["type_links"] = type_links.get(path, [])
+        entry["scip_symbols"] = _string_list(entry.get("scip_symbols"))
+        entry["scip_definition_count"] = _int_value(entry.get("scip_definition_count"))
+        entry["scip_reference_count"] = _int_value(entry.get("scip_reference_count"))
         entry["imported_by_count"] = max(
             _int_value(entry.get("imported_by_count")),
             len(entry["importers"]),
@@ -219,7 +230,148 @@ def normalize_context_graph(
     payload["tests"] = _path_union(
         payload.get("tests"), (path for path in imports if _is_test_path(path))
     )
+    if isinstance(payload.get("localization_backend"), str):
+        payload["localization_backend"] = payload["localization_backend"].strip().lower()
+    if "scip_status" in payload and not isinstance(payload["scip_status"], dict):
+        payload["scip_status"] = {"status": str(payload["scip_status"])}
+    if "scip_summary" in payload and not isinstance(payload["scip_summary"], dict):
+        payload["scip_summary"] = {}
+    if "scip_entities" in payload and not isinstance(payload["scip_entities"], list):
+        payload["scip_entities"] = []
+    if "scip_references" in payload and not isinstance(payload["scip_references"], list):
+        payload["scip_references"] = []
     return payload
+
+
+def _normalize_localization_backend(value: str | None) -> str:
+    backend = (value or "native").strip().lower()
+    if backend not in {"native", "scip", "auto"}:
+        raise ValueError(
+            f"unsupported localization backend {value!r}; expected one of: auto, native, scip"
+        )
+    return backend
+
+
+def _merge_localization_metadata(
+    graph: dict[str, Any],
+    *,
+    repo_root: Path,
+    language: str,
+    localization_backend: str,
+) -> dict[str, Any]:
+    if localization_backend == "native":
+        graph["localization_backend"] = "native"
+        graph.setdefault("scip_status", {"status": "not_requested"})
+        return normalize_context_graph(graph, repo_root=repo_root, language=language)
+
+    graph["localization_backend"] = localization_backend
+    try:
+        from acg.localization.scip_backend import build_scip_metadata
+    except Exception as exc:  # pragma: no cover - depends on optional worker output
+        graph["scip_status"] = {
+            "status": "unavailable",
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
+        return normalize_context_graph(graph, repo_root=repo_root, language=language)
+
+    try:
+        metadata = build_scip_metadata(repo_root, language, mode="scip")
+    except Exception as exc:
+        graph["scip_status"] = {
+            "status": "failed",
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
+        return normalize_context_graph(graph, repo_root=repo_root, language=language)
+
+    if not isinstance(metadata, dict):
+        graph["scip_status"] = {
+            "status": "failed",
+            "reason": "build_scip_metadata returned non-dict metadata",
+        }
+        return normalize_context_graph(graph, repo_root=repo_root, language=language)
+
+    _merge_graph_metadata(graph, metadata)
+    graph["localization_backend"] = localization_backend
+    graph.setdefault("scip_status", {"status": "ok"})
+    return normalize_context_graph(graph, repo_root=repo_root, language=language)
+
+
+def _merge_graph_metadata(graph: dict[str, Any], metadata: dict[str, Any]) -> None:
+    file_metadata = _file_metadata_by_path(metadata)
+    files = graph.get("files")
+    if isinstance(files, list):
+        for entry in files:
+            if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
+                continue
+            patch = file_metadata.get(entry["path"])
+            if patch:
+                entry.update(patch)
+
+    for key, value in metadata.items():
+        if key == "files":
+            continue
+        if key == "file_metadata":
+            continue
+        graph[key] = value
+    _apply_scip_metadata_to_files(graph)
+
+
+def _file_metadata_by_path(metadata: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    files = metadata.get("files")
+    if isinstance(files, list):
+        for entry in files:
+            if isinstance(entry, dict) and isinstance(entry.get("path"), str):
+                out[entry["path"].strip("/")] = {
+                    key: value for key, value in entry.items() if key != "path"
+                }
+    file_metadata = metadata.get("file_metadata")
+    if isinstance(file_metadata, dict):
+        for path, entry in file_metadata.items():
+            if isinstance(path, str) and isinstance(entry, dict):
+                out.setdefault(path.strip("/"), {}).update(entry)
+    return out
+
+
+def _apply_scip_metadata_to_files(graph: dict[str, Any]) -> None:
+    files = graph.get("files")
+    if not isinstance(files, list):
+        return
+    by_path = {
+        entry.get("path"): entry
+        for entry in files
+        if isinstance(entry, dict) and isinstance(entry.get("path"), str)
+    }
+    symbols_by_path: dict[str, list[str]] = {}
+    definition_counts: dict[str, int] = {}
+    reference_counts: dict[str, int] = {}
+    for entity in graph.get("scip_entities", []):
+        if not isinstance(entity, dict) or not isinstance(entity.get("path"), str):
+            continue
+        path = entity["path"]
+        symbol = entity.get("symbol")
+        if isinstance(symbol, str) and symbol:
+            symbols_by_path.setdefault(path, []).append(symbol)
+        definition_counts[path] = definition_counts.get(path, 0) + 1
+    for reference in graph.get("scip_references", []):
+        if not isinstance(reference, dict) or not isinstance(reference.get("path"), str):
+            continue
+        path = reference["path"]
+        reference_counts[path] = reference_counts.get(path, 0) + 1
+    for path, entry in by_path.items():
+        if entry is None:
+            continue
+        entry["scip_symbols"] = _unique_sorted(
+            [*_string_list(entry.get("scip_symbols")), *symbols_by_path.get(path, [])]
+        )
+        entry["scip_definition_count"] = max(
+            _int_value(entry.get("scip_definition_count")),
+            definition_counts.get(path, 0),
+        )
+        entry["scip_reference_count"] = max(
+            _int_value(entry.get("scip_reference_count")),
+            reference_counts.get(path, 0),
+        )
 
 
 def _scan_java(repo_root: Path, out_path: Path) -> dict[str, Any]:
