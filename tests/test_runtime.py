@@ -24,6 +24,7 @@ from acg.runtime import (
     RuntimeConfig,
     WorkerResult,
     _build_worker_prompt,
+    _parse_apply_envelope,
     run_group,
     run_lockfile,
     run_orchestrator,
@@ -1243,15 +1244,35 @@ def test_run_worker_handles_directory_predicted_write(
     assert worker.proposals[0].file == "tests/e2e/checkout.spec.ts"
 
 
-def test_worker_prompt_includes_content_request(
+def test_worker_prompt_requires_apply_patch_envelope(
     lock: AgentLock, empty_repo_graph: dict[str, object]
 ) -> None:
     task = lock.tasks[0]
     messages = _build_worker_prompt(task, empty_repo_graph)
     system = next(m["content"] for m in messages if m["role"] == "system")
-    assert "content" in system
+    assert "*** Begin Patch" in system
+    assert "MUST" in system
 
 
+def test_parse_apply_envelope_returns_one_proposal_per_file() -> None:
+    raw = """*** Begin Patch
+*** Update File: a.ts
+@@
+-old
++new
+*** Add File: b.ts
++hello
+*** End Patch
+"""
+    rows = _parse_apply_envelope(raw)
+    assert len(rows) == 2
+    kinds = {r["description"] for r in rows}
+    assert kinds == {"Update", "Add"}
+    paths = {r["file"] for r in rows}
+    assert paths == {"a.ts", "b.ts"}
+    for r in rows:
+        assert r["envelope"].startswith("*** Begin Patch")
+        assert r["envelope"].endswith("*** End Patch")
 def test_worker_proposal_with_content_is_parsed(
     lock: AgentLock, empty_repo_graph: dict[str, object]
 ) -> None:

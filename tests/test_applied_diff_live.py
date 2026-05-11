@@ -21,7 +21,9 @@ def _init_repo(path: Path) -> str:
     path.mkdir(parents=True, exist_ok=True)
     _git(path, "init", "-b", "main")
     (path / "README.md").write_text("# base\n", encoding="utf-8")
-    _git(path, "add", "README.md")
+    (path / "app").mkdir(parents=True, exist_ok=True)
+    (path / "app" / "x.ts").write_text("// seed\n", encoding="utf-8")
+    _git(path, "add", ".")
     _git(
         path,
         "-c",
@@ -110,16 +112,11 @@ def test_applied_diff_live_blocked_write_does_not_land_on_disk(tmp_path: Path) -
 
         async def complete(self, messages, *, max_tokens=700, temperature=0.2):
             del max_tokens, temperature
-            bad = json.dumps(
-                {
-                    "writes": [
-                        {
-                            "file": "outside/secret.ts",
-                            "description": "oob",
-                            "content": "evil\n",
-                        }
-                    ]
-                }
+            bad = (
+                "*** Begin Patch\n"
+                "*** Add File: outside/secret.ts\n"
+                "+evil\n"
+                "*** End Patch\n"
             )
             from acg.runtime import LLMReply
 

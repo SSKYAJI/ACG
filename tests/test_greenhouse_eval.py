@@ -14,8 +14,10 @@ without GX10 / Devin access.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -54,8 +56,13 @@ from experiments.greenhouse.strategies import (
     LockfileEchoMockLLM,
     _build_single_agent_prompt,
     _extract_task_id,
+    _parse_single_agent_applied_envelopes,
     _PromptCountingLLM,
+    _proposals_for_task_envelope_blob,
+    _proposals_to_naive_applied_eval_task,
+    _proposals_to_planned_applied_eval_task,
     _proposals_to_planned_eval_task,
+    _proposals_to_suite_applied_eval_task,
     _scoped_repo_graph,
     estimate_prompt_tokens,
     run_strategy,
@@ -1612,3 +1619,194 @@ def test_summary_metrics_excludes_blocked_from_tasks_completed() -> None:
     assert summary.proposal_completion_rate == 0.6667
     # The blocked event must still surface in burden metrics.
     assert summary.blocked_invalid_write_count == 1
+
+
+def test_applied_diff_task_marks_failed_when_no_envelope() -> None:
+    task = _planned_task()
+    worker = _worker_result(
+        proposals=[
+            Proposal(
+                file="src/in_scope.ts",
+                description="x",
+                allowed=True,
+                reason=None,
+                scope_status="allowed",
+                envelope=None,
+            )
+        ]
+    )
+    eval_task = _proposals_to_planned_applied_eval_task(
+        worker,
+        task,
+        started_at="2026-05-11T22:20:23Z",
+        finished_at="2026-05-11T22:20:59Z",
+        prompt=None,
+        git_changed_files=[],
+    )
+    assert eval_task.status == "failed"
+    assert eval_task.failure_reason == "NO_APPLIED_CONTENT"
+
+
+def test_applied_diff_task_marks_failed_on_empty_patch() -> None:
+    task = _planned_task()
+    env = "*** Begin Patch\n*** Update File: src/in_scope.ts\n@@\n*** End Patch\n"
+    worker = _worker_result(
+        proposals=[
+            Proposal(
+                file="src/in_scope.ts",
+                description="x",
+                allowed=True,
+                reason=None,
+                scope_status="allowed",
+                envelope=env,
+            )
+        ]
+    )
+    eval_task = _proposals_to_planned_applied_eval_task(
+        worker,
+        task,
+        started_at="2026-05-11T22:20:23Z",
+        finished_at="2026-05-11T22:20:59Z",
+        prompt=None,
+        git_changed_files=[],
+    )
+    assert eval_task.status == "failed"
+    assert eval_task.failure_reason == "EMPTY_PATCH"
+
+
+def test_naive_applied_writes_oob_files(tmp_path: Path) -> None:
+    repo = tmp_path / "checkout"
+    repo.mkdir()
+    subprocess.run(["git", "-C", str(repo), "init", "-b", "main"], check=True, capture_output=True)
+    (repo / "app").mkdir()
+    (repo / "app" / "x.ts").write_text("// x\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@e",
+            "commit",
+            "-m",
+            "init",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    base_sha = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    lock = AgentLock.model_validate(
+        {
+            "version": "1.0",
+            "generated_at": datetime.now(UTC),
+            "repo": {"root": str(repo), "commit": base_sha, "languages": ["ts"]},
+            "tasks": [
+                {
+                    "id": "task_a",
+                    "prompt": "x",
+                    "predicted_writes": [{"path": "app/x.ts", "confidence": 0.9, "reason": "r"}],
+                    "allowed_paths": ["app/**"],
+                    "depends_on": [],
+                    "parallel_group": 1,
+                    "rationale": None,
+                }
+            ],
+            "execution_plan": {
+                "groups": [{"id": 1, "tasks": ["task_a"], "type": "parallel", "waits_for": []}]
+            },
+            "conflicts_detected": [],
+        }
+    )
+
+    class OobEnvelopeLLM:
+        url = "mock://oob-naive"
+        model = "mock"
+
+        async def complete(self, messages, *, max_tokens=700, temperature=0.2):
+            del max_tokens, temperature
+            return LLMReply(
+                content=(
+                    "*** Begin Patch\n"
+                    "*** Add File: evil/out.ts\n"
+                    "+bad\n"
+                    "*** End Patch\n"
+                ),
+                reasoning="",
+                completion_tokens=4,
+                finish_reason="stop",
+                wall_s=0.0,
+            )
+
+        async def aclose(self) -> None:
+            return None
+
+    from experiments.greenhouse import strategies as gs
+
+    tasks, _wall_s, _m = asyncio.run(
+        gs._run_naive_parallel_applied(
+            lock,
+            {},
+            lambda: OobEnvelopeLLM(),
+            checkout_path=repo,
+            prompts_by_task=None,
+            cap_parallelism=None,
+        )
+    )
+    et = tasks[0]
+    assert "evil/out.ts" in et.actual_changed_files
+    assert "evil/out.ts" in et.out_of_bounds_files
+    assert et.status == "completed_unsafe"
+
+
+def test_single_agent_applied_splits_per_task() -> None:
+    lock = AgentLock.model_validate(
+        {
+            "version": "1.0",
+            "generated_at": datetime.now(UTC),
+            "repo": {"root": "/tmp", "languages": ["ts"]},
+            "tasks": [
+                {
+                    "id": "t1",
+                    "prompt": "p1",
+                    "predicted_writes": [{"path": "src/a.ts", "confidence": 0.9, "reason": "r"}],
+                    "allowed_paths": ["src/a.ts"],
+                    "depends_on": [],
+                    "parallel_group": 1,
+                    "rationale": None,
+                },
+                {
+                    "id": "t2",
+                    "prompt": "p2",
+                    "predicted_writes": [{"path": "src/b.ts", "confidence": 0.9, "reason": "r"}],
+                    "allowed_paths": ["src/b.ts"],
+                    "depends_on": [],
+                    "parallel_group": 1,
+                    "rationale": None,
+                },
+            ],
+            "execution_plan": {
+                "groups": [{"id": 1, "tasks": ["t1", "t2"], "type": "parallel", "waits_for": []}]
+            },
+            "conflicts_detected": [],
+        }
+    )
+    raw = (
+        "Task id: t1\n"
+        "*** Begin Patch\n*** Update File: src/a.ts\n@@\n+// t1\n*** End Patch\n\n"
+        "Task id: t2\n"
+        "*** Begin Patch\n*** Update File: src/b.ts\n@@\n+// t2\n*** End Patch\n"
+    )
+    by_task = _parse_single_agent_applied_envelopes(raw, lock)
+    p1 = _proposals_for_task_envelope_blob(by_task.get("t1", ""))
+    p2 = _proposals_for_task_envelope_blob(by_task.get("t2", ""))
+    assert len(p1) == 1 and p1[0].file == "src/a.ts"
+    assert len(p2) == 1 and p2[0].file == "src/b.ts"
