@@ -13,17 +13,10 @@ def test_python_graph_extracts_symbols_imports_and_reverse_imports(tmp_path: Pat
     (tmp_path / "starlette").mkdir()
     (tmp_path / "starlette" / "__init__.py").write_text("")
     (tmp_path / "starlette" / "requests.py").write_text(
-        "class Request:\n"
-        "    pass\n"
-        "\n"
-        "class HTTPConnection:\n"
-        "    pass\n"
+        "class Request:\n    pass\n\nclass HTTPConnection:\n    pass\n"
     )
     (tmp_path / "starlette" / "templating.py").write_text(
-        "from .requests import Request\n"
-        "\n"
-        "class Jinja2Templates:\n"
-        "    pass\n"
+        "from .requests import Request\n\nclass Jinja2Templates:\n    pass\n"
     )
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_templates.py").write_text(
@@ -38,16 +31,12 @@ def test_python_graph_extracts_symbols_imports_and_reverse_imports(tmp_path: Pat
     assert graph["language"] == "python"
     assert graph["symbols_index"]["Jinja2Templates"] == "starlette/templating.py"
     assert graph["symbols_index"]["Request"] == "starlette/requests.py"
-    assert graph["resolved_imports"]["starlette/templating.py"] == [
-        "starlette/requests.py"
-    ]
+    assert graph["resolved_imports"]["starlette/templating.py"] == ["starlette/requests.py"]
     assert "tests/test_templates.py" in graph["importers"]["starlette/templating.py"]
     assert "tests/test_templates.py" in graph["tests"]
 
 
-def test_scan_context_graph_merges_scip_metadata(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_scan_context_graph_merges_scip_metadata(monkeypatch, tmp_path: Path) -> None:
     (tmp_path / "pkg").mkdir()
     (tmp_path / "pkg" / "module.py").write_text("def target():\n    pass\n")
 

@@ -56,9 +56,7 @@ def _git_text(repo_path: Path, args: list[str]) -> str:
         )
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or exc.stdout or "").strip()
-        raise DiffValidationError(
-            f"git {' '.join(args)} failed in {repo_path}: {detail}"
-        ) from exc
+        raise DiffValidationError(f"git {' '.join(args)} failed in {repo_path}: {detail}") from exc
     return proc.stdout
 
 
@@ -128,9 +126,7 @@ def validate_git_diff(
     head_ref: str | None = None,
 ) -> DiffValidationResult:
     """Collect changed files from git and validate them against ``allowed_paths``."""
-    changed_files = changed_files_from_git_diff(
-        repo_path, base_ref=base_ref, head_ref=head_ref
-    )
+    changed_files = changed_files_from_git_diff(repo_path, base_ref=base_ref, head_ref=head_ref)
     return validate_changed_files(
         lock,
         task_id=task_id,

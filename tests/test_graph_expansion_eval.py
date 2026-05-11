@@ -38,8 +38,7 @@ def test_eval_output_stem_preserves_native_names_and_labels_scip() -> None:
     assert evaluate._output_stem("after", "replay", "scip") == "after_scip"
     assert evaluate._output_stem("after", "live", "scip") == "after_scip_live"
     assert (
-        evaluate._output_stem("after", "replay", "scip", "scip-replay")
-        == "after_scip_scip_replay"
+        evaluate._output_stem("after", "replay", "scip", "scip-replay") == "after_scip_scip_replay"
     )
     assert (
         evaluate._diff_name("replay", "scip", "scip-replay")
@@ -75,7 +74,7 @@ def test_write_strategy_artifacts_for_seed_scopes_acg_llm_seed(
     lock_path.write_text("{}\n")
 
     class _FakeLock(SimpleNamespace):
-        def model_copy(self, *, deep: bool = False) -> "_FakeLock":
+        def model_copy(self, *, deep: bool = False) -> _FakeLock:
             # Each call yields a distinct instance so the harness can verify
             # per-strategy lock isolation (deep flag is honored by callers).
             return _FakeLock(tasks=list(self.tasks))
@@ -103,7 +102,9 @@ def test_write_strategy_artifacts_for_seed_scopes_acg_llm_seed(
         ],
     )
     monkeypatch.setattr(evaluate.AgentLock, "model_validate_json", lambda payload: fake_lock)
-    monkeypatch.setattr(evaluate, "_repo_graph_for_task", lambda task, backend: {"backend": backend})
+    monkeypatch.setattr(
+        evaluate, "_repo_graph_for_task", lambda task, backend: {"backend": backend}
+    )
     monkeypatch.setattr(evaluate, "repo_from_path", lambda path: {"repo": str(path)})
     monkeypatch.setattr(evaluate, "to_dict", lambda run: run)
 

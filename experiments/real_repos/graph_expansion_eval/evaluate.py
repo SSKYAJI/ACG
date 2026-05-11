@@ -1,3 +1,15 @@
+"""Real-repo graph expansion benchmark (predictor + strategies).
+
+When analyzing ``*_strategy_scores.csv``, filter rows by ``ablation_name``,
+``repo``, and ``task_id``. Full runs append many tasks and strategies; ad-hoc
+drivers (for example ``_single_task_live_test.py``) set a dedicated
+``--ablation-name`` so their rows are easy to isolate.
+
+For paper-grade aggregates after substantive changes, re-run the full multi-seed
+live eval locally when API quota allows — numbers from a single task or seed are
+not comparable to macro summaries over the whole suite.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -1692,6 +1704,7 @@ def write_strategy_score_csv(
         _output_stem(mode, llm_mode, localization_backend, ablation_name),
         seed,
     )
+    # Consumers: slice this CSV by ablation_name / repo / task_id (see module docstring).
     _write_csv_rows(OUT_DIR / f"{output_stem}_strategy_scores.csv", STRATEGY_SCORE_FIELDS, rows)
     _write_csv_rows(
         OUT_DIR / f"{output_stem}_strategy_summary.csv",

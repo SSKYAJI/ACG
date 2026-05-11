@@ -58,9 +58,7 @@ def _find_task(lock: AgentLock, task_id: str) -> Task:
     raise KeyError(f"task {task_id!r} not found in lockfile")
 
 
-def validate_write(
-    lock: AgentLock, task_id: str, write_path: str
-) -> tuple[bool, str | None]:
+def validate_write(lock: AgentLock, task_id: str, write_path: str) -> tuple[bool, str | None]:
     """Return whether ``task_id`` is permitted to write ``write_path``.
 
     Args:

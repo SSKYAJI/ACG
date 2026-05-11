@@ -131,7 +131,9 @@ class EmbeddingsIndexer:
             score_f = float(score)
             if score_f < self._cosine_floor:
                 continue
-            confidence = max(0.0, min(CONFIDENCE_CEILING, (score_f + 1.0) / 2.0 * CONFIDENCE_CEILING))
+            confidence = max(
+                0.0, min(CONFIDENCE_CEILING, (score_f + 1.0) / 2.0 * CONFIDENCE_CEILING)
+            )
             out.append(
                 PredictedWrite(
                     path=doc.path,

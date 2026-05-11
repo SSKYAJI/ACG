@@ -96,7 +96,10 @@ def graph_file_entries(repo_root: Path | None, repo_graph: dict[str, Any]) -> li
     files = repo_graph.get("files") or []
     if files:
         return [entry for entry in files if isinstance(entry, dict) and entry.get("path")]
-    return [{"path": path, "imports": [], "exports": [], "symbols": []} for path in repo_files(repo_root, repo_graph)]
+    return [
+        {"path": path, "imports": [], "exports": [], "symbols": []}
+        for path in repo_files(repo_root, repo_graph)
+    ]
 
 
 def read_rel(repo_root: Path | None, rel_path: str, max_chars: int = 200_000) -> str:

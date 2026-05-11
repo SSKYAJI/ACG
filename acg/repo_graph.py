@@ -121,8 +121,7 @@ def detect_language(repo_root: Path) -> str:
     if counts["typescript"]:
         return "typescript"
     if counts["python"] and (
-        (root / "pyproject.toml").exists()
-        or counts["python"] >= counts["javascript"]
+        (root / "pyproject.toml").exists() or counts["python"] >= counts["javascript"]
     ):
         return "python"
     if counts["javascript"] or (root / "package.json").exists():
@@ -462,7 +461,9 @@ def _python_exports(tree: ast.Module, symbols: list[str]) -> list[str]:
     for node in tree.body:
         if not isinstance(node, ast.Assign):
             continue
-        if not any(isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets):
+        if not any(
+            isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets
+        ):
             continue
         value = node.value
         if not isinstance(value, (ast.List, ast.Tuple)):
@@ -744,9 +745,7 @@ def _reverse_imports(
     return {path: _unique_sorted(importers) for path, importers in out.items()}
 
 
-def _resolve_import_specifier(
-    importer: str, specifier: str, paths: set[str]
-) -> str | None:
+def _resolve_import_specifier(importer: str, specifier: str, paths: set[str]) -> str | None:
     if not specifier or specifier.startswith(("node:", "@")):
         return None
     candidates: list[str] = []

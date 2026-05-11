@@ -75,8 +75,7 @@ def evaluate_dataset(
     for row in rows:
         truth = set(row["ground_truth_paths"])
         predictions = [
-            write.path
-            for write in aggregate(_task(row), repo, {}, indexers=indexers, top_n=5)
+            write.path for write in aggregate(_task(row), repo, {}, indexers=indexers, top_n=5)
         ]
         hits = len(set(predictions) & truth)
         recall_total += hits / len(truth) if truth else 1.0
@@ -189,7 +188,9 @@ def main() -> None:
     RESULTS_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     print(_markdown(payload))
     if embed_indexers is None:
-        print("\n# embeddings extra not installed — install with `pip install -e '.[index-vector]'`")
+        print(
+            "\n# embeddings extra not installed — install with `pip install -e '.[index-vector]'`"
+        )
 
 
 if __name__ == "__main__":

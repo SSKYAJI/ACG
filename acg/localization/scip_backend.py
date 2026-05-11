@@ -98,7 +98,12 @@ def _file_metadata(entities: list[Any], references: list[Any]) -> list[dict[str,
             continue
         item = by_path.setdefault(
             path,
-            {"path": path, "scip_symbols": [], "scip_definition_count": 0, "scip_reference_count": 0},
+            {
+                "path": path,
+                "scip_symbols": [],
+                "scip_definition_count": 0,
+                "scip_reference_count": 0,
+            },
         )
         item["scip_definition_count"] += 1
         name = getattr(entity, "name", "") or getattr(entity, "symbol", "")
@@ -110,7 +115,12 @@ def _file_metadata(entities: list[Any], references: list[Any]) -> list[dict[str,
             continue
         item = by_path.setdefault(
             path,
-            {"path": path, "scip_symbols": [], "scip_definition_count": 0, "scip_reference_count": 0},
+            {
+                "path": path,
+                "scip_symbols": [],
+                "scip_definition_count": 0,
+                "scip_reference_count": 0,
+            },
         )
         item["scip_reference_count"] += 1
     out: list[dict[str, Any]] = []

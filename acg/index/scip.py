@@ -19,6 +19,7 @@ except ImportError:
             query_terms = set(query)
             return [float(len(set(tokens) & query_terms)) for tokens in self._corpus]
 
+
 from acg.schema import PredictedWrite, TaskInput
 
 from .util import task_text, tokenize
@@ -54,9 +55,9 @@ def _path_from(value: Any) -> str:
     if isinstance(value, str):
         return value.strip("./")
     if isinstance(value, dict):
-        return str(
-            value.get("path") or value.get("file_path") or value.get("file") or ""
-        ).strip("./")
+        return str(value.get("path") or value.get("file_path") or value.get("file") or "").strip(
+            "./"
+        )
     return str(
         getattr(value, "path", None)
         or getattr(value, "file_path", None)
@@ -246,7 +247,9 @@ class ScipIndexer:
                 confidence=existing.confidence,
                 reason="; ".join(dict.fromkeys(reasons[:3])),
             )
-        return sorted(best.values(), key=lambda write: (-write.confidence, write.path))[: self.top_n]
+        return sorted(best.values(), key=lambda write: (-write.confidence, write.path))[
+            : self.top_n
+        ]
 
     @staticmethod
     def _merge(

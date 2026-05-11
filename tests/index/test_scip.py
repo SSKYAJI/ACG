@@ -72,7 +72,9 @@ def test_scip_indexer_maps_fastify_content_type_request_without_hub_promotion() 
     assert "types/request.d.ts" in by_path
     assert by_path["types/request.d.ts"].confidence <= DEFINITION_CONFIDENCE_CAP
     assert by_path["lib/request.js"].confidence <= REFERENCE_CONFIDENCE_CAP
-    assert all("SCIP entity" in write.reason or "SCIP reference" in write.reason for write in writes)
+    assert all(
+        "SCIP entity" in write.reason or "SCIP reference" in write.reason for write in writes
+    )
 
 
 def test_aggregate_adds_scip_default_only_when_enabled_or_metadata(

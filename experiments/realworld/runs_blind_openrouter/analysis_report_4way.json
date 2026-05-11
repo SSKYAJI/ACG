@@ -1,0 +1,268 @@
+{
+  "overall": {
+    "f1": 0.7097,
+    "precision": 1.0,
+    "recall": 0.55,
+    "total_blocks": 3,
+    "total_oob": 11,
+    "total_posthoc_oob": 0,
+    "total_proposal_oob": 11
+  },
+  "runs": [
+    {
+      "backend": "local",
+      "blocked_invalid_write_count": 0,
+      "cost_method": "sum_provider_reported_task_costs",
+      "cost_source": "body.usage.cost",
+      "cost_usd_total": 0.00021204,
+      "evidence_kind": "suite_proposed_write_set",
+      "execution_mode": "single_agent_no_lock",
+      "out_of_bounds_write_count": 0,
+      "overlapping_write_pairs": 2,
+      "source_path": "experiments/realworld/runs_blind_openrouter/eval_run_single_agent.json",
+      "strategy": "single_agent",
+      "suite_name": "realworld-nestjs-blind-openrouter",
+      "tasks_completed": 6,
+      "tasks_total": 6,
+      "tested_tasks_completed": 0,
+      "tests_ran_count": 0,
+      "tokens_all_in": 630,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_method": "provider_usage_prompt_tokens",
+      "tokens_prompt_total": 630
+    },
+    {
+      "backend": "local",
+      "blocked_invalid_write_count": 0,
+      "cost_method": "sum_provider_reported_task_costs",
+      "cost_source": "body.usage.cost",
+      "cost_usd_total": 0.00036694,
+      "evidence_kind": "proposed_write_set",
+      "execution_mode": "propose_validate",
+      "out_of_bounds_write_count": 11,
+      "overlapping_write_pairs": 2,
+      "source_path": "experiments/realworld/runs_blind_openrouter/eval_run_naive_parallel.json",
+      "strategy": "naive_parallel",
+      "suite_name": "realworld-nestjs-blind-openrouter",
+      "tasks_completed": 2,
+      "tasks_total": 6,
+      "tested_tasks_completed": 0,
+      "tests_ran_count": 0,
+      "tokens_all_in": 12145,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_method": "provider_usage_prompt_tokens",
+      "tokens_prompt_total": 2636
+    },
+    {
+      "backend": "local",
+      "blocked_invalid_write_count": 3,
+      "cost_method": "sum_provider_reported_task_costs",
+      "cost_source": "body.usage.cost",
+      "cost_usd_total": 0.00019921,
+      "evidence_kind": "proposed_write_set",
+      "execution_mode": "propose_validate",
+      "out_of_bounds_write_count": 0,
+      "overlapping_write_pairs": 1,
+      "source_path": "experiments/realworld/runs_blind_openrouter/eval_run_acg_planned.json",
+      "strategy": "acg_planned",
+      "suite_name": "realworld-nestjs-blind-openrouter",
+      "tasks_completed": 6,
+      "tasks_total": 6,
+      "tested_tasks_completed": 0,
+      "tests_ran_count": 0,
+      "tokens_all_in": 10810,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_method": "provider_usage_prompt_tokens",
+      "tokens_prompt_total": 1301
+    },
+    {
+      "backend": "local",
+      "blocked_invalid_write_count": 0,
+      "cost_method": "sum_provider_reported_task_costs",
+      "cost_source": "body.usage.cost",
+      "cost_usd_total": 0.00029376,
+      "evidence_kind": "proposed_write_set",
+      "execution_mode": "propose_validate",
+      "out_of_bounds_write_count": 0,
+      "overlapping_write_pairs": 1,
+      "source_path": "experiments/realworld/runs_blind_openrouter/eval_run_acg_planned_replan.json",
+      "strategy": "acg_planned_replan",
+      "suite_name": "realworld-nestjs-blind-openrouter",
+      "tasks_completed": 6,
+      "tasks_total": 6,
+      "tested_tasks_completed": 0,
+      "tests_ran_count": 0,
+      "tokens_all_in": 10810,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_method": "provider_usage_prompt_tokens",
+      "tokens_prompt_total": 1301
+    }
+  ],
+  "tasks": {
+    "add-article-bookmarks": {
+      "actual_files_seen": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.service.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.service.ts"
+      ],
+      "allowed_glob_count": 2,
+      "blocked_events_total": 0,
+      "f1": 0.5714,
+      "false_negatives": 3,
+      "false_positives": 0,
+      "out_of_bounds_files": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.service.ts",
+        "src/user/user.service.ts"
+      ],
+      "precision": 1.0,
+      "predicted_files": [
+        "src/article/article.entity.ts",
+        "src/user/user.entity.ts"
+      ],
+      "recall": 0.4,
+      "runs_seen": 4,
+      "suggestions": [
+        "predictor missed files (recall=0.40); consider seeding ['src/article/article.controller.ts', 'src/article/article.service.ts', 'src/user/user.service.ts'] into the predictor",
+        "agent proposed 4 OOB write(s) (['src/article/article.controller.ts', 'src/article/article.entity.ts', 'src/article/article.service.ts']); decide: widen allowed_paths to include them, or audit the agent prompt"
+      ],
+      "task_id": "add-article-bookmarks",
+      "true_positives": 2
+    },
+    "add-article-search": {
+      "actual_files_seen": [
+        "src/article/article.controller.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.service.ts"
+      ],
+      "allowed_glob_count": 2,
+      "blocked_events_total": 2,
+      "f1": 0.8,
+      "false_negatives": 1,
+      "false_positives": 0,
+      "out_of_bounds_files": [
+        "src/article/article.controller.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.service.ts"
+      ],
+      "precision": 1.0,
+      "predicted_files": [
+        "src/article/article.controller.ts",
+        "src/article/article.service.ts"
+      ],
+      "recall": 0.6667,
+      "runs_seen": 4,
+      "suggestions": [
+        "agent proposed 3 OOB write(s) (['src/article/article.controller.ts', 'src/article/article.interface.ts', 'src/article/article.service.ts']); decide: widen allowed_paths to include them, or audit the agent prompt"
+      ],
+      "task_id": "add-article-search",
+      "true_positives": 2
+    },
+    "add-health-check": {
+      "actual_files_seen": [
+        "src/app.controller.ts"
+      ],
+      "allowed_glob_count": 1,
+      "blocked_events_total": 0,
+      "f1": 1.0,
+      "false_negatives": 0,
+      "false_positives": 0,
+      "out_of_bounds_files": [],
+      "precision": 1.0,
+      "predicted_files": [
+        "src/app.controller.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 4,
+      "suggestions": [],
+      "task_id": "add-health-check",
+      "true_positives": 1
+    },
+    "add-rate-limiting": {
+      "actual_files_seen": [
+        "package.json",
+        "src/main.ts"
+      ],
+      "allowed_glob_count": 1,
+      "blocked_events_total": 0,
+      "f1": 0.6667,
+      "false_negatives": 1,
+      "false_positives": 0,
+      "out_of_bounds_files": [
+        "package.json"
+      ],
+      "precision": 1.0,
+      "predicted_files": [
+        "src/main.ts"
+      ],
+      "recall": 0.5,
+      "runs_seen": 4,
+      "suggestions": [
+        "predictor missed files (recall=0.50); consider seeding ['package.json'] into the predictor",
+        "agent proposed 1 OOB write(s) (['package.json']); decide: widen allowed_paths to include them, or audit the agent prompt"
+      ],
+      "task_id": "add-rate-limiting",
+      "true_positives": 1
+    },
+    "add-user-roles": {
+      "actual_files_seen": [
+        "src/user/auth.middleware.ts",
+        "src/user/dto/index.ts",
+        "src/user/user.controller.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.service.ts"
+      ],
+      "allowed_glob_count": 3,
+      "blocked_events_total": 1,
+      "f1": 0.6667,
+      "false_negatives": 3,
+      "false_positives": 0,
+      "out_of_bounds_files": [
+        "src/user/auth.middleware.ts",
+        "src/user/user.controller.ts",
+        "src/user/user.interface.ts"
+      ],
+      "precision": 1.0,
+      "predicted_files": [
+        "src/user/dto/index.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts"
+      ],
+      "recall": 0.5,
+      "runs_seen": 4,
+      "suggestions": [
+        "predictor missed files (recall=0.50); consider seeding ['src/user/auth.middleware.ts', 'src/user/user.controller.ts', 'src/user/user.service.ts'] into the predictor",
+        "agent proposed 3 OOB write(s) (['src/user/auth.middleware.ts', 'src/user/user.controller.ts', 'src/user/user.interface.ts']); decide: widen allowed_paths to include them, or audit the agent prompt"
+      ],
+      "task_id": "add-user-roles",
+      "true_positives": 3
+    },
+    "extend-tag-crud": {
+      "actual_files_seen": [
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.entity.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "allowed_glob_count": 2,
+      "blocked_events_total": 0,
+      "f1": 0.8,
+      "false_negatives": 1,
+      "false_positives": 0,
+      "out_of_bounds_files": [],
+      "precision": 1.0,
+      "predicted_files": [
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "recall": 0.6667,
+      "runs_seen": 4,
+      "suggestions": [],
+      "task_id": "extend-tag-crud",
+      "true_positives": 2
+    }
+  }
+}

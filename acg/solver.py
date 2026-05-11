@@ -67,8 +67,7 @@ def detect_conflicts(tasks: list[Task]) -> list[Conflict]:
                 files=overlap,
                 between_tasks=[predecessor, successor],
                 resolution=(
-                    f"Serialize {successor} after {predecessor}; both modify "
-                    + ", ".join(overlap)
+                    f"Serialize {successor} after {predecessor}; both modify " + ", ".join(overlap)
                 ),
             )
         )
@@ -168,9 +167,7 @@ def build_dag(
     for task in tasks:
         for dep in task.depends_on:
             if dep not in known_ids:
-                raise ValueError(
-                    f"task {task.id!r} depends_on unknown task id {dep!r}"
-                )
+                raise ValueError(f"task {task.id!r} depends_on unknown task id {dep!r}")
             graph.add_edge(dep, task.id)
 
     if not nx.is_directed_acyclic_graph(graph):
@@ -224,8 +221,6 @@ def topological_groups(dag: nx.DiGraph) -> list[Group]:
         # are transitively waited for via the group chain, so listing them here
         # would be redundant and clutter the lockfile.
         waits_for: list[int] = [gid - 1] if gid > 1 else []
-        groups.append(
-            Group(id=gid, tasks=nodes, type=grp_type, waits_for=waits_for)
-        )
+        groups.append(Group(id=gid, tasks=nodes, type=grp_type, waits_for=waits_for))
 
     return groups

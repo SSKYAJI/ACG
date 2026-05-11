@@ -86,11 +86,11 @@ def _build_planner_prompt(
         "Decompose one high-level repository goal into reviewable sub-agent tasks. "
         "Each task must be independently executable, file-aware, and small enough "
         "for one coding agent. Prefer explicit dependencies over vague coordination. "
-        "Output ONLY a JSON object with key \"tasks\". Each task must include: "
-        "\"id\" (lowercase letters, digits, dash, underscore), \"prompt\" "
-        "(specific coding instruction), optional \"hints\" with \"touches\" "
-        "(short feature/path words) and \"suspected_files\" (repo-relative "
-        "files worth inspecting), and optional \"depends_on\" (task ids)."
+        'Output ONLY a JSON object with key "tasks". Each task must include: '
+        '"id" (lowercase letters, digits, dash, underscore), "prompt" '
+        '(specific coding instruction), optional "hints" with "touches" '
+        '(short feature/path words) and "suspected_files" (repo-relative '
+        'files worth inspecting), and optional "depends_on" (task ids).'
     )
     user = (
         f"High-level goal:\n{goal.strip()}\n\n"
@@ -118,9 +118,7 @@ def _extract_json_object(raw: str) -> dict[str, Any]:
         start = text.find("{")
         end = text.rfind("}")
         if start == -1 or end == -1 or end <= start:
-            raise TaskPlanningError(
-                "planner response did not contain a JSON object"
-            ) from None
+            raise TaskPlanningError("planner response did not contain a JSON object") from None
         try:
             payload = json.loads(text[start : end + 1])
         except json.JSONDecodeError as exc:
@@ -162,9 +160,7 @@ def _coerce_tasks(payload: dict[str, Any], *, max_tasks: int) -> TasksInput:
             raw_suspected = hints_payload.get("suspected_files") or []
             if isinstance(raw_suspected, list):
                 suspected_files = [
-                    str(path).strip("./")
-                    for path in raw_suspected
-                    if str(path).strip()
+                    str(path).strip("./") for path in raw_suspected if str(path).strip()
                 ]
         depends_on_raw = item.get("depends_on") or []
         depends_on = [str(dep) for dep in depends_on_raw if isinstance(dep, str)]

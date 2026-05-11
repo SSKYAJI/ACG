@@ -78,12 +78,7 @@ def _touch(root: Path, rel: str, body: str = "export const sentinel = 1\n") -> N
 
 
 def _graph(paths: list[str]) -> dict[str, Any]:
-    return {
-        "files": [
-            {"path": p, "exports": [], "imports": [], "symbols": []}
-            for p in paths
-        ]
-    }
+    return {"files": [{"path": p, "exports": [], "imports": [], "symbols": []} for p in paths]}
 
 
 # ---------------------------------------------------------------------------

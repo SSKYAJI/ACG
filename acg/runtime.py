@@ -350,9 +350,7 @@ def _optional_token_int(value: Any) -> int | None:
     return None
 
 
-def _extract_cost_usd(
-    data: dict[str, Any], headers: Any
-) -> tuple[float | None, str | None]:
+def _extract_cost_usd(data: dict[str, Any], headers: Any) -> tuple[float | None, str | None]:
     """Best-effort OpenRouter/OpenAI-compatible cost extraction.
 
     Providers are inconsistent: OpenRouter-compatible proxies sometimes put
@@ -419,7 +417,10 @@ _MOCK_WORKER_PROPOSALS: dict[str, list[dict[str, str]]] = {
     "oauth": [
         {"file": "src/server/auth/config.ts", "description": "Add Google OAuth provider"},
         {"file": "prisma/schema.prisma", "description": "Add Account/Session/User auth tables"},
-        {"file": "src/app/api/auth/[...nextauth]/route.ts", "description": "Wire NextAuth route handler"},
+        {
+            "file": "src/app/api/auth/[...nextauth]/route.ts",
+            "description": "Wire NextAuth route handler",
+        },
         {"file": "src/utils/random.ts", "description": "Helper for state token generation"},
     ],
     "billing": [
@@ -701,9 +702,9 @@ def _build_orchestrator_prompt(lock: AgentLock) -> list[dict[str, str]]:
         "You are an orchestrator analyzing a multi-agent execution plan for "
         "coding tasks. Reason carefully about whether the plan respects all "
         "write conflicts. Output ONLY a JSON object with keys:\n"
-        "  - \"approved\" (boolean)\n"
-        "  - \"concerns\" (list of short strings)\n"
-        "  - \"dispatch_order\" (list of group ids in execution order)\n"
+        '  - "approved" (boolean)\n'
+        '  - "concerns" (list of short strings)\n'
+        '  - "dispatch_order" (list of group ids in execution order)\n'
         "Do not include any prose outside the JSON object."
     )
     user = (
@@ -744,14 +745,13 @@ def _is_directoryish(path: str) -> bool:
     return "." not in last
 
 
-def _build_worker_prompt(
-    task: Task, repo_graph: dict[str, Any]
-) -> list[dict[str, str]]:
+def _build_worker_prompt(task: Task, repo_graph: dict[str, Any]) -> list[dict[str, str]]:
     """Construct the worker messages.
 
     Workers see hard predicted writes and candidate context, but not the
-    concrete ``allowed_paths`` globs. Candidate context is explicitly
-    read/replan-only; the validator remains the source of write authority.
+    concrete ``allowed_paths`` globs. They may propose candidate-context
+    writes when coordinated edits need them; ``enforce.validate_write`` and
+    the runtime auto-replan guard decide what is actually allowed.
     """
     files = _top_files(repo_graph)
     file_block = "\n".join(f"  - {p}" for p in files) or "  (graph empty)"
@@ -772,7 +772,7 @@ def _build_worker_prompt(
     system = (
         "You are a coding agent assigned a single task. Output ONLY a JSON "
         'object with key "writes": an array of objects with keys "file" '
-        "(repository-relative path) and \"description\" (one short sentence). "
+        '(repository-relative path) and "description" (one short sentence). '
         "Do not include prose, code fences, or any other text."
     )
     user = (
@@ -780,7 +780,10 @@ def _build_worker_prompt(
         f"Task: {task.prompt}\n"
         "Predicted writable files:\n"
         f"{hard_block}\n"
-        "Candidate context files (read-only unless a replan expands scope):\n"
+        "Candidate context files. You may propose writes here when changes to "
+        "the predicted writable files require coordinated edits. A runtime "
+        "auto-approval guard accepts high-confidence proposals and blocks the "
+        "rest.\n"
         f"{candidate_block}\n"
         f"Available files in this repo (top {len(files)} by importance):\n"
         f"{file_block}{extra_hint}"
@@ -800,6 +803,7 @@ _AUTO_REPLAN_SIGNALS = {
     "explicit",
     "framework",
     "llm",
+    "must_write_neighbor",
     "planner",
     "scope_review",
     "symbol",
@@ -815,9 +819,7 @@ def _candidate_scope(task: Task, path: str) -> Any | None:
     return None
 
 
-def _candidate_context_replan_state(
-    lock: AgentLock, task: Task, path: str
-) -> dict[str, Any]:
+def _candidate_context_replan_state(lock: AgentLock, task: Task, path: str) -> dict[str, Any]:
     normalized_path = path.lstrip("./")
     scope = _candidate_scope(task, normalized_path)
     signals = list(scope.signals) if scope is not None else []
@@ -851,9 +853,7 @@ def _has_hard_conflict(lock: AgentLock, task: Task, path: str) -> bool:
 
 
 def _can_auto_approve_replan(lock: AgentLock, task: Task, path: str) -> bool:
-    return bool(
-        _candidate_context_replan_state(lock, task, path)["can_auto_approve_replan"]
-    )
+    return bool(_candidate_context_replan_state(lock, task, path)["can_auto_approve_replan"])
 
 
 # ---------------------------------------------------------------------------
@@ -979,12 +979,12 @@ async def run_worker(
     for raw, (allowed, reason) in zip(raw_proposals, validation_results, strict=True):
         scope_status = "allowed" if allowed else "blocked"
         if _is_candidate_context_write(task, raw["file"]):
-            candidate_replan_state = _candidate_context_replan_state(
-                lock, task, raw["file"]
-            )
-            if not allowed and cfg.auto_replan and candidate_replan_state[
-                "can_auto_approve_replan"
-            ]:
+            candidate_replan_state = _candidate_context_replan_state(lock, task, raw["file"])
+            if (
+                not allowed
+                and cfg.auto_replan
+                and candidate_replan_state["can_auto_approve_replan"]
+            ):
                 promoted = promote_candidate_paths(
                     lock,
                     task.id,
@@ -1004,8 +1004,7 @@ async def run_worker(
                 )
             candidate_replan_state["final_outcome"] = scope_status
             _console.print(
-                "[candidate_replan] "
-                + json.dumps(candidate_replan_state, sort_keys=True)
+                "[candidate_replan] " + json.dumps(candidate_replan_state, sort_keys=True)
             )
         proposals.append(
             Proposal(
@@ -1021,9 +1020,7 @@ async def run_worker(
             allowed_count += 1
             if scope_status == "approved_replan":
                 replan_approved_count += 1
-            _console.print(
-                f"  [green][validator][/] ALLOWED {task.id} → {safe_file}"
-            )
+            _console.print(f"  [green][validator][/] ALLOWED {task.id} → {safe_file}")
         else:
             blocked_count += 1
             if scope_status == "needs_replan":
@@ -1032,8 +1029,7 @@ async def run_worker(
             label = "NEEDS_REPLAN" if scope_status == "needs_replan" else "BLOCKED"
             color = "yellow" if scope_status == "needs_replan" else "red"
             _console.print(
-                f"  [{color}][validator][/] {label} {task.id} → "
-                f"{safe_file}: {safe_reason}"
+                f"  [{color}][validator][/] {label} {task.id} → {safe_file}: {safe_reason}"
             )
 
     return WorkerResult(
@@ -1081,8 +1077,7 @@ async def run_group(
     """
     cfg = config or RuntimeConfig.from_env()
     _console.print(
-        f"[bold magenta][group {group.id}][/] starting "
-        f"({group.type}: {', '.join(group.tasks)})"
+        f"[bold magenta][group {group.id}][/] starting ({group.type}: {', '.join(group.tasks)})"
     )
     started_at = _now_iso()
     t0 = time.perf_counter()
@@ -1115,14 +1110,10 @@ async def run_group(
 
         workers = list(await asyncio.gather(*(_bounded(tid) for tid in eligible)))
     else:
-        workers = list(
-            await asyncio.gather(*(_run_worker_coro(tid) for tid in eligible))
-        )
+        workers = list(await asyncio.gather(*(_run_worker_coro(tid) for tid in eligible)))
 
     wall_s = time.perf_counter() - t0
-    _console.print(
-        f"[bold magenta][group {group.id}][/] done in {wall_s:.2f}s"
-    )
+    _console.print(f"[bold magenta][group {group.id}][/] done in {wall_s:.2f}s")
     return (
         GroupResult(
             id=group.id,

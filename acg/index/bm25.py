@@ -81,11 +81,7 @@ class BM25Indexer:
             corpus.append(tokens)
 
         query = tokenize(task_text(task))
-        query.extend(
-            synonym
-            for token in list(query)
-            for synonym in SYNONYMS.get(token, [])
-        )
+        query.extend(synonym for token in list(query) for synonym in SYNONYMS.get(token, []))
         if not query:
             return []
         bm25 = BM25Okapi(corpus)

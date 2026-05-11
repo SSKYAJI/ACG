@@ -98,7 +98,9 @@ def _file_entries_by_path(repo_graph: dict[str, Any]) -> dict[str, dict[str, Any
     }
 
 
-def _neighbors(path: str, repo_graph: dict[str, Any], entries: dict[str, dict[str, Any]]) -> list[str]:
+def _neighbors(
+    path: str, repo_graph: dict[str, Any], entries: dict[str, dict[str, Any]]
+) -> list[str]:
     entry = entries.get(path, {})
     candidates: list[str] = []
     for key in ("resolved_imports", "importers", "type_links"):
@@ -226,7 +228,10 @@ def aggregate(
     _graph_expand(task, repo_graph, fused)
 
     if indexers is None or any(indexer.name == "cochange" for indexer in first_pass):
-        seed_paths = [item.path for item in sorted(fused.values(), key=lambda write: (-write.confidence, write.path))]
+        seed_paths = [
+            item.path
+            for item in sorted(fused.values(), key=lambda write: (-write.confidence, write.path))
+        ]
         cochange = CochangeIndexer(seed_paths=seed_paths)
         for prediction in cochange.predict(task, repo_root, repo_graph):
             _merge_into(fused, prediction)

@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 REALWORLD_ARTIFACTS = [
@@ -39,6 +38,4 @@ def test_realworld_openrouter_artifacts_have_realworld_metadata(
     assert payload["suite_name"] == expected_suite_name
     assert "lujakob/nestjs-realworld-example-app" in repo["url"]
     assert "spring-attic/greenhouse" not in repo["url"]
-    assert repo["local_path"].replace("\\", "/").endswith(
-        "/experiments/realworld/checkout"
-    )
+    assert repo["local_path"].replace("\\", "/").endswith("/experiments/realworld/checkout")

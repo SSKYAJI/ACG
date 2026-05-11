@@ -12,7 +12,9 @@ class StubIndexer:
         self.name = name
         self._writes = writes
 
-    def predict(self, task: TaskInput, repo_root: Path | None, repo_graph: dict[str, Any]) -> list[PredictedWrite]:
+    def predict(
+        self, task: TaskInput, repo_root: Path | None, repo_graph: dict[str, Any]
+    ) -> list[PredictedWrite]:
         del task, repo_root, repo_graph
         return self._writes
 

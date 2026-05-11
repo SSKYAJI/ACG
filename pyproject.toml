@@ -58,6 +58,10 @@ select = ["E", "F", "W", "I", "B", "UP"]
 ignore = ["E501"]
 
 [tool.pytest.ini_options]
+# Upstream checkouts under experiments/real_repos/*/checkout/ ship their own
+# tests; collecting the whole repo would pick those up and fail (missing deps,
+# conftest name clashes). Default `pytest` with no args = project tests only.
+testpaths = ["tests"]
 markers = [
   "smoke: marks tests that hit a real LLM endpoint (deselect with -m 'not smoke')",
 ]

@@ -316,9 +316,7 @@ def test_validate_diff_command_blocks_oob_worktree_change(tmp_path: Path) -> Non
             Task(
                 id="docs",
                 prompt="Update docs.",
-                predicted_writes=[
-                    PredictedWrite(path="README.md", confidence=0.9, reason="docs")
-                ],
+                predicted_writes=[PredictedWrite(path="README.md", confidence=0.9, reason="docs")],
                 allowed_paths=["README.md"],
                 depends_on=[],
                 parallel_group=1,

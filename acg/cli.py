@@ -620,9 +620,7 @@ def cmd_analyze_runs(
     out: Annotated[
         Path | None,
         typer.Option(
-            help=(
-                "Where to write the Markdown report. Defaults to stdout."
-            ),
+            help=("Where to write the Markdown report. Defaults to stdout."),
         ),
     ] = None,
     json_out: Annotated[

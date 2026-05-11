@@ -131,9 +131,7 @@ def test_js_command_uses_infer_tsconfig(monkeypatch, tmp_path: Path) -> None:
     ]
 
 
-def test_js_command_skips_infer_tsconfig_when_tsconfig_exists(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_js_command_skips_infer_tsconfig_when_tsconfig_exists(monkeypatch, tmp_path: Path) -> None:
     (tmp_path / "tsconfig.json").write_text("{}")
     monkeypatch.setattr(
         "acg.localization.scip_backend.which",
@@ -146,9 +144,7 @@ def test_js_command_skips_infer_tsconfig_when_tsconfig_exists(
     ]
 
 
-def test_python_command_prefers_scip_python_plus_then_fallback(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_python_command_prefers_scip_python_plus_then_fallback(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(
         "acg.localization.scip_backend.which",
         lambda name: f"/bin/{name}" if name in {"scip-python", "scip-python-plus"} else None,

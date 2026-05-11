@@ -27,9 +27,7 @@ def _lock() -> AgentLock:
     task = Task(
         id="docs",
         prompt="Update docs.",
-        predicted_writes=[
-            PredictedWrite(path="README.md", confidence=0.9, reason="docs task")
-        ],
+        predicted_writes=[PredictedWrite(path="README.md", confidence=0.9, reason="docs task")],
         allowed_paths=["README.md"],
         depends_on=[],
         parallel_group=1,

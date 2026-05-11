@@ -37,9 +37,7 @@ def test_settings_cannot_write_auth_config(demo_lock_path: Path) -> None:
 
 def test_oauth_can_write_nested_route(demo_lock_path: Path) -> None:
     lock = load_lock(demo_lock_path)
-    allowed, _ = validate_write(
-        lock, "oauth", "src/app/api/auth/[...nextauth]/route.ts"
-    )
+    allowed, _ = validate_write(lock, "oauth", "src/app/api/auth/[...nextauth]/route.ts")
     assert allowed
 
 

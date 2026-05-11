@@ -42,7 +42,9 @@ ROLE_PATTERNS = {
     "view": re.compile(r"\bview|endpoint|serializer|api|route\b", re.IGNORECASE),
     "controller": re.compile(r"\bcontroller\b", re.IGNORECASE),
     "route": re.compile(r"\broute|endpoint|api|router\b", re.IGNORECASE),
-    "test": re.compile(r"\btests?|specs?|e2e|playwright|jest|vitest|pytest|cypress\b", re.IGNORECASE),
+    "test": re.compile(
+        r"\btests?|specs?|e2e|playwright|jest|vitest|pytest|cypress\b", re.IGNORECASE
+    ),
 }
 ROLE_WORDS = set(ROLE_PATTERNS) | {
     "api",
@@ -90,7 +92,9 @@ def detect_frameworks(repo_root: Path | None, repo_graph: dict[str, Any]) -> lis
     has_next = _has_any(files, ("next.config.js", "next.config.ts", "next.config.mjs")) or (
         '"next"' in package_json
     )
-    has_trpc = "@trpc/server" in package_json or any(path.startswith("server/api/") or path.startswith("src/server/api/") for path in files)
+    has_trpc = "@trpc/server" in package_json or any(
+        path.startswith("server/api/") or path.startswith("src/server/api/") for path in files
+    )
     has_prisma = "prisma/schema.prisma" in files or '"prisma"' in package_json
     if has_next:
         frameworks.append("next_app_router")
@@ -98,10 +102,9 @@ def detect_frameworks(repo_root: Path | None, repo_graph: dict[str, Any]) -> lis
         frameworks.append("t3")
     if "manage.py" in files or "django" in pyproject.lower():
         frameworks.append("django")
-    if (
-        "Gemfile" in files
-        and ("rails" in gemfile.lower() or "config/routes.rb" in files)
-    ) or (repo_root is not None and (repo_root / "Gemfile").exists() and "rails" in gemfile.lower()):
+    if ("Gemfile" in files and ("rails" in gemfile.lower() or "config/routes.rb" in files)) or (
+        repo_root is not None and (repo_root / "Gemfile").exists() and "rails" in gemfile.lower()
+    ):
         frameworks.append("rails")
     if (
         _has_any(files, ("vite.config.js", "vite.config.ts", "vite.config.mjs"))
@@ -109,7 +112,9 @@ def detect_frameworks(repo_root: Path | None, repo_graph: dict[str, Any]) -> lis
     ):
         frameworks.append("vite")
     if "fastapi" in pyproject.lower() or any(path.endswith("main.py") for path in files):
-        text = pyproject.lower() + "\n".join(_read_file(repo_root, path).lower() for path in files if path.endswith("main.py"))
+        text = pyproject.lower() + "\n".join(
+            _read_file(repo_root, path).lower() for path in files if path.endswith("main.py")
+        )
         if "fastapi" in text:
             frameworks.append("fastapi")
     if "pom.xml" in files and "spring-boot" in pom_xml:
@@ -138,7 +143,10 @@ def _snake(value: str) -> str:
 
 
 def _camel(value: str) -> str:
-    return "".join(part.capitalize() for part in re.split(r"[-_/]+", _slug(value)) if part) or "Feature"
+    return (
+        "".join(part.capitalize() for part in re.split(r"[-_/]+", _slug(value)) if part)
+        or "Feature"
+    )
 
 
 def _extract_entity(prompt: str, role: str) -> str:
@@ -186,7 +194,11 @@ def _extract_entity(prompt: str, role: str) -> str:
 
 
 def _app_prefix(ctx: FrameworkContext) -> str:
-    return "src/app" if any(path.startswith("src/app/") for path in ctx.files) or _exists(ctx.repo_root, "src") else "app"
+    return (
+        "src/app"
+        if any(path.startswith("src/app/") for path in ctx.files) or _exists(ctx.repo_root, "src")
+        else "app"
+    )
 
 
 def _src_prefix(ctx: FrameworkContext, rel: str) -> str:
@@ -263,7 +275,9 @@ def _rails_model(entity: str, _ctx: FrameworkContext) -> list[str]:
 
 
 def _fastapi_route(entity: str, ctx: FrameworkContext) -> list[str]:
-    if any(path.startswith("app/routers/") for path in ctx.files) or _exists(ctx.repo_root, "app/routers"):
+    if any(path.startswith("app/routers/") for path in ctx.files) or _exists(
+        ctx.repo_root, "app/routers"
+    ):
         return [f"app/routers/{_snake(entity)}.py"]
     return [f"app/api/{_snake(entity)}.py"]
 

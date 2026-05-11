@@ -79,9 +79,7 @@ def test_python_fastapi_lockfile_shape_if_present() -> None:
     assert len(lock.conflicts_detected) >= 2
     assert len(lock.execution_plan.groups) >= 2
 
-    grouped_task_ids = [
-        task_id for group in lock.execution_plan.groups for task_id in group.tasks
-    ]
+    grouped_task_ids = [task_id for group in lock.execution_plan.groups for task_id in group.tasks]
     grouped_counts = Counter(grouped_task_ids)
 
     assert set(grouped_counts) == expected_task_ids

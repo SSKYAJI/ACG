@@ -23,7 +23,9 @@ def commit_files(root: Path, message: str, files: dict[str, str]) -> None:
 def fixture_repo(root: Path) -> Path:
     run(root, "init")
     for i in range(3):
-        commit_files(root, f"pair {i}", {"src/auth.py": f"auth {i}", "tests/test_auth.py": f"test {i}"})
+        commit_files(
+            root, f"pair {i}", {"src/auth.py": f"auth {i}", "tests/test_auth.py": f"test {i}"}
+        )
     commit_files(root, "billing", {"src/billing.py": "billing", "tests/test_billing.py": "test"})
     return root
 

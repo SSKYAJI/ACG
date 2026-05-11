@@ -153,15 +153,11 @@ class AnalysisReport:
 
     @property
     def total_proposal_oob(self) -> int:
-        return sum(
-            r.out_of_bounds_write_count for r in self.runs if not _is_applied_diff_run(r)
-        )
+        return sum(r.out_of_bounds_write_count for r in self.runs if not _is_applied_diff_run(r))
 
     @property
     def total_posthoc_oob(self) -> int:
-        return sum(
-            r.out_of_bounds_write_count for r in self.runs if _is_applied_diff_run(r)
-        )
+        return sum(r.out_of_bounds_write_count for r in self.runs if _is_applied_diff_run(r))
 
 
 def _is_applied_diff_run(run: RunSummary) -> bool:
@@ -170,9 +166,7 @@ def _is_applied_diff_run(run: RunSummary) -> bool:
         return True
     if run.execution_mode in {"applied_diff", "manual_diff", "devin_diff"}:
         return True
-    if run.evidence_kind in {"proposed_write_set"} or run.execution_mode in {
-        "propose_validate"
-    }:
+    if run.evidence_kind in {"proposed_write_set"} or run.execution_mode in {"propose_validate"}:
         return False
     # Backward compatibility for older artifacts written before evidence_kind
     # existed: Devin backends report applied diffs, local/mock report proposals.
@@ -249,9 +243,7 @@ def analyze_paths(paths: Iterable[Path]) -> AnalysisReport:
                     tasks_total=summary_metrics.get("tasks_total", 0),
                     tasks_completed=summary_metrics.get("tasks_completed", 0),
                     tests_ran_count=summary_metrics.get("tests_ran_count", 0),
-                    tested_tasks_completed=summary_metrics.get(
-                        "tested_tasks_completed", 0
-                    ),
+                    tested_tasks_completed=summary_metrics.get("tested_tasks_completed", 0),
                     overlapping_write_pairs=summary_metrics.get("overlapping_write_pairs", 0),
                     out_of_bounds_write_count=summary_metrics.get("out_of_bounds_write_count", 0),
                     blocked_invalid_write_count=summary_metrics.get(
@@ -460,12 +452,10 @@ def format_markdown(report: AnalysisReport) -> str:
     lines.append("## Contract enforcement")
     lines.append("")
     lines.append(
-        f"- Proposal out-of-bounds files across proposal-only runs: "
-        f"**{report.total_proposal_oob}**"
+        f"- Proposal out-of-bounds files across proposal-only runs: **{report.total_proposal_oob}**"
     )
     lines.append(
-        f"- Planned validator-blocked write events across all runs: "
-        f"**{report.total_blocks}**"
+        f"- Planned validator-blocked write events across all runs: **{report.total_blocks}**"
     )
     lines.append(
         f"- Post-hoc out-of-bounds files detected in applied/manual diffs: "
@@ -496,7 +486,9 @@ def format_markdown(report: AnalysisReport) -> str:
             lines.append(f"- {item}")
         lines.append("")
     if not any_suggested:
-        lines.append("_No refinements suggested — predictor and contract are well-calibrated for the observed runs._")
+        lines.append(
+            "_No refinements suggested — predictor and contract are well-calibrated for the observed runs._"
+        )
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"

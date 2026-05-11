@@ -40,7 +40,9 @@ DEFINITION_RE = re.compile(
 JAVA_DEFINITION_RE = re.compile(
     r"\b(?:public|private|protected)?\s*(?:static\s+)?(?:class|interface|enum|record)\s+([A-Za-z_][A-Za-z0-9_]*)"
 )
-IMPORT_RE = re.compile(r"(?:from\s+['\"]([^'\"]+)['\"]|import\s+[^'\n]*?from\s+['\"]([^'\"]+)['\"]|import\s+['\"]([^'\"]+)['\"]|require\(['\"]([^'\"]+)['\"]\)|from\s+([\w.]+)\s+import|import\s+([\w.]+))")
+IMPORT_RE = re.compile(
+    r"(?:from\s+['\"]([^'\"]+)['\"]|import\s+[^'\n]*?from\s+['\"]([^'\"]+)['\"]|import\s+['\"]([^'\"]+)['\"]|require\(['\"]([^'\"]+)['\"]\)|from\s+([\w.]+)\s+import|import\s+([\w.]+))"
+)
 IDENT_RE = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*\b")
 
 
@@ -75,10 +77,27 @@ def _cache_path(repo_root: Path | None, signature: str) -> Path | None:
 def _module_to_path(importer: str, specifier: str, files: set[str]) -> str | None:
     if specifier.startswith("."):
         base = Path(importer).parent / specifier
-        candidates = [base.as_posix(), f"{base.as_posix()}.ts", f"{base.as_posix()}.tsx", f"{base.as_posix()}.js", f"{base.as_posix()}.py", f"{base.as_posix()}/index.ts", f"{base.as_posix()}/index.tsx"]
+        candidates = [
+            base.as_posix(),
+            f"{base.as_posix()}.ts",
+            f"{base.as_posix()}.tsx",
+            f"{base.as_posix()}.js",
+            f"{base.as_posix()}.py",
+            f"{base.as_posix()}/index.ts",
+            f"{base.as_posix()}/index.tsx",
+        ]
     elif specifier.startswith("~/"):
         raw = specifier[2:]
-        candidates = [f"src/{raw}", raw, f"src/{raw}.ts", f"src/{raw}.tsx", f"{raw}.ts", f"{raw}.tsx", f"src/{raw}/index.ts", f"src/{raw}/index.tsx"]
+        candidates = [
+            f"src/{raw}",
+            raw,
+            f"src/{raw}.ts",
+            f"src/{raw}.tsx",
+            f"{raw}.ts",
+            f"{raw}.tsx",
+            f"src/{raw}/index.ts",
+            f"src/{raw}/index.tsx",
+        ]
     else:
         raw = specifier.replace(".", "/")
         candidates = [raw, f"{raw}.py", f"{raw}.ts", f"{raw}.tsx", f"{raw}.js"]
@@ -120,7 +139,14 @@ def _tree_sitter_definitions(text: str, path: str) -> set[str]:
 
     def visit(node: Any) -> None:
         node_type = getattr(node, "type", "")
-        if node_type in {"function_declaration", "class_declaration", "interface_declaration", "type_alias_declaration", "lexical_declaration", "method_definition"}:
+        if node_type in {
+            "function_declaration",
+            "class_declaration",
+            "interface_declaration",
+            "type_alias_declaration",
+            "lexical_declaration",
+            "method_definition",
+        }:
             child = node.child_by_field_name("name")
             if child is not None:
                 symbols.add(text[child.start_byte : child.end_byte])
@@ -156,29 +182,41 @@ def _build_symbol_graph(repo_root: Path | None, repo_graph: dict[str, Any]) -> S
         path = entry["path"]
         text = read_rel(repo_root, path)
         direct_targets = [
-            target
-            for target in entry.get("resolved_imports", [])
-            if isinstance(target, str)
+            target for target in entry.get("resolved_imports", []) if isinstance(target, str)
         ]
         for target in direct_targets:
             if target and target != path:
-                graph.add_edge(path, target, weight=graph.get_edge_data(path, target, {}).get("weight", 0) + 2)
+                graph.add_edge(
+                    path, target, weight=graph.get_edge_data(path, target, {}).get("weight", 0) + 2
+                )
         for specifier in list(entry.get("imports") or []) + _imports(text):
             target = _module_to_path(path, specifier, files)
             if target and target != path:
-                graph.add_edge(path, target, weight=graph.get_edge_data(path, target, {}).get("weight", 0) + 2)
+                graph.add_edge(
+                    path, target, weight=graph.get_edge_data(path, target, {}).get("weight", 0) + 2
+                )
         for target in entry.get("type_links", []) or []:
             if isinstance(target, str) and target in files and target != path:
-                graph.add_edge(path, target, weight=graph.get_edge_data(path, target, {}).get("weight", 0) + 2)
-                graph.add_edge(target, path, weight=graph.get_edge_data(target, path, {}).get("weight", 0) + 2)
+                graph.add_edge(
+                    path, target, weight=graph.get_edge_data(path, target, {}).get("weight", 0) + 2
+                )
+                graph.add_edge(
+                    target, path, weight=graph.get_edge_data(target, path, {}).get("weight", 0) + 2
+                )
 
     for referrer, counts in references.items():
         for symbol, count in counts.items():
             definers = symbol_files.get(symbol, set()) - {referrer}
             for definer in definers:
-                graph.add_edge(referrer, definer, weight=graph.get_edge_data(referrer, definer, {}).get("weight", 0) + count)
+                graph.add_edge(
+                    referrer,
+                    definer,
+                    weight=graph.get_edge_data(referrer, definer, {}).get("weight", 0) + count,
+                )
 
-    return SymbolGraph(graph=graph, file_symbols=dict(file_symbols), symbol_files=dict(symbol_files))
+    return SymbolGraph(
+        graph=graph, file_symbols=dict(file_symbols), symbol_files=dict(symbol_files)
+    )
 
 
 def build_symbol_graph(repo_root: Path | None, repo_graph: dict[str, Any]) -> SymbolGraph:
@@ -211,7 +249,11 @@ def _symbol_matches(task: TaskInput, symbol_graph: SymbolGraph) -> dict[str, lis
         if not symbol_tokens:
             continue
         top_ratio = max(
-            (fuzz.ratio(query, candidate) for query in query_tokens for candidate in [symbol.lower(), *symbol_tokens]),
+            (
+                fuzz.ratio(query, candidate)
+                for query in query_tokens
+                for candidate in [symbol.lower(), *symbol_tokens]
+            ),
             default=0,
         )
         if top_ratio >= FUZZY_THRESHOLD:

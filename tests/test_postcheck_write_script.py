@@ -74,9 +74,7 @@ def test_silent_without_lockfile(tmp_path: Path) -> None:
     assert proc.stdout.strip() == ""
 
 
-def test_emits_receipt_with_task_context(
-    tmp_path: Path, example_dag_lockfile_path: Path
-) -> None:
+def test_emits_receipt_with_task_context(tmp_path: Path, example_dag_lockfile_path: Path) -> None:
     """With valid task context and lockfile → receipt message on stdout."""
     lock_copy = tmp_path / "agent_lock.json"
     shutil.copy(example_dag_lockfile_path, lock_copy)
@@ -96,9 +94,7 @@ def test_emits_receipt_with_task_context(
     assert "settings" in proc.stdout
 
 
-def test_emits_receipt_with_positional_arg(
-    tmp_path: Path, example_dag_lockfile_path: Path
-) -> None:
+def test_emits_receipt_with_positional_arg(tmp_path: Path, example_dag_lockfile_path: Path) -> None:
     """Direct invocation with $1 for testing ergonomics."""
     lock_copy = tmp_path / "agent_lock.json"
     shutil.copy(example_dag_lockfile_path, lock_copy)

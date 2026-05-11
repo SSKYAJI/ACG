@@ -3,6 +3,8 @@ interface Props {
   speed: number;
   phaseLabel: string;
   progressPct: number;
+  view: "replay" | "results";
+  onViewChange: (view: "replay" | "results") => void;
   onPlay: () => void;
   onPause: () => void;
   onReset: () => void;
@@ -20,6 +22,21 @@ export function Toolbar(props: Props) {
           className="progress-fill"
           style={{ width: `${Math.min(100, Math.max(0, props.progressPct))}%` }}
         />
+      </div>
+      <span className="spacer" />
+      <div className="view-group">
+        <button
+          className={props.view === "replay" ? "active" : ""}
+          onClick={() => props.onViewChange("replay")}
+        >
+          Replay
+        </button>
+        <button
+          className={props.view === "results" ? "active" : ""}
+          onClick={() => props.onViewChange("results")}
+        >
+          Results
+        </button>
       </div>
       <span className="spacer" />
       <span className="speed-label">speed</span>

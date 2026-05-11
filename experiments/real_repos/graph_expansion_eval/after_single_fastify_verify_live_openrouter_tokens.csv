@@ -1,0 +1,2 @@
+repo,task_id,pr_number,run_set,strategy,status,prompt_tokens,completion_tokens,cost_usd,source
+fastify,pr-6653,6653,,,unavailable,,,,predictor CSV uses live model compile

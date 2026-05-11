@@ -131,7 +131,9 @@ class CochangeIndexer:
                 existing = scores.get(path)
                 if existing is None or confidence > existing[1]:
                     scores[path] = (count, confidence, seed)
-        ranked = sorted(scores.items(), key=lambda item: (-item[1][1], -item[1][0], item[0]))[: self.top_n]
+        ranked = sorted(scores.items(), key=lambda item: (-item[1][1], -item[1][0], item[0]))[
+            : self.top_n
+        ]
         return [
             PredictedWrite(
                 path=path,

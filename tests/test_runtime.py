@@ -16,18 +16,20 @@ from pathlib import Path
 
 import pytest
 
+from acg.predictor import LLM_SEED_EXPANSION_REASON
 from acg.runtime import (
     LLMReply,
     OrchestratorResult,
     RunResult,
     RuntimeConfig,
     WorkerResult,
+    _build_worker_prompt,
     run_group,
     run_lockfile,
     run_orchestrator,
     run_worker,
 )
-from acg.schema import AgentLock, ExecutionPlan, FileScope, Group, Task
+from acg.schema import AgentLock, ExecutionPlan, FileScope, Group, PredictedWrite, Task
 
 # ---------------------------------------------------------------------------
 # Test doubles.
@@ -73,9 +75,7 @@ class StubRuntimeLLM:
         temperature: float = 0.2,
     ) -> LLMReply:
         del max_tokens, temperature
-        user_blob = "\n".join(
-            m.get("content", "") for m in messages if m.get("role") == "user"
-        )
+        user_blob = "\n".join(m.get("content", "") for m in messages if m.get("role") == "user")
         # Identify which task or whether this is the orchestrator.
         matched_task: str | None = None
         for tid in self._replies:
@@ -89,9 +89,7 @@ class StubRuntimeLLM:
             content = self._replies[matched_task]
         else:
             # Orchestrator default reply when no router supplied.
-            content = json.dumps(
-                {"approved": True, "concerns": [], "dispatch_order": [1, 2, 3]}
-            )
+            content = json.dumps({"approved": True, "concerns": [], "dispatch_order": [1, 2, 3]})
 
         delay = self.delays.get(matched_task or "_orchestrator_", 0.0)
         if delay:
@@ -137,13 +135,30 @@ def empty_repo_graph() -> dict[str, object]:
     return {"language": "typescript", "files": [], "hotspots": []}
 
 
+def test_worker_prompt_invites_candidate_writes_with_runtime_guard(
+    empty_repo_graph: dict[str, object],
+) -> None:
+    """Candidate context must not be labeled read-only; guard still described."""
+    task = Task(
+        id="oauth",
+        prompt="Example task",
+        predicted_writes=[PredictedWrite(path="src/must.js", confidence=0.9)],
+        allowed_paths=["src/**"],
+        candidate_context_paths=["lib/coordinated.js"],
+    )
+    messages = _build_worker_prompt(task, empty_repo_graph)
+    user = next(m["content"] for m in messages if m.get("role") == "user")
+    assert "You may propose writes here when changes to" in user
+    assert "runtime auto-approval guard" in user
+    assert "read-only unless a replan expands scope" not in user
+
+
 def _worker_replies(paths: list[str]) -> dict[str, str]:
     return {
         "oauth": json.dumps(
             {
                 "writes": [
-                    {"file": path, "description": f"write {idx}"}
-                    for idx, path in enumerate(paths)
+                    {"file": path, "description": f"write {idx}"} for idx, path in enumerate(paths)
                 ]
             }
         )
@@ -223,9 +238,7 @@ def test_runtime_blocks_writes_outside_allowed_paths(
         }
     )
     orch = StubRuntimeLLM()
-    result = asyncio.run(
-        run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json")
-    )
+    result = asyncio.run(run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json"))
     oauth_worker = next(w for w in result.workers if w.task_id == "oauth")
     assert oauth_worker.blocked_count == 1
     assert oauth_worker.allowed_count == 0
@@ -342,6 +355,127 @@ def test_runtime_auto_replan_approves_supported_candidate_context(
     assert "src/server/oauth-provider.ts" in oauth_task.allowed_paths
 
 
+def test_runtime_auto_replan_approves_must_write_neighbor_candidate(
+    lock: AgentLock,
+    empty_repo_graph: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A candidate scope whose ONLY signal is must_write_neighbor should
+    auto-approve when the worker proposes a write.
+
+    Guards Fix B (post-LLM typings expansion) ↔ Fix D (auto-replan) composition.
+    """
+    scoped_lock = lock.model_copy(deep=True)
+    oauth_task = next(t for t in scoped_lock.tasks if t.id == "oauth")
+    oauth_task.candidate_context_paths.append("types/oauth-provider.d.ts")
+    oauth_task.file_scopes.append(
+        FileScope(
+            path="types/oauth-provider.d.ts",
+            tier="candidate_context",
+            score=0.78,
+            signals=["must_write_neighbor"],
+            reason="Post-LLM typings expansion of a must_write file.",
+        )
+    )
+    sub = StubRuntimeLLM(
+        replies={
+            "oauth": json.dumps(
+                {"writes": [{"file": "types/oauth-provider.d.ts", "description": "typings"}]}
+            ),
+            "settings": json.dumps({"writes": []}),
+            "billing": json.dumps({"writes": []}),
+            "tests": json.dumps({"writes": []}),
+        }
+    )
+    recorder = RecordingConsole()
+    monkeypatch.setattr("acg.runtime._console", recorder)
+
+    result = asyncio.run(
+        run_lockfile(
+            scoped_lock,
+            empty_repo_graph,
+            StubRuntimeLLM(),
+            sub,
+            lockfile_path="x.json",
+            config=RuntimeConfig(auto_replan=True),
+        )
+    )
+
+    events = _candidate_replan_events(recorder.messages)
+    assert len(events) == 1
+    event = events[0]
+    assert event["path"] == "types/oauth-provider.d.ts"
+    assert event["signals"] == ["must_write_neighbor"]
+    assert event["can_auto_approve_replan"] is True
+    assert event["final_outcome"] == "approved_replan"
+
+    oauth_worker = next(w for w in result.workers if w.task_id == "oauth")
+    proposal = oauth_worker.proposals[0]
+    assert proposal.allowed is True
+    assert proposal.scope_status == "approved_replan"
+
+
+def test_runtime_auto_replan_approves_planner_seed_expansion_candidate(
+    lock: AgentLock,
+    empty_repo_graph: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Planner-only rows from _llm_seed_expansion (score 0.72) must auto-approve."""
+    path = "src/server/seed-expansion-target.ts"
+    scoped_lock = lock.model_copy(deep=True)
+    oauth_task = next(t for t in scoped_lock.tasks if t.id == "oauth")
+    oauth_task.candidate_context_paths.append(path)
+    oauth_task.file_scopes.append(
+        FileScope(
+            path=path,
+            tier="candidate_context",
+            score=0.72,
+            signals=["planner"],
+            reason=(
+                f"{LLM_SEED_EXPANSION_REASON} Candidate context only; requires replan before write. "
+                "Signals: planner."
+            ),
+        )
+    )
+    sub = StubRuntimeLLM(
+        replies={
+            "oauth": json.dumps({"writes": [{"file": path, "description": "coordination edit"}]}),
+            "settings": json.dumps({"writes": []}),
+            "billing": json.dumps({"writes": []}),
+            "tests": json.dumps({"writes": []}),
+        }
+    )
+    recorder = RecordingConsole()
+    monkeypatch.setattr("acg.runtime._console", recorder)
+
+    result = asyncio.run(
+        run_lockfile(
+            scoped_lock,
+            empty_repo_graph,
+            StubRuntimeLLM(),
+            sub,
+            lockfile_path="x.json",
+            config=RuntimeConfig(auto_replan=True),
+        )
+    )
+
+    events = _candidate_replan_events(recorder.messages)
+    assert len(events) == 1
+    event = events[0]
+    assert event["task_id"] == "oauth"
+    assert event["path"] == path
+    assert event["signals"] == ["planner"]
+    assert event["score"] == 0.72
+    assert event["can_auto_approve_replan"] is True
+    assert event["has_hard_conflict"] is False
+    assert event["final_outcome"] == "approved_replan"
+
+    oauth_worker = next(w for w in result.workers if w.task_id == "oauth")
+    proposal = oauth_worker.proposals[0]
+    assert proposal.allowed is True
+    assert proposal.scope_status == "approved_replan"
+
+
 def test_runtime_logs_needs_replan_for_unsupported_candidate_context(
     lock: AgentLock,
     empty_repo_graph: dict[str, object],
@@ -434,9 +568,7 @@ def test_runtime_allows_writes_within_allowed_paths(
         }
     )
     orch = StubRuntimeLLM()
-    result = asyncio.run(
-        run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json")
-    )
+    result = asyncio.run(run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json"))
     oauth_worker = next(w for w in result.workers if w.task_id == "oauth")
     assert oauth_worker.allowed_count == 2
     assert oauth_worker.blocked_count == 0
@@ -460,9 +592,7 @@ def test_grace_overlap_uses_thread_pool(
 
     monkeypatch.setattr("acg.enforce.validate_write", spy_validate_write)
     sub = StubRuntimeLLM(
-        replies=_worker_replies(
-            ["src/server/auth/config.ts", "src/server/auth/index.ts"]
-        )
+        replies=_worker_replies(["src/server/auth/config.ts", "src/server/auth/index.ts"])
     )
     oauth_task = next(t for t in lock.tasks if t.id == "oauth")
 
@@ -500,9 +630,7 @@ def test_grace_overlap_off_runs_synchronously(
 
     monkeypatch.setattr("acg.enforce.validate_write", spy_validate_write)
     sub = StubRuntimeLLM(
-        replies=_worker_replies(
-            ["src/server/auth/config.ts", "src/server/auth/index.ts"]
-        )
+        replies=_worker_replies(["src/server/auth/config.ts", "src/server/auth/index.ts"])
     )
     oauth_task = next(t for t in lock.tasks if t.id == "oauth")
 
@@ -575,9 +703,7 @@ def test_runtime_handles_malformed_worker_reply(
         }
     )
     orch = StubRuntimeLLM()
-    result = asyncio.run(
-        run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json")
-    )
+    result = asyncio.run(run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json"))
     oauth_worker = next(w for w in result.workers if w.task_id == "oauth")
     assert oauth_worker.proposals == []
     assert oauth_worker.allowed_count == 0
@@ -618,9 +744,7 @@ def test_runtime_handles_json_fenced_reply(
         }
     )
     orch = StubRuntimeLLM()
-    result = asyncio.run(
-        run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json")
-    )
+    result = asyncio.run(run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json"))
     oauth_worker = next(w for w in result.workers if w.task_id == "oauth")
     assert oauth_worker.allowed_count == 1
     assert oauth_worker.proposals[0].file == "src/server/auth/config.ts"
@@ -633,11 +757,11 @@ def test_runtime_records_orchestrator_reasoning(
     reasoning = "Looking at the lockfile, conflicts on prisma/schema.prisma…"
     orch = StubRuntimeLLM(reasoning=reasoning)
     sub = StubRuntimeLLM(
-        replies={tid: json.dumps({"writes": []}) for tid in ["oauth", "settings", "billing", "tests"]}
+        replies={
+            tid: json.dumps({"writes": []}) for tid in ["oauth", "settings", "billing", "tests"]
+        }
     )
-    result = asyncio.run(
-        run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json")
-    )
+    result = asyncio.run(run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json"))
     assert result.orchestrator.reasoning_content == reasoning
     assert result.orchestrator.parsed is not None
     assert result.orchestrator.parsed.get("approved") is True
@@ -649,11 +773,11 @@ def test_runtime_emits_required_trace_fields(
     """asdict(RunResult) must contain every top-level key the schema declares."""
     orch = StubRuntimeLLM()
     sub = StubRuntimeLLM(
-        replies={tid: json.dumps({"writes": []}) for tid in ["oauth", "settings", "billing", "tests"]}
+        replies={
+            tid: json.dumps({"writes": []}) for tid in ["oauth", "settings", "billing", "tests"]
+        }
     )
-    result = asyncio.run(
-        run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json")
-    )
+    result = asyncio.run(run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json"))
     payload = asdict(result)
     required = {
         "version",
@@ -724,9 +848,7 @@ def test_sequential_mode_serializes_workers(
 ) -> None:
     """sequential=True must run 4 × 100ms workers in serial (>= 0.4s wall)."""
     lock, group = _build_four_task_lock()
-    sub = StubRuntimeLLM(
-        replies={f"t{i}": json.dumps({"writes": []}) for i in range(1, 5)}
-    )
+    sub = StubRuntimeLLM(replies={f"t{i}": json.dumps({"writes": []}) for i in range(1, 5)})
     for i in range(1, 5):
         sub.set_delay(f"t{i}", 0.1)
 
@@ -744,9 +866,7 @@ def test_concurrent_mode_parallelizes_workers(
 ) -> None:
     """worker_concurrency=4 lets all 4 × 100ms workers run together (< 0.2s)."""
     lock, group = _build_four_task_lock()
-    sub = StubRuntimeLLM(
-        replies={f"t{i}": json.dumps({"writes": []}) for i in range(1, 5)}
-    )
+    sub = StubRuntimeLLM(replies={f"t{i}": json.dumps({"writes": []}) for i in range(1, 5)})
     for i in range(1, 5):
         sub.set_delay(f"t{i}", 0.1)
 
@@ -759,9 +879,7 @@ def test_concurrent_mode_parallelizes_workers(
     assert elapsed < 0.2, f"concurrent lane did not parallelize: {elapsed:.3f}s"
 
 
-def test_mutex_flags_rejected(
-    tmp_path: Path, example_dag_lockfile_path: Path
-) -> None:
+def test_mutex_flags_rejected(tmp_path: Path, example_dag_lockfile_path: Path) -> None:
     """`acg run --sequential --worker-concurrency 4` must exit non-zero."""
     from typer.testing import CliRunner
 
@@ -890,12 +1008,12 @@ def test_banner_includes_env_values(
     monkeypatch.setenv("ACG_GRACE_OVERLAP", "1")
 
     sub = StubRuntimeLLM(
-        replies={tid: json.dumps({"writes": []}) for tid in ["oauth", "settings", "billing", "tests"]}
+        replies={
+            tid: json.dumps({"writes": []}) for tid in ["oauth", "settings", "billing", "tests"]
+        }
     )
     orch = StubRuntimeLLM()
-    asyncio.run(
-        run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json")
-    )
+    asyncio.run(run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json"))
 
     err = capsys.readouterr().err
     assert "engine=llama.cpp" in err
@@ -924,12 +1042,12 @@ def test_banner_falls_back_to_unknown(
         monkeypatch.delenv(var, raising=False)
 
     sub = StubRuntimeLLM(
-        replies={tid: json.dumps({"writes": []}) for tid in ["oauth", "settings", "billing", "tests"]}
+        replies={
+            tid: json.dumps({"writes": []}) for tid in ["oauth", "settings", "billing", "tests"]
+        }
     )
     orch = StubRuntimeLLM()
-    asyncio.run(
-        run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json")
-    )
+    asyncio.run(run_lockfile(lock, empty_repo_graph, orch, sub, lockfile_path="x.json"))
 
     err = capsys.readouterr().err
     assert "engine=unknown" in err

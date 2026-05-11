@@ -10,6 +10,7 @@ import { TaskGraph } from "./components/TaskGraph";
 import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
 import { OrchestratorPanel } from "./components/OrchestratorPanel";
+import { ResultsPanel } from "./components/ResultsPanel";
 
 const lock = lockData as unknown as AgentLock;
 const trace = traceData as unknown as RunTrace;
@@ -21,6 +22,7 @@ export default function App() {
   const [tSeconds, setTSeconds] = useState(0);
   const [isPlaying, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
+  const [view, setView] = useState<"replay" | "results">("replay");
 
   // RAF-driven replay clock. We hold the latest speed in a ref so the loop
   // doesn't restart every time the user clicks a different speed button.
@@ -97,28 +99,38 @@ export default function App() {
         speed={speed}
         phaseLabel={phaseLabel}
         progressPct={progressPct}
+        view={view}
+        onViewChange={setView}
         onPlay={handlePlay}
         onPause={handlePause}
         onReset={handleReset}
         onSpeedChange={setSpeed}
       />
-      <div className="canvas-wrap">
-        <TaskGraph
-          lock={lock}
-          selectedTaskId={selectedId}
-          runningGroup={replay.runningGroupId}
-          completedGroups={replay.completedGroupIds}
-          workerProgress={replay.workerProgress}
-          onSelect={setSelectedId}
-        />
-        <OrchestratorPanel orchestrator={trace.orchestrator} replay={replay} />
-      </div>
-      <Sidebar
-        lock={lock}
-        selectedTaskId={selectedId}
-        worker={selectedWorker}
-        workerProgress={selectedProgress}
-      />
+      {view === "results" ? (
+        <div className="canvas-wrap" style={{ gridColumn: "1 / span 2" }}>
+          <ResultsPanel />
+        </div>
+      ) : (
+        <>
+          <div className="canvas-wrap">
+            <TaskGraph
+              lock={lock}
+              selectedTaskId={selectedId}
+              runningGroup={replay.runningGroupId}
+              completedGroups={replay.completedGroupIds}
+              workerProgress={replay.workerProgress}
+              onSelect={setSelectedId}
+            />
+            <OrchestratorPanel orchestrator={trace.orchestrator} replay={replay} />
+          </div>
+          <Sidebar
+            lock={lock}
+            selectedTaskId={selectedId}
+            worker={selectedWorker}
+            workerProgress={selectedProgress}
+          />
+        </>
+      )}
     </div>
   );
 }

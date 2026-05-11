@@ -98,9 +98,7 @@ def test_import_only_file_has_no_symbols(tmp_path: Path) -> None:
     """A file with only a package + imports should emit no exports/symbols."""
     src = tmp_path / "src/main/java/com/example/empty"
     src.mkdir(parents=True)
-    (src / "package-info.java").write_text(
-        "package com.example.empty;\nimport java.util.List;\n"
-    )
+    (src / "package-info.java").write_text("package com.example.empty;\nimport java.util.List;\n")
 
     graph = scan_java.scan(tmp_path)
     assert len(graph["files"]) == 1

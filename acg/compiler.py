@@ -45,10 +45,7 @@ def _to_allowed_path(write: PredictedWrite) -> str:
     parts = write.path.split("/")
     is_test_path = any(write.path.startswith(prefix) for prefix in TEST_DIR_PREFIXES)
     min_segments = 3 if is_test_path else GLOB_BROADENING_MIN_SEGMENTS
-    if (
-        write.confidence >= GLOB_BROADENING_MIN_CONFIDENCE
-        and len(parts) >= min_segments
-    ):
+    if write.confidence >= GLOB_BROADENING_MIN_CONFIDENCE and len(parts) >= min_segments:
         return "/".join(parts[:-1]) + "/**"
     return write.path
 
@@ -200,11 +197,7 @@ def rebuild_lockfile_plan(lock: AgentLock) -> None:
     conflicts = detect_conflicts(lock.tasks)
     dag = build_dag(lock.tasks)
     groups = topological_groups(dag)
-    group_by_task = {
-        task_id: group.id
-        for group in groups
-        for task_id in group.tasks
-    }
+    group_by_task = {task_id: group.id for group in groups for task_id in group.tasks}
     for task in lock.tasks:
         task.parallel_group = group_by_task.get(task.id)
     lock.conflicts_detected = conflicts

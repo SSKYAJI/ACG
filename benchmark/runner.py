@@ -42,9 +42,7 @@ def _load_repo_graph(repo_path: Path) -> dict[str, Any]:
         return {}
 
 
-def _ensure_lockfile(
-    repo_path: Path, tasks_input: TasksInput
-) -> AgentLock:
+def _ensure_lockfile(repo_path: Path, tasks_input: TasksInput) -> AgentLock:
     """Compile a fresh lockfile in memory using whatever LLM is configured."""
     llm = LLMClient.from_env()
     return compile_lockfile(repo_path, tasks_input, _load_repo_graph(repo_path), llm)
@@ -62,19 +60,14 @@ def run_naive(repo_path: Path, tasks_input: TasksInput) -> dict[str, Any]:
     for tid, paths in paths_per_task.items():
         for path in paths:
             file_owners[path].append(tid)
-    overlapping_writes = sum(
-        len(owners) for owners in file_owners.values() if len(owners) > 1
-    )
+    overlapping_writes = sum(len(owners) for owners in file_owners.values() if len(owners) > 1)
 
     overlap_pairs = sum(
-        1
-        for a, b in combinations(paths_per_task, 2)
-        if paths_per_task[a] & paths_per_task[b]
+        1 for a, b in combinations(paths_per_task, 2) if paths_per_task[a] & paths_per_task[b]
     )
 
     wall_time = (
-        NAIVE_BASE_MIN_PER_TASK * len(lock.tasks)
-        + NAIVE_OVERLAP_PENALTY_MIN * overlap_pairs
+        NAIVE_BASE_MIN_PER_TASK * len(lock.tasks) + NAIVE_OVERLAP_PENALTY_MIN * overlap_pairs
     )
     return {
         "mode": "naive",
@@ -117,9 +110,8 @@ def run_planned(
     # parallel and finish at the slowest member.
     wall_time = 0
     for grp in lock.execution_plan.groups:
-        wall_time += (
-            PLANNED_BASE_MIN_PER_GROUP
-            + PLANNED_BASE_MIN_PER_EXTRA_TASK_IN_GROUP * max(0, len(grp.tasks) - 1)
+        wall_time += PLANNED_BASE_MIN_PER_GROUP + PLANNED_BASE_MIN_PER_EXTRA_TASK_IN_GROUP * max(
+            0, len(grp.tasks) - 1
         )
 
     return {

@@ -50,8 +50,8 @@ from experiments.greenhouse.eval_schema import (
     write_eval_run,
 )
 from experiments.greenhouse.strategies import (
-    LockfileEchoMockLLM,
     SINGLE_AGENT_STRATEGY,
+    LockfileEchoMockLLM,
     _build_single_agent_prompt,
     _extract_task_id,
     _PromptCountingLLM,
@@ -594,19 +594,24 @@ def _greenhouse_repo_graph() -> dict:
         "src/main/java/com/springsource/greenhouse/develop/AppRepository.java",
         "src/main/java/com/springsource/greenhouse/develop/App.java",
     ]
-    noise = [
-        f"src/main/java/com/springsource/greenhouse/signup/{n}.java"
-        for n in ("Signup", "SignupForm", "SignupController", "SignupValidator")
-    ] + [
-        f"src/main/java/com/springsource/greenhouse/utils/{n}.java"
-        for n in ("StringUtils", "DateUtils", "FormatUtils", "JsonUtils")
-    ] + [
-        f"src/main/java/com/springsource/greenhouse/connect/{n}.java"
-        for n in ("ConnectController", "ConnectInterceptor")
-    ] + [
-        f"src/main/java/com/springsource/greenhouse/database/{n}.java"
-        for n in ("DatabaseConfig", "JdbcTemplate")
-    ]
+    noise = (
+        [
+            f"src/main/java/com/springsource/greenhouse/signup/{n}.java"
+            for n in ("Signup", "SignupForm", "SignupController", "SignupValidator")
+        ]
+        + [
+            f"src/main/java/com/springsource/greenhouse/utils/{n}.java"
+            for n in ("StringUtils", "DateUtils", "FormatUtils", "JsonUtils")
+        ]
+        + [
+            f"src/main/java/com/springsource/greenhouse/connect/{n}.java"
+            for n in ("ConnectController", "ConnectInterceptor")
+        ]
+        + [
+            f"src/main/java/com/springsource/greenhouse/database/{n}.java"
+            for n in ("DatabaseConfig", "JdbcTemplate")
+        ]
+    )
     paths = in_scope + noise
     files = [
         {"path": p, "import_fan_in": 10 - i // 5}  # roughly descending fan-in
@@ -692,10 +697,7 @@ def test_scoped_repo_graph_filters_files_to_allowed_paths() -> None:
     scoped = _scoped_repo_graph(full, lock, "lambda-rowmapper-account")
     paths = {f["path"] for f in scoped["files"]}
     assert "pom.xml" in paths
-    assert (
-        "src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java"
-        in paths
-    )
+    assert "src/main/java/com/springsource/greenhouse/account/JdbcAccountRepository.java" in paths
     # Other-service files must not leak through.
     assert not any("invite/" in p for p in paths)
     assert not any("develop/" in p for p in paths)
@@ -739,8 +741,7 @@ def test_planned_uses_fewer_prompt_tokens_than_naive_on_mock(tmp_path: Path) -> 
 
     # The headline savings claim: planned prompt tokens strictly less.
     assert (
-        planned.summary_metrics.tokens_prompt_total
-        < naive.summary_metrics.tokens_prompt_total
+        planned.summary_metrics.tokens_prompt_total < naive.summary_metrics.tokens_prompt_total
     ), (
         f"expected planned ({planned.summary_metrics.tokens_prompt_total}) "
         f"< naive ({naive.summary_metrics.tokens_prompt_total})"
@@ -1388,12 +1389,8 @@ def test_tightened_greenhouse_lockfile_fires_validator(tmp_path: Path) -> None:
     is enforced in CI.
     """
     repo_root = Path(__file__).resolve().parent.parent
-    tight_lock_path = (
-        repo_root / "experiments" / "greenhouse" / "agent_lock_tight.json"
-    )
-    assert tight_lock_path.exists(), (
-        f"tightened lockfile missing at {tight_lock_path}"
-    )
+    tight_lock_path = repo_root / "experiments" / "greenhouse" / "agent_lock_tight.json"
+    assert tight_lock_path.exists(), f"tightened lockfile missing at {tight_lock_path}"
     lock = AgentLock.model_validate_json(tight_lock_path.read_text())
 
     # ground-truth tightening: each task's allowed_paths is exactly
@@ -1424,9 +1421,7 @@ def test_tightened_greenhouse_lockfile_fires_validator(tmp_path: Path) -> None:
 
     # And per-task: every task should block at least its predictor's
     # over-eager false positives. Three tasks × ≥1 block each.
-    blocked_per_task = {
-        t.task_id: len(t.blocked_write_events) for t in run.tasks
-    }
+    blocked_per_task = {t.task_id: len(t.blocked_write_events) for t in run.tasks}
     assert all(count >= 1 for count in blocked_per_task.values()), (
         f"every task should produce blocked events; got {blocked_per_task!r}"
     )
@@ -1434,9 +1429,7 @@ def test_tightened_greenhouse_lockfile_fires_validator(tmp_path: Path) -> None:
     # And the in-bounds writes should still land — pom.xml is allowed for
     # every task and JdbcAccountRepository.java is allowed for the account
     # task — so ``actual_changed_files`` is non-empty.
-    actual_per_task = {
-        t.task_id: t.actual_changed_files for t in run.tasks
-    }
+    actual_per_task = {t.task_id: t.actual_changed_files for t in run.tasks}
     assert all(len(files) >= 1 for files in actual_per_task.values()), (
         f"in-bounds proposals must still land; got {actual_per_task!r}"
     )

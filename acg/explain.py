@@ -13,14 +13,8 @@ def render_summary(lock: AgentLock) -> str:
     """Bullet-list summary of execution plan, conflicts, and key tasks."""
     lines: list[str] = ["Execution plan:"]
     for grp in lock.execution_plan.groups:
-        wait = (
-            f", waits for {', '.join(str(w) for w in grp.waits_for)}"
-            if grp.waits_for
-            else ""
-        )
-        lines.append(
-            f"  Group {grp.id} ({grp.type}{wait}): {', '.join(grp.tasks)}"
-        )
+        wait = f", waits for {', '.join(str(w) for w in grp.waits_for)}" if grp.waits_for else ""
+        lines.append(f"  Group {grp.id} ({grp.type}{wait}): {', '.join(grp.tasks)}")
 
     if lock.conflicts_detected:
         lines.append("")
@@ -75,9 +69,7 @@ def render_dag(lock: AgentLock) -> str:
         first_col = first_group.tasks
         max_width = max(len(name) for name in first_col)
         for idx, name in enumerate(first_col):
-            connector = "───┐" if idx == 0 else (
-                "───┤" if idx < len(first_col) - 1 else "───┘"
-            )
+            connector = "───┐" if idx == 0 else ("───┤" if idx < len(first_col) - 1 else "───┘")
             spacer = " " * (max_width - len(name))
             if idx == len(first_col) // 2:
                 lines.append(f"  {name}{spacer} {connector}──► {rest}")

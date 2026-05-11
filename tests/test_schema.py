@@ -27,9 +27,7 @@ def test_examples_validate_against_schema(
     "fixture_name",
     ["example_simple_lockfile_path", "example_dag_lockfile_path"],
 )
-def test_examples_load_via_pydantic(
-    request: pytest.FixtureRequest, fixture_name: str
-) -> None:
+def test_examples_load_via_pydantic(request: pytest.FixtureRequest, fixture_name: str) -> None:
     path: Path = request.getfixturevalue(fixture_name)
     lock = AgentLock.model_validate_json(path.read_text())
     assert lock.version == "1.0"

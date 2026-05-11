@@ -18,6 +18,7 @@ from acg.predictor import (
     _extract_entity_nouns,
     _graph_expansion_seed,
     _index_seed,
+    _llm_seed_expansion,
     _looks_like_test_task,
     _sibling_pattern_seed,
     _test_scaffold_seed,
@@ -171,17 +172,13 @@ def test_malformed_llm_reply_is_ignored(repo_graph: dict[str, Any]) -> None:
 def test_predictions_are_capped_and_sorted(repo_graph: dict[str, Any]) -> None:
     rerank = {
         "writes": [
-            {"path": f"file_{i}.ts", "confidence": 0.5 + 0.01 * i, "reason": ""}
-            for i in range(20)
+            {"path": f"file_{i}.ts", "confidence": 0.5 + 0.01 * i, "reason": ""} for i in range(20)
         ]
     }
     task = TaskInput(id="big", prompt="Touch many files.", hints=None)
     writes = predict_writes(task, repo_graph, StubLLM(json.dumps(rerank)))
     assert len(writes) <= MAX_PREDICTIONS
-    assert all(
-        writes[i].confidence >= writes[i + 1].confidence
-        for i in range(len(writes) - 1)
-    )
+    assert all(writes[i].confidence >= writes[i + 1].confidence for i in range(len(writes) - 1))
 
 
 def _scope_paths(
@@ -191,8 +188,7 @@ def _scope_paths(
     signal_map: dict[str, set[str]],
 ) -> dict[str, str]:
     return {
-        scope.path: scope.tier
-        for scope in _build_file_scopes(task, repo_graph, writes, signal_map)
+        scope.path: scope.tier for scope in _build_file_scopes(task, repo_graph, writes, signal_map)
     }
 
 
@@ -374,9 +370,7 @@ def test_test_scaffold_seed_existing_playwright_config(tmp_path: Path) -> None:
 
 
 def test_test_scaffold_seed_pytest_existing_pyproject(tmp_path: Path) -> None:
-    (tmp_path / "pyproject.toml").write_text(
-        "[tool.pytest.ini_options]\ntestpaths = ['tests']\n"
-    )
+    (tmp_path / "pyproject.toml").write_text("[tool.pytest.ini_options]\ntestpaths = ['tests']\n")
     task = TaskInput(
         id="tests",
         prompt="Add pytest unit tests for the billing helper.",
@@ -433,9 +427,7 @@ def test_test_scaffold_seed_integrated_with_predict_writes(
     assert "tests/e2e/checkout.spec.ts" in paths
 
 
-def test_test_scaffold_seed_missing_repo_root_is_safe(
-    repo_graph: dict[str, Any]
-) -> None:
+def test_test_scaffold_seed_missing_repo_root_is_safe(repo_graph: dict[str, Any]) -> None:
     """predict_writes must not crash when repo_root is None and the seed
     can still infer from the prompt keyword alone."""
     task = TaskInput(
@@ -638,9 +630,7 @@ def test_index_seed_passes_through_aggregator_predictions(
     monkeypatch.setattr("acg.index.aggregate", fake_aggregate)
 
     task = TaskInput(id="x", prompt="Add a feature.")
-    scopes = predict_file_scopes(
-        task, {}, StubLLM(json.dumps({"writes": []})), repo_root=tmp_path
-    )
+    scopes = predict_file_scopes(task, {}, StubLLM(json.dumps({"writes": []})), repo_root=tmp_path)
     by_path = {scope.path: scope for scope in scopes}
 
     assert by_path["src/lib/cross-indexer-hit.ts"].tier == "candidate_context"
@@ -712,9 +702,7 @@ def test_index_seed_swallows_aggregator_failure(
     monkeypatch.setattr("acg.index.aggregate", boom)
 
     task = TaskInput(id="readme", prompt="Update README.md.")
-    writes = predict_writes(
-        task, {}, StubLLM(json.dumps({"writes": []})), repo_root=tmp_path
-    )
+    writes = predict_writes(task, {}, StubLLM(json.dumps({"writes": []})), repo_root=tmp_path)
     paths = {write.path for write in writes}
 
     assert "README.md" in paths
@@ -1029,9 +1017,7 @@ def test_scope_review_drop_allows_larger_candidate_context_sets_to_shrink_to_six
             signals=["graph"],
             reason="Graph-only retrieval hit.",
         )
-        for index, name in enumerate(
-            ["one", "two", "three", "four", "five", "six", "seven"]
-        )
+        for index, name in enumerate(["one", "two", "three", "four", "five", "six", "seven"])
     ]
 
     reviewed = _apply_scope_review(
@@ -1180,9 +1166,9 @@ def test_scope_review_legacy_promote_does_not_override_non_review_signals(
     by_path = {scope.path: scope for scope in prediction.scopes}
 
     assert by_path["starlette/templating.py"].tier == "candidate_context"
-    assert "non-review signals did not justify must_write" in by_path[
-        "starlette/templating.py"
-    ].reason
+    assert (
+        "non-review signals did not justify must_write" in by_path["starlette/templating.py"].reason
+    )
     assert "tests/test_environments.py" not in by_path
     assert prediction.scope_review_tokens > 0
 
@@ -1206,6 +1192,7 @@ def test_scope_review_promotes_when_non_review_signals_support_hard_scope() -> N
     }
     llm = SequenceLLM(
         [
+            json.dumps({"paths": []}),
             json.dumps(
                 {
                     "writes": [
@@ -1239,10 +1226,7 @@ def test_scope_review_promotes_when_non_review_signals_support_hard_scope() -> N
 def test_test_source_mapping_links_existing_starlette_test(tmp_path: Path) -> None:
     (tmp_path / "starlette").mkdir()
     (tmp_path / "starlette" / "__init__.py").write_text("")
-    (tmp_path / "starlette" / "templating.py").write_text(
-        "class Jinja2Templates:\n"
-        "    pass\n"
-    )
+    (tmp_path / "starlette" / "templating.py").write_text("class Jinja2Templates:\n    pass\n")
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_templates.py").write_text(
         "from starlette.templating import Jinja2Templates\n"
@@ -1253,10 +1237,7 @@ def test_test_source_mapping_links_existing_starlette_test(tmp_path: Path) -> No
     graph = scan_context_graph(tmp_path, language="python")
     task = TaskInput(
         id="templates",
-        prompt=(
-            "Make Jinja2Templates use select_autoescape and add tests for "
-            "escaping behavior."
-        ),
+        prompt=("Make Jinja2Templates use select_autoescape and add tests for escaping behavior."),
         hints=TaskInputHints(suspected_files=["starlette/templating.py"]),
     )
 
@@ -1265,6 +1246,7 @@ def test_test_source_mapping_links_existing_starlette_test(tmp_path: Path) -> No
         graph,
         SequenceLLM(
             [
+                json.dumps({"paths": []}),
                 json.dumps(
                     {
                         "writes": [
@@ -1275,7 +1257,7 @@ def test_test_source_mapping_links_existing_starlette_test(tmp_path: Path) -> No
                             }
                         ]
                     }
-                )
+                ),
             ]
         ),
         repo_root=tmp_path,
@@ -1358,9 +1340,7 @@ def test_predict_file_scopes_uses_broader_index_fanout_for_context(
 
     monkeypatch.setattr("acg.index.aggregate", fake_aggregate)
     task = TaskInput(id="fastify", prompt="Update fastify request handling.")
-    graph = {
-        "files": [{"path": path} for path in pagerank_only_paths + broad_consensus_paths]
-    }
+    graph = {"files": [{"path": path} for path in pagerank_only_paths + broad_consensus_paths]}
     llm = StubLLM(json.dumps({"writes": []}))
 
     prediction = predict_file_scopes_with_usage(task, graph, llm, repo_root=tmp_path)
@@ -1458,9 +1438,9 @@ def test_scope_review_cannot_promote_retrieved_scip_candidate_only(
 
     assert by_path["starlette/templating.py"].tier == "candidate_context"
     assert "scope_review" in by_path["starlette/templating.py"].signals
-    assert "non-review signals did not justify must_write" in by_path[
-        "starlette/templating.py"
-    ].reason
+    assert (
+        "non-review signals did not justify must_write" in by_path["starlette/templating.py"].reason
+    )
     assert "tests/test_templates.py" not in by_path
     assert "scip_entities" in scope_review_prompt
     assert "Jinja2Templates" in scope_review_prompt
@@ -1508,6 +1488,67 @@ def test_fastify_scip_hub_candidate_is_not_hard_promoted(
     by_path = {scope.path: scope for scope in scopes}
 
     assert "lib/symbols.js" not in by_path
+
+
+# --------------------------------------------------------------------------- #
+# LLM seed expansion.
+# --------------------------------------------------------------------------- #
+
+
+def test_llm_seed_expansion_adds_proposed_paths_as_candidate_context() -> None:
+    task = TaskInput(id="req", prompt="Update validation and request handling.", hints=None)
+    graph: dict[str, Any] = {
+        "files": [
+            {"path": "lib/request.js", "symbols": ["Request"]},
+            {"path": "lib/validation.js", "symbols": ["validate"]},
+        ],
+    }
+    scopes = _llm_seed_expansion(
+        task, graph, set(), StubLLM(json.dumps({"paths": ["lib/request.js", "lib/validation.js"]}))
+    )
+    by = {s.path: s for s in scopes}
+    for p in ("lib/request.js", "lib/validation.js"):
+        assert (
+            by[p].tier == "candidate_context"
+            and by[p].score == 0.72
+            and by[p].signals == ["planner"]
+        )
+
+
+def test_llm_seed_expansion_filters_nonexistent_paths() -> None:
+    task, graph = (
+        TaskInput(id="x", prompt="Update validation.", hints=None),
+        {"files": [{"path": "lib/request.js"}]},
+    )
+    assert not _llm_seed_expansion(
+        task, graph, set(), StubLLM(json.dumps({"paths": ["lib/does_not_exist.js"]}))
+    )
+
+
+def test_llm_seed_expansion_returns_empty_when_llm_returns_invalid_json() -> None:
+    task = TaskInput(id="x", prompt="Update validation.", hints=None)
+    graph: dict[str, Any] = {"files": [{"path": "lib/a.js"}]}
+    assert _llm_seed_expansion(task, graph, set(), StubLLM("not json")) == []
+    assert _llm_seed_expansion(task, graph, set(), None) == []
+
+
+def test_predictor_e2e_includes_seed_expansion_paths(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr("acg.index.aggregate", lambda *_a, **_k: [])
+
+    task = TaskInput(id="t", prompt="Adjust special module behavior.", hints=None)
+    graph: dict[str, Any] = {"files": [{"path": "lib/special.js", "symbols": ["specialFn"]}]}
+    llm = SequenceLLM(
+        [
+            json.dumps({"paths": ["lib/special.js"]}),
+            json.dumps({"writes": []}),
+            json.dumps({}),
+        ]
+    )
+    scopes = predict_file_scopes(task, graph, llm, repo_root=tmp_path)
+    match = next(s for s in scopes if s.path == "lib/special.js")
+    assert match.tier == "candidate_context"
 
 
 # --------------------------------------------------------------------------- #
@@ -1565,11 +1606,11 @@ def test_graph_expansion_seed_promotes_reverse_import_and_type_links() -> None:
                 "type_links": ["types/request.d.ts"],
             },
         ],
-            "resolved_imports": {
-                "lib/content-type-parser.js": ["lib/symbols.js"],
-                "lib/handle-request.js": ["lib/validation.js", "lib/symbols.js"],
-                "lib/validation.js": ["lib/symbols.js"],
-                "lib/request.js": ["lib/symbols.js"],
+        "resolved_imports": {
+            "lib/content-type-parser.js": ["lib/symbols.js"],
+            "lib/handle-request.js": ["lib/validation.js", "lib/symbols.js"],
+            "lib/validation.js": ["lib/symbols.js"],
+            "lib/request.js": ["lib/symbols.js"],
         },
         "importers": {
             "lib/validation.js": ["lib/handle-request.js"],

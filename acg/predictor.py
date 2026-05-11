@@ -53,6 +53,9 @@ SEED_INDEX_TOP_N = 24
 SEED_GRAPH_EXPANSION_CONFIDENCE = 0.72
 SEED_GRAPH_EXPANSION_STRUCTURAL_CONFIDENCE = 0.78
 SEED_GRAPH_EXPANSION_MIN_SEED_CONFIDENCE = 0.72
+LLM_SEED_EXPANSION_REASON = (
+    "LLM seed expansion: planner path from repository manifest; not in indexer seed pool."
+)
 TOP_GRAPH_FILES_FOR_LLM = 50
 MAX_PREDICTIONS = 10
 MAX_CONTEXT_PREDICTIONS = 25
@@ -86,6 +89,7 @@ TEST_LINK_STOPWORDS = {
 class ScopePrediction:
     scopes: list[FileScope]
     scope_review_tokens: int = 0
+
 
 # Regex for explicit file mentions like ``lib/auth.ts`` or ``prisma/schema.prisma``.
 _FILE_MENTION_RE = re.compile(
@@ -125,9 +129,30 @@ _ENTITY_CONJUNCTION_RE = re.compile(
     re.IGNORECASE,
 )
 _ENTITY_STOPWORDS = {
-    "the", "a", "an", "this", "that", "all", "any", "src", "lib", "test",
-    "tests", "testing", "spec", "specs", "playwright", "vitest", "jest",
-    "pytest", "cypress", "end", "to", "unit", "integration", "e2e",
+    "the",
+    "a",
+    "an",
+    "this",
+    "that",
+    "all",
+    "any",
+    "src",
+    "lib",
+    "test",
+    "tests",
+    "testing",
+    "spec",
+    "specs",
+    "playwright",
+    "vitest",
+    "jest",
+    "pytest",
+    "cypress",
+    "end",
+    "to",
+    "unit",
+    "integration",
+    "e2e",
 }
 _ENV_TRIGGER_RE = re.compile(
     r"\b(oauth|stripe|auth0|clerk|nextauth|api[\s-]?key|secret|"
@@ -328,9 +353,7 @@ def _index_seed(
     except Exception:
         return []
     try:
-        candidates = index_aggregate(
-            task, repo_root, repo_graph, top_n=SEED_INDEX_TOP_N
-        )
+        candidates = index_aggregate(task, repo_root, repo_graph, top_n=SEED_INDEX_TOP_N)
     except Exception:
         return []
     is_test_task = _looks_like_test_task(task.prompt) or bool(
@@ -370,7 +393,11 @@ def _is_docs_prediction(path: str) -> bool:
 
 
 def _looks_like_docs_task(prompt: str) -> bool:
-    return bool(re.search(r"\b(docs?|documentation|readme|changelog|release notes?)\b", prompt, re.IGNORECASE))
+    return bool(
+        re.search(
+            r"\b(docs?|documentation|readme|changelog|release notes?)\b", prompt, re.IGNORECASE
+        )
+    )
 
 
 def _read_testdir_from_js_config(path: Path) -> str | None:
@@ -428,9 +455,7 @@ def _detect_test_layout(
     return None
 
 
-def _test_scaffold_seed(
-    task: TaskInput, repo_root: Path | None
-) -> list[PredictedWrite]:
+def _test_scaffold_seed(task: TaskInput, repo_root: Path | None) -> list[PredictedWrite]:
     """Seed test/spec paths driven by project conventions or framework defaults.
 
     For tasks that ask to *create* tests, this is by far the highest-precision
@@ -453,9 +478,7 @@ def _test_scaffold_seed(
 
     # Config file itself, only if it doesn't exist yet (greenfield).
     if config_path:
-        config_exists = bool(
-            repo_root and (repo_root / config_path).exists()
-        )
+        config_exists = bool(repo_root and (repo_root / config_path).exists())
         if not config_exists:
             seeds.append(
                 PredictedWrite(
@@ -477,11 +500,7 @@ def _test_scaffold_seed(
         else:
             spec_path = f"{test_dir}/{entity}{ext}"
         spec_exists = bool(repo_root and (repo_root / spec_path).exists())
-        confidence = (
-            SEED_TEST_SCAFFOLD_CONFIDENCE
-            if framework != "pytest" or spec_exists
-            else 0.55
-        )
+        confidence = SEED_TEST_SCAFFOLD_CONFIDENCE if framework != "pytest" or spec_exists else 0.55
         reason_prefix = (
             f"{framework} convention"
             if confidence >= SEED_TEST_SCAFFOLD_CONFIDENCE
@@ -516,10 +535,7 @@ def _env_seed(task: TaskInput, repo_root: Path | None) -> list[PredictedWrite]:
     ]
     has_next_config = bool(
         repo_root
-        and (
-            (repo_root / "next.config.js").exists()
-            or (repo_root / "next.config.ts").exists()
-        )
+        and ((repo_root / "next.config.js").exists() or (repo_root / "next.config.ts").exists())
     )
     if has_next_config:
         seeds.append(
@@ -563,9 +579,7 @@ def _symbol_seed(prompt: str, repo_graph: dict[str, Any]) -> list[PredictedWrite
     return list(out.values())
 
 
-def _topical_seed(
-    hints: list[str], repo_graph: dict[str, Any]
-) -> list[PredictedWrite]:
+def _topical_seed(hints: list[str], repo_graph: dict[str, Any]) -> list[PredictedWrite]:
     """Match hint keywords against path components in the repo graph."""
     files = repo_graph.get("files") or []
     if not hints or not files:
@@ -685,9 +699,7 @@ def _test_source_link_seed(
     if not entries:
         return []
     source_seeds = [
-        seed
-        for seed in seeds
-        if seed.path in entries and not _is_test_prediction(seed.path)
+        seed for seed in seeds if seed.path in entries and not _is_test_prediction(seed.path)
     ]
     if not source_seeds:
         return []
@@ -870,9 +882,7 @@ def _post_llm_must_write_neighbor_expansion(
                         confidence=SEED_GRAPH_EXPANSION_STRUCTURAL_CONFIDENCE,
                         reason=existing.reason,
                     )
-                signal_map.setdefault(neighbor_path, set()).update(
-                    {"graph", "must_write_neighbor"}
-                )
+                signal_map.setdefault(neighbor_path, set()).update({"graph", "must_write_neighbor"})
             else:
                 expanded = PredictedWrite(
                     path=neighbor_path,
@@ -884,9 +894,7 @@ def _post_llm_must_write_neighbor_expansion(
                 )
                 expansions.append(expanded)
                 writes_by_path[neighbor_path] = expanded
-                signal_map.setdefault(neighbor_path, set()).update(
-                    {"graph", "must_write_neighbor"}
-                )
+                signal_map.setdefault(neighbor_path, set()).update({"graph", "must_write_neighbor"})
             if picked >= 3:
                 break
 
@@ -925,6 +933,120 @@ def _filter_graph_for_llm(repo_graph: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _llm_seed_expansion(
+    task: TaskInput,
+    repo_graph: dict[str, Any],
+    existing_seed_paths: set[str],
+    llm_client: Any,
+    *,
+    max_expansions: int = 5,
+    manifest_size: int = 200,
+) -> list[FileScope]:
+    """Ask the planner LLM for additional files the seed indexers missed.
+
+    Sends the task prompt + a list of repo files NOT in `existing_seed_paths`
+    (top `manifest_size` by pagerank) and asks the LLM to propose up to
+    `max_expansions` additional files. Each proposed file becomes a FileScope
+    with `tier='candidate_context'`, `score=0.72`, and `signals=['planner']`.
+
+    Filters out paths that don't exist in repo_graph. Returns an empty list if
+    the LLM call fails or returns no proposals.
+    """
+    if llm_client is None:
+        return []
+    entries = _path_entries(repo_graph)
+    if not entries:
+        return []
+    ranked: list[tuple[tuple[float, str], str]] = []
+    for e in repo_graph.get("files") or []:
+        if not isinstance(e, dict):
+            continue
+        p = e.get("path")
+        if not isinstance(p, str) or p in existing_seed_paths or p not in entries:
+            continue
+        f = entries.get(p, e)
+        pr = f.get("pagerank")
+        score = (
+            float(pr)
+            if isinstance(pr, (int, float))
+            else float(
+                int(f.get("imported_by_count") or 0)
+                + len(f.get("importers") or [])
+                + len(f.get("resolved_imports") or [])
+                + len(f.get("type_links") or [])
+            )
+        )
+        ranked.append(((-score, p), p))
+    ranked.sort()
+    manifest = [x for _, x in ranked[:manifest_size]]
+    if not manifest:
+        return []
+    nl, ex = "\n", sorted(existing_seed_paths)[:50]
+    try:
+        raw = llm_client.complete(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a code-search assistant. Pick task-relevant repo files not in the "
+                        'candidate list. Output ONLY JSON {"paths": ["relative/path", ...]}.'
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Task: {task.prompt}\n\nExisting candidates (do NOT re-propose):\n{nl.join(ex)}"
+                        f"\n\nOther files (import centrality / pagerank order):\n{nl.join(manifest)}"
+                        f"\n\nReturn up to {max_expansions} paths as JSON."
+                    ),
+                },
+            ]
+        )
+    except Exception:
+        return []
+    t = (raw or "").strip()
+    if t.startswith("```"):
+        t = re.sub(r"^```(?:json)?\s*", "", t)
+        t = re.sub(r"\s*```\s*$", "", t)
+    try:
+        d = json.loads(t)
+    except json.JSONDecodeError:
+        i, j = t.find("{"), t.rfind("}")
+        if i < 0 or j <= i:
+            return []
+        try:
+            d = json.loads(t[i : j + 1])
+        except json.JSONDecodeError:
+            return []
+    paths = d.get("paths") if isinstance(d, dict) else None
+    if not isinstance(paths, list):
+        return []
+    known = set(entries)
+    scopes: list[FileScope] = []
+    for it in paths:
+        path = (
+            it.strip("./")
+            if isinstance(it, str)
+            else (_path_value(it) if isinstance(it, dict) else "")
+        )
+        if not path or path not in known or path in existing_seed_paths:
+            continue
+        pw = PredictedWrite(path=path, confidence=0.72, reason=LLM_SEED_EXPANSION_REASON)
+        sg = {"planner"}
+        scopes.append(
+            FileScope(
+                path=path,
+                tier="candidate_context",
+                score=0.72,
+                signals=["planner"],
+                reason=_scope_reason(pw, sg, "candidate_context"),
+            )
+        )
+        if len(scopes) >= max_expansions:
+            break
+    return scopes
+
+
 def _build_prompt(
     task: TaskInput,
     repo_graph: dict[str, Any],
@@ -938,9 +1060,7 @@ def _build_prompt(
         "Be conservative: only include files where the task description clearly implies a modification.\n"
         "Do not include files based on speculation."
     )
-    hints_blob = (
-        json.dumps(task.hints.model_dump() if task.hints else {}, sort_keys=True)
-    )
+    hints_blob = json.dumps(task.hints.model_dump() if task.hints else {}, sort_keys=True)
     user = (
         f"Task id: {task.id}\n"
         f"Task: {task.prompt}\n"
@@ -994,9 +1114,7 @@ def _parse_llm_writes(raw: str) -> list[PredictedWrite]:
     return out
 
 
-def _merge(
-    seeds: list[PredictedWrite], rerank: list[PredictedWrite]
-) -> list[PredictedWrite]:
+def _merge(seeds: list[PredictedWrite], rerank: list[PredictedWrite]) -> list[PredictedWrite]:
     """Merge seed and re-ranked predictions.
 
     For paths present in both, the LLM's confidence wins (it can demote or
@@ -1009,12 +1127,8 @@ def _merge(
             merged[pw.path] = pw
             continue
         new_reason = pw.reason or existing.reason
-        confidence = (
-            existing.confidence if _deterministic_reason(pw.reason) else pw.confidence
-        )
-        merged[pw.path] = PredictedWrite(
-            path=pw.path, confidence=confidence, reason=new_reason
-        )
+        confidence = existing.confidence if _deterministic_reason(pw.reason) else pw.confidence
+        merged[pw.path] = PredictedWrite(path=pw.path, confidence=confidence, reason=new_reason)
     return sorted(merged.values(), key=lambda p: (-p.confidence, p.path))
 
 
@@ -1027,7 +1141,7 @@ def _signals_for_reason(reason: str) -> set[str]:
         signals.add("symbol")
     if lower.startswith("hint "):
         signals.add("hint")
-    if "planner suspected file" in lower:
+    if "planner suspected file" in lower or "llm seed expansion" in lower:
         signals.add("planner")
     if "test-source mapping" in lower:
         signals.add("testlink")
@@ -1120,10 +1234,7 @@ def _is_must_write(
         return False
     if _is_context_only_path(task, write.path, write.reason, signals, entries):
         return False
-    if (
-        _is_test_prediction(write.path)
-        and not (signals & {"explicit", "framework", "llm"})
-    ):
+    if _is_test_prediction(write.path) and not (signals & {"explicit", "framework", "llm"}):
         return False
     task_tokens = _token_set(task.prompt)
     if {"bm25", "pagerank"} <= signals and write.confidence >= 0.75:
@@ -1142,10 +1253,7 @@ def _is_must_write(
         return True
     if "llm" in signals and write.confidence >= 0.85:
         return True
-    if (
-        "sibling" in signals
-        and write.confidence >= SEED_SIBLING_PATTERN_PRIMARY_CONFIDENCE
-    ):
+    if "sibling" in signals and write.confidence >= SEED_SIBLING_PATTERN_PRIMARY_CONFIDENCE:
         return _task_matches_path(task_tokens, write.path, entries.get(write.path, {}))
     if len(signals & HIGH_PRECISION_SIGNALS) >= 2 and write.confidence >= 0.8:
         return True
@@ -1168,9 +1276,7 @@ def _entry_matches_task_tokens(entry: dict[str, Any], task_tokens: set[str]) -> 
     return bool(_token_set(" ".join(fields)) & task_tokens)
 
 
-def _scip_matches_task_tokens(
-    repo_graph: dict[str, Any], path: str, task_tokens: set[str]
-) -> bool:
+def _scip_matches_task_tokens(repo_graph: dict[str, Any], path: str, task_tokens: set[str]) -> bool:
     entities = _scip_entities_for_path(repo_graph, path)
     if not entities:
         return False
@@ -1215,6 +1321,8 @@ def _passes_structural_candidate_context_gate(
             return False
 
     if "explicit" in evidence_signals:
+        return True
+    if evidence_signals == {"planner"} and "llm seed expansion" in write.reason.lower():
         return True
     if "must_write_neighbor" in evidence_signals and "graph" in evidence_signals:
         return True
@@ -1265,9 +1373,7 @@ def _build_file_scopes(
             )
         )
     tier_order = {"must_write": 0, "candidate_context": 1, "needs_replan": 2}
-    return sorted(
-        scopes, key=lambda scope: (tier_order[scope.tier], -scope.score, scope.path)
-    )
+    return sorted(scopes, key=lambda scope: (tier_order[scope.tier], -scope.score, scope.path))
 
 
 def _to_predicted_write(scope: FileScope) -> PredictedWrite:
@@ -1294,9 +1400,9 @@ def _path_value(value: Any) -> str:
     if isinstance(value, str):
         return value.strip("./")
     if isinstance(value, dict):
-        return str(
-            value.get("path") or value.get("file_path") or value.get("file") or ""
-        ).strip("./")
+        return str(value.get("path") or value.get("file_path") or value.get("file") or "").strip(
+            "./"
+        )
     return str(
         getattr(value, "path", None)
         or getattr(value, "file_path", None)
@@ -1329,8 +1435,7 @@ def _scip_entities_for_path(repo_graph: dict[str, Any], path: str) -> list[dict[
     for entity in entities:
         symbol = str(_value(entity, "symbol", "scip_symbol", "descriptor") or "")
         name = str(
-            _value(entity, "name", "display_name", "identifier")
-            or symbol.rsplit(".", 1)[-1]
+            _value(entity, "name", "display_name", "identifier") or symbol.rsplit(".", 1)[-1]
         )
         definition_path = _path_value(
             _value(entity, "path", "file_path", "file", "definition_path", "relative_path")
@@ -1511,9 +1616,7 @@ def _apply_scope_review(
     entries = _path_entries(repo_graph)
     drop_floor = _scope_review_drop_floor(scopes)
     accepted_drop_paths = {
-        scope.path
-        for scope in scopes
-        if scope.path in drop_paths and _scope_review_can_drop(scope)
+        scope.path for scope in scopes if scope.path in drop_paths and _scope_review_can_drop(scope)
     }
     remaining_candidate_context = sum(
         1
@@ -1582,9 +1685,7 @@ def _review_file_scopes(
         return scopes, token_estimate
     keep_paths, drop_paths, promote_paths = _parse_scope_review(reply)
     return (
-        _apply_scope_review(
-            task, repo_graph, scopes, keep_paths, drop_paths, promote_paths
-        ),
+        _apply_scope_review(task, repo_graph, scopes, keep_paths, drop_paths, promote_paths),
         token_estimate,
     )
 
@@ -1616,6 +1717,15 @@ def _predict_scoped_candidates(
         cur = by_path.get(pw.path)
         if cur is None or pw.confidence > cur.confidence:
             by_path[pw.path] = pw
+    seeds = list(by_path.values())
+    for scope in _llm_seed_expansion(task, repo_graph, {pw.path for pw in seeds}, llm):
+        if scope.path not in by_path:
+            by_path[scope.path] = PredictedWrite(
+                path=scope.path,
+                confidence=scope.score,
+                reason=LLM_SEED_EXPANSION_REASON,
+            )
+            signal_map.setdefault(scope.path, set()).update({"planner"})
     seeds = list(by_path.values())
 
     rerank: list[PredictedWrite] = []
@@ -1671,9 +1781,7 @@ def predict_file_scopes(
 ) -> list[FileScope]:
     """Predict tiered file scope for a task."""
 
-    return predict_file_scopes_with_usage(
-        task, repo_graph, llm, repo_root=repo_root
-    ).scopes
+    return predict_file_scopes_with_usage(task, repo_graph, llm, repo_root=repo_root).scopes
 
 
 def predict_writes(
@@ -1699,8 +1807,6 @@ def predict_writes(
         descending confidence.
     """
     scopes = predict_file_scopes(task, repo_graph, llm, repo_root=repo_root)
-    return [
-        _to_predicted_write(scope)
-        for scope in scopes
-        if scope.tier == "must_write"
-    ][:MAX_PREDICTIONS]
+    return [_to_predicted_write(scope) for scope in scopes if scope.tier == "must_write"][
+        :MAX_PREDICTIONS
+    ]

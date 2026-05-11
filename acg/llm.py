@@ -208,9 +208,7 @@ class MockLLMClient:
     ) -> str:
         del response_format
         user_blob = "\n".join(m.get("content", "") for m in messages if m.get("role") == "user")
-        system_blob = "\n".join(
-            m.get("content", "") for m in messages if m.get("role") == "system"
-        )
+        system_blob = "\n".join(m.get("content", "") for m in messages if m.get("role") == "system")
         if "Decompose one high-level repository goal" in system_blob:
             return json.dumps(
                 {

@@ -12,9 +12,7 @@ def _task(id_: str, paths: list[str], depends_on: list[str] | None = None) -> Ta
     return Task(
         id=id_,
         prompt="",
-        predicted_writes=[
-            PredictedWrite(path=p, confidence=0.9, reason="") for p in paths
-        ],
+        predicted_writes=[PredictedWrite(path=p, confidence=0.9, reason="") for p in paths],
         allowed_paths=paths,
         depends_on=depends_on or [],
     )
