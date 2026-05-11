@@ -1,6 +1,6 @@
 """Task → write-set predictor.
 
-For each :class:`~acg.schema.TaskInput`, the predictor fuses **seven
+For each :class:`~acg.schema.TaskInput`, the predictor fuses **eight
 deterministic seed strategies** with one LLM re-rank pass to produce a
 list of :class:`~acg.schema.PredictedWrite`.
 
@@ -14,6 +14,7 @@ The seed layer:
 6. ``_sibling_pattern_seed`` — analogical reasoning over existing API trees
 7. ``_index_seed`` — :func:`acg.index.aggregate` (framework / PageRank /
    BM25 / git co-change), available whenever ``repo_root`` is set
+8. ``_module_name_seed`` — task-token alignment to ``src/<module>/<module>.*`` clusters
 
 The seeds give us a defensible baseline even when the LLM is offline; the
 re-rank lets the model add task-implied files that the seeds cannot infer
@@ -70,6 +71,7 @@ HIGH_PRECISION_SIGNALS = {
     "explicit",
     "framework",
     "llm",
+    "module_name",
     "package",
     "planner",
     "sibling",
@@ -185,11 +187,17 @@ _RESOURCE_ENTITY_RE = re.compile(
     re.IGNORECASE,
 )
 _AUTH_ROLE_TRIGGER_RE = re.compile(
-    r"\b(role|roles|guard|middleware|auth|permission|access.?control|rbac|acl)\b",
+    r"\b(role|roles|guard|middleware|decorator|auth|permission|access.?control|rbac|acl)\b",
     re.IGNORECASE,
 )
 _PACKAGE_TRIGGER_RE = re.compile(
-    r"\b(rate[-\s]?limit(?:ing)?|throttl(?:ing)?|library|package|dependency|install\s+(?:the\s+|a\s+|an\s+)?([a-z][\w-]+))\b",
+    r"\b("
+    r"rate[-\s]?limit(?:ing)?"
+    r"|\brate\s+limiting\b"
+    r"|throttl(?:ing)?"
+    r"|\bthrottling\b"
+    r"|library|package|dependency|install\s+(?:the\s+|a\s+|an\s+)?([a-z][\w-]+)"
+    r")\b",
     re.IGNORECASE,
 )
 _CLUSTER_SUFFIXES = (
@@ -202,7 +210,8 @@ _CLUSTER_SUFFIXES = (
     ".dto.ts",
     ".guard.ts",
 )
-SEED_AUTH_ROLE_CONFIDENCE = 0.72
+SEED_AUTH_ROLE_CONFIDENCE = 0.75
+SEED_MODULE_NAME_CONFIDENCE = 0.75
 SEED_PACKAGE_JSON_CONFIDENCE = 0.75
 SEED_CLUSTER_CONFIDENCE = 0.65
 _SIBLING_ENTITY_STOPWORDS = _ENTITY_STOPWORDS | {
@@ -1076,6 +1085,45 @@ def _implied_cluster_seed(
     return list(cluster_predictions.values())
 
 
+def _module_name_seed(task: TaskInput, repo_graph: dict[str, Any]) -> list[PredictedWrite]:
+    """Seed ``src/<name>/<name>.*`` NestJS siblings when task tokens match ``<name>`` (plural-aware).
+
+    Uses :func:`_task_evidence_tokens` and :func:`_cluster_base_relevant` so
+    plural/prefix rules stay aligned with :func:`_implied_cluster_seed`.
+    """
+    entries = _path_entries(repo_graph)
+    if not entries:
+        return []
+    task_tokens = _task_evidence_tokens(task)
+    module_dirs: set[str] = set()
+    for entry in repo_graph.get("files") or []:
+        path = entry.get("path", "") if isinstance(entry, dict) else ""
+        parts = path.split("/")
+        if len(parts) < 3 or parts[0] != "src":
+            continue
+        if "." in parts[1]:
+            continue
+        module_dirs.add(f"{parts[0]}/{parts[1]}")
+    predictions: dict[str, PredictedWrite] = {}
+    for module_dir in module_dirs:
+        base_name = module_dir.rsplit("/", 1)[-1]
+        if not _cluster_base_relevant(base_name, task_tokens):
+            continue
+        for suffix in _CLUSTER_SUFFIXES:
+            candidate = f"{module_dir}/{base_name}{suffix}"
+            if candidate not in entries:
+                continue
+            predictions[candidate] = PredictedWrite(
+                path=candidate,
+                confidence=SEED_MODULE_NAME_CONFIDENCE,
+                reason=(
+                    "Module-name seed: task tokens align with module "
+                    f"{module_dir!r}; coordinated NestJS cluster file."
+                ),
+            )
+    return list(predictions.values())
+
+
 def _filter_graph_for_llm(repo_graph: dict[str, Any]) -> dict[str, Any]:
     """Return a compact graph slice safe to embed in an LLM prompt."""
     files = repo_graph.get("files") or []
@@ -1347,6 +1395,8 @@ def _signals_for_reason(reason: str) -> set[str]:
         signals.add("package")
     if "implied cluster seed" in lower:
         signals.add("cluster")
+    if "module-name seed" in lower:
+        signals.add("module_name")
     if "graph expansion" in lower:
         signals.add("graph")
     return signals
@@ -1417,7 +1467,8 @@ def _is_must_write(
         return False
     task_tokens = _token_set(task.prompt)
     if {"bm25", "pagerank"} <= signals and write.confidence >= 0.75:
-        return _task_matches_path(task_tokens, write.path, entries.get(write.path, {}))
+        if _task_matches_path(task_tokens, write.path, entries.get(write.path, {})):
+            return True
     if signals <= CONTEXT_ONLY_SIGNALS:
         return False
     if "graph" in signals and not (signals & (HIGH_PRECISION_SIGNALS - {"framework"})):
@@ -1440,9 +1491,19 @@ def _is_must_write(
         return True
     if "cluster" in signals and write.confidence >= SEED_CLUSTER_CONFIDENCE:
         return True
+    if "module_name" in signals and write.confidence >= SEED_MODULE_NAME_CONFIDENCE:
+        return True
     if len(signals & HIGH_PRECISION_SIGNALS) >= 2 and write.confidence >= 0.8:
         return True
     if "symbol" in signals and write.confidence >= SEED_SYMBOL_CONFIDENCE:
+        return True
+    high_precision = signals & HIGH_PRECISION_SIGNALS
+    if (
+        len(high_precision) >= 3
+        and "llm" in signals
+        and _task_matches_path(task_tokens, write.path, entries.get(write.path, {}))
+        and write.confidence >= 0.7
+    ):
         return True
     return False
 
@@ -1894,6 +1955,7 @@ def _predict_scoped_candidates(
     seeds += _auth_role_seed(task, repo_graph)
     seeds += _package_json_seed(task, repo_root)
     seeds += _implied_cluster_seed(task, repo_graph, seeds)
+    seeds += _module_name_seed(task, repo_graph)
 
     signal_map: dict[str, set[str]] = {}
     for pw in seeds:
