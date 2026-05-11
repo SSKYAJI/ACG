@@ -810,30 +810,25 @@ def _is_directoryish(path: str) -> bool:
     return "." not in last
 
 
-def _build_worker_prompt(task: Task, repo_graph: dict[str, Any]) -> list[dict[str, str]]:
+def _build_worker_prompt(
+    task: Task,
+    repo_graph: dict[str, Any],
+    *,
+    include_lockfile_hints: bool = True,
+) -> list[dict[str, str]]:
     """Construct the worker messages.
 
     Workers see hard predicted writes and candidate context, but not the
     concrete ``allowed_paths`` globs. They may propose candidate-context
     writes when coordinated edits need them; ``enforce.validate_write`` and
     the runtime auto-replan guard decide what is actually allowed.
+
+    When ``include_lockfile_hints`` is false, the user message omits predicted
+    writes and candidate-context lists so workers only see the task text and
+    the global top-K repo file list (used for blind baselines).
     """
     files = _top_files(repo_graph)
     file_block = "\n".join(f"  - {p}" for p in files) or "  (graph empty)"
-    hard_paths = [pw.path for pw in task.predicted_writes]
-    hard_block = "\n".join(f"  - {p}" for p in hard_paths) or "  (none)"
-    candidate_paths = list(task.candidate_context_paths)[:20]
-    candidate_block = "\n".join(f"  - {p}" for p in candidate_paths) or "  (none)"
-
-    extra_hint = ""
-    for pw in task.predicted_writes:
-        if _is_directoryish(pw.path):
-            extra_hint = (
-                f"\nNote: the lockfile predicts writes under '{pw.path}'. "
-                "Propose specific file paths under that directory."
-            )
-            break
-
     system = (
         "You are a coding agent assigned a single task. Output ONLY an OpenAI "
         "apply_patch envelope that captures every change required to complete "
@@ -855,19 +850,41 @@ def _build_worker_prompt(task: Task, repo_graph: dict[str, Any]) -> list[dict[st
         "- You MUST produce a patch. An empty *** Begin Patch / *** End Patch is "
         "treated as task failure."
     )
-    user = (
-        f"Task id: {task.id}\n"
-        f"Task: {task.prompt}\n"
-        "Predicted writable files:\n"
-        f"{hard_block}\n"
-        "Candidate context files. You may propose writes here when changes to "
-        "the predicted writable files require coordinated edits. A runtime "
-        "auto-approval guard accepts high-confidence proposals and blocks the "
-        "rest.\n"
-        f"{candidate_block}\n"
-        f"Available files in this repo (top {len(files)} by importance):\n"
-        f"{file_block}{extra_hint}"
-    )
+    if include_lockfile_hints:
+        hard_paths = [pw.path for pw in task.predicted_writes]
+        hard_block = "\n".join(f"  - {p}" for p in hard_paths) or "  (none)"
+        candidate_paths = list(task.candidate_context_paths)[:20]
+        candidate_block = "\n".join(f"  - {p}" for p in candidate_paths) or "  (none)"
+
+        extra_hint = ""
+        for pw in task.predicted_writes:
+            if _is_directoryish(pw.path):
+                extra_hint = (
+                    f"\nNote: the lockfile predicts writes under '{pw.path}'. "
+                    "Propose specific file paths under that directory."
+                )
+                break
+
+        user = (
+            f"Task id: {task.id}\n"
+            f"Task: {task.prompt}\n"
+            "Predicted writable files:\n"
+            f"{hard_block}\n"
+            "Candidate context files. You may propose writes here when changes to "
+            "the predicted writable files require coordinated edits. A runtime "
+            "auto-approval guard accepts high-confidence proposals and blocks the "
+            "rest.\n"
+            f"{candidate_block}\n"
+            f"Available files in this repo (top {len(files)} by importance):\n"
+            f"{file_block}{extra_hint}"
+        )
+    else:
+        user = (
+            f"Task id: {task.id}\n"
+            f"Task: {task.prompt}\n"
+            f"Available files in this repo (top {len(files)} by importance):\n"
+            f"{file_block}"
+        )
     return [
         {"role": "system", "content": system},
         {"role": "user", "content": user},
@@ -952,8 +969,10 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _task_input_tokens(task: Task, repo_graph: dict[str, Any]) -> int:
-    prompt = _build_worker_prompt(task, repo_graph)
+def _task_input_tokens(
+    task: Task, repo_graph: dict[str, Any], *, include_lockfile_hints: bool = True
+) -> int:
+    prompt = _build_worker_prompt(task, repo_graph, include_lockfile_hints=include_lockfile_hints)
     return sum(len(message.get("content", "")) // 4 for message in prompt)
 
 
@@ -994,11 +1013,12 @@ async def run_worker(
     max_tokens: int = SUB_MAX_TOKENS,
     config: RuntimeConfig | None = None,
     perf: PerfRecorder | None = None,
+    include_lockfile_hints: bool = True,
 ) -> WorkerResult:
     """Run a single sub-agent and validate every proposed write."""
     cfg = config or RuntimeConfig.from_env()
     _console.print(f"[blue][worker {task.id}][/] starting (group {group_id})")
-    messages = _build_worker_prompt(task, repo_graph)
+    messages = _build_worker_prompt(task, repo_graph, include_lockfile_hints=include_lockfile_hints)
     error: str | None = None
     if perf:
         perf.mark_task_start(task.id, group_id)
@@ -1012,7 +1032,11 @@ async def run_worker(
         _console.print(f"[red][worker {task.id}][/] LLM error: {exc}")
         if perf:
             perf.mark_task_end(
-                task.id, input_tokens=_task_input_tokens(task, repo_graph), output_tokens=0
+                task.id,
+                input_tokens=_task_input_tokens(
+                    task, repo_graph, include_lockfile_hints=include_lockfile_hints
+                ),
+                output_tokens=0,
             )
         return WorkerResult(
             task_id=task.id,
@@ -1036,7 +1060,9 @@ async def run_worker(
     if perf:
         perf.mark_task_end(
             task.id,
-            input_tokens=_task_input_tokens(task, repo_graph),
+            input_tokens=_task_input_tokens(
+                task, repo_graph, include_lockfile_hints=include_lockfile_hints
+            ),
             output_tokens=reply.completion_tokens,
         )
     _console.print(
