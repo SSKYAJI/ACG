@@ -442,6 +442,8 @@ def main(argv: list[str] | None = None) -> int:
             )
             return EXIT_USER_ERROR
         allowed_applied = {
+            SINGLE_AGENT_STRATEGY,
+            NAIVE_STRATEGY,
             ACG_PLANNED_STRATEGY,
             ACG_PLANNED_REPLAN_STRATEGY,
             ACG_PLANNED_APPLIED_STRATEGY,
@@ -449,7 +451,8 @@ def main(argv: list[str] | None = None) -> int:
         if strategies[0] not in allowed_applied:
             print(
                 "error: --applied-diff-live is only valid with "
-                "acg_planned, acg_planned_replan, or acg_planned_applied",
+                "single_agent, naive_parallel, acg_planned, acg_planned_replan, "
+                "or acg_planned_applied",
                 file=sys.stderr,
             )
             return EXIT_USER_ERROR

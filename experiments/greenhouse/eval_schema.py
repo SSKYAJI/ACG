@@ -208,6 +208,7 @@ class SummaryMetrics:
     cost_usd_total: float | None = None
     cost_method: str | None = None
     cost_source: str | None = None
+    applied_changed_files_total: int | None = None
     integration_burden: IntegrationBurdenMetrics = field(
         default_factory=IntegrationBurdenMetrics
     )
@@ -560,6 +561,12 @@ def compute_summary_metrics(
         sources = sorted({t.metrics.cost_source or "provider_response" for t in tasks if t.metrics.cost_usd is not None})
         cost_source = cost_source or ",".join(sources)
 
+    applied_changed = sum(
+        len(t.actual_changed_files)
+        for t in tasks
+        if t.actual_changed_files_kind in {"applied_diff", "suite_applied_diff"}
+    )
+
     return SummaryMetrics(
         tasks_total=total,
         tasks_completed=completed,
@@ -592,6 +599,7 @@ def compute_summary_metrics(
         cost_usd_total=cost_usd_total,
         cost_method=cost_method,
         cost_source=cost_source,
+        applied_changed_files_total=applied_changed,
         integration_burden=compute_integration_burden(tasks),
     )
 

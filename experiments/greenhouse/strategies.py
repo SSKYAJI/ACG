@@ -21,12 +21,15 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from acg.apply_patch_adapter import apply_envelope
 from acg.enforce import validate_write
 from acg.runtime import (
     LLMReply,
+    Proposal,
     RuntimeLLM,
     RuntimeLLMProtocol,
     WorkerResult,
+    _parse_apply_envelope,
     run_worker,
 )
 from acg.schema import AgentLock, Task
@@ -221,6 +224,7 @@ class LockfileEchoMockLLM:
         self.url = f"mock-lockfile://{role}"
         self.model = "mock-lockfile-echo"
         self._top_k = top_k
+        self._echo_write_content = echo_write_content
         self._predictions: dict[str, list[dict[str, str]]] = {}
         for task in lock.tasks:
             sorted_writes = sorted(task.predicted_writes, key=lambda pw: -pw.confidence)[:top_k]
@@ -249,6 +253,21 @@ class LockfileEchoMockLLM:
         # Worker path: match "Task id: <id>" emitted by acg.runtime._build_worker_prompt.
         for task_id, writes in self._predictions.items():
             if f"Task id: {task_id}" in user_blob:
+                if self._echo_write_content:
+                    parts: list[str] = []
+                    for row in writes:
+                        fp = row["file"]
+                        parts.append(
+                            f"*** Update File: {fp}\n@@\n+ // TODO acg-applied: {task_id}\n"
+                        )
+                    envelope = "*** Begin Patch\n" + "\n".join(parts) + "\n*** End Patch\n"
+                    return LLMReply(
+                        content=envelope,
+                        reasoning="",
+                        completion_tokens=max(8, len(envelope) // 8),
+                        finish_reason="stop",
+                        wall_s=0.0,
+                    )
                 return LLMReply(
                     content=json.dumps({"writes": writes}),
                     reasoning="",
@@ -388,6 +407,111 @@ def _proposals_to_naive_eval_task(
     return eval_task
 
 
+def _proposals_to_naive_applied_eval_task(
+    worker: WorkerResult,
+    lock_task: Task,
+    lock: AgentLock,
+    *,
+    started_at: str,
+    finished_at: str,
+    prompt: str | None,
+    git_changed_files: list[str],
+) -> EvalTask:
+    """Naive parallel + real git writes — ``actual_changed_files`` come from ``git diff``."""
+    eval_task = task_from_lock(lock_task, prompt=prompt)
+    eval_task.actual_changed_files = sorted(git_changed_files)
+    eval_task.actual_changed_files_kind = "applied_diff"
+    eval_task.out_of_bounds_files = sorted(
+        {
+            p
+            for p in git_changed_files
+            if not validate_write(lock, lock_task.id, p)[0]
+        }
+    )
+    eval_task.blocked_write_events = [
+        BlockedWriteEvent(
+            file=p.file,
+            description=p.description,
+            reason=p.reason or "outside allowed_paths",
+        )
+        for p in worker.proposals
+        if not p.allowed
+    ]
+    if worker.error:
+        eval_task.status = "failed"
+        eval_task.failure_reason = "AGENT_FAIL"
+    elif not eval_task.actual_changed_files:
+        if worker.proposals and all(p.envelope is None for p in worker.proposals):
+            eval_task.status = "failed"
+            eval_task.failure_reason = "NO_APPLIED_CONTENT"
+        elif eval_task.blocked_write_events:
+            eval_task.status = "blocked"
+            eval_task.failure_reason = "BLOCKED_BY_SCOPE"
+        else:
+            eval_task.status = "failed"
+            eval_task.failure_reason = "EMPTY_PATCH"
+    elif eval_task.out_of_bounds_files:
+        eval_task.status = "completed_unsafe"
+        eval_task.failure_reason = None
+    else:
+        eval_task.status = "completed"
+    eval_task.timestamps.started_at = started_at
+    eval_task.timestamps.finished_at = finished_at
+    eval_task.metrics.wall_time_seconds = round(worker.wall_s, 4)
+    eval_task.metrics.tokens_completion = worker.completion_tokens or None
+    eval_task.metrics.cost_usd = worker.cost_usd
+    eval_task.metrics.cost_source = worker.cost_source
+    eval_task.metrics.model_calls = 1
+    return eval_task
+
+
+def _proposals_to_suite_applied_eval_task(
+    worker: WorkerResult,
+    lock_task: Task,
+    lock: AgentLock,
+    *,
+    started_at: str,
+    finished_at: str,
+    prompt: str | None,
+    git_changed_files: list[str],
+) -> EvalTask:
+    """Single-agent applied mode — git-derived files with suite-level envelope parsing."""
+    eval_task = task_from_lock(lock_task, prompt=prompt)
+    eval_task.actual_changed_files = sorted(git_changed_files)
+    eval_task.actual_changed_files_kind = "suite_applied_diff"
+    eval_task.out_of_bounds_files = sorted(
+        {
+            p
+            for p in git_changed_files
+            if not validate_write(lock, lock_task.id, p)[0]
+        }
+    )
+    eval_task.blocked_write_events = []
+    if worker.error:
+        eval_task.status = "failed"
+        eval_task.failure_reason = "AGENT_FAIL"
+    elif not eval_task.actual_changed_files:
+        if worker.proposals and all(p.envelope is None for p in worker.proposals):
+            eval_task.status = "failed"
+            eval_task.failure_reason = "NO_APPLIED_CONTENT"
+        else:
+            eval_task.status = "failed"
+            eval_task.failure_reason = "EMPTY_PATCH"
+    elif eval_task.out_of_bounds_files:
+        eval_task.status = "completed_unsafe"
+        eval_task.failure_reason = None
+    else:
+        eval_task.status = "completed"
+    eval_task.timestamps.started_at = started_at
+    eval_task.timestamps.finished_at = finished_at
+    eval_task.metrics.wall_time_seconds = round(worker.wall_s, 4)
+    eval_task.metrics.tokens_completion = worker.completion_tokens or None
+    eval_task.metrics.cost_usd = worker.cost_usd
+    eval_task.metrics.cost_source = worker.cost_source
+    eval_task.metrics.model_calls = 1
+    return eval_task
+
+
 def _proposals_to_planned_eval_task(
     worker: WorkerResult,
     lock_task: Task,
@@ -473,9 +597,16 @@ def _proposals_to_planned_applied_eval_task(
     if worker.error:
         eval_task.status = "failed"
         eval_task.failure_reason = "AGENT_FAIL"
-    elif not eval_task.actual_changed_files and eval_task.blocked_write_events:
-        eval_task.status = "blocked"
-        eval_task.failure_reason = "BLOCKED_BY_SCOPE"
+    elif not eval_task.actual_changed_files:
+        if worker.proposals and all(p.envelope is None for p in worker.proposals):
+            eval_task.status = "failed"
+            eval_task.failure_reason = "NO_APPLIED_CONTENT"
+        elif eval_task.blocked_write_events:
+            eval_task.status = "blocked"
+            eval_task.failure_reason = "BLOCKED_BY_SCOPE"
+        else:
+            eval_task.status = "failed"
+            eval_task.failure_reason = "EMPTY_PATCH"
     else:
         eval_task.status = "completed"
     eval_task.timestamps.started_at = started_at
@@ -501,14 +632,16 @@ def _git_identity_args() -> list[str]:
     ]
 
 
-def _apply_planned_writes_git_sync(
+def _apply_writes_git_sync(
     checkout: Path,
     base_sha: str,
     lock: AgentLock,
     task: Task,
     wr: WorkerResult,
+    *,
+    require_scope: bool = True,
 ) -> list[str]:
-    """Create ``acg-applied/<task>`` from ``base_sha``, write allowed bodies, commit, return diff names."""
+    """Create ``acg-applied/<task>`` from ``base_sha``, apply envelopes, commit, return diff names."""
     repo = str(checkout.resolve())
     branch = f"acg-applied/{_sanitize_applied_branch_task_id(task.id)}"
     subprocess.run(
@@ -526,19 +659,13 @@ def _apply_planned_writes_git_sync(
     try:
         root = checkout.resolve()
         for prop in wr.proposals:
-            if not prop.allowed or prop.content is None:
+            if prop.envelope is None or (require_scope and not prop.allowed):
                 continue
-            allowed, _reason = validate_write(lock, task.id, prop.file)
-            if not allowed:
-                continue
-            rel = prop.file.lstrip("./")
-            dest = (checkout / rel).resolve()
-            try:
-                dest.relative_to(root)
-            except ValueError:
-                continue
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(prop.content, encoding="utf-8")
+            if require_scope:
+                allowed, _reason = validate_write(lock, task.id, prop.file)
+                if not allowed:
+                    continue
+            apply_envelope(prop.envelope, root)
         subprocess.run(["git", "-C", repo, "add", "-A"], check=True, capture_output=True, text=True)
         st = subprocess.run(
             ["git", "-C", repo, "status", "--porcelain"],
@@ -568,6 +695,8 @@ def _apply_planned_writes_git_sync(
             capture_output=True,
             text=True,
         )
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -659,6 +788,105 @@ async def _run_naive_parallel(
     return tasks, wall_s, counting_sub.prompt_token_method
 
 
+async def _run_naive_parallel_applied(
+    lock: AgentLock,
+    repo_graph: dict[str, Any],
+    sub_factory: Callable[[], RuntimeLLMProtocol],
+    checkout_path: Path,
+    *,
+    prompts_by_task: dict[str, str] | None = None,
+    cap_parallelism: int | None = None,
+) -> tuple[list[EvalTask], float, str]:
+    """Naive workers + real git writes (no scope gate on apply)."""
+    checkout = checkout_path.resolve()
+    probe = subprocess.run(
+        ["git", "-C", str(checkout), "rev-parse", "--is-inside-work-tree"],
+        capture_output=True,
+        text=True,
+    )
+    if probe.returncode != 0 or probe.stdout.strip() != "true":
+        raise ValueError(f"applied branch writes require a git checkout: {checkout}")
+    if lock.repo and (lock.repo.commit or "").strip():
+        pin = lock.repo.commit.strip()
+        base_sha = subprocess.run(
+            ["git", "-C", str(checkout), "rev-parse", "--verify", pin],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    else:
+        base_sha = subprocess.run(
+            ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    sub_inner = sub_factory()
+    counting_sub = _PromptCountingLLM(sub_inner)
+    started = now_iso()
+    t0 = time.perf_counter()
+    from acg.runtime import RuntimeConfig
+
+    naive_runtime_config = RuntimeConfig.from_env()
+    naive_runtime_config.auto_replan = False
+    tasks_by_id = {t.id: t for t in lock.tasks}
+    changed_by_task: dict[str, list[str]] = {}
+    git_lock = asyncio.Lock()
+    try:
+        worker_results = await _gather_capped(
+            [
+                run_worker(
+                    task,
+                    lock,
+                    repo_graph,
+                    counting_sub,
+                    group_id=0,
+                    config=naive_runtime_config,
+                )
+                for task in lock.tasks
+            ],
+            cap_parallelism,
+        )
+        for wr in worker_results:
+            task = tasks_by_id.get(wr.task_id)
+            if task is None:
+                continue
+            async with git_lock:
+                names = await asyncio.to_thread(
+                    _apply_writes_git_sync,
+                    checkout,
+                    base_sha,
+                    lock,
+                    task,
+                    wr,
+                    require_scope=False,
+                )
+            changed_by_task[wr.task_id] = names
+    finally:
+        await counting_sub.aclose()
+    wall_s = time.perf_counter() - t0
+    finished = now_iso()
+
+    tasks = [
+        _proposals_to_naive_applied_eval_task(
+            wr,
+            tasks_by_id[wr.task_id],
+            lock,
+            started_at=started,
+            finished_at=finished,
+            prompt=(prompts_by_task or {}).get(wr.task_id),
+            git_changed_files=changed_by_task.get(wr.task_id, []),
+        )
+        for wr in worker_results
+        if wr.task_id in tasks_by_id
+    ]
+    for et in tasks:
+        et.metrics.tokens_prompt = counting_sub.tokens_by_task.get(et.task_id)
+    annotate_overlaps(tasks)
+    return tasks, wall_s, counting_sub.prompt_token_method
+
+
 # ---------------------------------------------------------------------------
 # Suite-level no-lock single-agent strategy.
 # ---------------------------------------------------------------------------
@@ -691,6 +919,7 @@ def _build_single_agent_prompt(
     repo_graph: dict[str, Any],
     *,
     prompts_by_task: dict[str, str] | None = None,
+    apply_patch_suites: bool = False,
 ) -> list[dict[str, str]]:
     files = _repo_graph_file_paths(repo_graph)
     file_block = "\n".join(f"  - {p}" for p in files) or "  (graph empty)"
@@ -700,13 +929,25 @@ def _build_single_agent_prompt(
             f"Task id: {task.id}\n"
             f"Task: {(prompts_by_task or {}).get(task.id, task.prompt)}"
         )
-    system = (
-        "You are a single coding agent handling an entire task suite without "
-        "a precomputed file contract. Output ONLY a JSON object with key \"tasks\": an "
-        "array of objects. Each object must have \"task_id\" and \"writes\"; "
-        "\"writes\" is an array of objects with \"file\" and \"description\". "
-        "Do not include prose, code fences, or contract-derived fields."
-    )
+    if apply_patch_suites:
+        system = (
+            "You are a single coding agent handling an entire task suite without "
+            "a precomputed file contract. For every task listed below, emit an "
+            "OpenAI apply_patch envelope that implements the task.\n\n"
+            "Formatting rules:\n"
+            "- Repeat one block per task in suite order.\n"
+            "- Each block MUST start with a line `Task id: <id>` copied from the list below,\n"
+            "  followed only by the `*** Begin Patch` … `*** End Patch` envelope for that task.\n"
+            "- Do not wrap patches in code fences and do not emit JSON ``tasks`` payloads.\n"
+        )
+    else:
+        system = (
+            "You are a single coding agent handling an entire task suite without "
+            "a precomputed file contract. Output ONLY a JSON object with key \"tasks\": an "
+            "array of objects. Each object must have \"task_id\" and \"writes\"; "
+            "\"writes\" is an array of objects with \"file\" and \"description\". "
+            "Do not include prose, code fences, or contract-derived fields."
+        )
     task_join = "\n\n".join(task_blocks)
     user = (
         "Single-agent no-lock suite.\n"
@@ -719,6 +960,81 @@ def _build_single_agent_prompt(
     return [
         {"role": "system", "content": system},
         {"role": "user", "content": user},
+    ]
+
+
+def _task_mentions_path(task: Task, path: str) -> bool:
+    n = path.lstrip("./")
+    if any(pw.path.lstrip("./") == n for pw in task.predicted_writes):
+        return True
+    return n in {c.lstrip("./") for c in task.candidate_context_paths}
+
+
+def _pick_task_for_patch_block(lock: AgentLock, block: str) -> str:
+    paths = re.findall(r"(?m)^\*\*\* (?:Update|Add|Delete) File: (.+?)\s*$", block)
+    paths = [p.strip() for p in paths]
+    if not paths or not lock.tasks:
+        return lock.tasks[0].id if lock.tasks else ""
+    for task in lock.tasks:
+        if all(_task_mentions_path(task, p) for p in paths):
+            return task.id
+    for task in lock.tasks:
+        if any(_task_mentions_path(task, p) for p in paths):
+            return task.id
+    return lock.tasks[0].id
+
+
+def _parse_single_agent_applied_sections(raw: str) -> dict[str, str]:
+    text = (raw or "").strip()
+    if not text or "Task id:" not in text:
+        return {}
+    sections: dict[str, str] = {}
+    pattern = re.compile(r"(?m)^Task id:\s*([^\s]+)\s*$")
+    matches = list(pattern.finditer(text))
+    if not matches:
+        return {}
+    for i, m in enumerate(matches):
+        tid = m.group(1)
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        chunk = text[start:end].strip()
+        if chunk:
+            sections[tid] = chunk
+    return sections
+
+
+def _parse_single_agent_applied_mega(raw: str, lock: AgentLock) -> dict[str, str]:
+    chunks_by_task: dict[str, list[str]] = {t.id: [] for t in lock.tasks}
+    if not lock.tasks:
+        return {}
+    for block in re.findall(r"\*\*\* Begin Patch[\s\S]*?\*\*\* End Patch", raw or ""):
+        b = block.strip()
+        if not b:
+            continue
+        tid = _pick_task_for_patch_block(lock, b)
+        chunks_by_task.setdefault(tid, []).append(b)
+    return {tid: "\n\n".join(chs).strip() for tid, chs in chunks_by_task.items() if chs}
+
+
+def _parse_single_agent_applied_envelopes(raw: str, lock: AgentLock) -> dict[str, str]:
+    by_section = _parse_single_agent_applied_sections(raw)
+    if by_section:
+        return by_section
+    return _parse_single_agent_applied_mega(raw, lock)
+
+
+def _proposals_for_task_envelope_blob(blob: str) -> list[Proposal]:
+    return [
+        Proposal(
+            file=r["file"],
+            description=str(r.get("description", "")),
+            allowed=True,
+            reason=None,
+            scope_status="allowed",
+            content=None,
+            envelope=r["envelope"],
+        )
+        for r in _parse_apply_envelope(blob or "")
     ]
 
 
@@ -886,6 +1202,139 @@ async def _run_single_agent(
     return tasks, wall_s, prompt_method
 
 
+async def _run_single_agent_applied(
+    lock: AgentLock,
+    repo_graph: dict[str, Any],
+    sub_factory: Callable[[], RuntimeLLMProtocol],
+    checkout_path: Path,
+    *,
+    prompts_by_task: dict[str, str] | None = None,
+) -> tuple[list[EvalTask], float, str]:
+    """Suite-level agent whose reply is split per task and applied as git branches."""
+    checkout = checkout_path.resolve()
+    probe = subprocess.run(
+        ["git", "-C", str(checkout), "rev-parse", "--is-inside-work-tree"],
+        capture_output=True,
+        text=True,
+    )
+    if probe.returncode != 0 or probe.stdout.strip() != "true":
+        raise ValueError(f"applied branch writes require a git checkout: {checkout}")
+    if lock.repo and (lock.repo.commit or "").strip():
+        pin = lock.repo.commit.strip()
+        base_sha = subprocess.run(
+            ["git", "-C", str(checkout), "rev-parse", "--verify", pin],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    else:
+        base_sha = subprocess.run(
+            ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    llm = sub_factory()
+    messages = _build_single_agent_prompt(
+        lock,
+        repo_graph,
+        prompts_by_task=prompts_by_task,
+        apply_patch_suites=True,
+    )
+    started = now_iso()
+    t0 = time.perf_counter()
+    reply: LLMReply | None = None
+    error: str | None = None
+    try:
+        reply = await llm.complete(messages, max_tokens=max(3200, SINGLE_AGENT_MAX_TOKENS))
+    except Exception as exc:  # pragma: no cover - exercised by live backends.
+        error = str(exc)
+    finally:
+        await llm.aclose()
+    wall_s = time.perf_counter() - t0
+    finished = now_iso()
+
+    prompt_tokens: int | None = None
+    prompt_method = "estimated_chars_div_4"
+    if reply is not None and reply.prompt_tokens is not None:
+        prompt_tokens = reply.prompt_tokens
+        prompt_method = "provider_usage_prompt_tokens"
+    elif reply is not None:
+        prompt_tokens = estimate_prompt_tokens(messages)
+
+    envelopes_by_task: dict[str, str] = {}
+    if reply is not None and not error:
+        envelopes_by_task = _parse_single_agent_applied_envelopes(reply.content, lock)
+
+    workers_by_task: dict[str, WorkerResult] = {}
+    for task in lock.tasks:
+        blob = envelopes_by_task.get(task.id, "")
+        proposals = _proposals_for_task_envelope_blob(blob)
+        workers_by_task[task.id] = WorkerResult(
+            task_id=task.id,
+            group_id=0,
+            url=llm.url,
+            model=llm.model,
+            wall_s=reply.wall_s if reply is not None else 0.0,
+            completion_tokens=(reply.completion_tokens if reply is not None else 0) or 0,
+            finish_reason=(reply.finish_reason if reply is not None else "error"),
+            raw_content=blob,
+            proposals=proposals,
+            allowed_count=sum(1 for p in proposals if p.allowed),
+            blocked_count=sum(1 for p in proposals if not p.allowed),
+            error=error,
+            prompt_tokens=reply.prompt_tokens if reply is not None else None,
+            cost_usd=reply.cost_usd if reply is not None else None,
+            cost_source=reply.cost_source if reply is not None else None,
+        )
+
+    changed_by_task: dict[str, list[str]] = {}
+    git_lock = asyncio.Lock()
+
+    async def _apply_one(task_id: str) -> None:
+        wr = workers_by_task[task_id]
+        task = next(t for t in lock.tasks if t.id == task_id)
+        async with git_lock:
+            names = await asyncio.to_thread(
+                _apply_writes_git_sync,
+                checkout,
+                base_sha,
+                lock,
+                task,
+                wr,
+                require_scope=False,
+            )
+        changed_by_task[task_id] = names
+
+    if not error:
+        for task in lock.tasks:
+            await _apply_one(task.id)
+
+    tasks_out: list[EvalTask] = []
+    for index, lock_task in enumerate(lock.tasks):
+        wr = workers_by_task[lock_task.id]
+        eval_task = _proposals_to_suite_applied_eval_task(
+            wr,
+            lock_task,
+            lock,
+            started_at=started,
+            finished_at=finished,
+            prompt=(prompts_by_task or {}).get(lock_task.id, lock_task.prompt),
+            git_changed_files=changed_by_task.get(lock_task.id, []),
+        )
+        eval_task.metrics.wall_time_seconds = round(wall_s if index == 0 else 0.0, 4)
+        eval_task.metrics.model_calls = 1 if index == 0 else 0
+        if index == 0 and reply is not None:
+            eval_task.metrics.tokens_prompt = prompt_tokens
+            eval_task.metrics.tokens_completion = reply.completion_tokens or None
+            eval_task.metrics.cost_usd = reply.cost_usd
+            eval_task.metrics.cost_source = reply.cost_source
+        tasks_out.append(eval_task)
+    annotate_overlaps(tasks_out)
+    return tasks_out, wall_s, prompt_method
+
+
 # ---------------------------------------------------------------------------
 # ACG-planned strategy.
 # ---------------------------------------------------------------------------
@@ -994,7 +1443,7 @@ async def _run_acg_planned_applied(
     scope_repo_graph: bool = True,
     auto_replan: bool = False,
 ) -> tuple[list[EvalTask], float, str]:
-    """Planned workers + git-backed writes for proposals that carry ``content``."""
+    """Planned workers + git-backed writes for proposals that carry apply_patch envelopes."""
     del lockfile_path
     checkout = checkout_path.resolve()
     probe = subprocess.run(
@@ -1040,12 +1489,13 @@ async def _run_acg_planned_applied(
             return
         async with git_lock:
             names = await asyncio.to_thread(
-                _apply_planned_writes_git_sync,
+                _apply_writes_git_sync,
                 checkout,
                 base_sha,
                 lock,
                 task,
                 wr,
+                require_scope=True,
             )
         changed_by_task[wr.task_id] = names
 
@@ -1188,12 +1638,23 @@ def run_strategy(
     )
     use_applied = strategy == ACG_PLANNED_APPLIED_STRATEGY or (
         applied_diff_live
+        and strategy
+        in (
+            SINGLE_AGENT_STRATEGY,
+            NAIVE_STRATEGY,
+            ACG_PLANNED_STRATEGY,
+            ACG_PLANNED_REPLAN_STRATEGY,
+        )
+    )
+    run_planned_git_applied = strategy == ACG_PLANNED_APPLIED_STRATEGY or (
+        applied_diff_live
         and strategy in (ACG_PLANNED_STRATEGY, ACG_PLANNED_REPLAN_STRATEGY)
     )
     if applied_diff_live and strategy == ACG_PLANNED_FULL_CONTEXT_STRATEGY:
         raise ValueError(
             "--applied-diff-live is not supported for acg_planned_full_context "
-            "(use acg_planned, acg_planned_replan, or acg_planned_applied)"
+            "(use single_agent, naive_parallel, acg_planned, acg_planned_replan, "
+            "or acg_planned_applied)"
         )
 
     if backend == "mock":
@@ -1205,33 +1666,63 @@ def run_strategy(
         sub_factory, model = _local_factory()
 
     orch_overhead: int | None
+    checkout = Path(eval_repo.local_path).resolve()
+
     if strategy == SINGLE_AGENT_STRATEGY:
-        tasks, wall_s, prompt_token_method = asyncio.run(
-            _run_single_agent(
-                lock,
-                repo_graph,
-                sub_factory,
-                prompts_by_task=prompts_by_task,
+        if applied_diff_live:
+            tasks, wall_s, prompt_token_method = asyncio.run(
+                _run_single_agent_applied(
+                    lock,
+                    repo_graph,
+                    sub_factory,
+                    checkout,
+                    prompts_by_task=prompts_by_task,
+                )
             )
-        )
-        orch_overhead = None
-        execution_mode = "single_agent_no_lock"
-        evidence_kind = "suite_proposed_write_set"
+            orch_overhead = None
+            execution_mode = "applied_diff_live"
+            evidence_kind = "suite_applied_diff"
+        else:
+            tasks, wall_s, prompt_token_method = asyncio.run(
+                _run_single_agent(
+                    lock,
+                    repo_graph,
+                    sub_factory,
+                    prompts_by_task=prompts_by_task,
+                )
+            )
+            orch_overhead = None
+            execution_mode = "single_agent_no_lock"
+            evidence_kind = "suite_proposed_write_set"
     elif strategy == NAIVE_STRATEGY:
-        tasks, wall_s, prompt_token_method = asyncio.run(
-            _run_naive_parallel(
-                lock,
-                repo_graph,
-                sub_factory,
-                prompts_by_task=prompts_by_task,
-                cap_parallelism=cap_parallelism,
+        if applied_diff_live:
+            tasks, wall_s, prompt_token_method = asyncio.run(
+                _run_naive_parallel_applied(
+                    lock,
+                    repo_graph,
+                    sub_factory,
+                    checkout,
+                    prompts_by_task=prompts_by_task,
+                    cap_parallelism=cap_parallelism,
+                )
             )
-        )
-        orch_overhead = None
-        execution_mode = "propose_validate"
-        evidence_kind = "proposed_write_set"
-    elif use_applied:
-        checkout = Path(eval_repo.local_path).resolve()
+            orch_overhead = None
+            execution_mode = "applied_diff_live"
+            evidence_kind = "applied_diff"
+        else:
+            tasks, wall_s, prompt_token_method = asyncio.run(
+                _run_naive_parallel(
+                    lock,
+                    repo_graph,
+                    sub_factory,
+                    prompts_by_task=prompts_by_task,
+                    cap_parallelism=cap_parallelism,
+                )
+            )
+            orch_overhead = None
+            execution_mode = "propose_validate"
+            evidence_kind = "proposed_write_set"
+    elif run_planned_git_applied:
         tasks, wall_s, prompt_token_method = asyncio.run(
             _run_acg_planned_applied(
                 lock,
