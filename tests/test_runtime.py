@@ -1241,3 +1241,37 @@ def test_run_worker_handles_directory_predicted_write(
     assert worker.allowed_count == 1
     assert worker.blocked_count == 0
     assert worker.proposals[0].file == "tests/e2e/checkout.spec.ts"
+
+
+def test_worker_prompt_includes_content_request(
+    lock: AgentLock, empty_repo_graph: dict[str, object]
+) -> None:
+    task = lock.tasks[0]
+    messages = _build_worker_prompt(task, empty_repo_graph)
+    system = next(m["content"] for m in messages if m["role"] == "system")
+    assert "content" in system
+
+
+def test_worker_proposal_with_content_is_parsed(
+    lock: AgentLock, empty_repo_graph: dict[str, object]
+) -> None:
+    task = next(t for t in lock.tasks if t.id == "oauth")
+    body = "export const x = 1;\n"
+    raw = json.dumps(
+        {
+            "writes": [
+                {
+                    "file": "src/server/auth/hello.ts",
+                    "description": "add helper",
+                    "content": body,
+                }
+            ]
+        }
+    )
+    sub = StubRuntimeLLM(replies={"oauth": raw})
+    worker = asyncio.run(run_worker(task, lock, empty_repo_graph, sub, group_id=1))
+    assert len(worker.proposals) == 1
+    prop = worker.proposals[0]
+    assert prop.file == "src/server/auth/hello.ts"
+    assert prop.allowed is True
+    assert prop.content == body
