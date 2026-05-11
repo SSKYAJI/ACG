@@ -1,4 +1,12 @@
-"""Evaluate deterministic indexers against small fixture datasets."""
+"""Evaluate deterministic indexers against small fixture datasets.
+
+Note: This script calls ``acg.index.aggregate`` (framework + PageRank + BM25 +
+co-change) directly. It does **not** exercise the full ``predict_writes`` /
+``predict_file_scopes`` seed pipeline (static, symbol, test-scaffold, env,
+sibling-pattern, auth-role, package, cluster, etc.). If the goal is to measure
+recall of the newer seed changes, a separate full-predictor benchmark row is
+needed.
+"""
 
 from __future__ import annotations
 
@@ -39,7 +47,12 @@ def _clone(url: str, dest: Path) -> Path:
 
 
 def _load_fixture(name: str) -> list[dict[str, Any]]:
-    fixture_name = "express-api" if name == "express" else name
+    if name == "express":
+        fixture_name = "express-api"
+    elif name == "realworld":
+        fixture_name = "realworld"
+    else:
+        fixture_name = name
     return json.loads((FIXTURE_DIR / f"{fixture_name}-tasks.json").read_text())
 
 
@@ -55,6 +68,8 @@ def _task(row: dict[str, Any]) -> TaskInput:
 def _repo_for_dataset(name: str) -> Path:
     if name == "demo-app":
         return ROOT / "demo-app"
+    if name == "realworld":
+        return ROOT / "experiments" / "realworld" / "checkout"
     cache = ROOT / ".acg" / "benchmark_repos"
     if name == "t3-app":
         return _clone("https://github.com/t3-oss/create-t3-app.git", cache / "create-t3-app")
@@ -177,7 +192,7 @@ def main() -> None:
     base_results: dict[str, dict[str, float]] = {}
     embed_results: dict[str, dict[str, float]] = {}
     embed_indexers = _indexers_with_embeddings()
-    for name in ("demo-app", "t3-app", "express"):
+    for name in ("demo-app", "t3-app", "express", "realworld"):
         base_results[name] = evaluate_dataset(name, indexers=None)
         if embed_indexers is not None:
             embed_results[name] = evaluate_dataset(name, indexers=embed_indexers)

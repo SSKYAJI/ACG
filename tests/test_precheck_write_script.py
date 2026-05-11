@@ -147,6 +147,33 @@ def test_normalises_absolute_cwd_prefixed_path(
     assert "src/server/auth/config.ts" in proc.stderr
 
 
+def test_blocks_traversal_path(tmp_path: Path, example_dag_lockfile_path: Path) -> None:
+    """.. that escapes the repo root is blocked by the hook."""
+    lock_copy = tmp_path / "agent_lock.json"
+    shutil.copy(example_dag_lockfile_path, lock_copy)
+    proc = _run(
+        ["src/../../outside.ts"],
+        env={"ACG_LOCK": str(lock_copy), "ACG_CURRENT_TASK": "settings"},
+        cwd=REPO_ROOT,
+    )
+    assert proc.returncode == 2, proc.stderr
+    assert "escapes" in proc.stderr.lower()
+
+
+def test_blocks_git_traversal_bypass(tmp_path: Path, example_dag_lockfile_path: Path) -> None:
+    """.git/../outside.ts must not match the allowlist and escape the repo."""
+    lock_copy = tmp_path / "agent_lock.json"
+    shutil.copy(example_dag_lockfile_path, lock_copy)
+    for traversal in (".git/../outside.ts", ".acg/../outside.ts", ".windsurf/../outside.ts"):
+        proc = _run(
+            [traversal],
+            env={"ACG_LOCK": str(lock_copy), "ACG_CURRENT_TASK": "settings"},
+            cwd=REPO_ROOT,
+        )
+        assert proc.returncode == 2, f"{traversal}: {proc.stderr}"
+        assert "escapes" in proc.stderr.lower()
+
+
 def test_allows_when_acg_binary_missing(tmp_path: Path, example_dag_lockfile_path: Path) -> None:
     """If neither `acg` on PATH nor the venv binary resolves, soft-fail."""
     lock_copy = tmp_path / "agent_lock.json"

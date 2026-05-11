@@ -19,6 +19,62 @@ EXIT_USER_ERROR = 1
 EXIT_BLOCKED = 2
 
 
+def _lexical_normalize(path: str) -> str:
+    """Collapse ``.`` and ``..`` segments lexically.
+
+    Raises :class:`ValueError` when ``..`` climbs above the root.
+    """
+    parts = path.replace("\\", "/").split("/")
+    out: list[str] = []
+    for part in parts:
+        if part == "" or part == ".":
+            continue
+        if part == "..":
+            if not out:
+                raise ValueError("path escapes root")
+            out.pop()
+        else:
+            out.append(part)
+    return "/".join(out)
+
+
+def _normalize_write_path(lock: AgentLock, write_path: str) -> tuple[str | None, str | None]:
+    """Return a lexically-normalized repo-relative path, or ``(None, reason)``.
+
+    * Relative paths are collapsed lexically; ``..`` that escapes the repo
+      root is rejected.
+    * Absolute paths are accepted only when they fall under
+      ``lock.repo.root``; the repo-root prefix is stripped.
+    """
+    # Handle absolute paths.
+    if write_path.startswith("/"):
+        try:
+            abs_normalized = _lexical_normalize(write_path)
+        except ValueError:
+            return None, f"path {write_path!r} escapes filesystem root"
+
+        # Derive absolute repo root without following symlinks.
+        repo_root = lock.repo.root
+        if not repo_root.startswith("/"):
+            repo_root = str(Path(repo_root).absolute())
+        repo_root = _lexical_normalize(repo_root)
+
+        prefix = repo_root.rstrip("/") + "/"
+        if abs_normalized == repo_root.rstrip("/"):
+            return "", None
+        if not abs_normalized.startswith(prefix):
+            return None, f"absolute path {write_path!r} is outside repo root"
+        return abs_normalized[len(prefix) :], None
+
+    # Relative path: lexical normalization.
+    try:
+        normalized = _lexical_normalize(write_path)
+    except ValueError:
+        return None, f"path {write_path!r} escapes repository root"
+
+    return normalized, None
+
+
 def _matches(pattern: str, path: str) -> bool:
     """Glob-match ``path`` against ``pattern``.
 
@@ -73,8 +129,12 @@ def validate_write(lock: AgentLock, task_id: str, write_path: str) -> tuple[bool
         KeyError: when ``task_id`` is not present in ``lock``.
     """
     task = _find_task(lock, task_id)
+    normalized, error = _normalize_write_path(lock, write_path)
+    if error:
+        return False, error
+    assert normalized is not None
     for pattern in task.allowed_paths:
-        if _matches(pattern, write_path):
+        if _matches(pattern, normalized):
             return True, None
     reason = (
         f"path {write_path!r} is outside task {task_id!r}'s allowed_paths "

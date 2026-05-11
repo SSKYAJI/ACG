@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from acg.runtime import LLMReply
+from acg.runtime import LLMReply, Proposal, WorkerResult
 from acg.schema import (
     AgentLock,
     Conflict,
@@ -55,6 +55,7 @@ from experiments.greenhouse.strategies import (
     _build_single_agent_prompt,
     _extract_task_id,
     _PromptCountingLLM,
+    _proposals_to_planned_eval_task,
     _scoped_repo_graph,
     estimate_prompt_tokens,
     run_strategy,
@@ -1433,3 +1434,181 @@ def test_tightened_greenhouse_lockfile_fires_validator(tmp_path: Path) -> None:
     assert all(len(files) >= 1 for files in actual_per_task.values()), (
         f"in-bounds proposals must still land; got {actual_per_task!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Planned-mode status assignment for blocked-only proposals.
+# ---------------------------------------------------------------------------
+
+
+def _planned_task() -> Task:
+    """Single lockfile task with one allowed path, used by status tests."""
+    return Task(
+        id="blocked-task",
+        prompt="placeholder",
+        predicted_writes=[
+            PredictedWrite(path="src/in_scope.ts", confidence=0.9, reason="x")
+        ],
+        allowed_paths=["src/in_scope.ts"],
+        depends_on=[],
+        parallel_group=None,
+        rationale=None,
+    )
+
+
+def _worker_result(*, proposals: list[Proposal], error: str | None = None) -> WorkerResult:
+    """Minimal WorkerResult shaped for `_proposals_to_planned_eval_task`."""
+    allowed_count = sum(1 for p in proposals if p.allowed)
+    blocked_count = len(proposals) - allowed_count
+    return WorkerResult(
+        task_id="blocked-task",
+        group_id=1,
+        url="mock://",
+        model="mock",
+        wall_s=0.1,
+        completion_tokens=4,
+        finish_reason="stop",
+        raw_content="{}",
+        proposals=proposals,
+        allowed_count=allowed_count,
+        blocked_count=blocked_count,
+        error=error,
+    )
+
+
+def test_planned_eval_task_marks_blocked_when_all_proposals_rejected() -> None:
+    """Regression: smoke run flagged `add-article-search` as completed even
+    though every proposed write was rejected by the lock."""
+    task = _planned_task()
+    worker = _worker_result(
+        proposals=[
+            Proposal(
+                file="src/out_of_scope.ts",
+                description="agent guessed wrong",
+                allowed=False,
+                reason="path 'src/out_of_scope.ts' is candidate_context only",
+                scope_status="needs_replan",
+            )
+        ]
+    )
+    eval_task = _proposals_to_planned_eval_task(
+        worker,
+        task,
+        started_at="2026-05-11T22:20:23Z",
+        finished_at="2026-05-11T22:20:59Z",
+        prompt=None,
+    )
+    assert eval_task.actual_changed_files == []
+    assert len(eval_task.blocked_write_events) == 1
+    assert eval_task.status == "blocked"
+    assert eval_task.failure_reason == "BLOCKED_BY_SCOPE"
+
+
+def test_planned_eval_task_partial_block_still_completed() -> None:
+    """Tasks with mixed allowed + blocked proposals stay completed —
+    real progress happened, the burden metric records the rejects."""
+    task = _planned_task()
+    worker = _worker_result(
+        proposals=[
+            Proposal(
+                file="src/in_scope.ts",
+                description="allowed write",
+                allowed=True,
+                reason=None,
+                scope_status="allowed",
+            ),
+            Proposal(
+                file="src/out_of_scope.ts",
+                description="rejected write",
+                allowed=False,
+                reason="outside allowed_paths",
+                scope_status="blocked",
+            ),
+        ]
+    )
+    eval_task = _proposals_to_planned_eval_task(
+        worker,
+        task,
+        started_at="2026-05-11T22:20:23Z",
+        finished_at="2026-05-11T22:20:59Z",
+        prompt=None,
+    )
+    assert eval_task.actual_changed_files == ["src/in_scope.ts"]
+    assert len(eval_task.blocked_write_events) == 1
+    assert eval_task.status == "completed"
+    assert eval_task.failure_reason is None
+
+
+def test_planned_eval_task_no_proposals_no_blocks_is_completed() -> None:
+    """A worker that proposed nothing is a no-op, not a block. Status stays
+    ``completed`` so we do not retroactively fail historic mock-backend
+    artifacts."""
+    task = _planned_task()
+    worker = _worker_result(proposals=[])
+    eval_task = _proposals_to_planned_eval_task(
+        worker,
+        task,
+        started_at="2026-05-11T22:20:23Z",
+        finished_at="2026-05-11T22:20:59Z",
+        prompt=None,
+    )
+    assert eval_task.actual_changed_files == []
+    assert eval_task.blocked_write_events == []
+    assert eval_task.status == "completed"
+
+
+def test_planned_eval_task_worker_error_takes_priority_over_blocks() -> None:
+    """If the worker raised, status is `failed` even if there are blocked
+    events recorded — the agent-fail signal is the more honest root cause."""
+    task = _planned_task()
+    worker = _worker_result(
+        proposals=[
+            Proposal(
+                file="src/out_of_scope.ts",
+                description="rejected",
+                allowed=False,
+                reason="outside allowed_paths",
+                scope_status="blocked",
+            )
+        ],
+        error="boom",
+    )
+    eval_task = _proposals_to_planned_eval_task(
+        worker,
+        task,
+        started_at="2026-05-11T22:20:23Z",
+        finished_at="2026-05-11T22:20:59Z",
+        prompt=None,
+    )
+    assert eval_task.status == "failed"
+    assert eval_task.failure_reason == "AGENT_FAIL"
+
+
+def test_summary_metrics_excludes_blocked_from_tasks_completed() -> None:
+    """Three tasks: two completed, one blocked → tasks_completed must be 2."""
+    tasks = [
+        EvalTask(task_id="a", status="completed", actual_changed_files=["a.ts"]),
+        EvalTask(task_id="b", status="completed", actual_changed_files=["b.ts"]),
+        EvalTask(
+            task_id="c",
+            status="blocked",
+            failure_reason="BLOCKED_BY_SCOPE",
+            actual_changed_files=[],
+            blocked_write_events=[
+                BlockedWriteEvent(
+                    file="src/out.ts",
+                    description="agent guessed wrong",
+                    reason="outside allowed_paths",
+                )
+            ],
+        ),
+    ]
+    summary = compute_summary_metrics(tasks, wall_time_seconds=1.0)
+    assert summary.tasks_total == 3
+    assert summary.tasks_completed == 2
+    assert summary.task_completion_rate == 0.6667
+    # `proposal_completion_rate` must also exclude blocked-only tasks because
+    # `_is_proposal_completed` requires status in {"completed", "completed_unsafe"}.
+    assert summary.proposal_completion_rate == 0.6667
+    # The blocked event must still surface in burden metrics.
+    assert summary.blocked_invalid_write_count == 1

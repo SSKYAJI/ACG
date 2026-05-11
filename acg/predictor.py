@@ -64,10 +64,13 @@ HUB_IMPORT_THRESHOLD = 15
 HUB_TOTAL_DEGREE_THRESHOLD = 30
 
 HIGH_PRECISION_SIGNALS = {
-    "explicit",
+    "auth_role",
+    "cluster",
     "env",
+    "explicit",
     "framework",
     "llm",
+    "package",
     "planner",
     "sibling",
     "symbol",
@@ -75,7 +78,16 @@ HIGH_PRECISION_SIGNALS = {
 }
 _CANDIDATE_HIGH_PRECISION_SIGNALS = HIGH_PRECISION_SIGNALS | {"scope_review"}
 CONTEXT_ONLY_SIGNALS = {"bm25", "cochange", "entity", "graph", "hint", "pagerank", "scip"}
-AUTO_REPLAN_SIGNALS = {"explicit", "framework", "llm", "planner", "symbol", "testlink"}
+AUTO_REPLAN_SIGNALS = {
+    "auth_role",
+    "explicit",
+    "framework",
+    "llm",
+    "package",
+    "planner",
+    "symbol",
+    "testlink",
+}
 TEST_LINK_STOPWORDS = {
     "middleware",
     "test",
@@ -172,6 +184,27 @@ _RESOURCE_ENTITY_RE = re.compile(
     r"\b([a-z][\w-]+)\s+(?:api|endpoint|route|webhook|checkout|integration)\b",
     re.IGNORECASE,
 )
+_AUTH_ROLE_TRIGGER_RE = re.compile(
+    r"\b(role|roles|guard|middleware|auth|permission|access.?control|rbac|acl)\b",
+    re.IGNORECASE,
+)
+_PACKAGE_TRIGGER_RE = re.compile(
+    r"\b(rate[-\s]?limit(?:ing)?|throttl(?:ing)?|library|package|dependency|install\s+(?:the\s+|a\s+|an\s+)?([a-z][\w-]+))\b",
+    re.IGNORECASE,
+)
+_CLUSTER_SUFFIXES = (
+    ".controller.ts",
+    ".service.ts",
+    ".module.ts",
+    ".entity.ts",
+    ".interface.ts",
+    ".middleware.ts",
+    ".dto.ts",
+    ".guard.ts",
+)
+SEED_AUTH_ROLE_CONFIDENCE = 0.72
+SEED_PACKAGE_JSON_CONFIDENCE = 0.75
+SEED_CLUSTER_CONFIDENCE = 0.65
 _SIBLING_ENTITY_STOPWORDS = _ENTITY_STOPWORDS | {
     "dashboard",
     "entry",
@@ -903,6 +936,146 @@ def _post_llm_must_write_neighbor_expansion(
     return expansions
 
 
+def _auth_role_seed(task: TaskInput, repo_graph: dict[str, Any]) -> list[PredictedWrite]:
+    """Predict auth middleware / guard files when the prompt mentions roles or access control."""
+    if not _AUTH_ROLE_TRIGGER_RE.search(task.prompt):
+        return []
+    files = repo_graph.get("files") or []
+    out: dict[str, PredictedWrite] = {}
+    for entry in files:
+        path = entry.get("path", "") if isinstance(entry, dict) else ""
+        lower = path.lower()
+        if any(kw in lower for kw in ("auth", "guard", "role", "permission", "middleware")):
+            if path not in out:
+                out[path] = PredictedWrite(
+                    path=path,
+                    confidence=SEED_AUTH_ROLE_CONFIDENCE,
+                    reason="Auth/role seed: prompt mentions access control; file matches auth/guard/middleware naming.",
+                )
+    return list(out.values())
+
+
+def _package_json_seed(task: TaskInput, repo_root: Path | None) -> list[PredictedWrite]:
+    """Predict package.json when the prompt implies adding a library or dependency."""
+    if not _PACKAGE_TRIGGER_RE.search(task.prompt):
+        return []
+    if repo_root is None or not (repo_root / "package.json").exists():
+        return []
+    return [
+        PredictedWrite(
+            path="package.json",
+            confidence=SEED_PACKAGE_JSON_CONFIDENCE,
+            reason="Package seed: prompt mentions adding a library, package, or rate-limiting dependency.",
+        )
+    ]
+
+
+def _cluster_base_relevant(base_name: str, task_tokens: set[str]) -> bool:
+    """Return True when ``base_name`` is plausibly the entity the task is about.
+
+    The implied-cluster seed amplifies one anchor into all of a NestJS module's
+    sibling files. Without a task-grounding gate, an indexer hit on an
+    unrelated module (e.g. ``profile.service.ts`` ranked high by PageRank)
+    becomes a full ``must_write`` cluster for a task that only cares about
+    articles. This helper is the gate: the cluster anchor's base name
+    (``profile`` / ``user`` / ``article``) must overlap, with simple
+    singular/plural tolerance, with the tokens drawn from the task id, prompt,
+    and ``hints.touches``.
+
+    When one string is a prefix of the other, the extra tail must look like a
+    simple English plural (``s`` / ``es`` only, length at most 2) so
+    ``article`` matches ``articles`` and ``class`` matches ``classes``, but
+    ``auth`` does not match ``author`` (tail ``or``, not a plural suffix).
+
+    >>> _cluster_base_relevant("article", {"add", "articles", "search"})
+    True
+    >>> _cluster_base_relevant("user", {"add", "users", "roles"})
+    True
+    >>> _cluster_base_relevant("profile", {"add", "article", "search"})
+    False
+    >>> _cluster_base_relevant("auth", {"author", "name"})
+    False
+    >>> _cluster_base_relevant("ab", {"ab", "abc"})  # too short to gate on
+    False
+    """
+    base = base_name.lower()
+    if len(base) < 3:
+        return False
+    _plural_tails = frozenset(("", "s", "es"))
+
+    def _prefix_plural_match(longer: str, shorter: str) -> bool:
+        if not longer.startswith(shorter):
+            return False
+        if len(longer) - len(shorter) > 2:
+            return False
+        return longer[len(shorter) :] in _plural_tails
+
+    for token in task_tokens:
+        if token == base:
+            return True
+        if _prefix_plural_match(token, base):
+            return True
+        if _prefix_plural_match(base, token):
+            return True
+    return False
+
+
+def _implied_cluster_seed(
+    task: TaskInput, repo_graph: dict[str, Any], seeds: list[PredictedWrite]
+) -> list[PredictedWrite]:
+    """Predict co-located module files (controller/service/entity/module/etc.) from existing seeds.
+
+    When a seed points to one file in a NestJS/TS module cluster, the other files
+    in the same directory with related suffixes are likely to need coordinated
+    edits. This improves recall for entity/controller/service tasks.
+
+    Gated on task relevance: only expand a cluster when the anchor's ``base_name``
+    (e.g. ``article`` in ``src/article/article.service.ts``) is plausibly the
+    entity the task is about. Without this gate a broad indexer signal on an
+    unrelated module would amplify into a full ``must_write`` cluster for the
+    wrong task — see :func:`_cluster_base_relevant`.
+    """
+    entries = _path_entries(repo_graph)
+    if not entries:
+        return []
+    task_tokens = _task_evidence_tokens(task)
+    existing_paths = {seed.path for seed in seeds}
+    cluster_predictions: dict[str, PredictedWrite] = {}
+    for seed in seeds:
+        seed_path = seed.path
+        if "/" not in seed_path:
+            continue
+        dir_part = seed_path.rsplit("/", 1)[0]
+        seed_suffix = seed_path.rsplit("/", 1)[-1]
+        # Find the base name (e.g., "user.controller.ts" -> "user")
+        base_name: str | None = None
+        for suffix in _CLUSTER_SUFFIXES:
+            if seed_suffix.endswith(suffix):
+                base_name = seed_suffix[: -len(suffix)]
+                break
+        if base_name is None:
+            continue
+        if not _cluster_base_relevant(base_name, task_tokens):
+            continue
+        for suffix in _CLUSTER_SUFFIXES:
+            candidate = f"{dir_part}/{base_name}{suffix}"
+            if candidate == seed_path or candidate in existing_paths:
+                continue
+            if candidate not in entries:
+                continue
+            if candidate in cluster_predictions:
+                continue
+            cluster_predictions[candidate] = PredictedWrite(
+                path=candidate,
+                confidence=SEED_CLUSTER_CONFIDENCE,
+                reason=(
+                    f"Implied cluster seed: {seed_path} suggests coordinated edits"
+                    f" to sibling {candidate} in the same module."
+                ),
+            )
+    return list(cluster_predictions.values())
+
+
 def _filter_graph_for_llm(repo_graph: dict[str, Any]) -> dict[str, Any]:
     """Return a compact graph slice safe to embed in an LLM prompt."""
     files = repo_graph.get("files") or []
@@ -1168,6 +1341,12 @@ def _signals_for_reason(reason: str) -> set[str]:
         signals.add("pagerank")
     if "rose co-change" in lower or "co-change" in lower:
         signals.add("cochange")
+    if "auth/role seed" in lower:
+        signals.add("auth_role")
+    if "package seed" in lower:
+        signals.add("package")
+    if "implied cluster seed" in lower:
+        signals.add("cluster")
     if "graph expansion" in lower:
         signals.add("graph")
     return signals
@@ -1255,6 +1434,12 @@ def _is_must_write(
         return True
     if "sibling" in signals and write.confidence >= SEED_SIBLING_PATTERN_PRIMARY_CONFIDENCE:
         return _task_matches_path(task_tokens, write.path, entries.get(write.path, {}))
+    if "auth_role" in signals and write.confidence >= SEED_AUTH_ROLE_CONFIDENCE:
+        return True
+    if "package" in signals and write.confidence >= SEED_PACKAGE_JSON_CONFIDENCE:
+        return True
+    if "cluster" in signals and write.confidence >= SEED_CLUSTER_CONFIDENCE:
+        return True
     if len(signals & HIGH_PRECISION_SIGNALS) >= 2 and write.confidence >= 0.8:
         return True
     if "symbol" in signals and write.confidence >= SEED_SYMBOL_CONFIDENCE:
@@ -1706,6 +1891,9 @@ def _predict_scoped_candidates(
     seeds += _sibling_pattern_seed(task, repo_graph)
     seeds += _index_seed(task, repo_root, repo_graph)
     seeds += _test_source_link_seed(task, repo_root, repo_graph, seeds)
+    seeds += _auth_role_seed(task, repo_graph)
+    seeds += _package_json_seed(task, repo_root)
+    seeds += _implied_cluster_seed(task, repo_graph, seeds)
 
     signal_map: dict[str, set[str]] = {}
     for pw in seeds:

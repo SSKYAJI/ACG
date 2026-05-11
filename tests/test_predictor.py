@@ -11,15 +11,19 @@ import pytest
 from acg.predictor import (
     MAX_PREDICTIONS,
     _apply_scope_review,
+    _auth_role_seed,
     _build_file_scopes,
+    _cluster_base_relevant,
     _detect_test_layout,
     _env_seed,
     _extract_entity_noun,
     _extract_entity_nouns,
     _graph_expansion_seed,
+    _implied_cluster_seed,
     _index_seed,
     _llm_seed_expansion,
     _looks_like_test_task,
+    _package_json_seed,
     _sibling_pattern_seed,
     _test_scaffold_seed,
     predict_file_scopes,
@@ -1764,3 +1768,234 @@ def test_post_llm_direct_import_stub_sibling_expansion_stays_candidate_context()
     assert "src/client.pyi" in by_path
     assert by_path["src/client.pyi"].tier == "candidate_context"
     assert {"graph", "must_write_neighbor"} <= set(by_path["src/client.pyi"].signals)
+
+
+# --------------------------------------------------------------------------- #
+# Auth/role, package.json, and implied cluster seeds.
+# --------------------------------------------------------------------------- #
+
+
+def test_auth_role_seed_triggers_on_role_prompt() -> None:
+    task = TaskInput(id="roles", prompt="Add role-based access control with a guard.", hints=None)
+    graph = {
+        "files": [
+            {"path": "src/user/auth.middleware.ts"},
+            {"path": "src/user/user.controller.ts"},
+            {"path": "src/user/user.service.ts"},
+        ]
+    }
+    seeds = _auth_role_seed(task, graph)
+    paths = {seed.path for seed in seeds}
+    assert "src/user/auth.middleware.ts" in paths
+    assert all(seed.confidence >= 0.72 for seed in seeds)
+
+
+def test_auth_role_seed_no_trigger_on_unrelated_prompt() -> None:
+    task = TaskInput(id="tags", prompt="Extend the tag system with write operations.", hints=None)
+    graph = {"files": [{"path": "src/user/auth.middleware.ts"}]}
+    assert _auth_role_seed(task, graph) == []
+
+
+def test_package_json_seed_triggers_on_rate_limit_prompt(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text("{}\n")
+    task = TaskInput(id="rate-limit", prompt="Add global API rate limiting.", hints=None)
+    seeds = _package_json_seed(task, tmp_path)
+    assert len(seeds) == 1
+    assert seeds[0].path == "package.json"
+    assert seeds[0].confidence >= 0.7
+
+
+def test_package_json_seed_no_trigger_when_missing(tmp_path: Path) -> None:
+    task = TaskInput(id="rate-limit", prompt="Add global API rate limiting.", hints=None)
+    assert _package_json_seed(task, tmp_path) == []
+
+
+def test_implied_cluster_seed_expands_controller_to_service() -> None:
+    task = TaskInput(id="user", prompt="Update user controller.", hints=None)
+    graph = {
+        "files": [
+            {"path": "src/user/user.controller.ts"},
+            {"path": "src/user/user.service.ts"},
+            {"path": "src/user/user.module.ts"},
+            {"path": "src/user/user.entity.ts"},
+        ]
+    }
+    seeds = [PredictedWrite(path="src/user/user.controller.ts", confidence=0.9, reason="static")]
+    cluster = _implied_cluster_seed(task, graph, seeds)
+    paths = {seed.path for seed in cluster}
+    assert "src/user/user.service.ts" in paths
+    assert "src/user/user.module.ts" in paths
+    assert "src/user/user.entity.ts" in paths
+    assert "src/user/user.controller.ts" not in paths  # already in seeds
+    assert all(seed.confidence >= 0.6 for seed in cluster)
+
+
+def test_implied_cluster_seed_no_expansion_for_unclustered_file() -> None:
+    task = TaskInput(id="utils", prompt="Update utils.", hints=None)
+    graph = {"files": [{"path": "src/utils/helpers.ts"}]}
+    seeds = [PredictedWrite(path="src/utils/helpers.ts", confidence=0.9, reason="static")]
+    assert _implied_cluster_seed(task, graph, seeds) == []
+
+
+def test_cluster_base_relevant_matches_exact_token() -> None:
+    assert _cluster_base_relevant("article", {"add", "article", "search"}) is True
+
+
+def test_cluster_base_relevant_matches_plural_token() -> None:
+    assert _cluster_base_relevant("article", {"add", "articles", "search"}) is True
+    assert _cluster_base_relevant("user", {"users", "roles"}) is True
+    assert _cluster_base_relevant("tag", {"add", "tags"}) is True
+
+
+def test_cluster_base_relevant_rejects_unrelated_token_set() -> None:
+    assert _cluster_base_relevant("profile", {"add", "article", "search"}) is False
+    assert _cluster_base_relevant("user", {"add", "article", "search"}) is False
+
+
+def test_cluster_base_relevant_rejects_short_prefix_overlap() -> None:
+    # `auth` is a 3-char prefix of `author`, but the 2-char tolerance window
+    # caps that as an accidental match.
+    assert _cluster_base_relevant("auth", {"author", "search"}) is False
+
+
+def test_cluster_base_relevant_skips_short_base_names() -> None:
+    # Two-letter base names are too noisy to gate on; the helper must say no.
+    assert _cluster_base_relevant("ab", {"abc", "ab"}) is False
+
+
+def test_implied_cluster_seed_skips_unrelated_module_when_base_name_not_in_task() -> None:
+    """Regression: smoke run had `profile.service.ts` as an anchor for the
+    add-article-search task and amplified into four bad must_write paths."""
+    task = TaskInput(
+        id="add-article-search",
+        prompt=(
+            "Add full-text search to the articles API. Users should be able to "
+            "search articles by keywords matching against the title and body "
+            "fields. Return paginated results."
+        ),
+        hints=None,
+    )
+    graph = {
+        "files": [
+            {"path": "src/profile/profile.service.ts"},
+            {"path": "src/profile/profile.controller.ts"},
+            {"path": "src/profile/profile.module.ts"},
+            {"path": "src/profile/profile.interface.ts"},
+            {"path": "src/article/article.controller.ts"},
+            {"path": "src/article/article.service.ts"},
+        ]
+    }
+    seeds = [
+        PredictedWrite(
+            path="src/profile/profile.service.ts",
+            confidence=0.8,
+            reason="pagerank centrality",
+        )
+    ]
+    cluster = _implied_cluster_seed(task, graph, seeds)
+    assert cluster == [], (
+        "profile.* must not cluster-expand for an article task; anchor base "
+        f"name `profile` is unrelated to task tokens; got {[c.path for c in cluster]}"
+    )
+
+
+def test_implied_cluster_seed_handles_plural_task_tokens() -> None:
+    """Task prompt only contains `articles` (plural) but the cluster anchor's
+    base name is `article` (singular). The prefix-within-2 tolerance must
+    keep this expansion alive — otherwise we'd over-correct the fix."""
+    task = TaskInput(
+        id="add-article-bookmarks",
+        prompt=(
+            "Add a bookmarking feature so users can save articles for later, "
+            "separate from the existing favorites system. Users should be "
+            "able to bookmark and unbookmark articles via the API."
+        ),
+        hints=None,
+    )
+    graph = {
+        "files": [
+            {"path": "src/article/article.service.ts"},
+            {"path": "src/article/article.controller.ts"},
+            {"path": "src/article/article.module.ts"},
+            {"path": "src/article/article.entity.ts"},
+        ]
+    }
+    seeds = [
+        PredictedWrite(
+            path="src/article/article.service.ts",
+            confidence=0.9,
+            reason="bm25 hit on article search prompt",
+        )
+    ]
+    cluster_paths = {seed.path for seed in _implied_cluster_seed(task, graph, seeds)}
+    assert "src/article/article.controller.ts" in cluster_paths
+    assert "src/article/article.module.ts" in cluster_paths
+    assert "src/article/article.entity.ts" in cluster_paths
+    assert "src/article/article.service.ts" not in cluster_paths  # already a seed
+
+
+def test_auth_role_seed_survives_full_predict_path(repo_graph: dict[str, Any]) -> None:
+    task = TaskInput(
+        id="roles",
+        prompt="Add role-based access control with a guard.",
+        hints=None,
+    )
+    graph = {
+        "language": "typescript",
+        "files": [
+            {"path": "src/user/auth.middleware.ts"},
+            {"path": "src/user/user.service.ts"},
+        ],
+        "symbols_index": {},
+        "hotspots": [],
+    }
+    llm = StubLLM(json.dumps({"writes": []}))
+    scopes = predict_file_scopes(task, graph, llm)
+    by_path = {scope.path: scope for scope in scopes}
+    assert "src/user/auth.middleware.ts" in by_path
+    assert by_path["src/user/auth.middleware.ts"].tier == "must_write"
+
+
+def test_package_json_seed_survives_full_predict_path(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text("{}\n")
+    task = TaskInput(
+        id="rate-limit",
+        prompt="Add global API rate limiting.",
+        hints=None,
+    )
+    graph = {
+        "language": "typescript",
+        "files": [{"path": "package.json"}],
+        "symbols_index": {},
+        "hotspots": [],
+    }
+    llm = StubLLM(json.dumps({"writes": []}))
+    scopes = predict_file_scopes(task, graph, llm, repo_root=tmp_path)
+    by_path = {scope.path: scope for scope in scopes}
+    assert "package.json" in by_path
+    assert by_path["package.json"].tier == "must_write"
+
+
+def test_cluster_seed_survives_full_predict_path() -> None:
+    task = TaskInput(
+        id="user",
+        prompt="Update UserController logic.",
+        hints=None,
+    )
+    graph = {
+        "language": "typescript",
+        "files": [
+            {"path": "src/user/user.controller.ts", "symbols": ["UserController"]},
+            {"path": "src/user/user.service.ts", "symbols": ["UserService"]},
+            {"path": "src/user/user.module.ts", "symbols": ["UserModule"]},
+            {"path": "src/user/user.entity.ts", "symbols": ["UserEntity"]},
+        ],
+        "symbols_index": {"UserController": "src/user/user.controller.ts"},
+        "hotspots": [],
+    }
+    llm = StubLLM(json.dumps({"writes": []}))
+    scopes = predict_file_scopes(task, graph, llm)
+    by_path = {scope.path: scope for scope in scopes}
+    assert "src/user/user.service.ts" in by_path
+    assert "src/user/user.module.ts" in by_path
+    assert by_path["src/user/user.service.ts"].tier == "must_write"

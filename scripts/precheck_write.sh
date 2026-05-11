@@ -56,6 +56,12 @@ if [[ -n "${WRITE_PATH}" && "${WRITE_PATH}" = /* ]]; then
   fi
 fi
 
+# Reject traversal attempts before the allowlist can be bypassed.
+if [[ -n "${WRITE_PATH}" && "${WRITE_PATH}" == *".."* ]]; then
+  echo "[acg-hook] BLOCKED: ${WRITE_PATH} escapes the repository." >&2
+  exit 2
+fi
+
 # Allow Cascade's own internal writes (config, history, caches) without
 # bothering the validator.
 case "${WRITE_PATH}" in

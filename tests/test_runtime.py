@@ -542,6 +542,171 @@ def test_runtime_logs_needs_replan_for_unsupported_candidate_context(
     assert oauth_worker.needs_replan_count == 1
 
 
+def test_runtime_auto_replan_blocked_for_hard_conflict(
+    lock: AgentLock,
+    empty_repo_graph: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A candidate path that another task is allowed to write must not auto-approve."""
+    scoped_lock = lock.model_copy(deep=True)
+    oauth_task = next(t for t in scoped_lock.tasks if t.id == "oauth")
+    # src/server/stripe.ts is in billing's allowed_paths but not oauth's.
+    path = "src/server/stripe.ts"
+    oauth_task.candidate_context_paths.append(path)
+    oauth_task.file_scopes.append(
+        FileScope(
+            path=path,
+            tier="candidate_context",
+            score=0.86,
+            signals=["explicit"],
+            reason="Shared endpoint candidate.",
+        )
+    )
+    sub = StubRuntimeLLM(
+        replies={
+            "oauth": json.dumps({"writes": [{"file": path, "description": "coordination edit"}]}),
+            "settings": json.dumps({"writes": []}),
+            "billing": json.dumps({"writes": []}),
+            "tests": json.dumps({"writes": []}),
+        }
+    )
+    recorder = RecordingConsole()
+    monkeypatch.setattr("acg.runtime._console", recorder)
+
+    result = asyncio.run(
+        run_lockfile(
+            scoped_lock,
+            empty_repo_graph,
+            StubRuntimeLLM(),
+            sub,
+            lockfile_path="x.json",
+            config=RuntimeConfig(auto_replan=True),
+        )
+    )
+
+    events = _candidate_replan_events(recorder.messages)
+    assert len(events) == 1
+    event = events[0]
+    assert event["task_id"] == "oauth"
+    assert event["path"] == path
+    assert event["can_auto_approve_replan"] is False
+    assert event["has_hard_conflict"] is True
+    assert event["final_outcome"] == "needs_replan"
+
+    oauth_worker = next(w for w in result.workers if w.task_id == "oauth")
+    proposal = oauth_worker.proposals[0]
+    assert proposal.allowed is False
+    assert proposal.scope_status == "needs_replan"
+
+
+def test_runtime_auto_replan_blocked_for_below_threshold_score(
+    lock: AgentLock,
+    empty_repo_graph: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Candidate context with score < 0.72 must not auto-approve."""
+    scoped_lock = lock.model_copy(deep=True)
+    oauth_task = next(t for t in scoped_lock.tasks if t.id == "oauth")
+    path = "src/server/low-confidence.ts"
+    oauth_task.candidate_context_paths.append(path)
+    oauth_task.file_scopes.append(
+        FileScope(
+            path=path,
+            tier="candidate_context",
+            score=0.71,
+            signals=["explicit"],
+            reason="Weak signal candidate.",
+        )
+    )
+    sub = StubRuntimeLLM(
+        replies={
+            "oauth": json.dumps({"writes": [{"file": path, "description": "coordination edit"}]}),
+            "settings": json.dumps({"writes": []}),
+            "billing": json.dumps({"writes": []}),
+            "tests": json.dumps({"writes": []}),
+        }
+    )
+    recorder = RecordingConsole()
+    monkeypatch.setattr("acg.runtime._console", recorder)
+
+    result = asyncio.run(
+        run_lockfile(
+            scoped_lock,
+            empty_repo_graph,
+            StubRuntimeLLM(),
+            sub,
+            lockfile_path="x.json",
+            config=RuntimeConfig(auto_replan=True),
+        )
+    )
+
+    events = _candidate_replan_events(recorder.messages)
+    assert len(events) == 1
+    event = events[0]
+    assert event["score"] == 0.71
+    assert event["can_auto_approve_replan"] is False
+    assert event["final_outcome"] == "needs_replan"
+
+    oauth_worker = next(w for w in result.workers if w.task_id == "oauth")
+    proposal = oauth_worker.proposals[0]
+    assert proposal.allowed is False
+    assert proposal.scope_status == "needs_replan"
+
+
+def test_runtime_candidate_stays_blocked_when_auto_replan_false(
+    lock: AgentLock,
+    empty_repo_graph: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With auto_replan=False, a valid candidate context write stays blocked."""
+    scoped_lock = lock.model_copy(deep=True)
+    oauth_task = next(t for t in scoped_lock.tasks if t.id == "oauth")
+    path = "src/server/oauth-provider.ts"
+    oauth_task.candidate_context_paths.append(path)
+    oauth_task.file_scopes.append(
+        FileScope(
+            path=path,
+            tier="candidate_context",
+            score=0.86,
+            signals=["explicit"],
+            reason="High-confidence candidate.",
+        )
+    )
+    sub = StubRuntimeLLM(
+        replies={
+            "oauth": json.dumps({"writes": [{"file": path, "description": "coordination edit"}]}),
+            "settings": json.dumps({"writes": []}),
+            "billing": json.dumps({"writes": []}),
+            "tests": json.dumps({"writes": []}),
+        }
+    )
+    recorder = RecordingConsole()
+    monkeypatch.setattr("acg.runtime._console", recorder)
+
+    result = asyncio.run(
+        run_lockfile(
+            scoped_lock,
+            empty_repo_graph,
+            StubRuntimeLLM(),
+            sub,
+            lockfile_path="x.json",
+            config=RuntimeConfig(auto_replan=False),
+        )
+    )
+
+    events = _candidate_replan_events(recorder.messages)
+    assert len(events) == 1
+    event = events[0]
+    assert event["can_auto_approve_replan"] is True  # conditions met, but gate is off
+    assert event["final_outcome"] == "needs_replan"
+
+    oauth_worker = next(w for w in result.workers if w.task_id == "oauth")
+    proposal = oauth_worker.proposals[0]
+    assert proposal.allowed is False
+    assert proposal.scope_status == "needs_replan"
+    assert oauth_worker.replan_approved_count == 0
+
+
 def test_runtime_allows_writes_within_allowed_paths(
     lock: AgentLock, empty_repo_graph: dict[str, object]
 ) -> None:

@@ -1,0 +1,58 @@
+[
+  {
+    "id": "add-rate-limiting",
+    "prompt": "Add global API rate limiting to the application. Use a NestJS-compatible throttling library. Configure a default of 100 requests per 60 seconds. Apply it globally so all endpoints are protected.",
+    "ground_truth_paths": [
+      "src/main.ts",
+      "package.json",
+      "src/app.module.ts"
+    ]
+  },
+  {
+    "id": "add-user-roles",
+    "prompt": "Add role-based access control to the application. Users should have a role field (user or admin). Create a guard that checks the current user's role against a required role. Register it so endpoints can be decorated with a role requirement.",
+    "ground_truth_paths": [
+      "src/user/dto/index.ts",
+      "src/user/user.entity.ts",
+      "src/user/auth.middleware.ts",
+      "src/user/user.controller.ts",
+      "src/user/user.service.ts"
+    ]
+  },
+  {
+    "id": "add-article-bookmarks",
+    "prompt": "Add a bookmarking feature so users can save articles for later, separate from the favorite system. Create endpoints to bookmark/unbookmark and list a user's bookmarks.",
+    "ground_truth_paths": [
+      "src/user/user.entity.ts",
+      "src/article/article.controller.ts",
+      "src/article/article.service.ts",
+      "src/user/user.service.ts"
+    ]
+  },
+  {
+    "id": "extend-tag-crud",
+    "prompt": "Extend the tag system with write operations. Currently tags can only be read. Add endpoints to create, update, and delete tags.",
+    "ground_truth_paths": [
+      "src/tag/tag.controller.ts",
+      "src/tag/tag.service.ts",
+      "src/tag/tag.entity.ts"
+    ]
+  },
+  {
+    "id": "add-article-search",
+    "prompt": "Add full-text search to the articles API. Users should be able to search articles by title, description, and body text.",
+    "ground_truth_paths": [
+      "src/article/article.controller.ts",
+      "src/article/article.service.ts",
+      "src/article/article.entity.ts"
+    ]
+  },
+  {
+    "id": "add-health-check",
+    "prompt": "Add a health check endpoint that verifies the application and its database connection are operational.",
+    "ground_truth_paths": [
+      "src/app.controller.ts",
+      "src/app.module.ts"
+    ]
+  }
+]

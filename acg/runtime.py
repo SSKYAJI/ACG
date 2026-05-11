@@ -800,10 +800,12 @@ def _is_candidate_context_write(task: Task, path: str) -> bool:
 
 
 _AUTO_REPLAN_SIGNALS = {
+    "auth_role",
     "explicit",
     "framework",
     "llm",
     "must_write_neighbor",
+    "package",
     "planner",
     "scope_review",
     "symbol",

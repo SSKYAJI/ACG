@@ -394,6 +394,17 @@ def _proposals_to_planned_eval_task(
     Planned mode honors ``allowed_paths`` via :func:`acg.enforce.validate_write`
     — out-of-bounds proposals become ``BlockedWriteEvent`` entries and are
     NOT promoted to ``actual_changed_files``.
+
+    Status assignment:
+
+    * ``failed`` — the worker raised (``worker.error`` is set).
+    * ``blocked`` — the worker proposed only out-of-scope paths
+      (zero ``actual_changed_files`` AND at least one ``blocked_write_events``
+      entry). ``failure_reason`` is ``BLOCKED_BY_SCOPE``. These tasks must
+      not count as ``completed`` in the summary metrics.
+    * ``completed`` — the worker produced at least one accepted proposal
+      (partial blocks are still ``completed``; the burden metric still
+      records the rejected events).
     """
     eval_task = task_from_lock(lock_task, prompt=prompt)
     eval_task.actual_changed_files = sorted({p.file for p in worker.proposals if p.allowed})
@@ -412,6 +423,9 @@ def _proposals_to_planned_eval_task(
     if worker.error:
         eval_task.status = "failed"
         eval_task.failure_reason = "AGENT_FAIL"
+    elif not eval_task.actual_changed_files and eval_task.blocked_write_events:
+        eval_task.status = "blocked"
+        eval_task.failure_reason = "BLOCKED_BY_SCOPE"
     else:
         eval_task.status = "completed"
     eval_task.timestamps.started_at = started_at
@@ -561,11 +575,12 @@ def _build_single_agent_prompt(
         "\"writes\" is an array of objects with \"file\" and \"description\". "
         "Do not include prose, code fences, or contract-derived fields."
     )
+    task_join = "\n\n".join(task_blocks)
     user = (
         "Single-agent no-lock suite.\n"
         "Use only these task descriptions and the repo file list below.\n\n"
         "Suite tasks:\n"
-        f"{'\n\n'.join(task_blocks)}\n\n"
+        f"{task_join}\n\n"
         f"Available files in this repo (top {len(files)} by importance):\n"
         f"{file_block}"
     )
