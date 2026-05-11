@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .compiler import _is_test_task as _compiler_is_test_task
 from .llm import LLMProtocol
 from .schema import FileScope, PredictedWrite, TaskInput
 
@@ -48,7 +49,7 @@ SEED_INDEX_CONFIDENCE_FLOOR = 0.5
 # hotspots and will happily propose the same auth/db files for every task,
 # which over-serializes the lockfile. Three signals per task keeps the
 # strongest hits while leaving room for task-specific seeds to dominate.
-SEED_INDEX_TOP_N = 8
+SEED_INDEX_TOP_N = 24
 SEED_GRAPH_EXPANSION_CONFIDENCE = 0.72
 SEED_GRAPH_EXPANSION_STRUCTURAL_CONFIDENCE = 0.78
 SEED_GRAPH_EXPANSION_MIN_SEED_CONFIDENCE = 0.72
@@ -69,6 +70,7 @@ HIGH_PRECISION_SIGNALS = {
     "symbol",
     "testlink",
 }
+_CANDIDATE_HIGH_PRECISION_SIGNALS = HIGH_PRECISION_SIGNALS | {"scope_review"}
 CONTEXT_ONLY_SIGNALS = {"bm25", "cochange", "entity", "graph", "hint", "pagerank", "scip"}
 AUTO_REPLAN_SIGNALS = {"explicit", "framework", "llm", "planner", "symbol", "testlink"}
 TEST_LINK_STOPWORDS = {
@@ -780,6 +782,119 @@ def _graph_expansion_seed(
     return expansions
 
 
+def _stub_sibling_path(path: str) -> str | None:
+    if path.endswith(".py"):
+        return path[:-3] + ".pyi"
+    if path.endswith((".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")):
+        return str(Path(path).with_suffix(".d.ts"))
+    return None
+
+
+def _type_link_neighbors(
+    path: str, repo_graph: dict[str, Any], entries: dict[str, dict[str, Any]]
+) -> list[str]:
+    entry = entries.get(path, {})
+    out: list[str] = []
+    value = entry.get("type_links")
+    if isinstance(value, list):
+        out.extend(item for item in value if isinstance(item, str))
+    mapping = repo_graph.get("type_links")
+    if isinstance(mapping, dict):
+        mapped = mapping.get(path)
+        if isinstance(mapped, list):
+            out.extend(item for item in mapped if isinstance(item, str))
+    return sorted(dict.fromkeys(out))
+
+
+def _resolved_import_stub_neighbors(
+    path: str, repo_graph: dict[str, Any], entries: dict[str, dict[str, Any]]
+) -> list[str]:
+    entry = entries.get(path, {})
+    imports: list[str] = []
+    value = entry.get("resolved_imports")
+    if isinstance(value, list):
+        imports.extend(item for item in value if isinstance(item, str))
+    mapping = repo_graph.get("resolved_imports")
+    if isinstance(mapping, dict):
+        mapped = mapping.get(path)
+        if isinstance(mapped, list):
+            imports.extend(item for item in mapped if isinstance(item, str))
+    out: list[str] = []
+    for target in dict.fromkeys(imports):
+        stub = _stub_sibling_path(target)
+        if stub and stub in entries:
+            out.append(stub)
+    return sorted(dict.fromkeys(out))
+
+
+def _post_llm_must_write_neighbor_expansion(
+    task: TaskInput,
+    repo_graph: dict[str, Any],
+    writes: list[PredictedWrite],
+    writes_by_path: dict[str, PredictedWrite],
+    signal_map: dict[str, set[str]],
+    llm_paths: set[str],
+) -> list[PredictedWrite]:
+    entries = _path_entries(repo_graph)
+    if not entries:
+        return []
+
+    anchor_writes: list[PredictedWrite] = []
+    for write in writes:
+        signals = signal_map.get(write.path, set()) or _signals_for_reason(write.reason)
+        if write.path in llm_paths or _is_must_write(task, write, signals, entries):
+            anchor_writes.append(write)
+
+    expansions: list[PredictedWrite] = []
+
+    for anchor in anchor_writes:
+        neighbors: list[tuple[str, str]] = []
+        for path in _type_link_neighbors(anchor.path, repo_graph, entries):
+            neighbors.append((path, "type_link"))
+        for path in _resolved_import_stub_neighbors(anchor.path, repo_graph, entries):
+            neighbors.append((path, "stub"))
+
+        seen_for_anchor: set[str] = set()
+        picked = 0
+        for neighbor_path, _kind in neighbors:
+            if neighbor_path == anchor.path or neighbor_path in seen_for_anchor:
+                continue
+            seen_for_anchor.add(neighbor_path)
+            picked += 1
+
+            existing = writes_by_path.get(neighbor_path)
+            if existing is not None:
+                if existing.confidence < SEED_GRAPH_EXPANSION_STRUCTURAL_CONFIDENCE:
+                    writes_by_path[neighbor_path] = PredictedWrite(
+                        path=neighbor_path,
+                        confidence=SEED_GRAPH_EXPANSION_STRUCTURAL_CONFIDENCE,
+                        reason=existing.reason,
+                    )
+                signal_map.setdefault(neighbor_path, set()).update(
+                    {"graph", "must_write_neighbor"}
+                )
+            else:
+                expanded = PredictedWrite(
+                    path=neighbor_path,
+                    confidence=SEED_GRAPH_EXPANSION_STRUCTURAL_CONFIDENCE,
+                    reason=(
+                        "Post-LLM graph expansion: type/stub neighbor of "
+                        f"{'must_write' if _is_must_write(task, anchor, signal_map.get(anchor.path, set()) or _signals_for_reason(anchor.reason), entries) else 'LLM'} path {anchor.path}."
+                    ),
+                )
+                expansions.append(expanded)
+                writes_by_path[neighbor_path] = expanded
+                signal_map.setdefault(neighbor_path, set()).update(
+                    {"graph", "must_write_neighbor"}
+                )
+            if picked >= 3:
+                break
+
+    if not expansions:
+        return []
+    return expansions
+
+
 def _filter_graph_for_llm(repo_graph: dict[str, Any]) -> dict[str, Any]:
     """Return a compact graph slice safe to embed in an LLM prompt."""
     files = repo_graph.get("files") or []
@@ -1090,42 +1205,26 @@ def _passes_structural_candidate_context_gate(
     entries: dict[str, dict[str, Any]],
 ) -> bool:
     """Drop weak structural retrieval hits before they become worker context."""
-    evidence_signals = signals - {"scope_review", "approved_replan"}
+    evidence_signals = signals - {"approved_replan"}
     if not evidence_signals:
         return False
-    entry = entries.get(write.path)
-    path_exists = entry is not None
-    task_is_testy = _looks_like_test_task(task.prompt) or (
-        "llm" in evidence_signals and _reason_mentions_tests(write.reason)
-    )
-    if _is_test_prediction(write.path) and not task_is_testy:
-        if evidence_signals <= {"symbol"} or evidence_signals <= {"testlink"}:
-            return False
-        if not evidence_signals & HIGH_PRECISION_SIGNALS:
+    if _is_test_prediction(write.path) and not _compiler_is_test_task(task):
+        if "explicit" not in evidence_signals and not (
+            "testlink" in evidence_signals and evidence_signals & {"llm", "framework"}
+        ):
             return False
 
-    high_precision = evidence_signals & HIGH_PRECISION_SIGNALS
-    if high_precision:
+    if "explicit" in evidence_signals:
+        return True
+    if "must_write_neighbor" in evidence_signals and "graph" in evidence_signals:
         return True
 
+    high_precision = evidence_signals & _CANDIDATE_HIGH_PRECISION_SIGNALS
     structural_signals = evidence_signals & CONTEXT_ONLY_SIGNALS
-    if not structural_signals:
-        return path_exists
-    if entry is None:
-        return False
-    has_task_evidence = _has_candidate_context_evidence(task, repo_graph, write.path, entry)
 
-    if len(structural_signals) >= 2 and write.confidence >= 0.8:
-        return True
-    if structural_signals <= {"pagerank", "cochange"}:
-        if _is_graph_hub(write.path, entries):
-            return False
-        return has_task_evidence
-    if "graph" in structural_signals and len(structural_signals) == 1:
-        return write.confidence >= SEED_GRAPH_EXPANSION_STRUCTURAL_CONFIDENCE or has_task_evidence
-    if "scip" in structural_signals or "bm25" in structural_signals or "hint" in structural_signals:
-        return has_task_evidence
-    return has_task_evidence
+    if _is_graph_hub(write.path, entries):
+        return bool(high_precision) and len(structural_signals) >= 2
+    return (bool(high_precision) and len(evidence_signals) >= 2) or len(structural_signals) >= 3
 
 
 def _scope_reason(write: PredictedWrite, signals: set[str], tier: str) -> str:
@@ -1148,11 +1247,10 @@ def _build_file_scopes(
     scopes: list[FileScope] = []
     for write in writes[:MAX_CONTEXT_PREDICTIONS]:
         signals = signal_map.get(write.path, set()) or _signals_for_reason(write.reason)
-        tier = (
-            "must_write"
-            if _is_must_write(task, write, signals, entries)
-            else "candidate_context"
-        )
+        is_must_write = _is_must_write(task, write, signals, entries)
+        tier = "must_write" if is_must_write else "candidate_context"
+        if is_must_write and "must_write_neighbor" in signals:
+            tier = "candidate_context"
         if tier == "candidate_context" and not _passes_structural_candidate_context_gate(
             task, repo_graph, write, signals, entries
         ):
@@ -1288,10 +1386,9 @@ def _build_scope_review_prompt(
     repo_root: Path | None,
 ) -> list[dict[str, str]]:
     system = (
-        "You are ACG's scope pruner. Review already-retrieved files for a "
-        "coding task. You may only choose paths from the provided candidates. "
-        "Output ONLY JSON with keys keep_paths, drop_paths, promote_paths, "
-        "and rationale."
+        "You are pruning a candidate set retrieved by deterministic indexers. "
+        "Output JSON with keep_paths, drop_paths, and optional promote_paths. "
+        "Drop only files unrelated to the task. Do not invent paths."
     )
     user = (
         f"Task id: {task.id}\n"
@@ -1364,6 +1461,8 @@ def _scope_review_can_promote(
     non_review_signals = set(scope.signals) - {"scope_review"}
     if not non_review_signals:
         return False
+    if "must_write_neighbor" in non_review_signals:
+        return False
     return _is_must_write(
         task,
         PredictedWrite(
@@ -1379,13 +1478,19 @@ def _scope_review_can_promote(
 def _scope_review_can_drop(scope: FileScope) -> bool:
     if scope.tier == "must_write":
         return False
-    evidence_signals = set(scope.signals) - {"scope_review", "approved_replan"}
-    high_precision = evidence_signals & HIGH_PRECISION_SIGNALS
-    if not high_precision:
-        return True
-    if _is_test_prediction(scope.path) and high_precision <= {"symbol", "testlink"}:
-        return True
-    return False
+    evidence_signals = set(scope.signals) - {"approved_replan"}
+    high_precision = evidence_signals & _CANDIDATE_HIGH_PRECISION_SIGNALS
+    return not high_precision
+
+
+def _scope_review_ground_truth_count_estimate(scopes: list[FileScope]) -> int:
+    # Scope review can only see the pre-review candidate set, so the most
+    # conservative estimate is the candidate_context count before any drops.
+    return sum(1 for scope in scopes if scope.tier == "candidate_context")
+
+
+def _scope_review_drop_floor(scopes: list[FileScope]) -> int:
+    return max(3, min(_scope_review_ground_truth_count_estimate(scopes), 6))
 
 
 def _apply_scope_review(
@@ -1404,6 +1509,19 @@ def _apply_scope_review(
     promote_paths &= known_paths
     drop_paths -= keep_paths | promote_paths
     entries = _path_entries(repo_graph)
+    drop_floor = _scope_review_drop_floor(scopes)
+    accepted_drop_paths = {
+        scope.path
+        for scope in scopes
+        if scope.path in drop_paths and _scope_review_can_drop(scope)
+    }
+    remaining_candidate_context = sum(
+        1
+        for scope in scopes
+        if scope.tier == "candidate_context" and scope.path not in accepted_drop_paths
+    )
+    if accepted_drop_paths and remaining_candidate_context < drop_floor:
+        return scopes
     out: list[FileScope] = []
     for scope in scopes:
         if scope.path in drop_paths and _scope_review_can_drop(scope):
@@ -1487,7 +1605,6 @@ def _predict_scoped_candidates(
     seeds += _sibling_pattern_seed(task, repo_graph)
     seeds += _index_seed(task, repo_root, repo_graph)
     seeds += _test_source_link_seed(task, repo_root, repo_graph, seeds)
-    seeds += _graph_expansion_seed(task, repo_graph, seeds)
 
     signal_map: dict[str, set[str]] = {}
     for pw in seeds:
@@ -1514,7 +1631,14 @@ def _predict_scoped_candidates(
             signals.add("llm")
         signal_map.setdefault(pw.path, set()).update(signals)
 
-    return _merge(seeds, rerank), signal_map
+    merged = _merge(seeds, rerank)
+    merged_by_path = {pw.path: pw for pw in merged}
+    llm_paths = {pw.path for pw in rerank}
+    _post_llm_must_write_neighbor_expansion(
+        task, repo_graph, merged, merged_by_path, signal_map, llm_paths
+    )
+    merged = sorted(merged_by_path.values(), key=lambda p: (-p.confidence, p.path))
+    return merged, signal_map
 
 
 def predict_file_scopes_with_usage(

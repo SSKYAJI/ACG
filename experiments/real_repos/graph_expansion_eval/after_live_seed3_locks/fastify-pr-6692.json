@@ -1,0 +1,95 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-11T06:20:55.985851Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 1385
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/fastify/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-6692",
+      "prompt": "Avoid unnecessary ContentType object creation in getSchemaSerializer by only parsing the response content type for content-type-keyed response schemas, including status-code, fallback, and default lookup paths.",
+      "predicted_writes": [
+        {
+          "path": "lib/content-type-parser.js",
+          "confidence": 0.9,
+          "reason": "Task involves avoiding unnecessary ContentType object creation, and this file handles content type parsing. Signals: bm25, llm, symbol."
+        },
+        {
+          "path": "lib/schemas.js",
+          "confidence": 0.9,
+          "reason": "The task specifically mentions 'getSchemaSerializer' which is defined in this file. Signals: bm25, llm, symbol."
+        }
+      ],
+      "allowed_paths": [
+        "lib/content-type-parser.js",
+        "lib/schemas.js"
+      ],
+      "candidate_context_paths": [
+        "types/content-type-parser.d.ts"
+      ],
+      "file_scopes": [
+        {
+          "path": "lib/content-type-parser.js",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "llm",
+            "symbol"
+          ],
+          "reason": "Task involves avoiding unnecessary ContentType object creation, and this file handles content type parsing. Signals: bm25, llm, symbol."
+        },
+        {
+          "path": "lib/schemas.js",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "llm",
+            "symbol"
+          ],
+          "reason": "The task specifically mentions 'getSchemaSerializer' which is defined in this file. Signals: bm25, llm, symbol."
+        },
+        {
+          "path": "types/content-type-parser.d.ts",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "bm25",
+            "graph",
+            "must_write_neighbor"
+          ],
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 37.73). Candidate context only; requires replan before write. Signals: bm25, graph, must_write_neighbor."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-6692"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

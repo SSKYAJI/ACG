@@ -1,0 +1,117 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-11T06:12:53.353429Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 2158
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/fastify/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-6653",
+      "prompt": "Add a readonly request.mediaType property that exposes the parsed request Content-Type media type, cache the parsed ContentType on the request, and update validation and request handling to reuse the parsed value.",
+      "predicted_writes": [
+        {
+          "path": "lib/content-type-parser.js",
+          "confidence": 0.9,
+          "reason": "Task involves caching parsed Content-Type, directly related to content type parsing logic. Signals: bm25, llm, symbol."
+        },
+        {
+          "path": "lib/content-type.js",
+          "confidence": 0.85,
+          "reason": "Task requires exposing media type from parsed Content-Type, closely related to content type handling. Signals: bm25, llm."
+        }
+      ],
+      "allowed_paths": [
+        "lib/content-type-parser.js",
+        "lib/content-type.js"
+      ],
+      "candidate_context_paths": [
+        "types/content-type-parser.d.ts",
+        "types/request.d.ts",
+        "lib/handle-request.js"
+      ],
+      "file_scopes": [
+        {
+          "path": "lib/content-type-parser.js",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "llm",
+            "symbol"
+          ],
+          "reason": "Task involves caching parsed Content-Type, directly related to content type parsing logic. Signals: bm25, llm, symbol."
+        },
+        {
+          "path": "lib/content-type.js",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "bm25",
+            "llm"
+          ],
+          "reason": "Task requires exposing media type from parsed Content-Type, closely related to content type handling. Signals: bm25, llm."
+        },
+        {
+          "path": "types/content-type-parser.d.ts",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "bm25",
+            "graph",
+            "must_write_neighbor"
+          ],
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 46.85). Candidate context only; requires replan before write. Signals: bm25, graph, must_write_neighbor."
+        },
+        {
+          "path": "types/request.d.ts",
+          "tier": "candidate_context",
+          "score": 0.78,
+          "signals": [
+            "bm25",
+            "graph",
+            "must_write_neighbor"
+          ],
+          "reason": "BM25 lexical match over path, identifiers, imports, docstrings (score 32.87). Candidate context only; requires replan before write. Signals: bm25, graph, must_write_neighbor."
+        },
+        {
+          "path": "lib/handle-request.js",
+          "tier": "candidate_context",
+          "score": 0.75,
+          "signals": [
+            "bm25",
+            "llm"
+          ],
+          "reason": "Task updates request handling to reuse parsed values, relevant to request processing flow. Candidate context only; requires replan before write. Signals: bm25, llm."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-6653"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

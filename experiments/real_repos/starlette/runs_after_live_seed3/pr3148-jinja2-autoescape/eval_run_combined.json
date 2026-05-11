@@ -1,0 +1,383 @@
+{
+  "strategies": {
+    "acg_planned": {
+      "backend": "local",
+      "created_at": "2026-05-11T06:24:02Z",
+      "evidence_kind": "proposed_write_set",
+      "execution_mode": "propose_validate",
+      "lockfile": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/graph_expansion_eval/after_live_seed3_locks/starlette-pr3148-jinja2-autoescape.json",
+      "model": {
+        "model": "qwen/qwen3-coder-30b-a3b-instruct",
+        "provider": "openai-compatible",
+        "url": "https://openrouter.ai/api/v1"
+      },
+      "repo": {
+        "commit": "2b73aecd8377e0c189943a5f30d3dbab134f6104",
+        "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/starlette/checkout",
+        "url": "https://github.com/encode/starlette.git"
+      },
+      "run_id": "greenhouse-local-acg_planned-20260511-062402",
+      "strategy": "acg_planned",
+      "suite_name": "starlette-eval",
+      "summary_metrics": {
+        "acus_consumed_total": null,
+        "blocked_invalid_write_count": 0,
+        "cost_method": "sum_provider_reported_task_costs",
+        "cost_source": "body.usage.cost",
+        "cost_usd_total": 3.867e-05,
+        "first_run_pass_rate": 0.0,
+        "human_interventions": 0,
+        "integration_burden": {
+          "blocked_events_total": 0,
+          "changed_file_mentions_total": 2,
+          "changed_lines_added": null,
+          "changed_lines_deleted": null,
+          "changed_lines_total": null,
+          "diff_stats_kind": null,
+          "duplicate_file_touches": 0,
+          "out_of_bounds_files_total": 0,
+          "overlapping_files": [],
+          "overlapping_task_pairs": 0,
+          "review_file_mentions_total": 2,
+          "review_unique_files_total": 2,
+          "unique_changed_files": 2
+        },
+        "merge_conflicts": 0,
+        "out_of_bounds_write_count": 0,
+        "overlapping_write_pairs": 0,
+        "proposal_completion_rate": 1.0,
+        "successful_parallel_speedup": null,
+        "task_completion_rate": 1.0,
+        "tasks_completed": 1,
+        "tasks_completed_per_hour": 2645.8566,
+        "tasks_total": 1,
+        "tested_completion_rate": 0.0,
+        "tested_tasks_completed": 0,
+        "tests_ran_count": 0,
+        "tokens_all_in": 1249,
+        "tokens_completion_method": "provider_usage_completion_tokens",
+        "tokens_completion_total": 95,
+        "tokens_orchestrator_overhead": null,
+        "tokens_planner_total": null,
+        "tokens_prompt_method": "provider_usage_prompt_tokens",
+        "tokens_prompt_total": 186,
+        "tokens_scope_review_total": 1063,
+        "tokens_worker_prompt_total": 186,
+        "wall_time_seconds": 1.3606
+      },
+      "tasks": [
+        {
+          "actual_changed_files": [
+            "starlette/templating.py",
+            "tests/test_templates.py"
+          ],
+          "actual_changed_files_kind": "proposed_write_set",
+          "allowed_write_globs": [
+            "starlette/templating.py",
+            "tests/test_templates.py"
+          ],
+          "approved_replan_files": [],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "changed_lines_added": null,
+            "changed_lines_deleted": null,
+            "changed_lines_kind": null,
+            "cost_source": "body.usage.cost",
+            "cost_usd": 3.867e-05,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 95,
+            "tokens_prompt": 186,
+            "wall_time_seconds": 1.3589
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [],
+          "predicted_write_files": [
+            "starlette/templating.py",
+            "tests/test_templates.py"
+          ],
+          "prompt": "Make Jinja2Templates use Jinja2's select_autoescape default when creating an environment from a template directory, while preserving caller-supplied environments and adding tests for escaping behavior.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "pr3148-jinja2-autoescape",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-11T06:24:02Z",
+            "started_at": "2026-05-11T06:24:01Z"
+          }
+        }
+      ],
+      "version": "0.1"
+    },
+    "acg_planned_replan": {
+      "backend": "local",
+      "created_at": "2026-05-11T06:24:09Z",
+      "evidence_kind": "proposed_write_set",
+      "execution_mode": "propose_validate",
+      "lockfile": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/graph_expansion_eval/after_live_seed3_locks/starlette-pr3148-jinja2-autoescape.json",
+      "model": {
+        "model": "qwen/qwen3-coder-30b-a3b-instruct",
+        "provider": "openai-compatible",
+        "url": "https://openrouter.ai/api/v1"
+      },
+      "repo": {
+        "commit": "2b73aecd8377e0c189943a5f30d3dbab134f6104",
+        "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/starlette/checkout",
+        "url": "https://github.com/encode/starlette.git"
+      },
+      "run_id": "greenhouse-local-acg_planned_replan-20260511-062409",
+      "strategy": "acg_planned_replan",
+      "suite_name": "starlette-eval",
+      "summary_metrics": {
+        "acus_consumed_total": null,
+        "blocked_invalid_write_count": 0,
+        "cost_method": "sum_provider_reported_task_costs",
+        "cost_source": "body.usage.cost",
+        "cost_usd_total": 3.822e-05,
+        "first_run_pass_rate": 0.0,
+        "human_interventions": 0,
+        "integration_burden": {
+          "blocked_events_total": 0,
+          "changed_file_mentions_total": 2,
+          "changed_lines_added": null,
+          "changed_lines_deleted": null,
+          "changed_lines_total": null,
+          "diff_stats_kind": null,
+          "duplicate_file_touches": 0,
+          "out_of_bounds_files_total": 0,
+          "overlapping_files": [],
+          "overlapping_task_pairs": 0,
+          "review_file_mentions_total": 2,
+          "review_unique_files_total": 2,
+          "unique_changed_files": 2
+        },
+        "merge_conflicts": 0,
+        "out_of_bounds_write_count": 0,
+        "overlapping_write_pairs": 0,
+        "proposal_completion_rate": 1.0,
+        "successful_parallel_speedup": null,
+        "task_completion_rate": 1.0,
+        "tasks_completed": 1,
+        "tasks_completed_per_hour": 566.0829,
+        "tasks_total": 1,
+        "tested_completion_rate": 0.0,
+        "tested_tasks_completed": 0,
+        "tests_ran_count": 0,
+        "tokens_all_in": 1249,
+        "tokens_completion_method": "provider_usage_completion_tokens",
+        "tokens_completion_total": 90,
+        "tokens_orchestrator_overhead": null,
+        "tokens_planner_total": null,
+        "tokens_prompt_method": "provider_usage_prompt_tokens",
+        "tokens_prompt_total": 186,
+        "tokens_scope_review_total": 1063,
+        "tokens_worker_prompt_total": 186,
+        "wall_time_seconds": 6.3595
+      },
+      "tasks": [
+        {
+          "actual_changed_files": [
+            "starlette/templating.py",
+            "tests/test_templates.py"
+          ],
+          "actual_changed_files_kind": "proposed_write_set",
+          "allowed_write_globs": [
+            "starlette/templating.py",
+            "tests/test_templates.py"
+          ],
+          "approved_replan_files": [],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "changed_lines_added": null,
+            "changed_lines_deleted": null,
+            "changed_lines_kind": null,
+            "cost_source": "body.usage.cost",
+            "cost_usd": 3.822e-05,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 90,
+            "tokens_prompt": 186,
+            "wall_time_seconds": 6.3553
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [],
+          "predicted_write_files": [
+            "starlette/templating.py",
+            "tests/test_templates.py"
+          ],
+          "prompt": "Make Jinja2Templates use Jinja2's select_autoescape default when creating an environment from a template directory, while preserving caller-supplied environments and adding tests for escaping behavior.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "pr3148-jinja2-autoescape",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-11T06:24:09Z",
+            "started_at": "2026-05-11T06:24:02Z"
+          }
+        }
+      ],
+      "version": "0.1"
+    },
+    "naive_parallel": {
+      "backend": "local",
+      "created_at": "2026-05-11T06:24:01Z",
+      "evidence_kind": "proposed_write_set",
+      "execution_mode": "propose_validate",
+      "lockfile": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/graph_expansion_eval/after_live_seed3_locks/starlette-pr3148-jinja2-autoescape.json",
+      "model": {
+        "model": "qwen/qwen3-coder-30b-a3b-instruct",
+        "provider": "openai-compatible",
+        "url": "https://openrouter.ai/api/v1"
+      },
+      "repo": {
+        "commit": "2b73aecd8377e0c189943a5f30d3dbab134f6104",
+        "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/starlette/checkout",
+        "url": "https://github.com/encode/starlette.git"
+      },
+      "run_id": "greenhouse-local-naive_parallel-20260511-062401",
+      "strategy": "naive_parallel",
+      "suite_name": "starlette-eval",
+      "summary_metrics": {
+        "acus_consumed_total": null,
+        "blocked_invalid_write_count": 0,
+        "cost_method": "sum_provider_reported_task_costs",
+        "cost_source": "body.usage.cost",
+        "cost_usd_total": 5.412e-05,
+        "first_run_pass_rate": 0.0,
+        "human_interventions": 0,
+        "integration_burden": {
+          "blocked_events_total": 0,
+          "changed_file_mentions_total": 2,
+          "changed_lines_added": null,
+          "changed_lines_deleted": null,
+          "changed_lines_total": null,
+          "diff_stats_kind": null,
+          "duplicate_file_touches": 0,
+          "out_of_bounds_files_total": 0,
+          "overlapping_files": [],
+          "overlapping_task_pairs": 0,
+          "review_file_mentions_total": 2,
+          "review_unique_files_total": 2,
+          "unique_changed_files": 2
+        },
+        "merge_conflicts": 0,
+        "out_of_bounds_write_count": 0,
+        "overlapping_write_pairs": 0,
+        "proposal_completion_rate": 1.0,
+        "successful_parallel_speedup": null,
+        "task_completion_rate": 1.0,
+        "tasks_completed": 1,
+        "tasks_completed_per_hour": 2035.9374,
+        "tasks_total": 1,
+        "tested_completion_rate": 0.0,
+        "tested_tasks_completed": 0,
+        "tests_ran_count": 0,
+        "tokens_all_in": 1489,
+        "tokens_completion_method": "provider_usage_completion_tokens",
+        "tokens_completion_total": 90,
+        "tokens_orchestrator_overhead": null,
+        "tokens_planner_total": null,
+        "tokens_prompt_method": "provider_usage_prompt_tokens",
+        "tokens_prompt_total": 426,
+        "tokens_scope_review_total": 1063,
+        "tokens_worker_prompt_total": 426,
+        "wall_time_seconds": 1.7682
+      },
+      "tasks": [
+        {
+          "actual_changed_files": [
+            "starlette/templating.py",
+            "tests/test_templates.py"
+          ],
+          "actual_changed_files_kind": "proposed_write_set",
+          "allowed_write_globs": [
+            "starlette/templating.py",
+            "tests/test_templates.py"
+          ],
+          "approved_replan_files": [],
+          "artifacts": {
+            "branch": null,
+            "commit": null,
+            "diff_path": null,
+            "log_path": null,
+            "pr_url": null,
+            "session_id": null
+          },
+          "blocked_write_events": [],
+          "failure_reason": null,
+          "metrics": {
+            "acus_consumed": null,
+            "changed_lines_added": null,
+            "changed_lines_deleted": null,
+            "changed_lines_kind": null,
+            "cost_source": "body.usage.cost",
+            "cost_usd": 5.412e-05,
+            "human_interventions": 0,
+            "model_calls": 1,
+            "tokens_completion": 90,
+            "tokens_prompt": 426,
+            "wall_time_seconds": 1.766
+          },
+          "out_of_bounds_files": [],
+          "overlaps_with": [],
+          "predicted_write_files": [
+            "starlette/templating.py",
+            "tests/test_templates.py"
+          ],
+          "prompt": "Make Jinja2Templates use Jinja2's select_autoescape default when creating an environment from a template directory, while preserving caller-supplied environments and adding tests for escaping behavior.",
+          "session_id": null,
+          "status": "completed",
+          "task_id": "pr3148-jinja2-autoescape",
+          "test": {
+            "command": null,
+            "duration_seconds": null,
+            "exit_code": null,
+            "failed_tests": [],
+            "passed": null,
+            "ran": false
+          },
+          "timestamps": {
+            "finished_at": "2026-05-11T06:24:01Z",
+            "started_at": "2026-05-11T06:23:59Z"
+          }
+        }
+      ],
+      "version": "0.1"
+    }
+  },
+  "version": "0.1"
+}

@@ -1,7 +1,12 @@
 repo,task_id,pr_number,run_set,strategy,status,prompt_tokens,completion_tokens,cost_usd,source
+axios,pr-10868,10868,,,unavailable,,,,predictor CSV uses live model compile
+commander_js,pr-2410,2410,,,unavailable,,,,predictor CSV uses live model compile
+express,pr-6088,6088,,,unavailable,,,,predictor CSV uses live model compile
 fastify,pr-6653,6653,,,unavailable,,,,predictor CSV uses live model compile
 fastify,pr-6692,6692,,,unavailable,,,,predictor CSV uses live model compile
 fastify,pr-6694,6694,,,unavailable,,,,predictor CSV uses live model compile
+flask,pr-5917,5917,,,unavailable,,,,predictor CSV uses live model compile
 starlette,pr3137-cors-credentials-origin,3137,,,unavailable,,,,predictor CSV uses live model compile
 starlette,pr3148-jinja2-autoescape,3148,,,unavailable,,,,predictor CSV uses live model compile
 starlette,pr3166-session-middleware,3166,,,unavailable,,,,predictor CSV uses live model compile
+urllib3,pr-4974,4974,,,unavailable,,,,predictor CSV uses live model compile

@@ -1,0 +1,125 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-11T06:22:15.252226Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 2199
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/urllib3/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "python"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-4974",
+      "prompt": "Avoid an infinite loop when HTTPResponse.read_chunked is called with amt=0, and add regression coverage for zero-length chunked reads.",
+      "predicted_writes": [
+        {
+          "path": "dummyserver/app.py",
+          "confidence": 0.85,
+          "reason": "Symbol 'chunked' referenced in prompt; defined in dummyserver/app.py. Signals: symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/urllib3/__init__.py",
+          "confidence": 0.85,
+          "reason": "Symbol 'HTTPResponse' referenced in prompt; defined in src/urllib3/__init__.py. Signals: symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "test/with_dummyserver/test_chunked_transfer.py",
+          "confidence": 0.85,
+          "reason": "Specifically tests chunked transfer encoding and is the most relevant for regression coverage of zero-length reads. Signals: llm, testlink. Scope review kept this file at its existing tier."
+        }
+      ],
+      "allowed_paths": [
+        "dummyserver/app.py",
+        "src/urllib3/__init__.py",
+        "test/with_dummyserver/test_chunked_transfer.py"
+      ],
+      "candidate_context_paths": [
+        "src/urllib3/response.py",
+        "test/test_response.py"
+      ],
+      "file_scopes": [
+        {
+          "path": "dummyserver/app.py",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "Symbol 'chunked' referenced in prompt; defined in dummyserver/app.py. Signals: symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/urllib3/__init__.py",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "Symbol 'HTTPResponse' referenced in prompt; defined in src/urllib3/__init__.py. Signals: symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "test/with_dummyserver/test_chunked_transfer.py",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "llm",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Specifically tests chunked transfer encoding and is the most relevant for regression coverage of zero-length reads. Signals: llm, testlink. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/urllib3/response.py",
+          "tier": "candidate_context",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "llm",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "HTTPResponse.read_chunked is defined here and the task directly modifies its behavior for amt=0. Candidate context only; requires replan before write. Signals: bm25, llm, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "test/test_response.py",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "llm",
+            "pagerank",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Contains MockChunkedEncodingResponse and is the primary test file for chunked response behavior. Candidate context only; requires replan before write. Signals: bm25, llm, pagerank, testlink. Scope review requested a drop, but protected evidence kept it."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-4974"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

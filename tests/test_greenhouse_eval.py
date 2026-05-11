@@ -412,6 +412,53 @@ def test_lockfile_echo_mock_emits_predicted_writes_for_known_task() -> None:
     assert any("JdbcAccountRepository" in f for f in files)
 
 
+def test_naive_strategy_does_not_inherit_acg_auto_replan_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``_run_naive_parallel`` must override ``ACG_AUTO_REPLAN`` from env.
+
+    Regression for the harness bug where naive workers, which run first in
+    the seeded strategy loop, were promoting candidate paths via the runtime
+    auto-replan branch because they fell back to ``RuntimeConfig.from_env()``.
+    The mutated lock then bled into the planned/replan strategies and
+    erased the distinction between planned writes and approved replans in
+    the serialized artifacts.
+    """
+    monkeypatch.setenv("ACG_AUTO_REPLAN", "1")
+
+    captured: list[bool] = []
+    from acg import runtime as runtime_mod
+
+    real_run_worker = runtime_mod.run_worker
+
+    async def spy(*args, config=None, **kwargs):  # type: ignore[no-untyped-def]
+        captured.append(bool(config and config.auto_replan))
+        return await real_run_worker(*args, config=config, **kwargs)
+
+    monkeypatch.setattr(runtime_mod, "run_worker", spy)
+    # The strategies module imports run_worker at module load time.
+    from experiments.greenhouse import strategies as strategies_mod
+
+    monkeypatch.setattr(strategies_mod, "run_worker", spy)
+
+    lock = _build_lock(serialized=False)
+    lock_path = tmp_path / "agent_lock.json"
+    lock_path.write_text(lock.model_dump_json(indent=2))
+    run_strategy(
+        strategy="naive_parallel",
+        backend="mock",
+        lock=lock,
+        repo_graph={},
+        lockfile_path=str(lock_path),
+    )
+
+    assert captured, "expected naive_parallel to invoke run_worker"
+    assert not any(captured), (
+        "naive_parallel must pass auto_replan=False even when "
+        f"ACG_AUTO_REPLAN=1 is set in env; saw {captured}"
+    )
+
+
 def test_naive_strategy_records_overlap_on_pom_xml(tmp_path: Path) -> None:
     """Mock naive run on the 3-task Greenhouse lockfile must surface overlaps."""
     lock = _build_lock(serialized=False)

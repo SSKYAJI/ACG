@@ -113,6 +113,15 @@ class StubRuntimeLLM:
         return None
 
 
+class RecordingConsole:
+    def __init__(self) -> None:
+        self.messages: list[str] = []
+
+    def print(self, *args: object, **kwargs: object) -> None:
+        del kwargs
+        self.messages.append(" ".join(str(arg) for arg in args))
+
+
 # ---------------------------------------------------------------------------
 # Fixtures.
 # ---------------------------------------------------------------------------
@@ -139,6 +148,16 @@ def _worker_replies(paths: list[str]) -> dict[str, str]:
             }
         )
     }
+
+
+def _candidate_replan_events(output: str | list[str]) -> list[dict[str, object]]:
+    prefix = "[candidate_replan] "
+    events: list[dict[str, object]] = []
+    lines = output if isinstance(output, list) else output.splitlines()
+    for line in lines:
+        if prefix in line:
+            events.append(json.loads(line.split(prefix, 1)[1]))
+    return events
 
 
 # ---------------------------------------------------------------------------
@@ -257,7 +276,9 @@ def test_runtime_marks_candidate_context_write_as_needs_replan(
 
 
 def test_runtime_auto_replan_approves_supported_candidate_context(
-    lock: AgentLock, empty_repo_graph: dict[str, object]
+    lock: AgentLock,
+    empty_repo_graph: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     scoped_lock = lock.model_copy(deep=True)
     oauth_task = next(t for t in scoped_lock.tasks if t.id == "oauth")
@@ -288,6 +309,8 @@ def test_runtime_auto_replan_approves_supported_candidate_context(
             "tests": json.dumps({"writes": []}),
         }
     )
+    recorder = RecordingConsole()
+    monkeypatch.setattr("acg.runtime._console", recorder)
 
     result = asyncio.run(
         run_lockfile(
@@ -300,12 +323,89 @@ def test_runtime_auto_replan_approves_supported_candidate_context(
         )
     )
 
+    events = _candidate_replan_events(recorder.messages)
+    assert len(events) == 1
+    event = events[0]
+    assert event["task_id"] == "oauth"
+    assert event["path"] == "src/server/oauth-provider.ts"
+    assert event["signals"] == ["scope_review"]
+    assert event["score"] == 0.86
+    assert event["can_auto_approve_replan"] is True
+    assert event["has_hard_conflict"] is False
+    assert event["final_outcome"] == "approved_replan"
+
     oauth_worker = next(w for w in result.workers if w.task_id == "oauth")
     proposal = oauth_worker.proposals[0]
     assert proposal.allowed is True
     assert proposal.scope_status == "approved_replan"
     assert oauth_worker.replan_approved_count == 1
     assert "src/server/oauth-provider.ts" in oauth_task.allowed_paths
+
+
+def test_runtime_logs_needs_replan_for_unsupported_candidate_context(
+    lock: AgentLock,
+    empty_repo_graph: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scoped_lock = lock.model_copy(deep=True)
+    oauth_task = next(t for t in scoped_lock.tasks if t.id == "oauth")
+    oauth_task.candidate_context_paths.append("src/server/oauth-provider.ts")
+    oauth_task.file_scopes.append(
+        FileScope(
+            path="src/server/oauth-provider.ts",
+            tier="candidate_context",
+            score=0.86,
+            signals=["manual_review"],
+            reason="Scope review did not surface an auto-replan signal.",
+        )
+    )
+    sub = StubRuntimeLLM(
+        replies={
+            "oauth": json.dumps(
+                {
+                    "writes": [
+                        {
+                            "file": "src/server/oauth-provider.ts",
+                            "description": "candidate helper",
+                        }
+                    ]
+                }
+            ),
+            "settings": json.dumps({"writes": []}),
+            "billing": json.dumps({"writes": []}),
+            "tests": json.dumps({"writes": []}),
+        }
+    )
+    recorder = RecordingConsole()
+    monkeypatch.setattr("acg.runtime._console", recorder)
+
+    result = asyncio.run(
+        run_lockfile(
+            scoped_lock,
+            empty_repo_graph,
+            StubRuntimeLLM(),
+            sub,
+            lockfile_path="x.json",
+            config=RuntimeConfig(auto_replan=True),
+        )
+    )
+
+    events = _candidate_replan_events(recorder.messages)
+    assert len(events) == 1
+    event = events[0]
+    assert event["task_id"] == "oauth"
+    assert event["path"] == "src/server/oauth-provider.ts"
+    assert event["signals"] == ["manual_review"]
+    assert event["score"] == 0.86
+    assert event["can_auto_approve_replan"] is False
+    assert event["has_hard_conflict"] is False
+    assert event["final_outcome"] == "needs_replan"
+
+    oauth_worker = next(w for w in result.workers if w.task_id == "oauth")
+    proposal = oauth_worker.proposals[0]
+    assert proposal.allowed is False
+    assert proposal.scope_status == "needs_replan"
+    assert oauth_worker.needs_replan_count == 1
 
 
 def test_runtime_allows_writes_within_allowed_paths(
@@ -719,6 +819,59 @@ def test_env_worker_concurrency_preserved_when_flag_omitted(
     if cli_worker_concurrency is not None:
         cfg.worker_concurrency = cli_worker_concurrency
     assert cfg.worker_concurrency == 0
+
+
+def test_runtime_llm_includes_seed_only_when_env_is_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from acg.runtime import RuntimeLLM
+
+    class FakeResponse:
+        status_code = 200
+        headers: dict[str, str] = {}
+        text = "{}"
+
+        def json(self) -> dict[str, object]:
+            return {
+                "choices": [
+                    {
+                        "message": {"content": "ok", "reasoning_content": ""},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            }
+
+    class FakeAsyncClient:
+        def __init__(self, timeout: float) -> None:
+            self.timeout = timeout
+            self.calls: list[dict[str, object]] = []
+
+        async def post(
+            self,
+            endpoint: str,
+            json: dict[str, object],
+            headers: dict[str, str],
+        ) -> FakeResponse:
+            self.calls.append({"endpoint": endpoint, "json": json, "headers": headers})
+            return FakeResponse()
+
+        async def aclose(self) -> None:
+            return None
+
+    fake_client = FakeAsyncClient(timeout=1.0)
+    monkeypatch.setattr("acg.runtime.httpx.AsyncClient", lambda timeout: fake_client)
+    monkeypatch.delenv("ACG_LLM_SEED", raising=False)
+    llm = RuntimeLLM(base_url="http://example.invalid/v1", model="demo", api_key="key")
+    asyncio.run(llm.complete([{"role": "user", "content": "hello"}]))
+    assert "seed" not in fake_client.calls[-1]["json"]
+
+    fake_client = FakeAsyncClient(timeout=1.0)
+    monkeypatch.setattr("acg.runtime.httpx.AsyncClient", lambda timeout: fake_client)
+    monkeypatch.setenv("ACG_LLM_SEED", "17")
+    llm = RuntimeLLM(base_url="http://example.invalid/v1", model="demo", api_key="key")
+    asyncio.run(llm.complete([{"role": "user", "content": "hello"}]))
+    assert fake_client.calls[-1]["json"]["seed"] == 17
 
 
 def test_banner_includes_env_values(

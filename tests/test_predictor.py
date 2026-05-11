@@ -10,6 +10,8 @@ import pytest
 
 from acg.predictor import (
     MAX_PREDICTIONS,
+    _apply_scope_review,
+    _build_file_scopes,
     _detect_test_layout,
     _env_seed,
     _extract_entity_noun,
@@ -24,7 +26,7 @@ from acg.predictor import (
     predict_writes,
 )
 from acg.repo_graph import scan_context_graph
-from acg.schema import PredictedWrite, TaskInput, TaskInputHints
+from acg.schema import FileScope, PredictedWrite, TaskInput, TaskInputHints
 
 
 class StubLLM:
@@ -180,6 +182,126 @@ def test_predictions_are_capped_and_sorted(repo_graph: dict[str, Any]) -> None:
         writes[i].confidence >= writes[i + 1].confidence
         for i in range(len(writes) - 1)
     )
+
+
+def _scope_paths(
+    task: TaskInput,
+    repo_graph: dict[str, Any],
+    writes: list[PredictedWrite],
+    signal_map: dict[str, set[str]],
+) -> dict[str, str]:
+    return {
+        scope.path: scope.tier
+        for scope in _build_file_scopes(task, repo_graph, writes, signal_map)
+    }
+
+
+@pytest.mark.parametrize(
+    "task,path,signals,repo_graph,expected_tier",
+    [
+        (
+            TaskInput(id="checkout", prompt="Add checkout validation."),
+            "src/checkout/validation.ts",
+            {"graph"},
+            {
+                "files": [
+                    {
+                        "path": "src/checkout/validation.ts",
+                        "symbols": ["validateCheckout"],
+                    }
+                ]
+            },
+            None,
+        ),
+        (
+            TaskInput(id="checkout", prompt="Add checkout validation."),
+            "src/checkout/validation.ts",
+            {"graph", "llm"},
+            {
+                "files": [
+                    {
+                        "path": "src/checkout/validation.ts",
+                        "symbols": ["validateCheckout"],
+                    }
+                ]
+            },
+            "candidate_context",
+        ),
+        (
+            TaskInput(id="task", prompt="Update the auth flow."),
+            "src/feature.ts",
+            {"pagerank", "bm25", "cochange"},
+            {"files": [{"path": "src/feature.ts"}]},
+            "candidate_context",
+        ),
+        (
+            TaskInput(id="hub", prompt="Update hub logic."),
+            "src/hub.ts",
+            {"pagerank"},
+            {
+                "files": [
+                    {
+                        "path": "src/hub.ts",
+                        "resolved_imports": [f"dep_{i}.ts" for i in range(20)],
+                    }
+                ]
+            },
+            None,
+        ),
+        (
+            TaskInput(id="hub", prompt="Update hub logic."),
+            "src/hub.ts",
+            {"pagerank", "bm25", "cochange"},
+            {
+                "files": [
+                    {
+                        "path": "src/hub.ts",
+                        "resolved_imports": [f"dep_{i}.ts" for i in range(20)],
+                    }
+                ]
+            },
+            None,
+        ),
+        (
+            TaskInput(id="hub", prompt="Update hub logic."),
+            "src/hub.ts",
+            {"pagerank", "llm", "graph"},
+            {
+                "files": [
+                    {
+                        "path": "src/hub.ts",
+                        "resolved_imports": [f"dep_{i}.ts" for i in range(20)],
+                    }
+                ]
+            },
+            "candidate_context",
+        ),
+        (
+            TaskInput(id="auth", prompt="Update auth flow."),
+            "tests/auth.spec.ts",
+            {"pagerank", "testlink"},
+            {"files": [{"path": "tests/auth.spec.ts"}]},
+            None,
+        ),
+        (
+            TaskInput(id="auth", prompt="Update auth flow."),
+            "tests/auth.spec.ts",
+            {"testlink", "llm"},
+            {"files": [{"path": "tests/auth.spec.ts"}]},
+            "candidate_context",
+        ),
+    ],
+)
+def test_candidate_context_gate_policies(
+    task: TaskInput,
+    path: str,
+    signals: set[str],
+    repo_graph: dict[str, Any],
+    expected_tier: str | None,
+) -> None:
+    writes = [PredictedWrite(path=path, confidence=0.84, reason="synthetic")]
+    tiers = _scope_paths(task, repo_graph, writes, {path: signals})
+    assert tiers.get(path) == expected_tier
 
 
 # --------------------------------------------------------------------------- #
@@ -556,7 +678,7 @@ def test_structural_candidate_context_gate_keeps_only_task_grounded_index_hits(
     )
     by_path = {scope.path: scope for scope in scopes}
 
-    assert by_path["src/checkout/validation.ts"].tier == "candidate_context"
+    assert "src/checkout/validation.ts" not in by_path
     assert "src/shared/hotspot.ts" not in by_path
 
 
@@ -610,45 +732,104 @@ def test_planner_suspected_files_are_evidence_not_automatic_hard_scope() -> None
     }
 
     scopes = predict_file_scopes(task, graph, StubLLM(json.dumps({"writes": []})))
-    scope = next(item for item in scopes if item.path == "starlette/templating.py")
+    by_path = {scope.path: scope for scope in scopes}
 
-    assert "planner" in scope.signals
-    assert scope.tier == "candidate_context"
+    assert "starlette/templating.py" not in by_path
 
 
-def test_scope_review_pruner_can_drop_candidate_context_paths() -> None:
-    task = TaskInput(
-        id="templates",
-        prompt="Enable Jinja2Templates autoescape.",
-        hints=TaskInputHints(
-            touches=["routing"],
-            suspected_files=["starlette/templating.py"],
-        ),
+def test_scope_review_pruner_can_drop_candidate_context_paths(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        "acg.index.aggregate",
+        lambda *_a, **_k: [
+            PredictedWrite(
+                path="starlette/templating.py",
+                confidence=0.82,
+                reason=(
+                    "PageRank rank 1 from repository graph. BM25 matched task; "
+                    "rose co-change also supports it."
+                ),
+            ),
+            PredictedWrite(
+                path="starlette/routing.py",
+                confidence=0.81,
+                reason=(
+                    "PageRank rank 2 from repository graph. BM25 matched task; "
+                    "rose co-change also supports it."
+                ),
+            ),
+            PredictedWrite(
+                path="starlette/app.py",
+                confidence=0.8,
+                reason=(
+                    "PageRank rank 3 from repository graph. BM25 matched task; "
+                    "rose co-change also supports it."
+                ),
+            ),
+            PredictedWrite(
+                path="starlette/config.py",
+                confidence=0.79,
+                reason=(
+                    "PageRank rank 4 from repository graph. BM25 matched task; "
+                    "rose co-change also supports it."
+                ),
+            ),
+            PredictedWrite(
+                path="starlette/debug.py",
+                confidence=0.78,
+                reason=(
+                    "PageRank rank 5 from repository graph. BM25 matched task; "
+                    "rose co-change also supports it."
+                ),
+            ),
+            PredictedWrite(
+                path="starlette/status.py",
+                confidence=0.77,
+                reason=(
+                    "PageRank rank 6 from repository graph. BM25 matched task; "
+                    "rose co-change also supports it."
+                ),
+            ),
+            PredictedWrite(
+                path="starlette/middleware.py",
+                confidence=0.76,
+                reason=(
+                    "PageRank rank 7 from repository graph. BM25 matched task; "
+                    "rose co-change also supports it."
+                ),
+            ),
+        ],
     )
+    task = TaskInput(id="templates", prompt="Enable Jinja2Templates autoescape.")
     graph = {
         "language": "python",
         "files": [
             {"path": "starlette/templating.py", "symbols": ["Jinja2Templates"]},
             {"path": "starlette/routing.py", "symbols": ["Router"]},
+            {"path": "starlette/app.py", "symbols": ["Starlette"]},
+            {"path": "starlette/config.py", "symbols": ["Config"]},
+            {"path": "starlette/debug.py", "symbols": ["Debug"]},
+            {"path": "starlette/status.py", "symbols": ["Status"]},
+            {"path": "starlette/middleware.py", "symbols": ["Middleware"]},
         ],
     }
     llm = StubLLM(
         json.dumps(
             {
-                "keep_paths": ["starlette/templating.py"],
-                "drop_paths": ["starlette/routing.py", "tests/test_environments.py"],
+                "keep_paths": [],
+                "drop_paths": ["starlette/templating.py", "tests/test_environments.py"],
                 "promote_paths": [],
                 "rationale": "Routing is read-only context for this task.",
             }
         )
     )
 
-    prediction = predict_file_scopes_with_usage(task, graph, llm)
+    prediction = predict_file_scopes_with_usage(task, graph, llm, repo_root=tmp_path)
     by_path = {scope.path: scope for scope in prediction.scopes}
     scope_review_prompt = llm.calls[-1][1]["content"]
 
-    assert by_path["starlette/templating.py"].tier == "candidate_context"
-    assert "starlette/routing.py" not in by_path
+    assert "starlette/templating.py" not in by_path
     assert "tests/test_environments.py" not in by_path
     assert "keep_paths" in scope_review_prompt
     assert "drop_paths" in scope_review_prompt
@@ -656,12 +837,329 @@ def test_scope_review_pruner_can_drop_candidate_context_paths() -> None:
     assert prediction.scope_review_tokens > 0
 
 
-def test_scope_review_legacy_promote_does_not_override_non_review_signals() -> None:
-    task = TaskInput(
-        id="templates",
-        prompt="Enable Jinja2Templates autoescape.",
-        hints=TaskInputHints(suspected_files=["starlette/templating.py"]),
+def test_scope_review_drop_paths_honors_graph_only_candidate() -> None:
+    task = TaskInput(id="templates", prompt="Enable Jinja2Templates autoescape.")
+    scopes = [
+        FileScope(
+            path="src/graph-only.ts",
+            tier="candidate_context",
+            score=0.62,
+            signals=["graph"],
+            reason="Graph-only retrieval hit.",
+        ),
+        FileScope(
+            path="src/llm-hit.ts",
+            tier="candidate_context",
+            score=0.71,
+            signals=["llm"],
+            reason="LLM-grounded retrieval hit.",
+        ),
+        FileScope(
+            path="src/explicit-hit.ts",
+            tier="candidate_context",
+            score=0.68,
+            signals=["explicit"],
+            reason="Explicit mention retrieval hit.",
+        ),
+        FileScope(
+            path="src/pagerank-hit.ts",
+            tier="candidate_context",
+            score=0.6,
+            signals=["pagerank"],
+            reason="PageRank retrieval hit.",
+        ),
+        FileScope(
+            path="src/bm25-hit.ts",
+            tier="candidate_context",
+            score=0.58,
+            signals=["bm25"],
+            reason="BM25 retrieval hit.",
+        ),
+        FileScope(
+            path="src/cochange-hit.ts",
+            tier="candidate_context",
+            score=0.57,
+            signals=["cochange"],
+            reason="Co-change retrieval hit.",
+        ),
+        FileScope(
+            path="src/entity-hit.ts",
+            tier="candidate_context",
+            score=0.56,
+            signals=["entity"],
+            reason="Entity retrieval hit.",
+        ),
+    ]
+
+    reviewed = _apply_scope_review(
+        task,
+        {},
+        scopes,
+        keep_paths=set(),
+        drop_paths={"src/graph-only.ts"},
+        promote_paths=set(),
     )
+    by_path = {scope.path: scope for scope in reviewed}
+
+    assert "src/graph-only.ts" not in by_path
+    assert len(by_path) == 6
+
+
+def test_scope_review_drop_paths_ignores_llm_protected_candidate() -> None:
+    task = TaskInput(id="templates", prompt="Enable Jinja2Templates autoescape.")
+    scopes = [
+        FileScope(
+            path="src/graph-only.ts",
+            tier="candidate_context",
+            score=0.62,
+            signals=["graph"],
+            reason="Graph-only retrieval hit.",
+        ),
+        FileScope(
+            path="src/llm-hit.ts",
+            tier="candidate_context",
+            score=0.71,
+            signals=["llm"],
+            reason="LLM-grounded retrieval hit.",
+        ),
+        FileScope(
+            path="src/explicit-hit.ts",
+            tier="candidate_context",
+            score=0.68,
+            signals=["explicit"],
+            reason="Explicit mention retrieval hit.",
+        ),
+        FileScope(
+            path="src/pagerank-hit.ts",
+            tier="candidate_context",
+            score=0.6,
+            signals=["pagerank"],
+            reason="PageRank retrieval hit.",
+        ),
+    ]
+
+    reviewed = _apply_scope_review(
+        task,
+        {},
+        scopes,
+        keep_paths=set(),
+        drop_paths={"src/llm-hit.ts"},
+        promote_paths=set(),
+    )
+    by_path = {scope.path: scope for scope in reviewed}
+
+    assert "src/llm-hit.ts" in by_path
+    assert "protected evidence kept it" in by_path["src/llm-hit.ts"].reason
+    assert "scope_review" in by_path["src/llm-hit.ts"].signals
+
+
+def test_scope_review_only_scope_review_signal_is_protected_from_drop() -> None:
+    task = TaskInput(id="templates", prompt="Enable Jinja2Templates autoescape.")
+    scopes = [
+        FileScope(
+            path="src/review-only.ts",
+            tier="candidate_context",
+            score=0.62,
+            signals=["scope_review"],
+            reason="Already reviewed context.",
+        ),
+        FileScope(
+            path="src/graph-one.ts",
+            tier="candidate_context",
+            score=0.6,
+            signals=["graph"],
+            reason="Graph-only retrieval hit.",
+        ),
+        FileScope(
+            path="src/graph-two.ts",
+            tier="candidate_context",
+            score=0.59,
+            signals=["graph"],
+            reason="Graph-only retrieval hit.",
+        ),
+    ]
+
+    reviewed = _apply_scope_review(
+        task,
+        {},
+        scopes,
+        keep_paths=set(),
+        drop_paths={"src/review-only.ts"},
+        promote_paths=set(),
+    )
+    by_path = {scope.path: scope for scope in reviewed}
+
+    assert "src/review-only.ts" in by_path
+    assert "protected evidence kept it" in by_path["src/review-only.ts"].reason
+    assert "scope_review" in by_path["src/review-only.ts"].signals
+
+
+def test_scope_review_drop_reverts_when_six_candidate_context_scopes_would_underflow() -> None:
+    task = TaskInput(id="templates", prompt="Enable Jinja2Templates autoescape.")
+    scopes = [
+        FileScope(
+            path=f"src/{name}.ts",
+            tier="candidate_context",
+            score=0.68 - 0.01 * index,
+            signals=["graph"],
+            reason="Graph-only retrieval hit.",
+        )
+        for index, name in enumerate(["one", "two", "three", "four", "five", "six"])
+    ]
+
+    reviewed = _apply_scope_review(
+        task,
+        {},
+        scopes,
+        keep_paths=set(),
+        drop_paths={"src/one.ts"},
+        promote_paths=set(),
+    )
+
+    assert [scope.path for scope in reviewed] == [scope.path for scope in scopes]
+
+
+def test_scope_review_drop_allows_larger_candidate_context_sets_to_shrink_to_six() -> None:
+    task = TaskInput(id="templates", prompt="Enable Jinja2Templates autoescape.")
+    scopes = [
+        FileScope(
+            path=f"src/{name}.ts",
+            tier="candidate_context",
+            score=0.69 - 0.01 * index,
+            signals=["graph"],
+            reason="Graph-only retrieval hit.",
+        )
+        for index, name in enumerate(
+            ["one", "two", "three", "four", "five", "six", "seven"]
+        )
+    ]
+
+    reviewed = _apply_scope_review(
+        task,
+        {},
+        scopes,
+        keep_paths=set(),
+        drop_paths={"src/one.ts"},
+        promote_paths=set(),
+    )
+    by_path = {scope.path: scope for scope in reviewed}
+
+    assert "src/one.ts" not in by_path
+    assert len([scope for scope in reviewed if scope.tier == "candidate_context"]) == 6
+    assert [scope.path for scope in reviewed] == [
+        "src/two.ts",
+        "src/three.ts",
+        "src/four.ts",
+        "src/five.ts",
+        "src/six.ts",
+        "src/seven.ts",
+    ]
+
+
+def test_scope_review_drop_reverts_when_remaining_candidate_context_falls_below_floor() -> None:
+    task = TaskInput(id="templates", prompt="Enable Jinja2Templates autoescape.")
+    scopes = [
+        FileScope(
+            path="src/must-write.ts",
+            tier="must_write",
+            score=0.91,
+            signals=["llm"],
+            reason="Must write anchor.",
+        ),
+        FileScope(
+            path="src/one.ts",
+            tier="candidate_context",
+            score=0.62,
+            signals=["graph"],
+            reason="Graph-only retrieval hit.",
+        ),
+        FileScope(
+            path="src/two.ts",
+            tier="candidate_context",
+            score=0.61,
+            signals=["graph"],
+            reason="Graph-only retrieval hit.",
+        ),
+        FileScope(
+            path="src/three.ts",
+            tier="candidate_context",
+            score=0.6,
+            signals=["graph"],
+            reason="Graph-only retrieval hit.",
+        ),
+        FileScope(
+            path="src/four.ts",
+            tier="candidate_context",
+            score=0.59,
+            signals=["graph"],
+            reason="Graph-only retrieval hit.",
+        ),
+    ]
+
+    reviewed = _apply_scope_review(
+        task,
+        {},
+        scopes,
+        keep_paths=set(),
+        drop_paths={"src/one.ts", "src/two.ts"},
+        promote_paths=set(),
+    )
+    by_path = {scope.path: scope for scope in reviewed}
+
+    assert set(by_path) == {scope.path for scope in scopes}
+    assert [scope.path for scope in reviewed] == [scope.path for scope in scopes]
+
+
+def test_scope_review_drop_reverts_when_two_candidate_context_scopes_would_underflow() -> None:
+    task = TaskInput(id="templates", prompt="Enable Jinja2Templates autoescape.")
+    scopes = [
+        FileScope(
+            path="src/one.ts",
+            tier="candidate_context",
+            score=0.62,
+            signals=["graph"],
+            reason="Graph-only retrieval hit.",
+        ),
+        FileScope(
+            path="src/two.ts",
+            tier="candidate_context",
+            score=0.61,
+            signals=["graph"],
+            reason="Graph-only retrieval hit.",
+        ),
+    ]
+
+    reviewed = _apply_scope_review(
+        task,
+        {},
+        scopes,
+        keep_paths=set(),
+        drop_paths={"src/one.ts"},
+        promote_paths=set(),
+    )
+    by_path = {scope.path: scope for scope in reviewed}
+
+    assert set(by_path) == {scope.path for scope in scopes}
+    assert [scope.path for scope in reviewed] == [scope.path for scope in scopes]
+
+
+def test_scope_review_legacy_promote_does_not_override_non_review_signals(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        "acg.index.aggregate",
+        lambda *_a, **_k: [
+            PredictedWrite(
+                path="starlette/templating.py",
+                confidence=0.82,
+                reason=(
+                    "PageRank rank 1 from repository graph. BM25 matched task; "
+                    "rose co-change also supports it."
+                ),
+            )
+        ],
+    )
+    task = TaskInput(id="templates", prompt="Enable Jinja2Templates autoescape.")
     graph = {
         "language": "python",
         "files": [{"path": "starlette/templating.py", "symbols": ["Jinja2Templates"]}],
@@ -678,7 +1176,7 @@ def test_scope_review_legacy_promote_does_not_override_non_review_signals() -> N
         )
     )
 
-    prediction = predict_file_scopes_with_usage(task, graph, llm)
+    prediction = predict_file_scopes_with_usage(task, graph, llm, repo_root=tmp_path)
     by_path = {scope.path: scope for scope in prediction.scopes}
 
     assert by_path["starlette/templating.py"].tier == "candidate_context"
@@ -690,10 +1188,21 @@ def test_scope_review_legacy_promote_does_not_override_non_review_signals() -> N
 
 
 def test_scope_review_promotes_when_non_review_signals_support_hard_scope() -> None:
-    task = TaskInput(id="settings", prompt="Update sidebar navigation.")
+    task = TaskInput(
+        id="settings",
+        prompt="Update sidebar navigation.",
+        hints=TaskInputHints(suspected_files=["components/sidebar.tsx"]),
+    )
     graph = {
         "language": "typescript",
-        "files": [{"path": "components/sidebar.tsx", "symbols": ["Sidebar"]}],
+        "files": [
+            {
+                "path": "components/nav.tsx",
+                "symbols": ["Nav"],
+                "resolved_imports": ["components/sidebar.tsx"],
+            },
+            {"path": "components/sidebar.tsx", "symbols": []},
+        ],
     }
     llm = SequenceLLM(
         [
@@ -702,7 +1211,7 @@ def test_scope_review_promotes_when_non_review_signals_support_hard_scope() -> N
                     "writes": [
                         {
                             "path": "components/sidebar.tsx",
-                            "confidence": 0.84,
+                            "confidence": 0.78,
                             "reason": "Sidebar navigation needs an edit.",
                         }
                     ]
@@ -751,12 +1260,31 @@ def test_test_source_mapping_links_existing_starlette_test(tmp_path: Path) -> No
         hints=TaskInputHints(suspected_files=["starlette/templating.py"]),
     )
 
-    scopes = predict_file_scopes(task, graph, StubLLM(json.dumps({"writes": []})), repo_root=tmp_path)
+    scopes = predict_file_scopes(
+        task,
+        graph,
+        SequenceLLM(
+            [
+                json.dumps(
+                    {
+                        "writes": [
+                            {
+                                "path": "tests/test_templates.py",
+                                "confidence": 0.83,
+                                "reason": "Framework scaffold and test-source mapping.",
+                            }
+                        ]
+                    }
+                )
+            ]
+        ),
+        repo_root=tmp_path,
+    )
     by_path = {scope.path: scope for scope in scopes}
 
     assert "starlette/templating.py" in by_path
     assert "tests/test_templates.py" in by_path
-    assert "testlink" in by_path["tests/test_templates.py"].signals
+    assert {"testlink", "framework"} <= set(by_path["tests/test_templates.py"].signals)
 
 
 def test_index_seed_unit_filters_below_floor(
@@ -774,6 +1302,76 @@ def test_index_seed_unit_filters_below_floor(
     seeds = _index_seed(task, tmp_path, {})
     paths = {seed.path for seed in seeds}
     assert paths == {"keep.ts"}
+
+
+def test_predict_file_scopes_uses_broader_index_fanout_for_context(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pagerank_only_paths = [
+        "src/core/pagerank_hit_0.ts",
+        "src/core/pagerank_hit_1.ts",
+        "src/core/pagerank_hit_2.ts",
+        "src/core/pagerank_hit_3.ts",
+        "src/core/pagerank_hit_4.ts",
+        "src/core/pagerank_hit_5.ts",
+        "src/core/pagerank_hit_6.ts",
+        "src/core/pagerank_hit_7.ts",
+    ]
+    broad_consensus_paths = [
+        "src/fastify/request-handling.ts",
+        "src/fastify/request-context.ts",
+        "src/fastify/request-parser.ts",
+        "src/fastify/request-typing.ts",
+        "src/fastify/request-hooks.ts",
+        "src/fastify/request-routing.ts",
+    ]
+    aggregate_rows = [
+        PredictedWrite(
+            path=path,
+            confidence=0.83 - 0.01 * idx,
+            reason=f"PageRank rank {idx + 1} from repository graph.",
+        )
+        for idx, path in enumerate(pagerank_only_paths)
+    ] + [
+        PredictedWrite(
+            path=path,
+            confidence=0.81 - 0.01 * idx,
+            reason=(
+                "SCIP entity 'FastifyRequest' "
+                "(typescript src/fastify/request-handling.ts FastifyRequest#) "
+                "BM25 matched task; definition in src/fastify/request-handling.ts."
+            ),
+        )
+        for idx, path in enumerate(broad_consensus_paths)
+    ]
+    requested_top_ns: list[int] = []
+
+    def fake_aggregate(
+        _task: TaskInput,
+        _repo_root: Path,
+        _repo_graph: dict[str, Any],
+        *,
+        top_n: int,
+    ) -> list[PredictedWrite]:
+        requested_top_ns.append(top_n)
+        return aggregate_rows[:top_n]
+
+    monkeypatch.setattr("acg.index.aggregate", fake_aggregate)
+    task = TaskInput(id="fastify", prompt="Update fastify request handling.")
+    graph = {
+        "files": [{"path": path} for path in pagerank_only_paths + broad_consensus_paths]
+    }
+    llm = StubLLM(json.dumps({"writes": []}))
+
+    prediction = predict_file_scopes_with_usage(task, graph, llm, repo_root=tmp_path)
+    candidate_context_paths = [
+        scope.path for scope in prediction.scopes if scope.tier == "candidate_context"
+    ]
+
+    assert requested_top_ns == [24]
+    assert 6 <= len(candidate_context_paths) <= 16
+    assert set(candidate_context_paths) == set(broad_consensus_paths)
+    assert set(candidate_context_paths).isdisjoint(pagerank_only_paths)
 
 
 def test_predict_file_scopes_keeps_scip_only_candidate_context(
@@ -907,10 +1505,9 @@ def test_fastify_scip_hub_candidate_is_not_hard_promoted(
     scopes = predict_file_scopes(
         task, graph, StubLLM(json.dumps({"writes": []})), repo_root=tmp_path
     )
-    scope = next(item for item in scopes if item.path == "lib/symbols.js")
+    by_path = {scope.path: scope for scope in scopes}
 
-    assert "scip" in scope.signals
-    assert scope.tier == "candidate_context"
+    assert "lib/symbols.js" not in by_path
 
 
 # --------------------------------------------------------------------------- #
@@ -1026,4 +1623,103 @@ def test_predict_file_scopes_keeps_graph_expansion_as_candidate_context() -> Non
     by_path = {scope.path: scope for scope in scopes}
 
     assert by_path["lib/handle-request.js"].tier == "must_write"
-    assert by_path["lib/validation.js"].tier == "candidate_context"
+    assert "lib/validation.js" not in by_path
+
+
+def test_post_llm_type_link_expansion_stays_candidate_context() -> None:
+    task = TaskInput(
+        id="fastify",
+        prompt="Update Fastify request handling and request type wiring.",
+    )
+    graph = {
+        "language": "typescript",
+        "files": [
+            {
+                "path": "lib/request.js",
+                "resolved_imports": [],
+                "type_links": ["types/request.d.ts"],
+                "symbols": ["Request"],
+            },
+            {
+                "path": "types/request.d.ts",
+                "resolved_imports": [],
+                "type_links": ["lib/request.js"],
+                "symbols": ["FastifyRequest"],
+            },
+        ],
+        "type_links": {
+            "lib/request.js": ["types/request.d.ts"],
+            "types/request.d.ts": ["lib/request.js"],
+        },
+    }
+    llm = StubLLM(
+        json.dumps(
+            {
+                "writes": [
+                    {
+                        "path": "lib/request.js",
+                        "confidence": 0.9,
+                        "reason": "Fastify request handling.",
+                    }
+                ]
+            }
+        )
+    )
+
+    prediction = predict_file_scopes_with_usage(task, graph, llm)
+    by_path = {scope.path: scope for scope in prediction.scopes}
+
+    assert "types/request.d.ts" in by_path
+    assert by_path["types/request.d.ts"].tier == "candidate_context"
+    assert {"graph", "must_write_neighbor"} <= set(by_path["types/request.d.ts"].signals)
+
+
+def test_post_llm_direct_import_stub_sibling_expansion_stays_candidate_context() -> None:
+    task = TaskInput(
+        id="service",
+        prompt="Update the service layer and its imported contract.",
+    )
+    graph = {
+        "language": "python",
+        "files": [
+            {
+                "path": "src/service.py",
+                "resolved_imports": ["src/client.py"],
+                "type_links": [],
+                "symbols": ["Service"],
+            },
+            {
+                "path": "src/client.py",
+                "resolved_imports": [],
+                "type_links": [],
+                "symbols": ["Client"],
+            },
+            {
+                "path": "src/client.pyi",
+                "resolved_imports": [],
+                "type_links": [],
+                "symbols": ["ClientProtocol"],
+            },
+        ],
+        "resolved_imports": {"src/service.py": ["src/client.py"]},
+    }
+    llm = StubLLM(
+        json.dumps(
+            {
+                "writes": [
+                    {
+                        "path": "src/service.py",
+                        "confidence": 0.9,
+                        "reason": "Service layer update.",
+                    }
+                ]
+            }
+        )
+    )
+
+    scopes = predict_file_scopes(task, graph, llm)
+    by_path = {scope.path: scope for scope in scopes}
+
+    assert "src/client.pyi" in by_path
+    assert by_path["src/client.pyi"].tier == "candidate_context"
+    assert {"graph", "must_write_neighbor"} <= set(by_path["src/client.pyi"].signals)

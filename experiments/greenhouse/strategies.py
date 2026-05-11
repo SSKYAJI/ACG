@@ -472,10 +472,21 @@ async def _run_naive_parallel(
     counting_sub = _PromptCountingLLM(sub_inner)
     started = now_iso()
     t0 = time.perf_counter()
+    from acg.runtime import RuntimeConfig
+
+    naive_runtime_config = RuntimeConfig.from_env()
+    naive_runtime_config.auto_replan = False
     try:
         worker_results = await _gather_capped(
             [
-                run_worker(task, lock, repo_graph, counting_sub, group_id=0)
+                run_worker(
+                    task,
+                    lock,
+                    repo_graph,
+                    counting_sub,
+                    group_id=0,
+                    config=naive_runtime_config,
+                )
                 for task in lock.tasks
             ],
             cap_parallelism,

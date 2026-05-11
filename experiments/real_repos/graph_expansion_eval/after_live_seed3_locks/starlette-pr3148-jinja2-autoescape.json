@@ -1,0 +1,84 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-11T06:21:51.816920Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 1063
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/starlette/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "python"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr3148-jinja2-autoescape",
+      "prompt": "Make Jinja2Templates use Jinja2's select_autoescape default when creating an environment from a template directory, while preserving caller-supplied environments and adding tests for escaping behavior.",
+      "predicted_writes": [
+        {
+          "path": "starlette/templating.py",
+          "confidence": 0.95,
+          "reason": "Jinja2Templates implementation must be modified to use select_autoescape default. Signals: bm25, llm, symbol. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "tests/test_templates.py",
+          "confidence": 0.9,
+          "reason": "Tests for escaping behavior must be added, and this file already tests templates. Signals: bm25, llm, testlink. Scope review kept this file at its existing tier."
+        }
+      ],
+      "allowed_paths": [
+        "starlette/templating.py",
+        "tests/test_templates.py"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "starlette/templating.py",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "llm",
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "Jinja2Templates implementation must be modified to use select_autoescape default. Signals: bm25, llm, symbol. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "tests/test_templates.py",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "llm",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Tests for escaping behavior must be added, and this file already tests templates. Signals: bm25, llm, testlink. Scope review kept this file at its existing tier."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr3148-jinja2-autoescape"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

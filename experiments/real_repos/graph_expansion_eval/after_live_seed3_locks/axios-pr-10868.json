@@ -1,0 +1,99 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-11T06:20:24.176934Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 1052
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/axios/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-10868",
+      "prompt": "Guard progress event reduction against malformed XHR upload events so progress callbacks do not produce invalid data, and add regression tests for malformed event inputs.",
+      "predicted_writes": [
+        {
+          "path": "lib/helpers/progressEventReducer.js",
+          "confidence": 0.95,
+          "reason": "Task explicitly mentions guarding progress event reduction against malformed XHR upload events, and this file contains the progressEventReducer function. Signals: bm25, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "tests/malformed.test.ts",
+          "confidence": 0.9,
+          "reason": "Task mentions adding regression tests for malformed event inputs, and .test.ts is a standard test file extension. Signals: framework, llm. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "lib/adapters/xhr.js",
+          "confidence": 0.85,
+          "reason": "Task mentions XHR upload events, and this file handles XHR adapter logic including progress events. Signals: bm25, llm. Scope review kept this file at its existing tier."
+        }
+      ],
+      "allowed_paths": [
+        "lib/adapters/xhr.js",
+        "lib/helpers/progressEventReducer.js",
+        "tests/malformed.test.ts"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "lib/helpers/progressEventReducer.js",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "Task explicitly mentions guarding progress event reduction against malformed XHR upload events, and this file contains the progressEventReducer function. Signals: bm25, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "tests/malformed.test.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "framework",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "Task mentions adding regression tests for malformed event inputs, and .test.ts is a standard test file extension. Signals: framework, llm. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "lib/adapters/xhr.js",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "bm25",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "Task mentions XHR upload events, and this file handles XHR adapter logic including progress events. Signals: bm25, llm. Scope review kept this file at its existing tier."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-10868"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

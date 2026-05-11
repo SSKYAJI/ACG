@@ -1,0 +1,84 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-11T06:16:49.088928Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 871
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/express/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr-6088",
+      "prompt": "Enhance req.acceptsCharsets handling so charset negotiation works correctly across accepted, missing, and rejected values, and cover the behavior with request charset tests.",
+      "predicted_writes": [
+        {
+          "path": "lib/request.js",
+          "confidence": 0.95,
+          "reason": "Task explicitly mentions enhancing req.acceptsCharsets handling, and this function is defined in lib/request.js. Signals: bm25, llm, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "test/req.acceptsCharsets.js",
+          "confidence": 0.9,
+          "reason": "Task requires covering behavior with request charset tests, and this file tests req.acceptsCharsets functionality. Signals: bm25, llm, testlink. Scope review kept this file at its existing tier."
+        }
+      ],
+      "allowed_paths": [
+        "lib/request.js",
+        "test/req.acceptsCharsets.js"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "lib/request.js",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "llm",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "Task explicitly mentions enhancing req.acceptsCharsets handling, and this function is defined in lib/request.js. Signals: bm25, llm, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "test/req.acceptsCharsets.js",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "llm",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Task requires covering behavior with request charset tests, and this file tests req.acceptsCharsets functionality. Signals: bm25, llm, testlink. Scope review kept this file at its existing tier."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr-6088"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

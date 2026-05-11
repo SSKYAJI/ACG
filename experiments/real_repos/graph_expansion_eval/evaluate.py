@@ -2,18 +2,28 @@ from __future__ import annotations
 
 import argparse
 import csv
+from contextlib import contextmanager, nullcontext
 import json
+import math
 import os
 import re
 import subprocess
+import statistics
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from acg.compiler import compile_lockfile
-from acg.llm import LLMClient, MockLLMClient
+from acg.llm import LLMClient, LLMError, MockLLMClient
 from acg.repo_graph import detect_language, load_context_graph, scan_context_graph
 from acg.schema import AgentLock, TasksInput
+from experiments.greenhouse.eval_schema import repo_from_path, to_dict
+from experiments.greenhouse.strategies import (
+    ACG_PLANNED_REPLAN_STRATEGY,
+    ACG_PLANNED_STRATEGY,
+    NAIVE_STRATEGY,
+    run_strategy,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 REAL_REPOS = PROJECT_ROOT / "experiments" / "real_repos"
@@ -43,6 +53,8 @@ PREDICTOR_FIELDS = [
     "hard_fp_per_task",
     "blocked_true_positive_count",
     "approval_needed_count",
+    "achievable_precision_at_recall_0.9",
+    "blocked_truth_recoverable_fraction",
     "hard_conflict_pair_count",
     "candidate_conflict_pair_count",
     "tokens_planner_total",
@@ -83,6 +95,31 @@ PREDICTOR_FIELDS = [
     "scip_f1",
     "candidate_recall_delta_vs_native",
     "hard_recall_delta_vs_native",
+]
+
+PREDICTOR_NUMERIC_FIELDS = [
+    field
+    for field in PREDICTOR_FIELDS
+    if field
+    not in {
+        "repo",
+        "task_id",
+        "pr_number",
+        "exact_overlap",
+        "predicted_writes",
+        "allowed_paths",
+        "candidate_context_paths",
+        "must_write_paths",
+        "ground_truth_files",
+        "false_positives",
+        "false_negatives",
+        "candidate_false_positives",
+        "candidate_false_negatives",
+        "localization_backend",
+        "ablation_name",
+        "scip_status",
+        "scip_index_path",
+    }
 ]
 
 
@@ -264,6 +301,12 @@ def _metric_row(
     ctp, cfp, cfn, crecall, cprecision, cf1 = _prf(candidate_set, truth_set)
     del ctp
     approval_needed = sorted((truth_set & set(candidate_context)) - hard_set)
+    achievable_precision_at_recall_09 = (
+        min(1.0, (0.9 * len(truth_set)) / 18) if truth_set else 0.0
+    )
+    blocked_truth_recoverable_fraction = len(approval_needed) / max(
+        1, len(truth_set - hard_set)
+    )
     scip_metrics = _scip_metrics(repo_graph or {}, file_scopes or [], truth_set)
     tokens_localization_total = (
         None
@@ -293,6 +336,8 @@ def _metric_row(
         "hard_fp_per_task": str(len(fp)),
         "blocked_true_positive_count": str(len(truth_set - hard_set)),
         "approval_needed_count": str(len(approval_needed)),
+        "achievable_precision_at_recall_0.9": f"{achievable_precision_at_recall_09:.6f}",
+        "blocked_truth_recoverable_fraction": f"{blocked_truth_recoverable_fraction:.6f}",
         "hard_conflict_pair_count": str(hard_conflict_pair_count),
         "candidate_conflict_pair_count": str(candidate_conflict_pair_count),
         "tokens_planner_total": "" if tokens_planner_total is None else str(tokens_planner_total),
@@ -466,6 +511,12 @@ def _output_stem(
     return "_".join(parts)
 
 
+def _seeded_output_stem(output_stem: str, seed: int | None) -> str:
+    if seed is None:
+        return output_stem
+    return f"{output_stem}_seed{seed}"
+
+
 def _diff_name(
     llm_mode: str,
     localization_backend: str = "native",
@@ -491,19 +542,241 @@ def _locks_dir_name(output_stem: str, llm_mode: str) -> str:
     return f"{output_stem}_locks"
 
 
-def _llm_for_eval(llm_mode: str, baseline_lock: AgentLock, task_id: str) -> Any:
+def _live_temperature() -> float:
+    raw = os.environ.get("ACG_LLM_TEMPERATURE")
+    if raw is None or not raw.strip():
+        return 0.2
+    try:
+        return float(raw)
+    except ValueError:
+        return 0.2
+
+
+@contextmanager
+def _temporary_env_var(key: str, value: str):
+    prior = os.environ.get(key)
+    os.environ[key] = value
+    try:
+        yield
+    finally:
+        if prior is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = prior
+
+
+_STRATEGIES_TO_RUN = (
+    NAIVE_STRATEGY,
+    ACG_PLANNED_STRATEGY,
+    ACG_PLANNED_REPLAN_STRATEGY,
+)
+
+
+def _strategy_run_set_name(backend: str, seed: int | None) -> str:
+    prefix = "runs_after_live" if backend == "local" else "runs_after_mock"
+    return f"{prefix}_seed{seed}" if seed is not None else prefix
+
+
+def _seed_strategy_run_sets(seed: int) -> set[str]:
+    return {
+        _strategy_run_set_name("local", seed),
+        _strategy_run_set_name("mock", seed),
+    }
+
+
+def _repo_graph_for_task(task: EvalTask, localization_backend: str) -> dict[str, Any]:
+    repo_graph = load_context_graph(task.checkout_path)
+    detected_language = detect_language(task.checkout_path)
+    graph_paths = [
+        entry.get("path", "")
+        for entry in repo_graph.get("files", [])
+        if isinstance(entry, dict)
+    ]
+    has_ignored_paths = any(
+        path.startswith((".venv/", "node_modules/", "vendor/"))
+        for path in graph_paths
+    )
+    graph_backend = repo_graph.get("localization_backend") or "native"
+    backend_mismatch = graph_backend != localization_backend
+    status = repo_graph.get("scip_status")
+    scip_unavailable = (
+        localization_backend in {"scip", "auto"}
+        and (not isinstance(status, dict) or status.get("status") != "ok")
+    )
+    if (
+        not repo_graph
+        or repo_graph.get("language") != detected_language
+        or has_ignored_paths
+        or backend_mismatch
+        or scip_unavailable
+    ):
+        repo_graph = scan_context_graph(
+            task.checkout_path,
+            detected_language,
+            localization_backend=localization_backend,
+        )
+    return repo_graph
+
+
+def _write_strategy_combined_artifact(
+    repo_dir: Path,
+    run_set: str,
+    task_id: str,
+    strategy_runs: dict[str, dict[str, Any]],
+) -> Path:
+    out_dir = repo_dir / run_set / task_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "eval_run_combined.json"
+    payload = {
+        "version": "0.1",
+        "strategies": {key: strategy_runs[key] for key in sorted(strategy_runs)},
+    }
+    out_path.write_text(json.dumps(payload, sort_keys=True, indent=2) + "\n")
+    return out_path
+
+
+def _write_strategy_artifacts_for_seed(
+    *,
+    output_stem: str,
+    llm_mode: str,
+    localization_backend: str,
+    seed: int,
+) -> set[str]:
+    seeded_output_stem = _seeded_output_stem(output_stem, seed)
+    locks_dir = OUT_DIR / _locks_dir_name(seeded_output_stem, llm_mode)
+    run_sets = _seed_strategy_run_sets(seed)
+    for task in discover_tasks():
+        lock_path = locks_dir / f"{task.repo}-{task.task_id}.json"
+        if not lock_path.exists():
+            continue
+        baseline_lock = AgentLock.model_validate_json(lock_path.read_text())
+        repo_graph = _repo_graph_for_task(task, localization_backend)
+        repo = repo_from_path(task.checkout_path)
+        for backend in ("local", "mock"):
+            strategy_runs: dict[str, dict[str, Any]] = {}
+            backend_context = (
+                _temporary_env_var("ACG_LLM_SEED", str(seed))
+                if backend == "local"
+                else nullcontext()
+            )
+            with backend_context:
+                for strategy in _STRATEGIES_TO_RUN:
+                    # Deep-copy the lock per strategy: replan mutates
+                    # allowed_paths via promote_candidate_paths, and we must
+                    # not let one strategy's mutations bleed into the next.
+                    strategy_lock = baseline_lock.model_copy(deep=True)
+                    run = run_strategy(
+                        strategy=strategy,
+                        backend=backend,
+                        lock=strategy_lock,
+                        repo_graph=repo_graph,
+                        lockfile_path=str(lock_path),
+                        repo=repo,
+                    )
+                    strategy_runs[strategy] = to_dict(run)
+            _write_strategy_combined_artifact(
+                REAL_REPOS / task.repo,
+                _strategy_run_set_name(backend, seed),
+                task.task_id,
+                strategy_runs,
+            )
+    return run_sets
+
+
+class _SeededLiveLLMClient:
+    model = "seeded-live"
+
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        model: str,
+        api_key: str,
+        seed: int,
+        temperature: float,
+    ) -> None:
+        import httpx
+
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        self.api_key = api_key
+        self.seed = seed
+        self.temperature = temperature
+        self._client = httpx.Client(timeout=120.0)
+
+    def complete(
+        self,
+        messages: list[dict[str, str]],
+        response_format: dict[str, Any] | None = None,
+    ) -> str:
+        import httpx
+
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": self.temperature,
+            "seed": self.seed,
+        }
+        if response_format is not None:
+            payload["response_format"] = response_format
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        url = f"{self.base_url}/chat/completions"
+
+        last_exc: Exception | None = None
+        for attempt in range(2):
+            try:
+                response = self._client.post(url, json=payload, headers=headers)
+            except httpx.TransportError as exc:
+                last_exc = exc
+                if attempt == 0:
+                    continue
+                raise LLMError(f"transport error contacting {url}: {exc}") from exc
+            if response.status_code >= 400:
+                raise LLMError(f"{url} returned {response.status_code}: {response.text[:500]}")
+            data = response.json()
+            try:
+                return data["choices"][0]["message"]["content"]
+            except (KeyError, IndexError, TypeError) as exc:
+                raise LLMError(f"unexpected response shape from {url}: {data!r}") from exc
+        raise LLMError(f"unreachable LLM retry loop, last_exc={last_exc}")
+
+
+def _llm_for_eval(
+    llm_mode: str,
+    baseline_lock: AgentLock,
+    task_id: str,
+    *,
+    seed: int | None = None,
+) -> Any:
     if llm_mode == "replay":
         return ReplayLockLLM(_predicted_items_for_task(baseline_lock, task_id))
     if llm_mode == "mock":
         return MockLLMClient()
     if llm_mode == "live":
+        if seed is None:
+            _load_dotenv()
+            llm = LLMClient.from_env()
+            if isinstance(llm, MockLLMClient):
+                raise RuntimeError(
+                    "live eval requested but no ACG_LLM_API_KEY/GROQ_API_KEY is configured"
+                )
+            return llm
+
         _load_dotenv()
-        llm = LLMClient.from_env()
-        if isinstance(llm, MockLLMClient):
+        api_key = os.environ.get("ACG_LLM_API_KEY") or os.environ.get("GROQ_API_KEY")
+        if not api_key or os.environ.get("ACG_MOCK_LLM") == "1":
             raise RuntimeError(
-                "live eval requested but no ACG_LLM_API_KEY/GROQ_API_KEY is configured"
+                "seeded live eval requested but no ACG_LLM_API_KEY/GROQ_API_KEY is configured"
             )
-        return llm
+        return _SeededLiveLLMClient(
+            base_url=os.environ.get("ACG_LLM_URL", "https://api.groq.com/openai/v1"),
+            model=os.environ.get("ACG_LLM_MODEL", "llama-3.3-70b-versatile"),
+            api_key=api_key,
+            seed=seed,
+            temperature=_live_temperature(),
+        )
     raise ValueError(f"unknown llm_mode: {llm_mode}")
 
 
@@ -512,9 +785,13 @@ def write_predictor_csv(
     llm_mode: str = "replay",
     localization_backend: str = "native",
     ablation_name: str = "",
+    seed: int | None = None,
 ) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
-    output_stem = _output_stem(mode, llm_mode, localization_backend, ablation_name)
+    output_stem = _seeded_output_stem(
+        _output_stem(mode, llm_mode, localization_backend, ablation_name),
+        seed,
+    )
     locks_dir = OUT_DIR / _locks_dir_name(output_stem, llm_mode)
     if mode == "after":
         locks_dir.mkdir(parents=True, exist_ok=True)
@@ -557,7 +834,7 @@ def write_predictor_csv(
                     detected_language,
                     localization_backend=localization_backend,
                 )
-            llm = _llm_for_eval(llm_mode, baseline_lock, task.task_id)
+            llm = _llm_for_eval(llm_mode, baseline_lock, task.task_id, seed=seed)
             lock = compile_lockfile(task.checkout_path, tasks_input, repo_graph, llm)
             (locks_dir / f"{task.repo}-{task.task_id}.json").write_text(
                 lock.model_dump_json(indent=2) + "\n"
@@ -589,12 +866,8 @@ def write_predictor_csv(
                 file_scopes=file_scopes,
             )
         )
-    out_path = OUT_DIR / f"{output_stem}_predictor.csv"
     _attach_native_deltas(rows, mode, llm_mode, localization_backend, ablation_name)
-    with out_path.open("w", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=PREDICTOR_FIELDS)
-        writer.writeheader()
-        writer.writerows(rows)
+    _write_csv_rows(OUT_DIR / f"{output_stem}_predictor.csv", PREDICTOR_FIELDS, rows)
     return rows
 
 
@@ -643,6 +916,157 @@ def _float_delta(new_value: str, old_value: str) -> str:
         return f"{float(new_value) - float(old_value):.6f}"
     except (TypeError, ValueError):
         return ""
+
+
+def _write_csv_rows(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _format_stat(value: float | None) -> str:
+    return "" if value is None else f"{value:.6f}"
+
+
+def _numeric_values(rows: list[dict[str, str]], field: str) -> list[float]:
+    values: list[float] = []
+    for row in rows:
+        value = _float_or_none(row.get(field, ""))
+        if value is not None:
+            values.append(value)
+    return values
+
+
+def _nearest_rank_percentile(values: list[float], percentile: float) -> float | None:
+    """Return the nearest-rank percentile for a small ordered sample."""
+    if not values:
+        return None
+    ranked = sorted(values)
+    index = max(0, min(len(ranked) - 1, math.ceil(percentile * len(ranked)) - 1))
+    return ranked[index]
+
+
+def _predictor_variance_rows(seed_rows: list[list[dict[str, str]]]) -> list[dict[str, str]]:
+    task_keys = sorted(
+        {
+            (
+                row["repo"],
+                row["task_id"],
+                row["pr_number"],
+                row["localization_backend"],
+                row["ablation_name"],
+            )
+            for rows in seed_rows
+            for row in rows
+        }
+    )
+    output_rows: list[dict[str, str]] = []
+    for key in task_keys:
+        row: dict[str, str] = {
+            "repo": key[0],
+            "task_id": key[1],
+            "pr_number": key[2],
+            "localization_backend": key[3],
+            "ablation_name": key[4],
+        }
+        task_rows = [
+            next(
+                (
+                    candidate
+                    for candidate in rows
+                    if (
+                        candidate["repo"],
+                        candidate["task_id"],
+                        candidate["pr_number"],
+                        candidate["localization_backend"],
+                        candidate["ablation_name"],
+                    )
+                    == key
+                ),
+                None,
+            )
+            for rows in seed_rows
+        ]
+        for field in PREDICTOR_NUMERIC_FIELDS:
+            values = [
+                value
+                for candidate in task_rows
+                if candidate is not None
+                if (value := _float_or_none(candidate.get(field, ""))) is not None
+            ]
+            row[f"{field}_mean"] = _format_stat(statistics.mean(values) if values else None)
+            row[f"{field}_std"] = _format_stat(statistics.pstdev(values) if values else None)
+        output_rows.append(row)
+    return output_rows
+
+
+def _predictor_summary_rows(seed_rows: list[list[dict[str, str]]]) -> list[dict[str, str]]:
+    macro_means_by_seed: list[dict[str, float]] = []
+    for rows in seed_rows:
+        metric_means: dict[str, float] = {}
+        for field in PREDICTOR_NUMERIC_FIELDS:
+            values = _numeric_values(rows, field)
+            if values:
+                metric_means[field] = statistics.mean(values)
+        candidate_counts = _numeric_values(rows, "candidate_context_count")
+        if candidate_counts:
+            metric_means["candidate_count_median"] = statistics.median(candidate_counts)
+            metric_means["candidate_count_p95"] = _nearest_rank_percentile(
+                candidate_counts,
+                0.95,
+            )
+            metric_means["candidate_count_min"] = min(candidate_counts)
+        macro_means_by_seed.append(metric_means)
+
+    row: dict[str, str] = {"scope": "macro"}
+    for field in PREDICTOR_NUMERIC_FIELDS:
+        values = [seed_means[field] for seed_means in macro_means_by_seed if field in seed_means]
+        row[f"{field}_mean"] = _format_stat(statistics.mean(values) if values else None)
+        row[f"{field}_std"] = _format_stat(statistics.pstdev(values) if values else None)
+    for field in ["candidate_count_median", "candidate_count_p95", "candidate_count_min"]:
+        values = [seed_means[field] for seed_means in macro_means_by_seed if field in seed_means]
+        row[f"{field}_mean"] = _format_stat(statistics.mean(values) if values else None)
+        row[f"{field}_std"] = _format_stat(statistics.pstdev(values) if values else None)
+    return [row]
+
+
+def _write_predictor_aggregate_csvs(
+    output_stem: str,
+    seed_rows: list[list[dict[str, str]]],
+) -> None:
+    if not seed_rows:
+        return
+    variance_fields = [
+        "repo",
+        "task_id",
+        "pr_number",
+        "localization_backend",
+        "ablation_name",
+        *[f"{field}_mean" for field in PREDICTOR_NUMERIC_FIELDS],
+        *[f"{field}_std" for field in PREDICTOR_NUMERIC_FIELDS],
+    ]
+    summary_fields = [
+        "scope",
+        *[f"{field}_mean" for field in PREDICTOR_NUMERIC_FIELDS],
+        *[f"{field}_std" for field in PREDICTOR_NUMERIC_FIELDS],
+        "candidate_count_median_mean",
+        "candidate_count_median_std",
+        "candidate_count_p95_mean",
+        "candidate_count_p95_std",
+        "candidate_count_min_mean",
+        "candidate_count_min_std",
+    ]
+    _write_csv_rows(
+        OUT_DIR / f"{output_stem}_predictor_variance.csv",
+        variance_fields,
+        _predictor_variance_rows(seed_rows),
+    )
+    _write_csv_rows(
+        OUT_DIR / f"{output_stem}_predictor_summary.csv",
+        summary_fields,
+        _predictor_summary_rows(seed_rows),
+    )
 
 
 def write_diff_csv(
@@ -885,6 +1309,30 @@ STRATEGY_SUMMARY_FIELDS = [
     "macro_f1_delta_vs_acg_planned",
 ]
 
+STRATEGY_VARIANCE_FIELDS = [
+    "backend",
+    "strategy",
+    "seed_count",
+    "task_count_mean",
+    "task_count_std",
+    "macro_recall_mean",
+    "macro_recall_std",
+    "macro_precision_mean",
+    "macro_precision_std",
+    "macro_f1_mean",
+    "macro_f1_std",
+    "approved_replan_count_mean",
+    "approved_replan_count_std",
+    "total_out_of_bounds_mean",
+    "total_out_of_bounds_std",
+    "total_blocked_invalid_mean",
+    "total_blocked_invalid_std",
+    "total_tokens_all_in_mean",
+    "total_tokens_all_in_std",
+    "total_cost_usd_mean",
+    "total_cost_usd_std",
+]
+
 
 def _display_path(path: Path) -> str:
     try:
@@ -930,6 +1378,7 @@ def _strategy_score_rows_for_task(
     *,
     localization_backend: str,
     ablation_name: str,
+    run_sets: set[str] | None = None,
 ) -> list[dict[str, str]]:
     repo_dir = REAL_REPOS / task.repo
     rows: list[dict[str, str]] = []
@@ -939,6 +1388,8 @@ def _strategy_score_rows_for_task(
         if not isinstance(strategies, dict):
             continue
         run_set = path.relative_to(repo_dir).parts[0]
+        if run_sets is not None and run_set not in run_sets:
+            continue
         truth_set = set(task.ground_truth)
         for strategy, run in sorted(strategies.items()):
             if not isinstance(run, dict):
@@ -1075,11 +1526,155 @@ def _strategy_summary_rows(score_rows: list[dict[str, str]]) -> list[dict[str, s
     return summary_rows
 
 
+def _strategy_seed_summary_rows(score_rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    groups: dict[tuple[str, str], list[dict[str, str]]] = {}
+    for row in score_rows:
+        groups.setdefault((row["backend"], row["strategy"]), []).append(row)
+    summary_rows: list[dict[str, str]] = []
+    for key, rows in sorted(groups.items()):
+        backend, strategy = key
+        task_count = len(rows)
+        recall_values = [float(row["recall"]) for row in rows]
+        precision_values = [float(row["precision"]) for row in rows]
+        f1_values = [float(row["f1"]) for row in rows]
+        approved_replans = sum(_safe_int(row["approved_replan_count"]) for row in rows)
+        total_tokens = sum(
+            value for row in rows if (value := _float_or_none(row["tokens_all_in"])) is not None
+        )
+        total_cost = sum(
+            value for row in rows if (value := _float_or_none(row["cost_usd_total"])) is not None
+        )
+        summary_rows.append(
+            {
+                "backend": backend,
+                "strategy": strategy,
+                "task_count": str(task_count),
+                "macro_recall": f"{(sum(recall_values) / task_count if task_count else 0.0):.6f}",
+                "macro_precision": f"{(sum(precision_values) / task_count if task_count else 0.0):.6f}",
+                "macro_f1": f"{(sum(f1_values) / task_count if task_count else 0.0):.6f}",
+                "approved_replan_count": str(approved_replans),
+                "total_out_of_bounds": str(sum(_safe_int(row["out_of_bounds_count"]) for row in rows)),
+                "total_blocked_invalid": str(sum(_safe_int(row["blocked_write_count"]) for row in rows)),
+                "total_tokens_all_in": f"{total_tokens:.0f}" if total_tokens else "",
+                "total_cost_usd": f"{total_cost:.8f}" if total_cost else "",
+            }
+        )
+    return summary_rows
+
+
+def _strategy_summary_variance_rows(
+    seed_summary_rows: list[list[dict[str, str]]],
+) -> list[dict[str, str]]:
+    groups: dict[tuple[str, str], list[dict[str, str]]] = {}
+    for rows in seed_summary_rows:
+        for row in rows:
+            groups.setdefault((row["backend"], row["strategy"]), []).append(row)
+
+    output_rows: list[dict[str, str]] = []
+    for key, rows in sorted(groups.items()):
+        backend, strategy = key
+        output_rows.append(
+            {
+                "backend": backend,
+                "strategy": strategy,
+                "seed_count": str(len(rows)),
+                "task_count_mean": _format_stat(
+                    statistics.mean(float(row["task_count"]) for row in rows) if rows else None
+                ),
+                "task_count_std": _format_stat(
+                    statistics.pstdev(float(row["task_count"]) for row in rows) if rows else None
+                ),
+                "macro_recall_mean": _format_stat(
+                    statistics.mean(float(row["macro_recall"]) for row in rows) if rows else None
+                ),
+                "macro_recall_std": _format_stat(
+                    statistics.pstdev(float(row["macro_recall"]) for row in rows) if rows else None
+                ),
+                "macro_precision_mean": _format_stat(
+                    statistics.mean(float(row["macro_precision"]) for row in rows) if rows else None
+                ),
+                "macro_precision_std": _format_stat(
+                    statistics.pstdev(float(row["macro_precision"]) for row in rows) if rows else None
+                ),
+                "macro_f1_mean": _format_stat(
+                    statistics.mean(float(row["macro_f1"]) for row in rows) if rows else None
+                ),
+                "macro_f1_std": _format_stat(
+                    statistics.pstdev(float(row["macro_f1"]) for row in rows) if rows else None
+                ),
+                "approved_replan_count_mean": _format_stat(
+                    statistics.mean(float(row["approved_replan_count"]) for row in rows)
+                    if rows
+                    else None
+                ),
+                "approved_replan_count_std": _format_stat(
+                    statistics.pstdev(float(row["approved_replan_count"]) for row in rows)
+                    if rows
+                    else None
+                ),
+                "total_out_of_bounds_mean": _format_stat(
+                    statistics.mean(float(row["total_out_of_bounds"]) for row in rows) if rows else None
+                ),
+                "total_out_of_bounds_std": _format_stat(
+                    statistics.pstdev(float(row["total_out_of_bounds"]) for row in rows) if rows else None
+                ),
+                "total_blocked_invalid_mean": _format_stat(
+                    statistics.mean(float(row["total_blocked_invalid"]) for row in rows) if rows else None
+                ),
+                "total_blocked_invalid_std": _format_stat(
+                    statistics.pstdev(float(row["total_blocked_invalid"]) for row in rows) if rows else None
+                ),
+                "total_tokens_all_in_mean": _format_stat(
+                    statistics.mean(
+                        float(row["total_tokens_all_in"])
+                        for row in rows
+                        if row["total_tokens_all_in"]
+                    )
+                    if any(row["total_tokens_all_in"] for row in rows)
+                    else None
+                ),
+                "total_tokens_all_in_std": _format_stat(
+                    statistics.pstdev(
+                        float(row["total_tokens_all_in"])
+                        for row in rows
+                        if row["total_tokens_all_in"]
+                    )
+                    if any(row["total_tokens_all_in"] for row in rows)
+                    else None
+                ),
+                "total_cost_usd_mean": _format_stat(
+                    statistics.mean(float(row["total_cost_usd"]) for row in rows if row["total_cost_usd"])
+                    if any(row["total_cost_usd"] for row in rows)
+                    else None
+                ),
+                "total_cost_usd_std": _format_stat(
+                    statistics.pstdev(float(row["total_cost_usd"]) for row in rows if row["total_cost_usd"])
+                    if any(row["total_cost_usd"] for row in rows)
+                    else None
+                ),
+            }
+        )
+    return output_rows
+
+
+def _write_strategy_summary_variance_csv(
+    output_stem: str,
+    seed_summary_rows: list[list[dict[str, str]]],
+) -> None:
+    _write_csv_rows(
+        OUT_DIR / f"{output_stem}_strategy_summary_variance.csv",
+        STRATEGY_VARIANCE_FIELDS,
+        _strategy_summary_variance_rows(seed_summary_rows),
+    )
+
+
 def write_strategy_score_csv(
     mode: str,
     llm_mode: str = "replay",
     localization_backend: str = "native",
     ablation_name: str = "",
+    seed: int | None = None,
+    run_sets: set[str] | None = None,
 ) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for task in discover_tasks():
@@ -1088,19 +1683,21 @@ def write_strategy_score_csv(
                 task,
                 localization_backend=localization_backend,
                 ablation_name=ablation_name,
+                run_sets=run_sets,
             )
         )
     _attach_strategy_deltas(rows)
     summary_rows = _strategy_summary_rows(rows)
-    output_stem = _output_stem(mode, llm_mode, localization_backend, ablation_name)
-    with (OUT_DIR / f"{output_stem}_strategy_scores.csv").open("w", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=STRATEGY_SCORE_FIELDS)
-        writer.writeheader()
-        writer.writerows(rows)
-    with (OUT_DIR / f"{output_stem}_strategy_summary.csv").open("w", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=STRATEGY_SUMMARY_FIELDS)
-        writer.writeheader()
-        writer.writerows(summary_rows)
+    output_stem = _seeded_output_stem(
+        _output_stem(mode, llm_mode, localization_backend, ablation_name),
+        seed,
+    )
+    _write_csv_rows(OUT_DIR / f"{output_stem}_strategy_scores.csv", STRATEGY_SCORE_FIELDS, rows)
+    _write_csv_rows(
+        OUT_DIR / f"{output_stem}_strategy_summary.csv",
+        STRATEGY_SUMMARY_FIELDS,
+        summary_rows,
+    )
     return rows
 
 
@@ -1174,24 +1771,74 @@ def main() -> None:
         default="",
         help="Optional output stem label for ablation CSVs and lock dirs.",
     )
+    parser.add_argument("--seeds", type=int, default=1)
     args = parser.parse_args()
 
+    if args.seeds < 1:
+        raise SystemExit("--seeds must be at least 1")
     if args.mode == "before" and args.llm_mode != "replay":
         raise SystemExit("--llm-mode only applies to --mode after")
+    if args.mode == "before" and args.seeds > 1:
+        raise SystemExit("--seeds only applies to --mode after")
+    if args.mode == "after" and args.seeds > 1 and args.llm_mode != "live":
+        raise SystemExit("--seeds > 1 is only supported for --mode after --llm-mode live")
 
-    write_predictor_csv(
+    output_stem = _output_stem(
         args.mode,
         args.llm_mode,
         args.localization_backend,
         args.ablation_name,
     )
+    predictor_rows_by_seed: list[list[dict[str, str]]] = []
+    strategy_seed_summary_rows: list[list[dict[str, str]]] = []
+    if args.mode == "after" and args.llm_mode == "live" and args.seeds > 1:
+        for seed in range(1, args.seeds + 1):
+            predictor_rows = write_predictor_csv(
+                args.mode,
+                args.llm_mode,
+                args.localization_backend,
+                args.ablation_name,
+                seed=seed,
+            )
+            predictor_rows_by_seed.append(predictor_rows)
+            run_sets = _write_strategy_artifacts_for_seed(
+                output_stem=output_stem,
+                llm_mode=args.llm_mode,
+                localization_backend=args.localization_backend,
+                seed=seed,
+            )
+            strategy_rows = write_strategy_score_csv(
+                args.mode,
+                args.llm_mode,
+                args.localization_backend,
+                args.ablation_name,
+                seed=seed,
+                run_sets=run_sets,
+            )
+            strategy_seed_summary_rows.append(_strategy_seed_summary_rows(strategy_rows))
+        _write_csv_rows(
+            OUT_DIR / f"{output_stem}_predictor.csv",
+            PREDICTOR_FIELDS,
+            predictor_rows_by_seed[0],
+        )
+        _write_predictor_aggregate_csvs(output_stem, predictor_rows_by_seed)
+        _write_strategy_summary_variance_csv(output_stem, strategy_seed_summary_rows)
+    else:
+        predictor_rows_by_seed.append(
+            write_predictor_csv(
+                args.mode,
+                args.llm_mode,
+                args.localization_backend,
+                args.ablation_name,
+            )
+        )
+        write_strategy_score_csv(
+            args.mode,
+            args.llm_mode,
+            args.localization_backend,
+            args.ablation_name,
+        )
     write_openrouter_tokens_csv(
-        args.mode,
-        args.llm_mode,
-        args.localization_backend,
-        args.ablation_name,
-    )
-    write_strategy_score_csv(
         args.mode,
         args.llm_mode,
         args.localization_backend,

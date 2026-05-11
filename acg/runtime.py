@@ -256,6 +256,12 @@ class RuntimeLLM:
             "temperature": temperature,
             "stream": False,
         }
+        seed_env = os.environ.get("ACG_LLM_SEED")
+        if seed_env is not None and seed_env.strip():
+            try:
+                payload["seed"] = int(seed_env)
+            except ValueError:
+                pass
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
@@ -809,6 +815,31 @@ def _candidate_scope(task: Task, path: str) -> Any | None:
     return None
 
 
+def _candidate_context_replan_state(
+    lock: AgentLock, task: Task, path: str
+) -> dict[str, Any]:
+    normalized_path = path.lstrip("./")
+    scope = _candidate_scope(task, normalized_path)
+    signals = list(scope.signals) if scope is not None else []
+    score = scope.score if scope is not None else None
+    has_hard_conflict = _has_hard_conflict(lock, task, normalized_path)
+    can_auto_approve_replan = (
+        scope is not None
+        and scope.tier == "candidate_context"
+        and scope.score >= 0.72
+        and bool(set(scope.signals) & _AUTO_REPLAN_SIGNALS)
+        and not has_hard_conflict
+    )
+    return {
+        "task_id": task.id,
+        "path": normalized_path,
+        "signals": signals,
+        "score": score,
+        "can_auto_approve_replan": can_auto_approve_replan,
+        "has_hard_conflict": has_hard_conflict,
+    }
+
+
 def _has_hard_conflict(lock: AgentLock, task: Task, path: str) -> bool:
     for other in lock.tasks:
         if other.id == task.id:
@@ -820,14 +851,9 @@ def _has_hard_conflict(lock: AgentLock, task: Task, path: str) -> bool:
 
 
 def _can_auto_approve_replan(lock: AgentLock, task: Task, path: str) -> bool:
-    scope = _candidate_scope(task, path)
-    if scope is None or scope.tier != "candidate_context":
-        return False
-    if scope.score < 0.72:
-        return False
-    if not (set(scope.signals) & _AUTO_REPLAN_SIGNALS):
-        return False
-    return not _has_hard_conflict(lock, task, path)
+    return bool(
+        _candidate_context_replan_state(lock, task, path)["can_auto_approve_replan"]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -952,8 +978,13 @@ async def run_worker(
         ]
     for raw, (allowed, reason) in zip(raw_proposals, validation_results, strict=True):
         scope_status = "allowed" if allowed else "blocked"
-        if not allowed and _is_candidate_context_write(task, raw["file"]):
-            if cfg.auto_replan and _can_auto_approve_replan(lock, task, raw["file"]):
+        if _is_candidate_context_write(task, raw["file"]):
+            candidate_replan_state = _candidate_context_replan_state(
+                lock, task, raw["file"]
+            )
+            if not allowed and cfg.auto_replan and candidate_replan_state[
+                "can_auto_approve_replan"
+            ]:
                 promoted = promote_candidate_paths(
                     lock,
                     task.id,
@@ -971,6 +1002,11 @@ async def run_worker(
                     f"path {raw['file']!r} is candidate_context only for task "
                     f"{task.id!r}; replan or approval is required before write"
                 )
+            candidate_replan_state["final_outcome"] = scope_status
+            _console.print(
+                "[candidate_replan] "
+                + json.dumps(candidate_replan_state, sort_keys=True)
+            )
         proposals.append(
             Proposal(
                 file=raw["file"],

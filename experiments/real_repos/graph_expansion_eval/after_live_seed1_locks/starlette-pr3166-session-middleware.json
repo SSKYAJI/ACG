@@ -1,0 +1,84 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-11T06:13:59.991643Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 1009
+  },
+  "repo": {
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/starlette/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "python"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr3166-session-middleware",
+      "prompt": "Change SessionMiddleware so it can distinguish session access from mutation, avoid sending Set-Cookie for unchanged sessions, preserve cookie clearing behavior, and add regression coverage for concurrent/read-only session flows.",
+      "predicted_writes": [
+        {
+          "path": "starlette/middleware/sessions.py",
+          "confidence": 0.95,
+          "reason": "Task explicitly requests changes to SessionMiddleware implementation. Signals: bm25, llm, symbol. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "tests/middleware/test_session.py",
+          "confidence": 0.9,
+          "reason": "Task requires regression coverage for session middleware behavior, tests are the standard location for such coverage. Signals: bm25, llm, testlink. Scope review kept this file at its existing tier."
+        }
+      ],
+      "allowed_paths": [
+        "starlette/middleware/sessions.py",
+        "tests/middleware/**"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "starlette/middleware/sessions.py",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "llm",
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "Task explicitly requests changes to SessionMiddleware implementation. Signals: bm25, llm, symbol. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "tests/middleware/test_session.py",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "llm",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Task requires regression coverage for session middleware behavior, tests are the standard location for such coverage. Signals: bm25, llm, testlink. Scope review kept this file at its existing tier."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr3166-session-middleware"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}
