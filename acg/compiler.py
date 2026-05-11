@@ -145,10 +145,12 @@ def compile_lockfile(
     heuristic_deps = _heuristic_dependencies(tasks_input.tasks)
     tasks: list[Task] = []
     scope_review_tokens_total = 0
+    compile_planner_tokens_total = 0
     for ti in tasks_input.tasks:
         prediction = predict_file_scopes_with_usage(ti, repo_graph, llm, repo_root=repo_path)
         file_scopes = prediction.scopes
         scope_review_tokens_total += prediction.scope_review_tokens
+        compile_planner_tokens_total += prediction.planner_tokens
         writes = _must_writes(file_scopes)
         allowed_paths = _build_allowed_paths(writes)
         tasks.append(
@@ -175,6 +177,8 @@ def compile_lockfile(
     for task in tasks:
         task.parallel_group = group_by_task.get(task.id)
 
+    tokens_planner_total = (tasks_input.tokens_planner_total or 0) + compile_planner_tokens_total
+
     return AgentLock(
         version="1.0",
         generated_at=AgentLock.utcnow(),
@@ -182,7 +186,7 @@ def compile_lockfile(
             tool="acg",
             version=__version__,
             model=llm.model,
-            tokens_planner_total=tasks_input.tokens_planner_total,
+            tokens_planner_total=tokens_planner_total,
             tokens_scope_review_total=scope_review_tokens_total or None,
         ),
         repo=Repo(root=str(repo_path), languages=_detect_languages(repo_graph)),

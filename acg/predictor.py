@@ -103,6 +103,7 @@ TEST_LINK_STOPWORDS = {
 class ScopePrediction:
     scopes: list[FileScope]
     scope_review_tokens: int = 0
+    planner_tokens: int = 0
 
 
 # Regex for explicit file mentions like ``lib/auth.ts`` or ``prisma/schema.prisma``.
@@ -1162,7 +1163,7 @@ def _llm_seed_expansion(
     *,
     max_expansions: int = 5,
     manifest_size: int = 200,
-) -> list[FileScope]:
+) -> tuple[list[FileScope], int]:
     """Ask the planner LLM for additional files the seed indexers missed.
 
     Sends the task prompt + a list of repo files NOT in `existing_seed_paths`
@@ -1170,14 +1171,16 @@ def _llm_seed_expansion(
     `max_expansions` additional files. Each proposed file becomes a FileScope
     with `tier='candidate_context'`, `score=0.72`, and `signals=['planner']`.
 
-    Filters out paths that don't exist in repo_graph. Returns an empty list if
-    the LLM call fails or returns no proposals.
+    Filters out paths that don't exist in repo_graph. Returns ``([], 0)`` if
+    the LLM call is skipped or fails, or if it returns no proposals; otherwise
+    returns ``(scopes, input_token_estimate)`` for the planner prompt (even
+    when parsing yields no scopes).
     """
     if llm_client is None:
-        return []
+        return [], 0
     entries = _path_entries(repo_graph)
     if not entries:
-        return []
+        return [], 0
     ranked: list[tuple[tuple[float, str], str]] = []
     for e in repo_graph.get("files") or []:
         if not isinstance(e, dict):
@@ -1201,30 +1204,30 @@ def _llm_seed_expansion(
     ranked.sort()
     manifest = [x for _, x in ranked[:manifest_size]]
     if not manifest:
-        return []
+        return [], 0
     nl, ex = "\n", sorted(existing_seed_paths)[:50]
+    seed_messages: list[dict[str, str]] = [
+        {
+            "role": "system",
+            "content": (
+                "You are a code-search assistant. Pick task-relevant repo files not in the "
+                'candidate list. Output ONLY JSON {"paths": ["relative/path", ...]}.'
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Task: {task.prompt}\n\nExisting candidates (do NOT re-propose):\n{nl.join(ex)}"
+                f"\n\nOther files (import centrality / pagerank order):\n{nl.join(manifest)}"
+                f"\n\nReturn up to {max_expansions} paths as JSON."
+            ),
+        },
+    ]
+    token_estimate = _estimate_tokens(seed_messages)
     try:
-        raw = llm_client.complete(
-            [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a code-search assistant. Pick task-relevant repo files not in the "
-                        'candidate list. Output ONLY JSON {"paths": ["relative/path", ...]}.'
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        f"Task: {task.prompt}\n\nExisting candidates (do NOT re-propose):\n{nl.join(ex)}"
-                        f"\n\nOther files (import centrality / pagerank order):\n{nl.join(manifest)}"
-                        f"\n\nReturn up to {max_expansions} paths as JSON."
-                    ),
-                },
-            ]
-        )
+        raw = llm_client.complete(seed_messages)
     except Exception:
-        return []
+        return [], token_estimate
     t = (raw or "").strip()
     if t.startswith("```"):
         t = re.sub(r"^```(?:json)?\s*", "", t)
@@ -1234,14 +1237,14 @@ def _llm_seed_expansion(
     except json.JSONDecodeError:
         i, j = t.find("{"), t.rfind("}")
         if i < 0 or j <= i:
-            return []
+            return [], token_estimate
         try:
             d = json.loads(t[i : j + 1])
         except json.JSONDecodeError:
-            return []
+            return [], token_estimate
     paths = d.get("paths") if isinstance(d, dict) else None
     if not isinstance(paths, list):
-        return []
+        return [], token_estimate
     known = set(entries)
     scopes: list[FileScope] = []
     for it in paths:
@@ -1265,7 +1268,7 @@ def _llm_seed_expansion(
         )
         if len(scopes) >= max_expansions:
             break
-    return scopes
+    return scopes, token_estimate
 
 
 def _build_prompt(
@@ -1941,7 +1944,13 @@ def _predict_scoped_candidates(
     repo_graph: dict[str, Any],
     llm: LLMProtocol,
     repo_root: Path | None = None,
-) -> tuple[list[PredictedWrite], dict[str, set[str]]]:
+) -> tuple[list[PredictedWrite], dict[str, set[str]], int]:
+    """Return merged writes, per-path signals, and planner-phase input token estimate.
+
+    ``planner_tokens`` sums :func:`_estimate_tokens` for the seed-expansion and
+    rerank prompts immediately before each ``llm.complete`` call. Tests may set
+    ``llm.skip_planner_llm = True`` to bypass both calls and return ``0``.
+    """
     seeds = _static_seed(task.prompt)
     seeds += _symbol_seed(task.prompt, repo_graph)
     if task.hints and task.hints.touches:
@@ -1968,7 +1977,21 @@ def _predict_scoped_candidates(
         if cur is None or pw.confidence > cur.confidence:
             by_path[pw.path] = pw
     seeds = list(by_path.values())
-    for scope in _llm_seed_expansion(task, repo_graph, {pw.path for pw in seeds}, llm):
+    planner_tokens = 0
+    if getattr(llm, "skip_planner_llm", False):
+        merged = _merge(seeds, [])
+        merged_by_path = {pw.path: pw for pw in merged}
+        _post_llm_must_write_neighbor_expansion(
+            task, repo_graph, merged, merged_by_path, signal_map, set()
+        )
+        merged = sorted(merged_by_path.values(), key=lambda p: (-p.confidence, p.path))
+        return merged, signal_map, 0
+
+    expansion_scopes, seed_tokens = _llm_seed_expansion(
+        task, repo_graph, {pw.path for pw in seeds}, llm
+    )
+    planner_tokens += seed_tokens
+    for scope in expansion_scopes:
         if scope.path not in by_path:
             by_path[scope.path] = PredictedWrite(
                 path=scope.path,
@@ -1978,9 +2001,12 @@ def _predict_scoped_candidates(
             signal_map.setdefault(scope.path, set()).update({"planner"})
     seeds = list(by_path.values())
 
+    rerank_messages = _build_prompt(task, repo_graph, seeds)
+    rerank_token_estimate = _estimate_tokens(rerank_messages)
+    planner_tokens += rerank_token_estimate
     rerank: list[PredictedWrite] = []
     try:
-        reply = llm.complete(_build_prompt(task, repo_graph, seeds))
+        reply = llm.complete(rerank_messages)
         rerank = _parse_llm_writes(reply)
     except Exception:
         # Failing closed: keep seeds. Logging is the CLI layer's responsibility.
@@ -1998,7 +2024,7 @@ def _predict_scoped_candidates(
         task, repo_graph, merged, merged_by_path, signal_map, llm_paths
     )
     merged = sorted(merged_by_path.values(), key=lambda p: (-p.confidence, p.path))
-    return merged, signal_map
+    return merged, signal_map, planner_tokens
 
 
 def predict_file_scopes_with_usage(
@@ -2015,12 +2041,16 @@ def predict_file_scopes_with_usage(
     authority.
     """
 
-    writes, signal_map = _predict_scoped_candidates(task, repo_graph, llm, repo_root)
+    writes, signal_map, planner_tokens = _predict_scoped_candidates(task, repo_graph, llm, repo_root)
     scopes = _build_file_scopes(task, repo_graph, writes, signal_map)
     reviewed_scopes, scope_review_tokens = _review_file_scopes(
         task, repo_graph, llm, repo_root, scopes
     )
-    return ScopePrediction(scopes=reviewed_scopes, scope_review_tokens=scope_review_tokens)
+    return ScopePrediction(
+        scopes=reviewed_scopes,
+        scope_review_tokens=scope_review_tokens,
+        planner_tokens=planner_tokens,
+    )
 
 
 def predict_file_scopes(

@@ -1510,7 +1510,7 @@ def test_llm_seed_expansion_adds_proposed_paths_as_candidate_context() -> None:
             {"path": "lib/validation.js", "symbols": ["validate"]},
         ],
     }
-    scopes = _llm_seed_expansion(
+    scopes, _tok = _llm_seed_expansion(
         task, graph, set(), StubLLM(json.dumps({"paths": ["lib/request.js", "lib/validation.js"]}))
     )
     by = {s.path: s for s in scopes}
@@ -1529,14 +1529,56 @@ def test_llm_seed_expansion_filters_nonexistent_paths() -> None:
     )
     assert not _llm_seed_expansion(
         task, graph, set(), StubLLM(json.dumps({"paths": ["lib/does_not_exist.js"]}))
-    )
+    )[0]
 
 
 def test_llm_seed_expansion_returns_empty_when_llm_returns_invalid_json() -> None:
     task = TaskInput(id="x", prompt="Update validation.", hints=None)
     graph: dict[str, Any] = {"files": [{"path": "lib/a.js"}]}
-    assert _llm_seed_expansion(task, graph, set(), StubLLM("not json")) == []
-    assert _llm_seed_expansion(task, graph, set(), None) == []
+    scopes_bad, tok_bad = _llm_seed_expansion(task, graph, set(), StubLLM("not json"))
+    assert scopes_bad == []
+    assert tok_bad > 0
+    assert _llm_seed_expansion(task, graph, set(), None) == ([], 0)
+
+
+def test_predict_file_scopes_with_usage_returns_planner_tokens(repo_graph: dict[str, Any]) -> None:
+    task = TaskInput(
+        id="auth",
+        prompt="Refactor authOptions to add a Google provider.",
+        hints=TaskInputHints(touches=["auth"]),
+    )
+    llm = SequenceLLM(
+        [
+            json.dumps({"paths": ["components/sidebar.tsx"]}),
+            json.dumps({"writes": []}),
+            json.dumps({}),
+        ]
+    )
+    prediction = predict_file_scopes_with_usage(task, repo_graph, llm)
+    assert prediction.planner_tokens > 0
+    assert len(llm.calls) == 3
+
+
+class _NullPlannerLLM:
+    """Skips seed-expansion and rerank; still participates in scope review."""
+
+    model = "null-planner"
+    skip_planner_llm = True
+
+    def complete(self, messages: list[dict[str, str]], response_format: dict[str, Any] | None = None) -> str:  # noqa: ARG002
+        return "{}"
+
+
+def test_predict_file_scopes_with_usage_zero_planner_tokens_when_llm_skipped(
+    repo_graph: dict[str, Any],
+) -> None:
+    task = TaskInput(
+        id="auth",
+        prompt="Refactor authOptions to add a Google provider.",
+        hints=TaskInputHints(touches=["auth"]),
+    )
+    prediction = predict_file_scopes_with_usage(task, repo_graph, _NullPlannerLLM())
+    assert prediction.planner_tokens == 0
 
 
 def test_predictor_e2e_includes_seed_expansion_paths(
