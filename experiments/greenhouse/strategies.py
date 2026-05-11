@@ -1,8 +1,8 @@
 """Strategy runners that turn a lockfile + a backend into ``EvalRun`` artifacts.
 
-The local/mock strategies (``naive_parallel``, ``acg_planned``, and the
-``acg_planned_full_context`` ablation) share the same per-task data shape:
-see :mod:`eval_schema`.
+The local/mock strategies (``naive_parallel``, ``naive_parallel_blind``,
+``acg_planned``, and the ``acg_planned_full_context`` ablation) share the same
+per-task data shape: see :mod:`eval_schema`.
 
 The mock backend is the workhorse for CI and offline development. It uses
 :class:`LockfileEchoMockLLM` to derive proposals from the lockfile's
@@ -57,6 +57,7 @@ SINGLE_AGENT_MAX_TOKENS = 1600
 
 SINGLE_AGENT_STRATEGY = "single_agent"
 NAIVE_STRATEGY = "naive_parallel"
+NAIVE_PARALLEL_BLIND_STRATEGY = "naive_parallel_blind"
 ACG_PLANNED_STRATEGY = "acg_planned"
 ACG_PLANNED_FULL_CONTEXT_STRATEGY = "acg_planned_full_context"
 ACG_PLANNED_REPLAN_STRATEGY = "acg_planned_replan"
@@ -64,6 +65,7 @@ ACG_PLANNED_APPLIED_STRATEGY = "acg_planned_applied"
 LOCAL_STRATEGIES = (
     SINGLE_AGENT_STRATEGY,
     NAIVE_STRATEGY,
+    NAIVE_PARALLEL_BLIND_STRATEGY,
     ACG_PLANNED_STRATEGY,
     ACG_PLANNED_FULL_CONTEXT_STRATEGY,
     ACG_PLANNED_REPLAN_STRATEGY,
@@ -103,9 +105,7 @@ def _extract_task_id(messages: list[dict[str, str]]) -> str | None:
     return None
 
 
-def _scoped_repo_graph(
-    repo_graph: dict[str, Any], lock: AgentLock, task_id: str
-) -> dict[str, Any]:
+def _scoped_repo_graph(repo_graph: dict[str, Any], lock: AgentLock, task_id: str) -> dict[str, Any]:
     """Filter ``repo_graph['files']`` to only paths inside the task's allowed_paths.
 
     The reduced graph is what gets handed to :func:`acg.runtime.run_worker`
@@ -165,9 +165,7 @@ class _PromptCountingLLM:
     ) -> LLMReply:
         est = estimate_prompt_tokens(messages)
         task_id = _extract_task_id(messages)
-        reply = await self._inner.complete(
-            messages, max_tokens=max_tokens, temperature=temperature
-        )
+        reply = await self._inner.complete(messages, max_tokens=max_tokens, temperature=temperature)
         if reply.prompt_tokens is not None:
             prompt_tokens = reply.prompt_tokens
             self.provider_prompt_token_calls += 1
@@ -175,9 +173,7 @@ class _PromptCountingLLM:
             prompt_tokens = est
             self.estimated_prompt_token_calls += 1
         if task_id is not None:
-            self.tokens_by_task[task_id] = (
-                self.tokens_by_task.get(task_id, 0) + prompt_tokens
-            )
+            self.tokens_by_task[task_id] = self.tokens_by_task.get(task_id, 0) + prompt_tokens
         else:
             self.orchestrator_tokens += prompt_tokens
         self.calls += 1
@@ -310,9 +306,7 @@ class NoLockSuiteMockLLM:
     ) -> LLMReply:
         del max_tokens, temperature
         await asyncio.sleep(0)
-        user_blob = "\n".join(
-            m.get("content", "") for m in messages if m.get("role") == "user"
-        )
+        user_blob = "\n".join(m.get("content", "") for m in messages if m.get("role") == "user")
         task_prompts: dict[str, str] = {}
         current_id: str | None = None
         for line in user_blob.splitlines():
@@ -350,9 +344,7 @@ class NoLockSuiteMockLLM:
         return None
 
 
-_PROMPT_PATH_RE = re.compile(
-    r"(?<![\w./-])pom\.xml(?![\w./-])|(?:[\w.-]+/)+[\w.\-\[\]@]+"
-)
+_PROMPT_PATH_RE = re.compile(r"(?<![\w./-])pom\.xml(?![\w./-])|(?:[\w.-]+/)+[\w.\-\[\]@]+")
 
 
 def _paths_named_in_prompt(prompt: str) -> list[str]:
@@ -689,7 +681,15 @@ def _apply_writes_git_sync(
         )
         if st.stdout.strip():
             subprocess.run(
-                ["git", "-C", repo, *_git_identity_args(), "commit", "-m", f"acg(applied): {task.id}"],
+                [
+                    "git",
+                    "-C",
+                    repo,
+                    *_git_identity_args(),
+                    "commit",
+                    "-m",
+                    f"acg(applied): {task.id}",
+                ],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -718,9 +718,7 @@ def _apply_writes_git_sync(
 # ---------------------------------------------------------------------------
 
 
-async def _gather_capped(
-    coros: list, cap_parallelism: int | None
-) -> list:
+async def _gather_capped(coros: list, cap_parallelism: int | None) -> list:
     """asyncio.gather variant that bounds in-flight concurrency to ``cap``.
 
     ``cap_parallelism`` of ``None`` or ``<= 0`` is treated as "uncapped" and
@@ -798,6 +796,67 @@ async def _run_naive_parallel(
     ]
     for et in tasks:
         et.metrics.tokens_prompt = counting_sub.tokens_by_task.get(et.task_id)
+    annotate_overlaps(tasks)
+    return tasks, wall_s, counting_sub.prompt_token_method
+
+
+async def _run_naive_parallel_blind(
+    lock: AgentLock,
+    repo_graph: dict[str, Any],
+    sub_factory: Callable[[], RuntimeLLMProtocol],
+    *,
+    prompts_by_task: dict[str, str] | None = None,
+    cap_parallelism: int | None = None,
+) -> tuple[list[EvalTask], float, str]:
+    """Per-task workers with NO predictor output in the prompt and no scope guard.
+
+    This is the true blind baseline; contrast with :func:`_run_naive_parallel`,
+    which shares the worker prompt template with :func:`_run_acg_planned` and
+    therefore consumes ``predicted_writes``/``candidate_context`` for free.
+    """
+    sub_inner = sub_factory()
+    counting_sub = _PromptCountingLLM(sub_inner)
+    started = now_iso()
+    t0 = time.perf_counter()
+    from acg.runtime import RuntimeConfig
+
+    naive_runtime_config = RuntimeConfig.from_env()
+    naive_runtime_config.auto_replan = False
+    try:
+        worker_results = await _gather_capped(
+            [
+                run_worker(
+                    task,
+                    lock,
+                    repo_graph,
+                    counting_sub,
+                    group_id=0,
+                    config=naive_runtime_config,
+                    include_lockfile_hints=False,
+                )
+                for task in lock.tasks
+            ],
+            cap_parallelism,
+        )
+    finally:
+        await counting_sub.aclose()
+    wall_s = time.perf_counter() - t0
+    finished = now_iso()
+
+    by_id = {t.id: t for t in lock.tasks}
+    tasks = [
+        _proposals_to_naive_eval_task(
+            wr,
+            by_id[wr.task_id],
+            started_at=started,
+            finished_at=finished,
+            prompt=(prompts_by_task or {}).get(wr.task_id),
+        )
+        for wr in worker_results
+    ]
+    for et in tasks:
+        et.metrics.tokens_prompt = counting_sub.tokens_by_task.get(et.task_id)
+        et.actual_changed_files_kind = "naive_parallel_blind_proposed_write_set"
     annotate_overlaps(tasks)
     return tasks, wall_s, counting_sub.prompt_token_method
 
@@ -940,8 +999,7 @@ def _build_single_agent_prompt(
     task_blocks = []
     for task in lock.tasks:
         task_blocks.append(
-            f"Task id: {task.id}\n"
-            f"Task: {(prompts_by_task or {}).get(task.id, task.prompt)}"
+            f"Task id: {task.id}\nTask: {(prompts_by_task or {}).get(task.id, task.prompt)}"
         )
     if apply_patch_suites:
         system = (
@@ -1604,6 +1662,7 @@ def _mock_factory(
 
 def _single_agent_mock_factory() -> tuple[Callable[[], RuntimeLLMProtocol], EvalModel]:
     """Build the no-lock suite mock backend."""
+
     def sub_factory() -> RuntimeLLMProtocol:
         return NoLockSuiteMockLLM()
 
@@ -1760,6 +1819,19 @@ def run_strategy(
             orch_overhead = None
             execution_mode = "propose_validate"
             evidence_kind = "proposed_write_set"
+    elif strategy == NAIVE_PARALLEL_BLIND_STRATEGY:
+        tasks, wall_s, prompt_token_method = asyncio.run(
+            _run_naive_parallel_blind(
+                lock,
+                repo_graph,
+                sub_factory,
+                prompts_by_task=prompts_by_task,
+                cap_parallelism=cap_parallelism,
+            )
+        )
+        orch_overhead = None
+        execution_mode = "propose_validate_blind"
+        evidence_kind = "naive_parallel_blind_proposed_write_set"
     elif run_planned_git_applied:
         tasks, wall_s, prompt_token_method = asyncio.run(
             _run_acg_planned_applied(
@@ -1786,9 +1858,7 @@ def run_strategy(
                 lockfile_path=lockfile_path,
                 prompts_by_task=prompts_by_task,
                 cap_parallelism=cap_parallelism,
-                scope_repo_graph=(
-                    strategy in {ACG_PLANNED_STRATEGY, ACG_PLANNED_REPLAN_STRATEGY}
-                ),
+                scope_repo_graph=(strategy in {ACG_PLANNED_STRATEGY, ACG_PLANNED_REPLAN_STRATEGY}),
                 auto_replan=(strategy == ACG_PLANNED_REPLAN_STRATEGY),
             )
         )
@@ -1813,7 +1883,9 @@ def run_strategy(
         ),
         tokens_prompt_method=prompt_token_method,
         tokens_completion_method=(
-            "provider_usage_completion_tokens" if backend == "local" else "mock_reply_completion_tokens"
+            "provider_usage_completion_tokens"
+            if backend == "local"
+            else "mock_reply_completion_tokens"
         ),
     )
     return EvalRun(
@@ -1840,6 +1912,7 @@ __all__ = [
     "LOCKFILE_ECHO_TOP_K",
     "LockfileEchoMockLLM",
     "LOCAL_STRATEGIES",
+    "NAIVE_PARALLEL_BLIND_STRATEGY",
     "NAIVE_STRATEGY",
     "NoLockSuiteMockLLM",
     "SINGLE_AGENT_STRATEGY",

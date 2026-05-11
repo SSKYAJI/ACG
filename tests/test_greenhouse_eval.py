@@ -52,6 +52,7 @@ from experiments.greenhouse.eval_schema import (
     write_eval_run,
 )
 from experiments.greenhouse.strategies import (
+    NAIVE_PARALLEL_BLIND_STRATEGY,
     SINGLE_AGENT_STRATEGY,
     LockfileEchoMockLLM,
     _build_single_agent_prompt,
@@ -465,6 +466,68 @@ def test_naive_strategy_does_not_inherit_acg_auto_replan_env(
         "naive_parallel must pass auto_replan=False even when "
         f"ACG_AUTO_REPLAN=1 is set in env; saw {captured}"
     )
+
+
+def test_naive_parallel_blind_dispatch_uses_blind_prompt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: list[bool] = []
+    from acg import runtime as runtime_mod
+
+    real_run_worker = runtime_mod.run_worker
+
+    async def spy(*args, **kwargs):  # type: ignore[no-untyped-def]
+        captured.append(bool(kwargs.get("include_lockfile_hints", True)))
+        return await real_run_worker(*args, **kwargs)
+
+    monkeypatch.setattr(runtime_mod, "run_worker", spy)
+    from experiments.greenhouse import strategies as strategies_mod
+
+    monkeypatch.setattr(strategies_mod, "run_worker", spy)
+
+    lock = _build_lock(serialized=False)
+    lock_path = tmp_path / "agent_lock.json"
+    lock_path.write_text(lock.model_dump_json(indent=2))
+    run_strategy(
+        strategy=NAIVE_PARALLEL_BLIND_STRATEGY,
+        backend="mock",
+        lock=lock,
+        repo_graph={},
+        lockfile_path=str(lock_path),
+    )
+    assert captured
+    assert all(h is False for h in captured)
+
+
+def test_naive_parallel_dispatch_keeps_lockfile_hints(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: list[bool] = []
+    from acg import runtime as runtime_mod
+
+    real_run_worker = runtime_mod.run_worker
+
+    async def spy(*args, **kwargs):  # type: ignore[no-untyped-def]
+        captured.append(bool(kwargs.get("include_lockfile_hints", True)))
+        return await real_run_worker(*args, **kwargs)
+
+    monkeypatch.setattr(runtime_mod, "run_worker", spy)
+    from experiments.greenhouse import strategies as strategies_mod
+
+    monkeypatch.setattr(strategies_mod, "run_worker", spy)
+
+    lock = _build_lock(serialized=False)
+    lock_path = tmp_path / "agent_lock.json"
+    lock_path.write_text(lock.model_dump_json(indent=2))
+    run_strategy(
+        strategy="naive_parallel",
+        backend="mock",
+        lock=lock,
+        repo_graph={},
+        lockfile_path=str(lock_path),
+    )
+    assert captured
+    assert all(h is True for h in captured)
 
 
 def test_naive_strategy_records_overlap_on_pom_xml(tmp_path: Path) -> None:
@@ -1453,9 +1516,7 @@ def _planned_task() -> Task:
     return Task(
         id="blocked-task",
         prompt="placeholder",
-        predicted_writes=[
-            PredictedWrite(path="src/in_scope.ts", confidence=0.9, reason="x")
-        ],
+        predicted_writes=[PredictedWrite(path="src/in_scope.ts", confidence=0.9, reason="x")],
         allowed_paths=["src/in_scope.ts"],
         depends_on=[],
         parallel_group=None,

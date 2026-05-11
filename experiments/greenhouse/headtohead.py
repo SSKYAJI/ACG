@@ -73,6 +73,7 @@ from .strategies import (
     ACG_PLANNED_FULL_CONTEXT_STRATEGY,
     ACG_PLANNED_REPLAN_STRATEGY,
     ACG_PLANNED_STRATEGY,
+    NAIVE_PARALLEL_BLIND_STRATEGY,
     NAIVE_STRATEGY,
     SINGLE_AGENT_STRATEGY,
     run_strategy,
@@ -101,6 +102,7 @@ STRATEGY_GROUPS = {
 VALID_STRATEGIES = (
     SINGLE_AGENT_STRATEGY,
     NAIVE_STRATEGY,
+    NAIVE_PARALLEL_BLIND_STRATEGY,
     ACG_PLANNED_STRATEGY,
     ACG_PLANNED_FULL_CONTEXT_STRATEGY,
     ACG_PLANNED_REPLAN_STRATEGY,
@@ -305,6 +307,7 @@ def _short_name(strategy: str) -> str:
     return {
         SINGLE_AGENT_STRATEGY: "single_agent",
         NAIVE_STRATEGY: "naive",
+        NAIVE_PARALLEL_BLIND_STRATEGY: "naive_parallel_blind",
         ACG_PLANNED_STRATEGY: "acg",
         ACG_PLANNED_FULL_CONTEXT_STRATEGY: "acg_full_context",
         ACG_PLANNED_REPLAN_STRATEGY: "acg_replan",
@@ -351,8 +354,7 @@ def _run_one(
         )
     if strategy == ACG_PLANNED_FULL_CONTEXT_STRATEGY:
         raise SystemExit(
-            "acg_planned_full_context is only supported by mock/local proposal "
-            "backends"
+            "acg_planned_full_context is only supported by mock/local proposal backends"
         )
     if backend == "applied-diff":
         results_path = diff_results or devin_results

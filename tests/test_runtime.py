@@ -154,6 +154,56 @@ def test_worker_prompt_invites_candidate_writes_with_runtime_guard(
     assert "read-only unless a replan expands scope" not in user
 
 
+def test_build_worker_prompt_blind_omits_predicted_writes(
+    empty_repo_graph: dict[str, object],
+) -> None:
+    task = Task(
+        id="t1",
+        prompt="Do something",
+        predicted_writes=[PredictedWrite(path="src/foo.ts", confidence=0.9)],
+        allowed_paths=["src/**"],
+        candidate_context_paths=[],
+    )
+    messages = _build_worker_prompt(task, empty_repo_graph, include_lockfile_hints=False)
+    user = next(m["content"] for m in messages if m.get("role") == "user")
+    assert "Predicted writable files" not in user
+    assert "foo.ts" not in user
+
+
+def test_build_worker_prompt_blind_omits_candidate_context(
+    empty_repo_graph: dict[str, object],
+) -> None:
+    task = Task(
+        id="t1",
+        prompt="Do something",
+        predicted_writes=[PredictedWrite(path="src/a.ts", confidence=0.9)],
+        allowed_paths=["src/**"],
+        candidate_context_paths=["src/bar.ts", "lib/other.ts"],
+    )
+    messages = _build_worker_prompt(task, empty_repo_graph, include_lockfile_hints=False)
+    user = next(m["content"] for m in messages if m.get("role") == "user")
+    assert "Candidate context" not in user
+    assert "bar.ts" not in user
+
+
+def test_build_worker_prompt_full_still_includes_hints(
+    empty_repo_graph: dict[str, object],
+) -> None:
+    task = Task(
+        id="t1",
+        prompt="Do something",
+        predicted_writes=[PredictedWrite(path="src/foo.ts", confidence=0.9)],
+        allowed_paths=["src/**"],
+        candidate_context_paths=["src/bar.ts"],
+    )
+    messages = _build_worker_prompt(task, empty_repo_graph)
+    user = next(m["content"] for m in messages if m.get("role") == "user")
+    assert "Predicted writable files" in user
+    assert "foo.ts" in user
+    assert "Candidate context" in user
+    assert "bar.ts" in user
+
+
 def _worker_replies(paths: list[str]) -> dict[str, str]:
     return {
         "oauth": json.dumps(
