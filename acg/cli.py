@@ -676,8 +676,27 @@ def cmd_analyze_runs(
                     "cost_usd_total": r.cost_usd_total,
                     "cost_method": r.cost_method,
                     "cost_source": r.cost_source,
+                    "wall_time_seconds": r.wall_time_seconds,
+                    "tokens_completion_total": r.tokens_completion_total,
+                    "patch_na_count": r.patch_na_count,
+                    "typecheck_pass_count": r.typecheck_pass_count,
+                    "typecheck_fail_count": r.typecheck_fail_count,
+                    "typecheck_skipped_count": r.typecheck_skipped_count,
+                    "tokens_total_per_task_mean": r.tokens_total_per_task_mean,
+                    "cost_per_completed_task": r.cost_per_completed_task,
+                    "oob_files_per_task_mean": r.oob_files_per_task_mean,
+                    "replan_rescued_count": r.replan_rescued_count,
                 }
                 for r in report.runs
+            ],
+            "replan_rescues": [
+                {
+                    "files": e.files,
+                    "source_path": e.source_path,
+                    "strategy": e.strategy,
+                    "task_id": e.task_id,
+                }
+                for e in report.replan_rescues
             ],
             "tasks": {
                 tid: {

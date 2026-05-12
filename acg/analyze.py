@@ -90,6 +90,16 @@ class TaskAnalysis:
 
 
 @dataclass
+class ReplanRescueEntry:
+    """One task that benefited from an approved replan (acg_planned_replan*)."""
+
+    source_path: str
+    strategy: str
+    task_id: str
+    files: list[str]
+
+
+@dataclass
 class RunSummary:
     """Per-eval-run-file metadata."""
 
@@ -113,6 +123,16 @@ class RunSummary:
     cost_usd_total: float | None
     cost_method: str | None
     cost_source: str | None
+    wall_time_seconds: float
+    tokens_completion_total: int | None
+    patch_na_count: int
+    typecheck_pass_count: int
+    typecheck_fail_count: int
+    typecheck_skipped_count: int
+    tokens_total_per_task_mean: float | None
+    cost_per_completed_task: float | None
+    oob_files_per_task_mean: float | None
+    replan_rescued_count: int
 
 
 @dataclass
@@ -121,6 +141,7 @@ class AnalysisReport:
 
     runs: list[RunSummary] = field(default_factory=list)
     tasks: dict[str, TaskAnalysis] = field(default_factory=dict)
+    replan_rescues: list[ReplanRescueEntry] = field(default_factory=list)
 
     @property
     def total_runs(self) -> int:
@@ -212,6 +233,113 @@ def _expand_paths(inputs: Iterable[Path]) -> list[Path]:
     return unique
 
 
+def _task_metrics_dict(task: dict[str, Any]) -> dict[str, Any]:
+    raw = task.get("metrics")
+    return raw if isinstance(raw, dict) else {}
+
+
+def _honest_metrics_from_task_dicts(
+    tasks: list[dict[str, Any]], evidence_kind: str
+) -> dict[str, Any]:
+    """Mirror :func:`compute_summary_metrics` honest fields for JSON task dicts."""
+    applied_like = "applied_diff" in (evidence_kind or "").lower()
+    patch_na_count = 0
+    typecheck_pass_count = 0
+    typecheck_fail_count = 0
+    replan_rescued_count = 0
+    per_task_token_totals: list[float] = []
+
+    for task in tasks:
+        m = _task_metrics_dict(task)
+        if m.get("patch_applies") is False:
+            patch_na_count += 1
+        if m.get("typecheck_ran"):
+            code = m.get("typecheck_exit_code")
+            if code == 0:
+                typecheck_pass_count += 1
+            elif code not in (None, 0):
+                typecheck_fail_count += 1
+        replan = task.get("approved_replan_files") or []
+        if replan:
+            replan_rescued_count += 1
+        p, c = m.get("tokens_prompt"), m.get("tokens_completion")
+        if p is not None or c is not None:
+            per_task_token_totals.append(float((p or 0) + (c or 0)))
+
+    n = len(tasks)
+    typecheck_skipped_count = (
+        sum(
+            1
+            for task in tasks
+            if not bool(_task_metrics_dict(task).get("typecheck_ran", False))
+        )
+        if applied_like
+        else 0
+    )
+    tokens_total_per_task_mean: float | None = None
+    if per_task_token_totals:
+        tokens_total_per_task_mean = round(
+            sum(per_task_token_totals) / len(per_task_token_totals), 4
+        )
+    oob_files_per_task_mean: float | None = (
+        round(
+            sum(len(task.get("out_of_bounds_files") or []) for task in tasks) / n,
+            4,
+        )
+        if n
+        else None
+    )
+    completed = sum(
+        1
+        for task in tasks
+        if task.get("status") == "completed"
+        and not (
+            isinstance(task.get("test"), dict)
+            and task["test"].get("ran")
+            and task["test"].get("passed") is False
+        )
+    )
+    cost_total: float | None = None
+    for task in tasks:
+        m = _task_metrics_dict(task)
+        if m.get("cost_usd") is not None:
+            cost_total = (cost_total or 0.0) + float(m["cost_usd"])
+    if cost_total is not None:
+        cost_total = round(cost_total, 8)
+    cost_per_completed_task: float | None = None
+    if completed > 0 and cost_total is not None:
+        cost_per_completed_task = round(cost_total / completed, 8)
+
+    return {
+        "patch_na_count": patch_na_count,
+        "typecheck_pass_count": typecheck_pass_count,
+        "typecheck_fail_count": typecheck_fail_count,
+        "typecheck_skipped_count": typecheck_skipped_count,
+        "tokens_total_per_task_mean": tokens_total_per_task_mean,
+        "oob_files_per_task_mean": oob_files_per_task_mean,
+        "replan_rescued_count": replan_rescued_count,
+        "cost_per_completed_task": cost_per_completed_task,
+    }
+
+
+def _merge_summary_int(
+    sm: dict[str, Any], derived: dict[str, Any], key: str, default: int = 0
+) -> int:
+    if key in sm and sm[key] is not None:
+        return int(sm[key])
+    val = derived.get(key, default)
+    return int(val) if val is not None else default
+
+
+def _merge_summary_float(
+    sm: dict[str, Any], derived: dict[str, Any], key: str
+) -> float | None:
+    if key in sm and sm[key] is not None:
+        return float(sm[key])
+    val = derived.get(key)
+    return float(val) if val is not None else None
+
+
 # ---------------------------------------------------------------------------
 # Core analysis
 # ---------------------------------------------------------------------------
@@ -231,7 +359,49 @@ def analyze_paths(paths: Iterable[Path]) -> AnalysisReport:
 
     for run_path in expanded:
         for run in _load_run(run_path):
-            summary_metrics = run.get("summary_metrics", {})
+            summary_metrics = run.get("summary_metrics") or {}
+            run_tasks: list[dict[str, Any]] = run.get("tasks", []) or []
+            evidence_kind = str(run.get("evidence_kind") or "")
+            derived = _honest_metrics_from_task_dicts(run_tasks, evidence_kind)
+
+            wall_time_seconds = float(summary_metrics.get("wall_time_seconds") or 0.0)
+            tokens_completion_total = summary_metrics.get("tokens_completion_total")
+            if tokens_completion_total is None:
+                comp_vals = [
+                    _task_metrics_dict(t).get("tokens_completion")
+                    for t in run_tasks
+                    if _task_metrics_dict(t).get("tokens_completion") is not None
+                ]
+                tokens_completion_total = sum(comp_vals) if comp_vals else None
+
+            patch_na_count = _merge_summary_int(summary_metrics, derived, "patch_na_count", 0)
+            typecheck_pass_count = _merge_summary_int(
+                summary_metrics, derived, "typecheck_pass_count", 0
+            )
+            typecheck_fail_count = _merge_summary_int(
+                summary_metrics, derived, "typecheck_fail_count", 0
+            )
+            typecheck_skipped_count = _merge_summary_int(
+                summary_metrics, derived, "typecheck_skipped_count", 0
+            )
+            tokens_total_per_task_mean = _merge_summary_float(
+                summary_metrics, derived, "tokens_total_per_task_mean"
+            )
+            cost_per_completed_task = _merge_summary_float(
+                summary_metrics, derived, "cost_per_completed_task"
+            )
+            if cost_per_completed_task is None:
+                tc_done = summary_metrics.get("tasks_completed")
+                ctot = summary_metrics.get("cost_usd_total")
+                if tc_done and ctot is not None:
+                    cost_per_completed_task = round(float(ctot) / int(tc_done), 8)
+            oob_files_per_task_mean = _merge_summary_float(
+                summary_metrics, derived, "oob_files_per_task_mean"
+            )
+            replan_rescued_count = _merge_summary_int(
+                summary_metrics, derived, "replan_rescued_count", 0
+            )
+
             report.runs.append(
                 RunSummary(
                     source_path=run.get("_source_path", str(run_path)),
@@ -258,10 +428,34 @@ def analyze_paths(paths: Iterable[Path]) -> AnalysisReport:
                     cost_usd_total=summary_metrics.get("cost_usd_total"),
                     cost_method=summary_metrics.get("cost_method"),
                     cost_source=summary_metrics.get("cost_source"),
+                    wall_time_seconds=wall_time_seconds,
+                    tokens_completion_total=tokens_completion_total,
+                    patch_na_count=patch_na_count,
+                    typecheck_pass_count=typecheck_pass_count,
+                    typecheck_fail_count=typecheck_fail_count,
+                    typecheck_skipped_count=typecheck_skipped_count,
+                    tokens_total_per_task_mean=tokens_total_per_task_mean,
+                    cost_per_completed_task=cost_per_completed_task,
+                    oob_files_per_task_mean=oob_files_per_task_mean,
+                    replan_rescued_count=replan_rescued_count,
                 )
             )
 
-            for task in run.get("tasks", []):
+            strategy = run.get("strategy", "?")
+            if isinstance(strategy, str) and strategy.startswith("acg_planned_replan"):
+                for task in run_tasks:
+                    rescued = task.get("approved_replan_files") or []
+                    if rescued:
+                        report.replan_rescues.append(
+                            ReplanRescueEntry(
+                                source_path=run.get("_source_path", str(run_path)),
+                                strategy=strategy,
+                                task_id=str(task.get("task_id", "?")),
+                                files=list(rescued),
+                            )
+                        )
+
+            for task in run_tasks:
                 tid = task.get("task_id", "?")
                 analysis = report.tasks.setdefault(tid, TaskAnalysis(task_id=tid))
                 analysis.runs_seen += 1
@@ -350,19 +544,195 @@ def _md_table(rows: list[list[str]], headers: list[str]) -> str:
     return "\n".join(out)
 
 
+def _reporting_mode(evidence_kind: str, execution_mode: str) -> str:
+    ek = (evidence_kind or "").lower()
+    em = (execution_mode or "").lower()
+    if "applied_diff" in ek or "applied_diff" in em:
+        return "applied"
+    if "suite_proposed" in ek:
+        return "suite"
+    return "proposed"
+
+
+def _headline_tokens_total_cell(r: RunSummary) -> str:
+    if r.tokens_total_per_task_mean is None:
+        return "—"
+    return str(int(round(r.tokens_total_per_task_mean)))
+
+
+def _headline_cost_usd_per_task_cell(r: RunSummary) -> str:
+    if r.cost_usd_total is None or r.cost_usd_total == 0 or not r.tasks_total:
+        return "—"
+    return f"{r.cost_usd_total / r.tasks_total:.4f}"
+
+
+def _headline_oob_per_task_cell(r: RunSummary) -> str:
+    if r.oob_files_per_task_mean is None:
+        return "—"
+    return f"{r.oob_files_per_task_mean:.2f}"
+
+
+def _fmt_patch_applies_pct(r: RunSummary) -> str:
+    if _reporting_mode(r.evidence_kind, r.execution_mode) != "applied":
+        return "—"
+    total = r.tasks_total or 0
+    if total <= 0:
+        return "—"
+    if r.patch_na_count == 0:
+        return "100%"
+    return f"{(1 - r.patch_na_count / total) * 100:.0f}%"
+
+
+def _fmt_typecheck_pass_pct(r: RunSummary) -> str:
+    denom = r.typecheck_pass_count + r.typecheck_fail_count
+    if denom <= 0:
+        return "—"
+    return f"{100 * r.typecheck_pass_count / denom:.0f}%"
+
+
+def _any_acg_planned_replan_runs(report: AnalysisReport) -> bool:
+    return any(
+        isinstance(r.strategy, str) and r.strategy.startswith("acg_planned_replan")
+        for r in report.runs
+    )
+
+
 def format_markdown(report: AnalysisReport) -> str:
     """Render the full analysis report as Markdown."""
     lines: list[str] = []
     lines.append("# ACG run-trace analysis")
     lines.append("")
+    lines.append(
+        "This harness reports per-task total tokens and cost, consistent with "
+        "SWE-ContextBench, AutoCodeRover, and RepoAgent practice (aggregate prompt "
+        "plus completion). Patch-applies and typecheck columns are populated only "
+        "for applied-diff runs. Out-of-bounds file rates are a write-side analog of "
+        "context precision. Published agent-eval work often shows roughly 20–50% "
+        "cost deltas between scoped and blind setups; tenfold swings on comparable "
+        "slices would be pathological."
+    )
+    lines.append("")
     lines.append(f"_Aggregated across {report.total_runs} run artifact(s)._")
     lines.append("")
-
-    # Per-run summary
     lines.append("## Runs")
     lines.append("")
     if report.runs:
-        rows = [
+        headline_rows = [
+            [
+                r.strategy,
+                _reporting_mode(r.evidence_kind, r.execution_mode),
+                _headline_tokens_total_cell(r),
+                _headline_cost_usd_per_task_cell(r),
+                str(r.tasks_completed),
+                _headline_oob_per_task_cell(r),
+                str(r.replan_rescued_count),
+                _fmt_patch_applies_pct(r),
+                _fmt_typecheck_pass_pct(r),
+                f"{r.wall_time_seconds:.1f}",
+            ]
+            for r in report.runs
+        ]
+        lines.append(
+            _md_table(
+                headline_rows,
+                [
+                    "strategy",
+                    "mode",
+                    "tokens_total/task",
+                    "cost_usd/task",
+                    "tasks_completed",
+                    "OOB_files/task",
+                    "replan_rescued",
+                    "patch_applies%",
+                    "typecheck_pass%",
+                    "wall_s",
+                ],
+            )
+        )
+        lines.append("")
+        lines.append("### Safety")
+        lines.append("")
+        safety_rows = [
+            [
+                r.strategy,
+                _reporting_mode(r.evidence_kind, r.execution_mode),
+                str(r.out_of_bounds_write_count),
+                str(r.patch_na_count),
+                str(r.typecheck_fail_count),
+            ]
+            for r in report.runs
+        ]
+        lines.append(
+            _md_table(
+                safety_rows,
+                ["strategy", "mode", "OOB_files", "PATCH_NA_count", "typecheck_fail_count"],
+            )
+        )
+        lines.append("")
+        lines.append("### Cost")
+        lines.append("")
+        cost_rows = []
+        for r in report.runs:
+            cpc = r.cost_per_completed_task
+            cpc_s = "—" if cpc is None else f"{cpc:.4f}"
+            tp = r.tokens_prompt_total
+            tc = r.tokens_completion_total
+            tp_s = "—" if tp is None else str(int(tp))
+            tc_s = "—" if tc is None else str(int(tc))
+            if tp is None and tc is None:
+                tot_s = "—"
+            else:
+                tot_s = str(int((tp or 0) + (tc or 0)))
+            cost_tot = r.cost_usd_total
+            cost_tot_s = "—" if cost_tot is None else f"{cost_tot:.6f}"
+            cost_rows.append(
+                [
+                    r.strategy,
+                    _reporting_mode(r.evidence_kind, r.execution_mode),
+                    cost_tot_s,
+                    cpc_s,
+                    tp_s,
+                    tc_s,
+                    tot_s,
+                ]
+            )
+        lines.append(
+            _md_table(
+                cost_rows,
+                [
+                    "strategy",
+                    "mode",
+                    "cost_usd_total",
+                    "cost_per_completed_task",
+                    "tokens_prompt_total",
+                    "tokens_completion_total",
+                    "tokens_total",
+                ],
+            )
+        )
+        lines.append("")
+        if _any_acg_planned_replan_runs(report):
+            lines.append("### Replan rescue")
+            lines.append("")
+            if report.replan_rescues:
+                rr_rows = [
+                    [
+                        Path(e.source_path).name,
+                        e.strategy,
+                        e.task_id,
+                        ", ".join(e.files),
+                    ]
+                    for e in report.replan_rescues
+                ]
+                lines.append(
+                    _md_table(rr_rows, ["file", "strategy", "task_id", "rescued_files"])
+                )
+            else:
+                lines.append("_No replan-rescue events (empty `approved_replan_files`) on these runs._")
+            lines.append("")
+        lines.append("### Run file details")
+        lines.append("")
+        detail_rows = [
             [
                 Path(r.source_path).name,
                 r.suite_name,
@@ -383,7 +753,7 @@ def format_markdown(report: AnalysisReport) -> str:
         ]
         lines.append(
             _md_table(
-                rows,
+                detail_rows,
                 [
                     "file",
                     "suite",
@@ -496,6 +866,7 @@ def format_markdown(report: AnalysisReport) -> str:
 
 __all__ = [
     "AnalysisReport",
+    "ReplanRescueEntry",
     "RunSummary",
     "TaskAnalysis",
     "analyze_paths",

@@ -15,13 +15,21 @@ The analyzer is wired into ``acg analyze-runs`` and feeds the megaplan's
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
+
+import pytest
 
 from acg.analyze import (
     AnalysisReport,
     analyze_paths,
     collect_suggestions,
     format_markdown,
+)
+from experiments.greenhouse.eval_schema import (
+    EvalTask,
+    TaskMetrics,
+    compute_summary_metrics,
 )
 
 
@@ -307,3 +315,197 @@ def test_markdown_does_not_double_count_posthoc_diff_oob(
     assert report.total_posthoc_oob == 1
     assert "Proposal out-of-bounds files across proposal-only runs: **0**" in md
     assert "Post-hoc out-of-bounds files detected in applied/manual diffs: **1**" in md
+
+
+def test_summary_metrics_includes_tokens_total_and_cost_per_completed() -> None:
+    tasks = [
+        EvalTask(
+            task_id="a",
+            status="completed",
+            actual_changed_files=["x"],
+            metrics=TaskMetrics(tokens_prompt=100, tokens_completion=50, cost_usd=0.5),
+        ),
+        EvalTask(
+            task_id="b",
+            status="completed",
+            actual_changed_files=["y"],
+            metrics=TaskMetrics(tokens_prompt=200, tokens_completion=None, cost_usd=0.5),
+        ),
+    ]
+    summary = compute_summary_metrics(
+        tasks,
+        wall_time_seconds=10.0,
+        cost_usd_total=1.0,
+        evidence_kind="proposed_write_set",
+    )
+    assert summary.tokens_total_per_task_mean == pytest.approx(175.0, rel=1e-6)
+    assert summary.cost_per_completed_task == pytest.approx(0.5, rel=1e-6)
+
+
+def test_summary_metrics_replan_rescued_count() -> None:
+    tasks = [
+        EvalTask(
+            task_id="a",
+            status="completed",
+            actual_changed_files=["x"],
+            approved_replan_files=["z.py"],
+        ),
+        EvalTask(task_id="b", status="completed", actual_changed_files=["y"]),
+    ]
+    summary = compute_summary_metrics(tasks, wall_time_seconds=1.0)
+    assert summary.replan_rescued_count == 1
+
+
+def test_summary_metrics_oob_files_per_task_mean() -> None:
+    tasks = [
+        EvalTask(
+            task_id="a",
+            status="completed",
+            actual_changed_files=["x"],
+            out_of_bounds_files=["o1", "o2"],
+        ),
+        EvalTask(task_id="b", status="completed", actual_changed_files=["y"]),
+    ]
+    summary = compute_summary_metrics(tasks, wall_time_seconds=1.0)
+    assert summary.oob_files_per_task_mean == pytest.approx(1.0, rel=1e-6)
+
+
+def test_summary_metrics_typecheck_skipped_count_for_proposed_only_is_zero() -> None:
+    tasks = [
+        EvalTask(
+            task_id="a",
+            status="completed",
+            actual_changed_files=["x"],
+            metrics=TaskMetrics(typecheck_ran=False),
+        ),
+    ]
+    proposed = compute_summary_metrics(
+        tasks, wall_time_seconds=1.0, evidence_kind="proposed_write_set"
+    )
+    assert proposed.typecheck_skipped_count == 0
+    applied = compute_summary_metrics(
+        tasks, wall_time_seconds=1.0, evidence_kind="applied_diff_live"
+    )
+    assert applied.typecheck_skipped_count == 1
+
+
+def test_analyze_runs_headline_table_includes_new_columns(tmp_path: Path) -> None:
+    run_path = tmp_path / "headline.json"
+    run_path.write_text(
+        json.dumps(
+            {
+                "version": "0.1",
+                "strategy": "acg_planned",
+                "backend": "local",
+                "suite_name": "demo",
+                "execution_mode": "applied_diff",
+                "evidence_kind": "applied_diff",
+                "summary_metrics": {
+                    "tasks_total": 1,
+                    "tasks_completed": 1,
+                    "wall_time_seconds": 12.34,
+                    "tokens_prompt_total": 100,
+                    "tokens_completion_total": 50,
+                    "tokens_all_in": None,
+                    "tokens_prompt_method": "x",
+                    "tokens_orchestrator_overhead": None,
+                    "cost_usd_total": 0.25,
+                    "patch_na_count": 0,
+                    "typecheck_pass_count": 1,
+                    "typecheck_fail_count": 0,
+                    "typecheck_skipped_count": 0,
+                    "tokens_total_per_task_mean": 150.0,
+                    "cost_per_completed_task": 0.25,
+                    "oob_files_per_task_mean": 0.0,
+                    "replan_rescued_count": 0,
+                },
+                "tasks": [
+                    {
+                        "task_id": "t1",
+                        "status": "completed",
+                        "predicted_write_files": ["a.py"],
+                        "actual_changed_files": ["a.py"],
+                        "allowed_write_globs": ["**/*.py"],
+                        "out_of_bounds_files": [],
+                        "blocked_write_events": [],
+                        "metrics": {
+                            "tokens_prompt": 100,
+                            "tokens_completion": 50,
+                            "typecheck_ran": True,
+                            "typecheck_exit_code": 0,
+                        },
+                    }
+                ],
+            }
+        )
+    )
+    md = format_markdown(analyze_paths([run_path]))
+    for col in (
+        "tokens_total/task",
+        "cost_usd/task",
+        "OOB_files/task",
+        "replan_rescued",
+        "patch_applies%",
+        "typecheck_pass%",
+    ):
+        assert col in md
+
+
+def test_analyze_runs_handles_runs_without_new_fields(tmp_path: Path) -> None:
+    run_path = tmp_path / "legacy.json"
+    _write_eval_run(
+        run_path,
+        strategy="naive_parallel",
+        backend="mock",
+        tasks=[
+            {
+                "task_id": "t1",
+                "status": "completed",
+                "predicted_write_files": ["a.py"],
+                "actual_changed_files": ["a.py"],
+                "allowed_write_globs": ["**/*.py"],
+                "out_of_bounds_files": [],
+                "blocked_write_events": [],
+            }
+        ],
+    )
+    md = format_markdown(analyze_paths([run_path]))
+    assert re.search(
+        r"naive_parallel \| proposed \|[^\n]+\| — \| — \|",
+        md,
+    ), "expected proposed headline row with dash patch/typecheck cells"
+
+
+def test_replan_rescue_section_lists_approved_files(tmp_path: Path) -> None:
+    run_path = tmp_path / "replan.json"
+    run_path.write_text(
+        json.dumps(
+            {
+                "strategy": "acg_planned_replan",
+                "backend": "mock",
+                "suite_name": "demo",
+                "summary_metrics": {
+                    "tasks_total": 1,
+                    "tasks_completed": 1,
+                    "wall_time_seconds": 1.0,
+                },
+                "tasks": [
+                    {
+                        "task_id": "t1",
+                        "status": "completed",
+                        "predicted_write_files": ["a.py"],
+                        "actual_changed_files": ["a.py"],
+                        "allowed_write_globs": ["**/*.py"],
+                        "out_of_bounds_files": [],
+                        "blocked_write_events": [],
+                        "approved_replan_files": ["extra.py"],
+                    }
+                ],
+            }
+        )
+    )
+    report = analyze_paths([run_path])
+    assert len(report.replan_rescues) == 1
+    md = format_markdown(report)
+    assert "### Replan rescue" in md
+    assert "extra.py" in md
