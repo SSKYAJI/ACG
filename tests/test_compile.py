@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
+
+import pytest
 
 from acg.compiler import compile_lockfile
 from acg.schema import TaskInput, TaskInputHints, TasksInput
@@ -120,3 +123,23 @@ def test_compile_lockfile_adds_tokens_planner_to_tasks_input(tmp_path: Path) -> 
     lock = compile_lockfile(tmp_path, tasks, _repo_graph(), llm)
     assert lock.generator.tokens_planner_total is not None
     assert lock.generator.tokens_planner_total > 500
+
+
+def test_compile_lockfile_parallel_tasks_preserve_order(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """ACG_COMPILE_TASK_CONCURRENCY>1 fans out compile-time predictor work."""
+    monkeypatch.setenv("ACG_COMPILE_TASK_CONCURRENCY", "2")
+    stub_seq = [
+        json.dumps({"paths": ["components/sidebar.tsx"]}),
+        json.dumps({"writes": []}),
+        json.dumps({}),
+    ]
+    tasks = TasksInput(
+        tasks=[
+            TaskInput(id="a", prompt="do a", hints=TaskInputHints(touches=["auth"])),
+            TaskInput(id="b", prompt="do b", hints=TaskInputHints(touches=["auth"])),
+        ]
+    )
+    outer = _StubLLM(["{}"])
+    with patch("acg.llm.LLMClient.from_env", side_effect=lambda: _StubLLM(list(stub_seq))):
+        lock = compile_lockfile(tmp_path, tasks, _repo_graph(), outer)
+    assert [t.id for t in lock.tasks] == ["a", "b"]

@@ -8,6 +8,9 @@ else is delegated to :mod:`acg.predictor` and :mod:`acg.solver`.
 
 from __future__ import annotations
 
+import os
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -120,6 +123,31 @@ def _detect_languages(repo_graph: dict[str, Any]) -> list[str]:
     return languages or ["unknown"]
 
 
+def _compile_task_concurrency() -> int:
+    raw = os.environ.get("ACG_COMPILE_TASK_CONCURRENCY", "1")
+    try:
+        n = int(raw)
+    except ValueError:
+        return 1
+    return max(1, n)
+
+
+def _predict_one_task_compile(
+    ti: TaskInput,
+    *,
+    repo_graph: dict[str, Any],
+    repo_path: Path,
+    llm: LLMProtocol,
+    isolated_clients: bool,
+) -> tuple[TaskInput, Any]:
+    """Run predictor for one task (used serially or from a thread pool)."""
+    from .llm import LLMClient
+    from .predictor import predict_file_scopes_with_usage
+
+    client: LLMProtocol = LLMClient.from_env() if isolated_clients else llm
+    return ti, predict_file_scopes_with_usage(ti, repo_graph, client, repo_root=repo_path)
+
+
 def compile_lockfile(
     repo_path: Path,
     tasks_input: TasksInput,
@@ -132,22 +160,47 @@ def compile_lockfile(
         repo_path: Path to the target repository (used for metadata only).
         tasks_input: Parsed ``tasks.json`` document.
         repo_graph: Output of the TS graph builder; ``{}`` is acceptable.
-        llm: LLM client used by :mod:`acg.predictor`.
+        llm: LLM client used by :mod:`acg.predictor` when
+            ``ACG_COMPILE_TASK_CONCURRENCY`` is ``1`` (default). For values ``>1``,
+            each thread calls :meth:`LLMClient.from_env` instead (thread-safe HTTP).
 
     Returns:
         A validated :class:`AgentLock` that round-trips through the JSON
         Schema in ``schema/agent_lock.schema.json``.
     """
-    # Late import to keep the schema module dependency-free at import time.
-    from .predictor import predict_file_scopes_with_usage
-
     explicit_deps = _explicit_dependencies(tasks_input.tasks)
     heuristic_deps = _heuristic_dependencies(tasks_input.tasks)
     tasks: list[Task] = []
     scope_review_tokens_total = 0
     compile_planner_tokens_total = 0
-    for ti in tasks_input.tasks:
-        prediction = predict_file_scopes_with_usage(ti, repo_graph, llm, repo_root=repo_path)
+
+    workers = _compile_task_concurrency()
+    task_inputs = list(tasks_input.tasks)
+    use_pool = workers > 1 and len(task_inputs) > 1
+    if use_pool:
+        max_workers = min(workers, len(task_inputs))
+        worker = partial(
+            _predict_one_task_compile,
+            repo_graph=repo_graph,
+            repo_path=repo_path,
+            llm=llm,
+            isolated_clients=True,
+        )
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            predictions = list(pool.map(worker, task_inputs))
+    else:
+        predictions = [
+            _predict_one_task_compile(
+                ti,
+                repo_graph=repo_graph,
+                repo_path=repo_path,
+                llm=llm,
+                isolated_clients=False,
+            )
+            for ti in task_inputs
+        ]
+
+    for ti, prediction in predictions:
         file_scopes = prediction.scopes
         scope_review_tokens_total += prediction.scope_review_tokens
         compile_planner_tokens_total += prediction.planner_tokens

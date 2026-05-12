@@ -10,6 +10,10 @@ Environment variable        Purpose
 ``ACG_LLM_MODEL``           Model id, e.g. ``llama-3.3-70b-versatile``
 ``ACG_LLM_API_KEY``         Bearer token; ``GROQ_API_KEY`` is used as a fallback
 ``ACG_MOCK_LLM``            If set to ``1`` a deterministic offline client is used
+``ACG_COMPILE_TASK_CONCURRENCY``  Max parallel :func:`acg.compiler.compile_lockfile`
+                            predictor tasks (default ``1`` = serial). When ``>1``,
+                            each worker uses its own :class:`LLMClient` (``from_env``);
+                            keep low to avoid OpenRouter 429s.
 ==========================  =======================================================
 """
 

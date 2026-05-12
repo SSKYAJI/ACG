@@ -213,6 +213,8 @@ compile-realworld: setup-realworld
 	  --out experiments/realworld/agent_lock.json
 
 compile-realworld-blind: setup-realworld
+# Optional: ACG_COMPILE_TASK_CONCURRENCY=4 before make to parallelize predictor
+# during compile (separate httpx clients per task; watch OpenRouter rate limits).
 	set -a && . ./.env && set +a && \
 	./.venv/bin/acg compile \
 	  --repo experiments/realworld/checkout \
