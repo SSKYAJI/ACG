@@ -55,15 +55,14 @@ from experiments.greenhouse.strategies import (
     NAIVE_PARALLEL_BLIND_STRATEGY,
     SINGLE_AGENT_STRATEGY,
     LockfileEchoMockLLM,
+    TaskApplyOutcome,
     _build_single_agent_prompt,
     _extract_task_id,
     _parse_single_agent_applied_envelopes,
     _PromptCountingLLM,
     _proposals_for_task_envelope_blob,
-    _proposals_to_naive_applied_eval_task,
     _proposals_to_planned_applied_eval_task,
     _proposals_to_planned_eval_task,
-    _proposals_to_suite_applied_eval_task,
     _scoped_repo_graph,
     estimate_prompt_tokens,
     run_strategy,
@@ -1702,7 +1701,7 @@ def test_applied_diff_task_marks_failed_when_no_envelope() -> None:
         started_at="2026-05-11T22:20:23Z",
         finished_at="2026-05-11T22:20:59Z",
         prompt=None,
-        git_changed_files=[],
+        task_outcome=TaskApplyOutcome(),
     )
     assert eval_task.status == "failed"
     assert eval_task.failure_reason == "NO_APPLIED_CONTENT"
@@ -1729,7 +1728,7 @@ def test_applied_diff_task_marks_failed_on_empty_patch() -> None:
         started_at="2026-05-11T22:20:23Z",
         finished_at="2026-05-11T22:20:59Z",
         prompt=None,
-        git_changed_files=[],
+        task_outcome=TaskApplyOutcome(),
     )
     assert eval_task.status == "failed"
     assert eval_task.failure_reason == "EMPTY_PATCH"
@@ -1871,3 +1870,257 @@ def test_single_agent_applied_splits_per_task() -> None:
     p2 = _proposals_for_task_envelope_blob(by_task.get("t2", ""))
     assert len(p1) == 1 and p1[0].file == "src/a.ts"
     assert len(p2) == 1 and p2[0].file == "src/b.ts"
+
+
+# ---------------------------------------------------------------------------
+# honest-completion-metrics: PATCH_NA / typecheck status transitions.
+# ---------------------------------------------------------------------------
+
+
+def _planned_proposal_with_envelope() -> Proposal:
+    """A scope-allowed proposal carrying a non-empty apply_patch envelope."""
+    env = "*** Begin Patch\n*** Update File: src/in_scope.ts\n@@\n+x\n*** End Patch\n"
+    return Proposal(
+        file="src/in_scope.ts",
+        description="x",
+        allowed=True,
+        reason=None,
+        scope_status="allowed",
+        envelope=env,
+    )
+
+
+def _tc_outcome(*, ran: bool, exit_code: int | None, diagnostics: int | None = None):
+    from acg.typecheck import TypecheckOutcome
+
+    return TypecheckOutcome(
+        ran=ran,
+        exit_code=exit_code,
+        diagnostic_count=diagnostics,
+        wall_seconds=0.1 if ran else None,
+        skip_reason=None if ran else "NPX_MISSING",
+    )
+
+
+def test_applied_diff_marks_failed_patch_na_when_outcome_says_so() -> None:
+    """A patch_na outcome must short-circuit status to failed/PATCH_NA and
+    populate ``patch_na_reason`` plus ``metrics.patch_applies = False``."""
+    task = _planned_task()
+    worker = _worker_result(proposals=[_planned_proposal_with_envelope()])
+    outcome = TaskApplyOutcome(
+        changed_files=[],
+        patch_na=True,
+        patch_na_reason="apply_patch error: invalid hunk",
+    )
+    eval_task = _proposals_to_planned_applied_eval_task(
+        worker,
+        task,
+        started_at="2026-05-11T22:20:23Z",
+        finished_at="2026-05-11T22:20:59Z",
+        prompt=None,
+        task_outcome=outcome,
+    )
+    assert eval_task.status == "failed"
+    assert eval_task.failure_reason == "PATCH_NA"
+    assert eval_task.patch_na_reason == "apply_patch error: invalid hunk"
+    assert eval_task.metrics.patch_applies is False
+
+
+def test_applied_diff_marks_failed_typecheck_on_nonzero_exit() -> None:
+    """When the patch lands but tsc exits non-zero, status is failed/FAILED_TYPECHECK."""
+    task = _planned_task()
+    worker = _worker_result(proposals=[_planned_proposal_with_envelope()])
+    outcome = TaskApplyOutcome(
+        changed_files=["src/in_scope.ts"],
+        patch_na=False,
+        patch_na_reason=None,
+        typecheck=_tc_outcome(ran=True, exit_code=1, diagnostics=3),
+    )
+    eval_task = _proposals_to_planned_applied_eval_task(
+        worker,
+        task,
+        started_at="2026-05-11T22:20:23Z",
+        finished_at="2026-05-11T22:20:59Z",
+        prompt=None,
+        task_outcome=outcome,
+    )
+    assert eval_task.status == "failed"
+    assert eval_task.failure_reason == "FAILED_TYPECHECK"
+    assert eval_task.metrics.patch_applies is True
+    assert eval_task.metrics.typecheck_ran is True
+    assert eval_task.metrics.typecheck_exit_code == 1
+    assert eval_task.metrics.typecheck_diagnostic_count == 3
+
+
+def test_applied_diff_marks_completed_unverified_when_typecheck_skipped() -> None:
+    """If tsc could not run (e.g. NPX_MISSING) and the patch landed, the
+    status is the new ``completed_unverified`` tag, not ``completed``."""
+    task = _planned_task()
+    worker = _worker_result(proposals=[_planned_proposal_with_envelope()])
+    outcome = TaskApplyOutcome(
+        changed_files=["src/in_scope.ts"],
+        patch_na=False,
+        patch_na_reason=None,
+        typecheck=_tc_outcome(ran=False, exit_code=None),
+    )
+    eval_task = _proposals_to_planned_applied_eval_task(
+        worker,
+        task,
+        started_at="2026-05-11T22:20:23Z",
+        finished_at="2026-05-11T22:20:59Z",
+        prompt=None,
+        task_outcome=outcome,
+    )
+    assert eval_task.status == "completed_unverified"
+    assert eval_task.metrics.patch_applies is True
+    assert eval_task.metrics.typecheck_ran is False
+
+
+def test_applied_diff_marks_completed_when_typecheck_passes() -> None:
+    """Patch lands AND tsc exit code 0 ⇒ status is the strong ``completed``."""
+    task = _planned_task()
+    worker = _worker_result(proposals=[_planned_proposal_with_envelope()])
+    outcome = TaskApplyOutcome(
+        changed_files=["src/in_scope.ts"],
+        patch_na=False,
+        patch_na_reason=None,
+        typecheck=_tc_outcome(ran=True, exit_code=0, diagnostics=0),
+    )
+    eval_task = _proposals_to_planned_applied_eval_task(
+        worker,
+        task,
+        started_at="2026-05-11T22:20:23Z",
+        finished_at="2026-05-11T22:20:59Z",
+        prompt=None,
+        task_outcome=outcome,
+    )
+    assert eval_task.status == "completed"
+    assert eval_task.metrics.patch_applies is True
+    assert eval_task.metrics.typecheck_ran is True
+    assert eval_task.metrics.typecheck_exit_code == 0
+
+
+def test_naive_parallel_blind_applied_uses_blind_prompt(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The blind applied dispatch must call ``run_worker`` with
+    ``include_lockfile_hints=False`` so the prompt does not enumerate
+    predicted_writes / candidate_context."""
+    repo = tmp_path / "checkout"
+    repo.mkdir()
+    subprocess.run(["git", "-C", str(repo), "init", "-b", "main"], check=True, capture_output=True)
+    (repo / "app").mkdir()
+    (repo / "app" / "x.ts").write_text("// x\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@e",
+            "commit",
+            "-m",
+            "init",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    base_sha = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    lock = AgentLock.model_validate(
+        {
+            "version": "1.0",
+            "generated_at": datetime.now(UTC),
+            "repo": {"root": str(repo), "commit": base_sha, "languages": ["ts"]},
+            "tasks": [
+                {
+                    "id": "task_blind",
+                    "prompt": "blind",
+                    "predicted_writes": [
+                        {"path": "app/x.ts", "confidence": 0.9, "reason": "r"}
+                    ],
+                    "allowed_paths": ["app/**"],
+                    "depends_on": [],
+                    "parallel_group": 1,
+                    "rationale": None,
+                }
+            ],
+            "execution_plan": {
+                "groups": [
+                    {"id": 1, "tasks": ["task_blind"], "type": "parallel", "waits_for": []}
+                ]
+            },
+            "conflicts_detected": [],
+        }
+    )
+
+    captured: dict[str, object] = {}
+
+    async def _fake_run_worker(*args, **kwargs):
+        captured["include_lockfile_hints"] = kwargs.get("include_lockfile_hints")
+        captured["task_id"] = args[0].id
+        return WorkerResult(
+            task_id=args[0].id,
+            group_id=0,
+            url="mock://",
+            model="mock",
+            wall_s=0.0,
+            completion_tokens=0,
+            finish_reason="stop",
+            raw_content="",
+            proposals=[],
+            allowed_count=0,
+            blocked_count=0,
+            error=None,
+        )
+
+    def _fake_tsc(_checkout):
+        from acg.typecheck import TypecheckOutcome
+
+        return TypecheckOutcome(
+            ran=False,
+            exit_code=None,
+            diagnostic_count=None,
+            wall_seconds=None,
+            skip_reason="NPX_MISSING",
+        )
+
+    from experiments.greenhouse import strategies as gs
+
+    monkeypatch.setattr(gs, "run_worker", _fake_run_worker)
+    monkeypatch.setattr(gs, "run_tsc_noemit", _fake_tsc)
+
+    class _NullLLM:
+        url = "mock://blind"
+        model = "mock"
+
+        async def complete(self, *_a, **_k):
+            return LLMReply(
+                content="", reasoning="", completion_tokens=0,
+                finish_reason="stop", wall_s=0.0,
+            )
+
+        async def aclose(self) -> None:
+            return None
+
+    tasks, _wall_s, _m = asyncio.run(
+        gs._run_naive_parallel_blind_applied(
+            lock,
+            {},
+            lambda: _NullLLM(),
+            checkout_path=repo,
+            prompts_by_task=None,
+            cap_parallelism=None,
+        )
+    )
+    assert captured.get("include_lockfile_hints") is False
+    assert captured.get("task_id") == "task_blind"
+    assert tasks and tasks[0].actual_changed_files_kind == "naive_parallel_blind_applied_diff"
