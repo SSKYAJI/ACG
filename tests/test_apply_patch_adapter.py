@@ -5,8 +5,6 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from acg.apply_patch_adapter import AppliedPatchResult, apply_envelope
 
 
