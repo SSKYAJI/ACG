@@ -441,7 +441,7 @@ def _proposals_to_naive_applied_eval_task(
         eval_task.status = "failed"
         eval_task.failure_reason = "AGENT_FAIL"
     elif not eval_task.actual_changed_files:
-        if worker.proposals and all(p.envelope is None for p in worker.proposals):
+        if not worker.proposals or all(p.envelope is None for p in worker.proposals):
             eval_task.status = "failed"
             eval_task.failure_reason = "NO_APPLIED_CONTENT"
         elif eval_task.blocked_write_events:
@@ -491,7 +491,7 @@ def _proposals_to_suite_applied_eval_task(
         eval_task.status = "failed"
         eval_task.failure_reason = "AGENT_FAIL"
     elif not eval_task.actual_changed_files:
-        if worker.proposals and all(p.envelope is None for p in worker.proposals):
+        if not worker.proposals or all(p.envelope is None for p in worker.proposals):
             eval_task.status = "failed"
             eval_task.failure_reason = "NO_APPLIED_CONTENT"
         else:
@@ -598,7 +598,7 @@ def _proposals_to_planned_applied_eval_task(
         eval_task.status = "failed"
         eval_task.failure_reason = "AGENT_FAIL"
     elif not eval_task.actual_changed_files:
-        if worker.proposals and all(p.envelope is None for p in worker.proposals):
+        if not worker.proposals or all(p.envelope is None for p in worker.proposals):
             eval_task.status = "failed"
             eval_task.failure_reason = "NO_APPLIED_CONTENT"
         elif eval_task.blocked_write_events:
@@ -659,13 +659,27 @@ def _apply_writes_git_sync(
     try:
         root = checkout.resolve()
         for prop in wr.proposals:
-            if prop.envelope is None or (require_scope and not prop.allowed):
+            if require_scope and not prop.allowed:
                 continue
-            if require_scope:
-                allowed, _reason = validate_write(lock, task.id, prop.file)
-                if not allowed:
+            if prop.envelope is not None:
+                if require_scope:
+                    allowed, _reason = validate_write(lock, task.id, prop.file)
+                    if not allowed:
+                        continue
+                apply_envelope(prop.envelope, root)
+            elif prop.content is not None:
+                if require_scope:
+                    allowed, _reason = validate_write(lock, task.id, prop.file)
+                    if not allowed:
+                        continue
+                rel = prop.file.lstrip("./")
+                dest = (checkout / rel).resolve()
+                try:
+                    dest.relative_to(root)
+                except ValueError:
                     continue
-            apply_envelope(prop.envelope, root)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text(prop.content, encoding="utf-8")
         subprocess.run(["git", "-C", repo, "add", "-A"], check=True, capture_output=True, text=True)
         st = subprocess.run(
             ["git", "-C", repo, "status", "--porcelain"],
@@ -932,13 +946,16 @@ def _build_single_agent_prompt(
     if apply_patch_suites:
         system = (
             "You are a single coding agent handling an entire task suite without "
-            "a precomputed file contract. For every task listed below, emit an "
-            "OpenAI apply_patch envelope that implements the task.\n\n"
-            "Formatting rules:\n"
-            "- Repeat one block per task in suite order.\n"
-            "- Each block MUST start with a line `Task id: <id>` copied from the list below,\n"
-            "  followed only by the `*** Begin Patch` … `*** End Patch` envelope for that task.\n"
-            "- Do not wrap patches in code fences and do not emit JSON ``tasks`` payloads.\n"
+            "a precomputed file contract. You must implement every task on disk.\n\n"
+            "Choose exactly ONE response format:\n\n"
+            "A) OpenAI apply_patch layout: for each task, emit a `Task id: <id>` line "
+            "copied from the list below, followed only by a `*** Begin Patch` … "
+            "`*** End Patch` envelope for that task (no code fences, no JSON).\n\n"
+            "B) Legacy JSON object with key \"tasks\": an array of objects. Each object "
+            "must have \"task_id\" and \"writes\"; every write object must include "
+            "\"file\", \"description\", and a string \"content\" field whose value is "
+            "the complete UTF-8 file body to write.\n\n"
+            "Do not mix formats. If you choose JSON, partial file bodies are invalid."
         )
     else:
         system = (
@@ -1060,10 +1077,10 @@ def _jsonish_payload(raw: str) -> Any:
     return None
 
 
-def _coerce_write_items(value: Any) -> list[dict[str, str]]:
+def _coerce_write_items(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
-    out: list[dict[str, str]] = []
+    out: list[dict[str, Any]] = []
     for item in value:
         if isinstance(item, str):
             file_path = item
@@ -1077,20 +1094,23 @@ def _coerce_write_items(value: Any) -> list[dict[str, str]]:
             continue
         if not isinstance(description, str):
             description = str(description)
-        out.append(
-            {
-                "file": file_path.strip().lstrip("./"),
-                "description": description.strip(),
-            }
-        )
+        row: dict[str, Any] = {
+            "file": file_path.strip().lstrip("./"),
+            "description": description.strip(),
+        }
+        if isinstance(item, dict):
+            wc = item.get("content")
+            if isinstance(wc, str):
+                row["content"] = wc
+        out.append(row)
     return out
 
 
 def _parse_single_agent_task_writes(
     raw: str, task_ids: set[str]
-) -> dict[str, list[dict[str, str]]]:
+) -> dict[str, list[dict[str, Any]]]:
     payload = _jsonish_payload(raw)
-    parsed: dict[str, list[dict[str, str]]] = {task_id: [] for task_id in task_ids}
+    parsed: dict[str, list[dict[str, Any]]] = {task_id: [] for task_id in task_ids}
     if isinstance(payload, dict):
         tasks_payload = payload.get("tasks")
         if isinstance(tasks_payload, list):
@@ -1247,7 +1267,7 @@ async def _run_single_agent_applied(
     reply: LLMReply | None = None
     error: str | None = None
     try:
-        reply = await llm.complete(messages, max_tokens=max(3200, SINGLE_AGENT_MAX_TOKENS))
+        reply = await llm.complete(messages, max_tokens=max(16000, SINGLE_AGENT_MAX_TOKENS))
     except Exception as exc:  # pragma: no cover - exercised by live backends.
         error = str(exc)
     finally:
@@ -1263,14 +1283,32 @@ async def _run_single_agent_applied(
     elif reply is not None:
         prompt_tokens = estimate_prompt_tokens(messages)
 
-    envelopes_by_task: dict[str, str] = {}
     if reply is not None and not error:
         envelopes_by_task = _parse_single_agent_applied_envelopes(reply.content, lock)
+        parsed_writes = _parse_single_agent_task_writes(
+            reply.content, {t.id for t in lock.tasks}
+        )
+    else:
+        envelopes_by_task = {}
+        parsed_writes = {}
 
     workers_by_task: dict[str, WorkerResult] = {}
     for task in lock.tasks:
         blob = envelopes_by_task.get(task.id, "")
         proposals = _proposals_for_task_envelope_blob(blob)
+        if not proposals:
+            for row in parsed_writes.get(task.id, []):
+                proposals.append(
+                    Proposal(
+                        file=row["file"],
+                        description=row.get("description", ""),
+                        allowed=True,
+                        reason=None,
+                        scope_status="allowed",
+                        content=row.get("content") if isinstance(row.get("content"), str) else None,
+                        envelope=None,
+                    )
+                )
         workers_by_task[task.id] = WorkerResult(
             task_id=task.id,
             group_id=0,

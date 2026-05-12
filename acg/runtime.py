@@ -63,7 +63,7 @@ DEFAULT_MODEL = "gemma"
 DEFAULT_TIMEOUT_S = 180.0
 
 ORCH_MAX_TOKENS = 2048
-SUB_MAX_TOKENS = 700
+SUB_MAX_TOKENS = 4096
 TEMPERATURE = 0.2
 
 # Top N files (sorted by import-fan-in) embedded in worker prompts so workers
