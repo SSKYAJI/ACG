@@ -19,9 +19,38 @@ _FILE_HEADER = re.compile(r"^\*\*\* (Update|Add|Delete) File: (.+?)\s*$", re.MUL
 
 @dataclass(frozen=True)
 class AppliedPatchResult:
+    """Outcome of applying a single ``apply_patch`` envelope on disk.
+
+    The ``patch_na`` / ``patch_na_reason`` fields are the structured signal
+    the eval harness needs to mark a task ``failed/PATCH_NA`` instead of
+    silently swallowing the ``ApplyPatchError`` and downgrading to
+    ``EMPTY_PATCH``. ``patch_na`` is true whenever the underlying Rust
+    parser/applier rejected the input, the envelope was malformed, or an
+    OS-level subprocess error tripped the adapter. ``patch_na_reason`` is
+    a short, truncated ``str(exc)`` (<=300 chars) suitable for inclusion
+    in artifact JSON without bloating it.
+    """
+
     changed_files: list[str]
     errors: list[str]
     envelope_parsed: bool
+    patch_na: bool = False
+    patch_na_reason: str | None = None
+
+
+# Plan-aligned alias so callers reading the megaplan can import
+# ``AppliedPatchOutcome`` instead of ``AppliedPatchResult``.
+AppliedPatchOutcome = AppliedPatchResult
+
+
+_REASON_MAX_CHARS = 300
+
+
+def _truncate_reason(reason: str) -> str:
+    reason = reason.strip()
+    if len(reason) <= _REASON_MAX_CHARS:
+        return reason
+    return reason[: _REASON_MAX_CHARS - 1].rstrip() + "…"
 
 
 def _paths_in_envelope(envelope: str) -> list[str]:
@@ -54,7 +83,13 @@ def _parse_success_paths(message: str) -> list[str]:
 
 
 def apply_envelope(envelope: str, repo_root: Path) -> AppliedPatchResult:
-    """Parse and apply ``envelope`` under ``repo_root`` (must be a git checkout root)."""
+    """Parse and apply ``envelope`` under ``repo_root`` (must be a git checkout root).
+
+    Never raises: any underlying ``ApplyPatchError``, malformed-envelope
+    ``ValueError``, or unhandled subprocess/OS error is captured into
+    ``AppliedPatchResult.patch_na`` + ``patch_na_reason`` so callers can
+    treat the outcome as a structured task-level signal.
+    """
     root = repo_root.resolve()
     try:
         parsed = parse_patch(envelope)
@@ -63,19 +98,34 @@ def apply_envelope(envelope: str, repo_root: Path) -> AppliedPatchResult:
             changed_files=[],
             errors=[str(exc)],
             envelope_parsed=False,
+            patch_na=True,
+            patch_na_reason=_truncate_reason(str(exc)),
+        )
+    except ApplyPatchError as exc:  # pragma: no cover - parse_patch typically raises ValueError
+        return AppliedPatchResult(
+            changed_files=[],
+            errors=[str(exc)],
+            envelope_parsed=False,
+            patch_na=True,
+            patch_na_reason=_truncate_reason(str(exc)),
         )
     if not parsed:
         return AppliedPatchResult(
             changed_files=[],
             errors=["empty patch"],
             envelope_parsed=False,
+            patch_na=True,
+            patch_na_reason="empty patch",
         )
     for path in _paths_in_envelope(envelope):
         if not _safe_repo_relative(path, root):
+            reason = f"unsafe or absolute path in patch: {path!r}"
             return AppliedPatchResult(
                 changed_files=[],
-                errors=[f"unsafe or absolute path in patch: {path!r}"],
+                errors=[reason],
                 envelope_parsed=True,
+                patch_na=True,
+                patch_na_reason=_truncate_reason(reason),
             )
     try:
         with chdir(root):
@@ -85,9 +135,13 @@ def apply_envelope(envelope: str, repo_root: Path) -> AppliedPatchResult:
             changed_files=[],
             errors=[str(exc)],
             envelope_parsed=True,
+            patch_na=True,
+            patch_na_reason=_truncate_reason(str(exc)),
         )
     return AppliedPatchResult(
         changed_files=_parse_success_paths(str(message)),
         errors=[],
         envelope_parsed=True,
+        patch_na=False,
+        patch_na_reason=None,
     )
