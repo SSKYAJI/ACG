@@ -319,6 +319,7 @@ def _run_manual_sidecar(
         wall_time_seconds=wall_time_seconds,
         sequential_wall_time_seconds=sequential_wall_time_seconds,
         merge_conflicts=int(payload.get("merge_conflicts") or 0),
+        evidence_kind="applied_diff",
     )
     return EvalRun(
         run_id=make_run_id(strategy, backend),
@@ -671,6 +672,7 @@ async def _devin_api_run_async(
         eval_tasks,
         wall_time_seconds=overall_wall,
         sequential_wall_time_seconds=sequential_wall_time_seconds,
+        evidence_kind="applied_diff",
     )
     agent = (devin_extra_body or {}).get("agent") or "default"
     return EvalRun(

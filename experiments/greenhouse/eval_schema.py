@@ -68,6 +68,12 @@ class TaskMetrics:
     acus_consumed: float | None = None
     cost_usd: float | None = None
     cost_source: str | None = None
+    # --- honest-completion-metrics fields (b94d2f0a) ---
+    patch_applies: bool | None = None
+    typecheck_ran: bool = False
+    typecheck_exit_code: int | None = None
+    typecheck_diagnostic_count: int | None = None
+    typecheck_wall_seconds: float | None = None
 
 
 @dataclass
@@ -100,6 +106,11 @@ class EvalTask:
     runs it is the backend-reported or git-derived applied diff file list.
     ``actual_changed_files_kind`` records which interpretation is valid for
     each task.
+
+    ``status`` is a string tag. Common values include ``pending``,
+    ``running``, ``completed``, ``failed``, ``completed_unsafe``, and
+    ``completed_unverified`` (patch landed but typecheck was skipped or could
+    not run — populated by later harness phases).
     """
 
     task_id: str
@@ -119,6 +130,8 @@ class EvalTask:
     timestamps: TaskTimestamps = field(default_factory=TaskTimestamps)
     metrics: TaskMetrics = field(default_factory=TaskMetrics)
     artifacts: TaskArtifacts = field(default_factory=TaskArtifacts)
+    # --- honest-completion-metrics fields (b94d2f0a) ---
+    patch_na_reason: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +225,15 @@ class SummaryMetrics:
     integration_burden: IntegrationBurdenMetrics = field(
         default_factory=IntegrationBurdenMetrics
     )
+    # --- honest-completion-metrics fields (b94d2f0a) ---
+    patch_na_count: int = 0
+    typecheck_pass_count: int = 0
+    typecheck_fail_count: int = 0
+    typecheck_skipped_count: int = 0
+    tokens_total_per_task_mean: float | None = None
+    cost_per_completed_task: float | None = None
+    oob_files_per_task_mean: float | None = None
+    replan_rescued_count: int = 0
 
 
 @dataclass
@@ -498,6 +520,7 @@ def compute_summary_metrics(
     cost_usd_total: float | None = None,
     cost_method: str | None = None,
     cost_source: str | None = None,
+    evidence_kind: str | None = None,
 ) -> SummaryMetrics:
     """Aggregate per-task data into the run-level summary.
 
@@ -512,6 +535,8 @@ def compute_summary_metrics(
             tallies these from backend output).
         tokens_orchestrator_overhead: Estimated input tokens consumed by optional
             coordination / plan-review calls outside per-task worker prompts.
+        evidence_kind: Run-level evidence tag; drives ``typecheck_skipped_count``
+            for applied-diff style runs only.
     """
     total = len(tasks)
     completed = sum(1 for t in tasks if _is_completed(t))
@@ -567,6 +592,53 @@ def compute_summary_metrics(
         if t.actual_changed_files_kind in {"applied_diff", "suite_applied_diff"}
     )
 
+    # --- honest-completion-metrics fields (b94d2f0a) ---
+    patch_na_count = sum(
+        1 for t in tasks if getattr(t.metrics, "patch_applies", None) is False
+    )
+    typecheck_pass_count = sum(
+        1
+        for t in tasks
+        if bool(getattr(t.metrics, "typecheck_ran", False))
+        and getattr(t.metrics, "typecheck_exit_code", None) == 0
+    )
+    typecheck_fail_count = sum(
+        1
+        for t in tasks
+        if bool(getattr(t.metrics, "typecheck_ran", False))
+        and getattr(t.metrics, "typecheck_exit_code", None) not in (None, 0)
+    )
+    applied_like = bool(evidence_kind and "applied_diff" in evidence_kind.lower())
+    typecheck_skipped_count = (
+        sum(
+            1
+            for t in tasks
+            if not bool(getattr(t.metrics, "typecheck_ran", False))
+        )
+        if applied_like
+        else 0
+    )
+    per_task_token_totals: list[float] = []
+    for t in tasks:
+        p = getattr(t.metrics, "tokens_prompt", None)
+        c = getattr(t.metrics, "tokens_completion", None)
+        if p is not None or c is not None:
+            per_task_token_totals.append(float((p or 0) + (c or 0)))
+    tokens_total_per_task_mean: float | None = None
+    if per_task_token_totals:
+        tokens_total_per_task_mean = round(
+            sum(per_task_token_totals) / len(per_task_token_totals), 4
+        )
+    cost_per_completed_task: float | None = None
+    if completed > 0 and cost_usd_total is not None:
+        cost_per_completed_task = round(cost_usd_total / completed, 8)
+    oob_files_per_task_mean: float | None = (
+        round(sum(len(t.out_of_bounds_files) for t in tasks) / total, 4) if total else None
+    )
+    replan_rescued_count = sum(
+        1 for t in tasks if len(getattr(t, "approved_replan_files", []) or []) > 0
+    )
+
     return SummaryMetrics(
         tasks_total=total,
         tasks_completed=completed,
@@ -601,6 +673,14 @@ def compute_summary_metrics(
         cost_source=cost_source,
         applied_changed_files_total=applied_changed,
         integration_burden=compute_integration_burden(tasks),
+        patch_na_count=patch_na_count,
+        typecheck_pass_count=typecheck_pass_count,
+        typecheck_fail_count=typecheck_fail_count,
+        typecheck_skipped_count=typecheck_skipped_count,
+        tokens_total_per_task_mean=tokens_total_per_task_mean,
+        cost_per_completed_task=cost_per_completed_task,
+        oob_files_per_task_mean=oob_files_per_task_mean,
+        replan_rescued_count=replan_rescued_count,
     )
 
 

@@ -1887,6 +1887,7 @@ def run_strategy(
             if backend == "local"
             else "mock_reply_completion_tokens"
         ),
+        evidence_kind=evidence_kind,
     )
     return EvalRun(
         run_id=make_run_id(strategy, backend),
