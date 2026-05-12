@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import subprocess
 import time
@@ -55,7 +56,28 @@ from .eval_schema import (
 # Capped so that a noisy predictor doesn't drown the eval in noise.
 LOCKFILE_ECHO_TOP_K = 8
 SINGLE_AGENT_TOP_K_FILES = 30
-SINGLE_AGENT_MAX_TOKENS = 1600
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+# Output ceiling for proposal-only single-agent runs. Override via
+# ``ACG_SINGLE_AGENT_MAX_TOKENS`` for budget-tight tests.
+SINGLE_AGENT_MAX_TOKENS = _env_int("ACG_SINGLE_AGENT_MAX_TOKENS", 16384)
+
+# Output ceiling for ``--applied-diff-live`` single-agent runs, where the
+# worker must emit one big ``apply_patch`` envelope covering every task.
+# Override via ``ACG_SINGLE_AGENT_APPLIED_MAX_TOKENS``.
+SINGLE_AGENT_APPLIED_MAX_TOKENS = _env_int(
+    "ACG_SINGLE_AGENT_APPLIED_MAX_TOKENS", 65536
+)
 
 SINGLE_AGENT_STRATEGY = "single_agent"
 NAIVE_STRATEGY = "naive_parallel"
@@ -1544,7 +1566,9 @@ async def _run_single_agent_applied(
     reply: LLMReply | None = None
     error: str | None = None
     try:
-        reply = await llm.complete(messages, max_tokens=max(16000, SINGLE_AGENT_MAX_TOKENS))
+        reply = await llm.complete(
+            messages, max_tokens=max(SINGLE_AGENT_APPLIED_MAX_TOKENS, SINGLE_AGENT_MAX_TOKENS)
+        )
     except Exception as exc:  # pragma: no cover - exercised by live backends.
         error = str(exc)
     finally:

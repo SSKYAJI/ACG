@@ -27,6 +27,10 @@ Environment variables (read by :meth:`RuntimeConfig.from_env`):
 ``ACG_LLM_MODEL``             Sub-agent model id
 ``ACG_LLM_API_KEY``           Sub-agent bearer token
 ``ACG_MOCK_LLM``              ``1`` ⇒ short-circuit to :class:`MockRuntimeLLM`
+``ACG_SUB_MAX_TOKENS``        Per-worker ``max_tokens`` (default ``65536``);
+                              set lower for 32k-context endpoints (e.g.
+                              standard ``moonshotai/kimi-k2.6`` ⇒ ``16384``).
+``ACG_ORCH_MAX_TOKENS``       Orchestrator ``max_tokens`` (default ``8192``).
 ``ACG_PERF_TRACE``            Optional path for a GX10 perf trace JSON
 ============================  ==================================================
 """
@@ -62,8 +66,13 @@ DEFAULT_SUB_URL = "http://gx10-f2c9:8080/v1"
 DEFAULT_MODEL = "gemma"
 DEFAULT_TIMEOUT_S = 180.0
 
-ORCH_MAX_TOKENS = 2048
-SUB_MAX_TOKENS = 4096
+# Defaults sized for frontier coder models on long-context endpoints
+# (e.g. Kimi K2.6 Nitro / GPT-5.3-Codex / Claude 4.5 Sonnet). Workers must
+# emit a complete ``apply_patch`` envelope in a single response; truncating
+# at 4k turned applied-diff runs into PATCH_NA noise. Override per env via
+# ``ACG_SUB_MAX_TOKENS`` / ``ACG_ORCH_MAX_TOKENS`` for smaller context windows.
+ORCH_MAX_TOKENS = 8192
+SUB_MAX_TOKENS = 65536
 TEMPERATURE = 0.2
 
 # Top N files (sorted by import-fan-in) embedded in worker prompts so workers
@@ -128,6 +137,8 @@ class RuntimeConfig:
             auto_replan=_env_bool("ACG_AUTO_REPLAN", False),
             model_sha=os.environ.get("ACG_LLM_MODEL_SHA", ""),
             sequential=_env_bool("ACG_SEQUENTIAL", False),
+            sub_max_tokens=_env_int("ACG_SUB_MAX_TOKENS", SUB_MAX_TOKENS),
+            orch_max_tokens=_env_int("ACG_ORCH_MAX_TOKENS", ORCH_MAX_TOKENS),
         )
 
     def public(self) -> dict[str, Any]:
@@ -980,9 +991,13 @@ async def run_orchestrator(
     lock: AgentLock,
     llm: RuntimeLLMProtocol,
     *,
-    max_tokens: int = ORCH_MAX_TOKENS,
+    max_tokens: int | None = None,
+    config: RuntimeConfig | None = None,
 ) -> OrchestratorResult:
     """Run the single thinking-pass orchestrator call."""
+    cfg = config or RuntimeConfig.from_env()
+    if max_tokens is None:
+        max_tokens = cfg.orch_max_tokens
     _console.print("[bold cyan][orchestrator][/] thinking…")
     messages = _build_orchestrator_prompt(lock)
     reply = await llm.complete(messages, max_tokens=max_tokens)
@@ -1010,13 +1025,15 @@ async def run_worker(
     llm: RuntimeLLMProtocol,
     group_id: int,
     *,
-    max_tokens: int = SUB_MAX_TOKENS,
+    max_tokens: int | None = None,
     config: RuntimeConfig | None = None,
     perf: PerfRecorder | None = None,
     include_lockfile_hints: bool = True,
 ) -> WorkerResult:
     """Run a single sub-agent and validate every proposed write."""
     cfg = config or RuntimeConfig.from_env()
+    if max_tokens is None:
+        max_tokens = cfg.sub_max_tokens
     _console.print(f"[blue][worker {task.id}][/] starting (group {group_id})")
     messages = _build_worker_prompt(task, repo_graph, include_lockfile_hints=include_lockfile_hints)
     error: str | None = None
@@ -1294,7 +1311,7 @@ async def run_lockfile(
     if perf:
         perf.start()
 
-    orch_result = await run_orchestrator(lock, orch)
+    orch_result = await run_orchestrator(lock, orch, config=cfg)
 
     workers: list[WorkerResult] = []
     groups_executed: list[GroupResult] = []
