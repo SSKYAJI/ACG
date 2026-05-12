@@ -59,6 +59,7 @@ except ImportError:  # pragma: no cover
 
 from acg.repo_graph import load_context_graph
 from acg.schema import AgentLock, TasksInput
+from acg.stdio_live import prefer_line_buffered_stdio
 
 from .devin_adapter import (
     DevinAPINotConfigured,
@@ -78,6 +79,8 @@ from .strategies import (
     SINGLE_AGENT_STRATEGY,
     run_strategy,
 )
+
+prefer_line_buffered_stdio()
 
 STRATEGY_GROUPS = {
     "both": [NAIVE_STRATEGY, ACG_PLANNED_STRATEGY],

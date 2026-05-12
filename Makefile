@@ -12,6 +12,8 @@ GEMMA_ORCH_PORT ?= 8081
 GEMMA_ENV       := ACG_LLM_URL=http://$(GEMMA_HOST):$(GEMMA_PORT)/v1 ACG_LLM_MODEL=gemma ACG_LLM_API_KEY=local
 GEMMA_ORCH_ENV  := ACG_ORCH_URL=http://$(GEMMA_HOST):$(GEMMA_ORCH_PORT)/v1 ACG_ORCH_MODEL=gemma ACG_ORCH_API_KEY=local
 
+# Stream Python stdout/stderr during long LLM runs (OpenRouter, compile, eval).
+export PYTHONUNBUFFERED := 1
 
 install:
 	python3 -m venv .venv

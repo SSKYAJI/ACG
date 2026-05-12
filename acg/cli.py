@@ -29,8 +29,11 @@ from .repo_graph import (
     scan_context_graph,
 )
 from .schema import AgentLock, TasksInput
+from .stdio_live import prefer_line_buffered_stdio
 
 LOCALIZATION_BACKENDS = ("native", "scip", "auto")
+
+prefer_line_buffered_stdio()
 
 app = typer.Typer(
     add_completion=False,
