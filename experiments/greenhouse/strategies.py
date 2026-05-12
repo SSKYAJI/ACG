@@ -18,6 +18,7 @@ import re
 import subprocess
 import time
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,7 @@ from acg.runtime import (
     run_worker,
 )
 from acg.schema import AgentLock, Task
+from acg.typecheck import TypecheckOutcome, run_tsc_noemit
 
 from .eval_schema import (
     BlockedWriteEvent,
@@ -407,9 +409,15 @@ def _proposals_to_naive_applied_eval_task(
     started_at: str,
     finished_at: str,
     prompt: str | None,
-    git_changed_files: list[str],
+    task_outcome: TaskApplyOutcome,
 ) -> EvalTask:
-    """Naive parallel + real git writes — ``actual_changed_files`` come from ``git diff``."""
+    """Naive parallel + real git writes — ``actual_changed_files`` come from ``git diff``.
+
+    Status is decided in priority order: AGENT_FAIL > PATCH_NA > NO_APPLIED_CONTENT/
+    BLOCKED_BY_SCOPE/EMPTY_PATCH > completed_unsafe (OOB) > FAILED_TYPECHECK >
+    completed > completed_unverified.
+    """
+    git_changed_files = task_outcome.changed_files
     eval_task = task_from_lock(lock_task, prompt=prompt)
     eval_task.actual_changed_files = sorted(git_changed_files)
     eval_task.actual_changed_files_kind = "applied_diff"
@@ -429,9 +437,14 @@ def _proposals_to_naive_applied_eval_task(
         for p in worker.proposals
         if not p.allowed
     ]
+    tc = task_outcome.typecheck
     if worker.error:
         eval_task.status = "failed"
         eval_task.failure_reason = "AGENT_FAIL"
+    elif task_outcome.patch_na:
+        eval_task.status = "failed"
+        eval_task.failure_reason = "PATCH_NA"
+        eval_task.patch_na_reason = task_outcome.patch_na_reason
     elif not eval_task.actual_changed_files:
         if not worker.proposals or all(p.envelope is None for p in worker.proposals):
             eval_task.status = "failed"
@@ -445,8 +458,13 @@ def _proposals_to_naive_applied_eval_task(
     elif eval_task.out_of_bounds_files:
         eval_task.status = "completed_unsafe"
         eval_task.failure_reason = None
-    else:
+    elif tc.ran and tc.exit_code == 0:
         eval_task.status = "completed"
+    elif tc.ran and tc.exit_code is not None and tc.exit_code != 0:
+        eval_task.status = "failed"
+        eval_task.failure_reason = "FAILED_TYPECHECK"
+    else:
+        eval_task.status = "completed_unverified"
     eval_task.timestamps.started_at = started_at
     eval_task.timestamps.finished_at = finished_at
     eval_task.metrics.wall_time_seconds = round(worker.wall_s, 4)
@@ -454,6 +472,14 @@ def _proposals_to_naive_applied_eval_task(
     eval_task.metrics.cost_usd = worker.cost_usd
     eval_task.metrics.cost_source = worker.cost_source
     eval_task.metrics.model_calls = 1
+    if task_outcome.patch_na:
+        eval_task.metrics.patch_applies = False
+    elif eval_task.actual_changed_files:
+        eval_task.metrics.patch_applies = True
+    eval_task.metrics.typecheck_ran = tc.ran
+    eval_task.metrics.typecheck_exit_code = tc.exit_code
+    eval_task.metrics.typecheck_diagnostic_count = tc.diagnostic_count
+    eval_task.metrics.typecheck_wall_seconds = tc.wall_seconds
     return eval_task
 
 
@@ -465,9 +491,10 @@ def _proposals_to_suite_applied_eval_task(
     started_at: str,
     finished_at: str,
     prompt: str | None,
-    git_changed_files: list[str],
+    task_outcome: TaskApplyOutcome,
 ) -> EvalTask:
     """Single-agent applied mode — git-derived files with suite-level envelope parsing."""
+    git_changed_files = task_outcome.changed_files
     eval_task = task_from_lock(lock_task, prompt=prompt)
     eval_task.actual_changed_files = sorted(git_changed_files)
     eval_task.actual_changed_files_kind = "suite_applied_diff"
@@ -479,9 +506,14 @@ def _proposals_to_suite_applied_eval_task(
         }
     )
     eval_task.blocked_write_events = []
+    tc = task_outcome.typecheck
     if worker.error:
         eval_task.status = "failed"
         eval_task.failure_reason = "AGENT_FAIL"
+    elif task_outcome.patch_na:
+        eval_task.status = "failed"
+        eval_task.failure_reason = "PATCH_NA"
+        eval_task.patch_na_reason = task_outcome.patch_na_reason
     elif not eval_task.actual_changed_files:
         if not worker.proposals or all(p.envelope is None for p in worker.proposals):
             eval_task.status = "failed"
@@ -492,8 +524,13 @@ def _proposals_to_suite_applied_eval_task(
     elif eval_task.out_of_bounds_files:
         eval_task.status = "completed_unsafe"
         eval_task.failure_reason = None
-    else:
+    elif tc.ran and tc.exit_code == 0:
         eval_task.status = "completed"
+    elif tc.ran and tc.exit_code is not None and tc.exit_code != 0:
+        eval_task.status = "failed"
+        eval_task.failure_reason = "FAILED_TYPECHECK"
+    else:
+        eval_task.status = "completed_unverified"
     eval_task.timestamps.started_at = started_at
     eval_task.timestamps.finished_at = finished_at
     eval_task.metrics.wall_time_seconds = round(worker.wall_s, 4)
@@ -501,6 +538,14 @@ def _proposals_to_suite_applied_eval_task(
     eval_task.metrics.cost_usd = worker.cost_usd
     eval_task.metrics.cost_source = worker.cost_source
     eval_task.metrics.model_calls = 1
+    if task_outcome.patch_na:
+        eval_task.metrics.patch_applies = False
+    elif eval_task.actual_changed_files:
+        eval_task.metrics.patch_applies = True
+    eval_task.metrics.typecheck_ran = tc.ran
+    eval_task.metrics.typecheck_exit_code = tc.exit_code
+    eval_task.metrics.typecheck_diagnostic_count = tc.diagnostic_count
+    eval_task.metrics.typecheck_wall_seconds = tc.wall_seconds
     return eval_task
 
 
@@ -568,9 +613,15 @@ def _proposals_to_planned_applied_eval_task(
     started_at: str,
     finished_at: str,
     prompt: str | None,
-    git_changed_files: list[str],
+    task_outcome: TaskApplyOutcome,
 ) -> EvalTask:
-    """Like :func:`_proposals_to_planned_eval_task` but ``actual_changed_files`` is git-derived."""
+    """Like :func:`_proposals_to_planned_eval_task` but ``actual_changed_files`` is git-derived.
+
+    Status transitions (priority order):
+    AGENT_FAIL > PATCH_NA > NO_APPLIED_CONTENT/BLOCKED_BY_SCOPE/EMPTY_PATCH >
+    FAILED_TYPECHECK > completed > completed_unverified.
+    """
+    git_changed_files = task_outcome.changed_files
     eval_task = task_from_lock(lock_task, prompt=prompt)
     eval_task.actual_changed_files = sorted(git_changed_files)
     eval_task.actual_changed_files_kind = "applied_diff"
@@ -586,9 +637,14 @@ def _proposals_to_planned_applied_eval_task(
         for p in worker.proposals
         if not p.allowed
     ]
+    tc = task_outcome.typecheck
     if worker.error:
         eval_task.status = "failed"
         eval_task.failure_reason = "AGENT_FAIL"
+    elif task_outcome.patch_na:
+        eval_task.status = "failed"
+        eval_task.failure_reason = "PATCH_NA"
+        eval_task.patch_na_reason = task_outcome.patch_na_reason
     elif not eval_task.actual_changed_files:
         if not worker.proposals or all(p.envelope is None for p in worker.proposals):
             eval_task.status = "failed"
@@ -599,8 +655,13 @@ def _proposals_to_planned_applied_eval_task(
         else:
             eval_task.status = "failed"
             eval_task.failure_reason = "EMPTY_PATCH"
-    else:
+    elif tc.ran and tc.exit_code == 0:
         eval_task.status = "completed"
+    elif tc.ran and tc.exit_code is not None and tc.exit_code != 0:
+        eval_task.status = "failed"
+        eval_task.failure_reason = "FAILED_TYPECHECK"
+    else:
+        eval_task.status = "completed_unverified"
     eval_task.timestamps.started_at = started_at
     eval_task.timestamps.finished_at = finished_at
     eval_task.metrics.wall_time_seconds = round(worker.wall_s, 4)
@@ -608,6 +669,14 @@ def _proposals_to_planned_applied_eval_task(
     eval_task.metrics.cost_usd = worker.cost_usd
     eval_task.metrics.cost_source = worker.cost_source
     eval_task.metrics.model_calls = 1
+    if task_outcome.patch_na:
+        eval_task.metrics.patch_applies = False
+    elif eval_task.actual_changed_files:
+        eval_task.metrics.patch_applies = True
+    eval_task.metrics.typecheck_ran = tc.ran
+    eval_task.metrics.typecheck_exit_code = tc.exit_code
+    eval_task.metrics.typecheck_diagnostic_count = tc.diagnostic_count
+    eval_task.metrics.typecheck_wall_seconds = tc.wall_seconds
     return eval_task
 
 
@@ -624,6 +693,33 @@ def _git_identity_args() -> list[str]:
     ]
 
 
+@dataclass(frozen=True)
+class TaskApplyOutcome:
+    """Aggregated apply-step result for one task.
+
+    Combines the git-derived ``changed_files``, the patch-N/A signal lifted
+    from ``apply_envelope`` calls (any patch failure surfaces as
+    ``patch_na=True`` plus the first reason), and the ``TypecheckOutcome``
+    captured from ``npx tsc --noEmit`` after the commit step. Converters
+    use this struct to assign honest task statuses
+    (``failed/PATCH_NA`` / ``failed/FAILED_TYPECHECK`` / ``completed`` /
+    ``completed_unverified``) without needing access to subprocess details.
+    """
+
+    changed_files: list[str] = field(default_factory=list)
+    patch_na: bool = False
+    patch_na_reason: str | None = None
+    typecheck: TypecheckOutcome = field(
+        default_factory=lambda: TypecheckOutcome(
+            ran=False,
+            exit_code=None,
+            diagnostic_count=None,
+            wall_seconds=None,
+            skip_reason="NOT_RUN",
+        )
+    )
+
+
 def _apply_writes_git_sync(
     checkout: Path,
     base_sha: str,
@@ -632,7 +728,8 @@ def _apply_writes_git_sync(
     wr: WorkerResult,
     *,
     require_scope: bool = True,
-) -> list[str]:
+    run_typecheck: bool = True,
+) -> TaskApplyOutcome:
     """Create ``acg-applied/<task>`` from ``base_sha``, apply envelopes, commit, return diff names."""
     repo = str(checkout.resolve())
     branch = f"acg-applied/{_sanitize_applied_branch_task_id(task.id)}"
@@ -650,28 +747,25 @@ def _apply_writes_git_sync(
     )
     try:
         root = checkout.resolve()
+        patch_na = False
+        patch_na_reason: str | None = None
         for prop in wr.proposals:
             if require_scope and not prop.allowed:
                 continue
-            if prop.envelope is not None:
-                if require_scope:
-                    allowed, _reason = validate_write(lock, task.id, prop.file)
-                    if not allowed:
-                        continue
-                apply_envelope(prop.envelope, root)
-            elif prop.content is not None:
-                if require_scope:
-                    allowed, _reason = validate_write(lock, task.id, prop.file)
-                    if not allowed:
-                        continue
-                rel = prop.file.lstrip("./")
-                dest = (checkout / rel).resolve()
-                try:
-                    dest.relative_to(root)
-                except ValueError:
+            if prop.envelope is None:
+                # Proposals without an apply_patch envelope are silently
+                # ignored at the apply step. The legacy ``content`` fallback
+                # was removed because it muddied the "completed" signal:
+                # a raw blob write isn't an apply_patch outcome.
+                continue
+            if require_scope:
+                allowed, _reason = validate_write(lock, task.id, prop.file)
+                if not allowed:
                     continue
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_text(prop.content, encoding="utf-8")
+            outcome = apply_envelope(prop.envelope, root)
+            if outcome.patch_na and not patch_na:
+                patch_na = True
+                patch_na_reason = outcome.patch_na_reason
         subprocess.run(["git", "-C", repo, "add", "-A"], check=True, capture_output=True, text=True)
         st = subprocess.run(
             ["git", "-C", repo, "status", "--porcelain"],
@@ -700,8 +794,25 @@ def _apply_writes_git_sync(
             capture_output=True,
             text=True,
         )
-        names = [line.strip() for line in diff.stdout.splitlines() if line.strip()]
-        return sorted(set(names))
+        names = sorted(
+            {line.strip() for line in diff.stdout.splitlines() if line.strip()}
+        )
+        if run_typecheck:
+            tc = run_tsc_noemit(checkout)
+        else:
+            tc = TypecheckOutcome(
+                ran=False,
+                exit_code=None,
+                diagnostic_count=None,
+                wall_seconds=None,
+                skip_reason="DISABLED",
+            )
+        return TaskApplyOutcome(
+            changed_files=names,
+            patch_na=patch_na,
+            patch_na_reason=patch_na_reason,
+            typecheck=tc,
+        )
     finally:
         subprocess.run(
             ["git", "-C", repo, "checkout", "--quiet", "--detach", base_sha],
@@ -904,7 +1015,7 @@ async def _run_naive_parallel_applied(
     naive_runtime_config = RuntimeConfig.from_env()
     naive_runtime_config.auto_replan = False
     tasks_by_id = {t.id: t for t in lock.tasks}
-    changed_by_task: dict[str, list[str]] = {}
+    outcome_by_task: dict[str, TaskApplyOutcome] = {}
     git_lock = asyncio.Lock()
     try:
         worker_results = await _gather_capped(
@@ -926,7 +1037,7 @@ async def _run_naive_parallel_applied(
             if task is None:
                 continue
             async with git_lock:
-                names = await asyncio.to_thread(
+                outcome = await asyncio.to_thread(
                     _apply_writes_git_sync,
                     checkout,
                     base_sha,
@@ -935,7 +1046,7 @@ async def _run_naive_parallel_applied(
                     wr,
                     require_scope=False,
                 )
-            changed_by_task[wr.task_id] = names
+            outcome_by_task[wr.task_id] = outcome
     finally:
         await counting_sub.aclose()
     wall_s = time.perf_counter() - t0
@@ -949,13 +1060,121 @@ async def _run_naive_parallel_applied(
             started_at=started,
             finished_at=finished,
             prompt=(prompts_by_task or {}).get(wr.task_id),
-            git_changed_files=changed_by_task.get(wr.task_id, []),
+            task_outcome=outcome_by_task.get(wr.task_id, TaskApplyOutcome()),
         )
         for wr in worker_results
         if wr.task_id in tasks_by_id
     ]
     for et in tasks:
         et.metrics.tokens_prompt = counting_sub.tokens_by_task.get(et.task_id)
+    annotate_overlaps(tasks)
+    return tasks, wall_s, counting_sub.prompt_token_method
+
+
+async def _run_naive_parallel_blind_applied(
+    lock: AgentLock,
+    repo_graph: dict[str, Any],
+    sub_factory: Callable[[], RuntimeLLMProtocol],
+    checkout_path: Path,
+    *,
+    prompts_by_task: dict[str, str] | None = None,
+    cap_parallelism: int | None = None,
+) -> tuple[list[EvalTask], float, str]:
+    """Naive blind workers (no lockfile hints) + real git writes.
+
+    Mirrors :func:`_run_naive_parallel_applied` but every worker is built
+    with ``include_lockfile_hints=False`` so the prompt does not enumerate
+    ``predicted_writes`` / ``candidate_context``. This is the apply-step
+    counterpart of :func:`_run_naive_parallel_blind` and exposes the OOB
+    behavior for the blind baseline.
+    """
+    checkout = checkout_path.resolve()
+    probe = subprocess.run(
+        ["git", "-C", str(checkout), "rev-parse", "--is-inside-work-tree"],
+        capture_output=True,
+        text=True,
+    )
+    if probe.returncode != 0 or probe.stdout.strip() != "true":
+        raise ValueError(f"applied branch writes require a git checkout: {checkout}")
+    if lock.repo and (lock.repo.commit or "").strip():
+        pin = lock.repo.commit.strip()
+        base_sha = subprocess.run(
+            ["git", "-C", str(checkout), "rev-parse", "--verify", pin],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    else:
+        base_sha = subprocess.run(
+            ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    sub_inner = sub_factory()
+    counting_sub = _PromptCountingLLM(sub_inner)
+    started = now_iso()
+    t0 = time.perf_counter()
+    from acg.runtime import RuntimeConfig
+
+    blind_runtime_config = RuntimeConfig.from_env()
+    blind_runtime_config.auto_replan = False
+    tasks_by_id = {t.id: t for t in lock.tasks}
+    outcome_by_task: dict[str, TaskApplyOutcome] = {}
+    git_lock = asyncio.Lock()
+    try:
+        worker_results = await _gather_capped(
+            [
+                run_worker(
+                    task,
+                    lock,
+                    repo_graph,
+                    counting_sub,
+                    group_id=0,
+                    config=blind_runtime_config,
+                    include_lockfile_hints=False,
+                )
+                for task in lock.tasks
+            ],
+            cap_parallelism,
+        )
+        for wr in worker_results:
+            task = tasks_by_id.get(wr.task_id)
+            if task is None:
+                continue
+            async with git_lock:
+                outcome = await asyncio.to_thread(
+                    _apply_writes_git_sync,
+                    checkout,
+                    base_sha,
+                    lock,
+                    task,
+                    wr,
+                    require_scope=False,
+                )
+            outcome_by_task[wr.task_id] = outcome
+    finally:
+        await counting_sub.aclose()
+    wall_s = time.perf_counter() - t0
+    finished = now_iso()
+
+    tasks = [
+        _proposals_to_naive_applied_eval_task(
+            wr,
+            tasks_by_id[wr.task_id],
+            lock,
+            started_at=started,
+            finished_at=finished,
+            prompt=(prompts_by_task or {}).get(wr.task_id),
+            task_outcome=outcome_by_task.get(wr.task_id, TaskApplyOutcome()),
+        )
+        for wr in worker_results
+        if wr.task_id in tasks_by_id
+    ]
+    for et in tasks:
+        et.metrics.tokens_prompt = counting_sub.tokens_by_task.get(et.task_id)
+        et.actual_changed_files_kind = "naive_parallel_blind_applied_diff"
     annotate_overlaps(tasks)
     return tasks, wall_s, counting_sub.prompt_token_method
 
@@ -1385,14 +1604,14 @@ async def _run_single_agent_applied(
             cost_source=reply.cost_source if reply is not None else None,
         )
 
-    changed_by_task: dict[str, list[str]] = {}
+    outcome_by_task: dict[str, TaskApplyOutcome] = {}
     git_lock = asyncio.Lock()
 
     async def _apply_one(task_id: str) -> None:
         wr = workers_by_task[task_id]
         task = next(t for t in lock.tasks if t.id == task_id)
         async with git_lock:
-            names = await asyncio.to_thread(
+            outcome = await asyncio.to_thread(
                 _apply_writes_git_sync,
                 checkout,
                 base_sha,
@@ -1401,7 +1620,7 @@ async def _run_single_agent_applied(
                 wr,
                 require_scope=False,
             )
-        changed_by_task[task_id] = names
+        outcome_by_task[task_id] = outcome
 
     if not error:
         for task in lock.tasks:
@@ -1417,7 +1636,7 @@ async def _run_single_agent_applied(
             started_at=started,
             finished_at=finished,
             prompt=(prompts_by_task or {}).get(lock_task.id, lock_task.prompt),
-            git_changed_files=changed_by_task.get(lock_task.id, []),
+            task_outcome=outcome_by_task.get(lock_task.id, TaskApplyOutcome()),
         )
         eval_task.metrics.wall_time_seconds = round(wall_s if index == 0 else 0.0, 4)
         eval_task.metrics.model_calls = 1 if index == 0 else 0
@@ -1574,7 +1793,7 @@ async def _run_acg_planned_applied(
 
     tasks_by_id = {t.id: t for t in lock.tasks}
     worker_results: list[WorkerResult] = []
-    changed_by_task: dict[str, list[str]] = {}
+    outcome_by_task: dict[str, TaskApplyOutcome] = {}
     git_lock = asyncio.Lock()
     started = now_iso()
     t0 = time.perf_counter()
@@ -1584,7 +1803,7 @@ async def _run_acg_planned_applied(
         if task is None:
             return
         async with git_lock:
-            names = await asyncio.to_thread(
+            outcome = await asyncio.to_thread(
                 _apply_writes_git_sync,
                 checkout,
                 base_sha,
@@ -1593,7 +1812,7 @@ async def _run_acg_planned_applied(
                 wr,
                 require_scope=True,
             )
-        changed_by_task[wr.task_id] = names
+        outcome_by_task[wr.task_id] = outcome
 
     try:
         for group in sorted(lock.execution_plan.groups, key=lambda g: g.id):
@@ -1636,7 +1855,7 @@ async def _run_acg_planned_applied(
             started_at=started,
             finished_at=finished,
             prompt=(prompts_by_task or {}).get(wr.task_id),
-            git_changed_files=changed_by_task.get(wr.task_id, []),
+            task_outcome=outcome_by_task.get(wr.task_id, TaskApplyOutcome()),
         )
         et.metrics.tokens_prompt = counting_sub.tokens_by_task.get(wr.task_id)
         tasks.append(et)
@@ -1739,6 +1958,7 @@ def run_strategy(
         in (
             SINGLE_AGENT_STRATEGY,
             NAIVE_STRATEGY,
+            NAIVE_PARALLEL_BLIND_STRATEGY,
             ACG_PLANNED_STRATEGY,
             ACG_PLANNED_REPLAN_STRATEGY,
         )
@@ -1750,8 +1970,8 @@ def run_strategy(
     if applied_diff_live and strategy == ACG_PLANNED_FULL_CONTEXT_STRATEGY:
         raise ValueError(
             "--applied-diff-live is not supported for acg_planned_full_context "
-            "(use single_agent, naive_parallel, acg_planned, acg_planned_replan, "
-            "or acg_planned_applied)"
+            "(use single_agent, naive_parallel, naive_parallel_blind, acg_planned, "
+            "acg_planned_replan, or acg_planned_applied)"
         )
 
     if backend == "mock":
@@ -1820,18 +2040,33 @@ def run_strategy(
             execution_mode = "propose_validate"
             evidence_kind = "proposed_write_set"
     elif strategy == NAIVE_PARALLEL_BLIND_STRATEGY:
-        tasks, wall_s, prompt_token_method = asyncio.run(
-            _run_naive_parallel_blind(
-                lock,
-                repo_graph,
-                sub_factory,
-                prompts_by_task=prompts_by_task,
-                cap_parallelism=cap_parallelism,
+        if applied_diff_live:
+            tasks, wall_s, prompt_token_method = asyncio.run(
+                _run_naive_parallel_blind_applied(
+                    lock,
+                    repo_graph,
+                    sub_factory,
+                    checkout,
+                    prompts_by_task=prompts_by_task,
+                    cap_parallelism=cap_parallelism,
+                )
             )
-        )
-        orch_overhead = None
-        execution_mode = "propose_validate_blind"
-        evidence_kind = "naive_parallel_blind_proposed_write_set"
+            orch_overhead = None
+            execution_mode = "applied_diff_live"
+            evidence_kind = "naive_parallel_blind_applied_diff"
+        else:
+            tasks, wall_s, prompt_token_method = asyncio.run(
+                _run_naive_parallel_blind(
+                    lock,
+                    repo_graph,
+                    sub_factory,
+                    prompts_by_task=prompts_by_task,
+                    cap_parallelism=cap_parallelism,
+                )
+            )
+            orch_overhead = None
+            execution_mode = "propose_validate_blind"
+            evidence_kind = "naive_parallel_blind_proposed_write_set"
     elif run_planned_git_applied:
         tasks, wall_s, prompt_token_method = asyncio.run(
             _run_acg_planned_applied(

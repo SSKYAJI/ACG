@@ -8,9 +8,24 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from acg.schema import AgentLock
+from acg.typecheck import TypecheckOutcome
 from experiments.greenhouse.eval_schema import EvalRepo, write_eval_run
 from experiments.greenhouse.strategies import ACG_PLANNED_APPLIED_STRATEGY, run_strategy
+
+
+def _passing_typecheck_outcome(_checkout) -> TypecheckOutcome:
+    """Mock ``run_tsc_noemit`` substitute used by tests that do not ship a
+    tsconfig — we want the apply machinery to mark tasks ``completed`` so the
+    test asserts apply-step behavior, not transitive typecheck behavior."""
+    return TypecheckOutcome(
+        ran=True,
+        exit_code=0,
+        diagnostic_count=0,
+        wall_seconds=0.0,
+    )
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -71,7 +86,13 @@ def _minimal_lock(*, repo_root: str, task_id: str, file_path: str) -> AgentLock:
     )
 
 
-def test_applied_diff_live_writes_files_to_checkout(tmp_path: Path) -> None:
+def test_applied_diff_live_writes_files_to_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "experiments.greenhouse.strategies.run_tsc_noemit",
+        _passing_typecheck_outcome,
+    )
     repo = tmp_path / "checkout"
     base_sha = _init_repo(repo)
     lock = _minimal_lock(repo_root=str(repo), task_id="task_a", file_path="app/x.ts")
