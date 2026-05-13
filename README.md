@@ -4,7 +4,6 @@
 
 Parallel coding agents are powerful, but they collide on shared files. Devin now manages teams of Devins, but public docs only say the coordinator resolves conflicts after the fact. **ACG moves that work before execution.** It scans the repo, predicts each task's write-set, emits a committable `agent_lock.json`, and validates writes against that contract. In local/Cascade-style execution, the validator can block illegal writes before they corrupt the diff; for black-box Devin, the same contract is injected up front and audited post-hoc from PR diffs.
 
-LA Hacks 2026 — Cognition track (primary) · ASUS track (secondary).
 
 ## Live execution mode
 
@@ -143,10 +142,10 @@ tasks.json + repo  ──► graph_builder/scan.ts (ts-morph)  ──► context
 
 Long form in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-## Sponsor narratives
+## Integrations
 
-- **Cognition** — Devin Manage Devins coordinates child Devins but doesn't publish how it resolves conflicts. ACG is the pre-flight artifact the coordinator can consume before fanning out. See [`docs/COGNITION_INTEGRATION.md`](docs/COGNITION_INTEGRATION.md).
-- **ASUS GX10** — Local-first AI infrastructure for compliance-heavy enterprises that cannot ship code to cloud LLMs. The same OpenAI-compatible client that talks to Groq talks to vLLM on the GX10. See [`docs/ASUS_DEPLOYMENT.md`](docs/ASUS_DEPLOYMENT.md).
+- **Cognition (Devin)** — ACG is the pre-flight artifact a coordinator can consume before fanning out child agents. See [`docs/COGNITION_INTEGRATION.md`](docs/COGNITION_INTEGRATION.md).
+- **Local-first / on-prem deployment** — The same OpenAI-compatible client that talks to Groq or OpenRouter talks to vLLM on local hardware, keeping code off third-party APIs. See [`docs/ASUS_DEPLOYMENT.md`](docs/ASUS_DEPLOYMENT.md).
 
 ## Cascade integration
 
