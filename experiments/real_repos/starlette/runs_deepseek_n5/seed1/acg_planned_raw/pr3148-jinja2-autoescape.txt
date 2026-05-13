@@ -1,0 +1,57 @@
+*** Begin Patch
+*** Update File: starlette/templating.py
+@@
+ from __future__ import annotations
+ 
+ import typing
+ from pathlib import Path
+ 
+-from jinja2 import Environment, FileSystemLoader
++from jinja2 import Environment, FileSystemLoader, select_autoescape
+ 
+ from starlette.requests import Request
+ from starlette.responses import HTMLResponse
+ from starlette.templating import _TemplateResponse
+@@
+ class Jinja2Templates:
+     def __init__(
+         self,
+         directory: str | Path | None = None,
+         env: Environment | None = None,
+         **env_options: typing.Any,
+     ) -> None:
+         if env is not None:
+             self.env = env
+         elif directory is not None:
+-            self.env = Environment(loader=FileSystemLoader(directory), **env_options)
++            opts = dict(loader=FileSystemLoader(directory), **env_options)
++            if "autoescape" not in env_options:
++                opts["autoescape"] = select_autoescape
++            self.env = Environment(**opts)
+         else:
+             raise ValueError(...)
+         self.env.globals.setdefault("url_for", ...)
+*** Update File: tests/test_templates.py
+@@
++def test_autoescaping_default():
++    from starlette.templating import Jinja2Templates
++    import tempfile
++    from pathlib import Path
++    with tempfile.TemporaryDirectory() as tmpdir:
++        template_path = Path(tmpdir) / "test.html"
++        template_path.write_text("<html><body>{{ variable }}</body></html>")
++        templates = Jinja2Templates(directory=tmpdir)
++        response = templates.TemplateResponse("test.html", {"request": {}, "variable": "<script>alert('xss')</script>"})
++        assert b"&lt;script&gt;" in response.body
++
++def test_autoescaping_disabled():
++    from starlette.templating import Jinja2Templates
++    import tempfile
++    from pathlib import Path
++    with tempfile.TemporaryDirectory() as tmpdir:
++        template_path = Path(tmpdir) / "test.html"
++        template_path.write_text("<html><body>{{ variable }}</body></html>")
++        templates = Jinja2Templates(directory=tmpdir, env_options={"autoescape": False})
++        response = templates.TemplateResponse("test.html", {"request": {}, "variable": "<script>alert('xss')</script>"})
++        assert b"<script>" in response.body
+*** End Patch

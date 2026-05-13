@@ -1,0 +1,527 @@
+{
+  "backend": "mock",
+  "created_at": "2026-05-12T02:50:17Z",
+  "evidence_kind": "proposed_write_set",
+  "execution_mode": "propose_validate",
+  "lockfile": "experiments/realworld/agent_lock_blind.json",
+  "model": {
+    "model": "lockfile-echo",
+    "provider": "mock",
+    "url": "mock://local"
+  },
+  "repo": {
+    "commit": "c1c2cc4e448b279ff083272df1ac50d20c3304fa",
+    "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/realworld/checkout",
+    "url": "https://github.com/lujakob/nestjs-realworld-example-app.git"
+  },
+  "run_id": "greenhouse-mock-acg_planned_replan-20260512-025017",
+  "strategy": "acg_planned_replan",
+  "suite_name": "realworld-nestjs-blind-mock-replan",
+  "summary_metrics": {
+    "acus_consumed_total": null,
+    "applied_changed_files_total": 0,
+    "blocked_invalid_write_count": 0,
+    "cost_method": null,
+    "cost_per_completed_task": null,
+    "cost_source": null,
+    "cost_usd_total": null,
+    "first_run_pass_rate": 0.0,
+    "human_interventions": 0,
+    "integration_burden": {
+      "blocked_events_total": 0,
+      "changed_file_mentions_total": 27,
+      "changed_lines_added": null,
+      "changed_lines_deleted": null,
+      "changed_lines_total": null,
+      "diff_stats_kind": null,
+      "duplicate_file_touches": 9,
+      "out_of_bounds_files_total": 0,
+      "overlapping_files": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.service.ts",
+        "src/user/user.controller.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.module.ts",
+        "src/user/user.service.ts"
+      ],
+      "overlapping_task_pairs": 3,
+      "review_file_mentions_total": 27,
+      "review_unique_files_total": 18,
+      "unique_changed_files": 18
+    },
+    "merge_conflicts": 0,
+    "oob_files_per_task_mean": 0.0,
+    "out_of_bounds_write_count": 0,
+    "overlapping_write_pairs": 3,
+    "patch_na_count": 0,
+    "proposal_completion_rate": 1.0,
+    "replan_rescued_count": 0,
+    "successful_parallel_speedup": null,
+    "task_completion_rate": 1.0,
+    "tasks_completed": 6,
+    "tasks_completed_per_hour": 2968833.8416,
+    "tasks_total": 6,
+    "tested_completion_rate": 0.0,
+    "tested_tasks_completed": 0,
+    "tests_ran_count": 0,
+    "tokens_all_in": 34956,
+    "tokens_completion_method": "mock_reply_completion_tokens",
+    "tokens_completion_total": 108,
+    "tokens_orchestrator_overhead": null,
+    "tokens_planner_total": 18976,
+    "tokens_prompt_method": "estimated_chars_div_4",
+    "tokens_prompt_total": 2458,
+    "tokens_scope_review_total": 13522,
+    "tokens_total_per_task_mean": 427.6667,
+    "tokens_worker_prompt_total": 2458,
+    "typecheck_fail_count": 0,
+    "typecheck_pass_count": 0,
+    "typecheck_skipped_count": 0,
+    "wall_time_seconds": 0.0073
+  },
+  "tasks": [
+    {
+      "actual_changed_files": [
+        "src/app.controller.ts"
+      ],
+      "actual_changed_files_kind": "proposed_write_set",
+      "allowed_write_globs": [
+        "src/app.controller.ts"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": null,
+        "cost_usd": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "patch_applies": null,
+        "tokens_completion": 4,
+        "tokens_prompt": 323,
+        "typecheck_diagnostic_count": null,
+        "typecheck_exit_code": null,
+        "typecheck_ran": false,
+        "typecheck_wall_seconds": null,
+        "wall_time_seconds": 0.0
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "patch_na_reason": null,
+      "predicted_write_files": [
+        "src/app.controller.ts"
+      ],
+      "prompt": "Add a health check endpoint that verifies the application and its database connection are operational. Return a standard health status response.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "add-health-check",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-12T02:50:17Z",
+        "started_at": "2026-05-12T02:50:17Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "package.json",
+        "src/main.ts"
+      ],
+      "actual_changed_files_kind": "proposed_write_set",
+      "allowed_write_globs": [
+        "package.json",
+        "src/main.ts"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": null,
+        "cost_usd": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "patch_applies": null,
+        "tokens_completion": 8,
+        "tokens_prompt": 358,
+        "typecheck_diagnostic_count": null,
+        "typecheck_exit_code": null,
+        "typecheck_ran": false,
+        "typecheck_wall_seconds": null,
+        "wall_time_seconds": 0.0
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "patch_na_reason": null,
+      "predicted_write_files": [
+        "src/main.ts",
+        "package.json"
+      ],
+      "prompt": "Add global API rate limiting to the application. Use a NestJS-compatible throttling library. Configure a default of 100 requests per 60 seconds. Apply it globally so all endpoints are protected.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "add-rate-limiting",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-12T02:50:17Z",
+        "started_at": "2026-05-12T02:50:17Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "src/user/auth.middleware.ts",
+        "src/user/dto/index.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.module.ts"
+      ],
+      "actual_changed_files_kind": "proposed_write_set",
+      "allowed_write_globs": [
+        "src/user/auth.middleware.ts",
+        "src/user/dto/**",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.module.ts"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": null,
+        "cost_usd": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "patch_applies": null,
+        "tokens_completion": 20,
+        "tokens_prompt": 443,
+        "typecheck_diagnostic_count": null,
+        "typecheck_exit_code": null,
+        "typecheck_ran": false,
+        "typecheck_wall_seconds": null,
+        "wall_time_seconds": 0.0
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [
+        "add-article-bookmarks",
+        "add-article-search"
+      ],
+      "patch_na_reason": null,
+      "predicted_write_files": [
+        "src/user/user.module.ts",
+        "src/user/dto/index.ts",
+        "src/user/user.entity.ts",
+        "src/user/auth.middleware.ts",
+        "src/user/user.interface.ts"
+      ],
+      "prompt": "Add role-based access control to the application. Users should have a role field (user or admin). Create a guard that checks the current user's role against a required role. Register it so endpoints can be decorated with a role requirement.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "add-user-roles",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-12T02:50:17Z",
+        "started_at": "2026-05-12T02:50:17Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.module.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "actual_changed_files_kind": "proposed_write_set",
+      "allowed_write_globs": [
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.module.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": null,
+        "cost_usd": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "patch_applies": null,
+        "tokens_completion": 12,
+        "tokens_prompt": 354,
+        "typecheck_diagnostic_count": null,
+        "typecheck_exit_code": null,
+        "typecheck_ran": false,
+        "typecheck_wall_seconds": null,
+        "wall_time_seconds": 0.0
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "patch_na_reason": null,
+      "predicted_write_files": [
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.service.ts",
+        "src/tag/tag.module.ts"
+      ],
+      "prompt": "Extend the tag system with write operations. Currently tags can only be read. Add the ability to create new tags and delete existing ones via the API.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "extend-tag-crud",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-12T02:50:17Z",
+        "started_at": "2026-05-12T02:50:17Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.service.ts",
+        "src/user/user.controller.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.module.ts",
+        "src/user/user.service.ts"
+      ],
+      "actual_changed_files_kind": "proposed_write_set",
+      "allowed_write_globs": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/user/user.controller.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.module.ts",
+        "src/user/user.service.ts"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": null,
+        "cost_usd": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "patch_applies": null,
+        "tokens_completion": 32,
+        "tokens_prompt": 492,
+        "typecheck_diagnostic_count": null,
+        "typecheck_exit_code": null,
+        "typecheck_ran": false,
+        "typecheck_wall_seconds": null,
+        "wall_time_seconds": 0.0
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [
+        "add-article-search",
+        "add-user-roles"
+      ],
+      "patch_na_reason": null,
+      "predicted_write_files": [
+        "src/user/user.interface.ts",
+        "src/user/user.module.ts",
+        "src/article/article.entity.ts",
+        "src/user/user.entity.ts",
+        "src/article/article.service.ts",
+        "src/user/user.service.ts",
+        "src/article/article.controller.ts",
+        "src/user/user.controller.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.module.ts"
+      ],
+      "prompt": "Add a bookmarking feature so users can save articles for later, separate from the existing favorites system. Users should be able to bookmark and unbookmark articles via the API. Store the bookmark relationship in the database.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "add-article-bookmarks",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-12T02:50:17Z",
+        "started_at": "2026-05-12T02:50:17Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/user/user.controller.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.service.ts"
+      ],
+      "actual_changed_files_kind": "proposed_write_set",
+      "allowed_write_globs": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/user/user.controller.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.module.ts",
+        "src/user/user.service.ts"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": null,
+        "cost_usd": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "patch_applies": null,
+        "tokens_completion": 32,
+        "tokens_prompt": 488,
+        "typecheck_diagnostic_count": null,
+        "typecheck_exit_code": null,
+        "typecheck_ran": false,
+        "typecheck_wall_seconds": null,
+        "wall_time_seconds": 0.0
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [
+        "add-article-bookmarks",
+        "add-user-roles"
+      ],
+      "patch_na_reason": null,
+      "predicted_write_files": [
+        "src/user/user.interface.ts",
+        "src/article/article.controller.ts",
+        "src/article/article.service.ts",
+        "src/user/user.controller.ts",
+        "src/user/user.service.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.module.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.module.ts"
+      ],
+      "prompt": "Add full-text search to the articles API. Users should be able to search articles by keywords matching against the title and body fields. Return paginated results.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "add-article-search",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-12T02:50:17Z",
+        "started_at": "2026-05-12T02:50:17Z"
+      }
+    }
+  ],
+  "version": "0.1"
+}

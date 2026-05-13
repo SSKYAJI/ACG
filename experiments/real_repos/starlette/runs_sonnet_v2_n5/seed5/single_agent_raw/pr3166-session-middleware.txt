@@ -1,0 +1,142 @@
+*** Begin Patch
+*** Add File: tests/test_sessions.py
+import pytest
+
+from starlette.applications import Starlette
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Route
+from starlette.testclient import TestClient
+
+
+def view_session(request: Request):
+    return JSONResponse({"session": dict(request.session)})
+
+
+async def update_session(request: Request):
+    data = await request.json()
+    request.session.update(data)
+    return JSONResponse({"session": dict(request.session)})
+
+
+async def clear_session(request: Request):
+    request.session.clear()
+    return JSONResponse({"session": dict(request.session)})
+
+
+def create_app():
+    app = Starlette(
+        routes=[
+            Route("/view", view_session),
+            Route("/update", update_session, methods=["POST"]),
+            Route("/clear", clear_session, methods=["POST"]),
+        ]
+    )
+    app.add_middleware(SessionMiddleware, secret_key="test-secret")
+    return app
+
+
+def test_session_basic():
+    app = create_app()
+    client = TestClient(app)
+
+    response = client.post("/update", json={"username": "alice"})
+    assert response.status_code == 200
+    assert response.json() == {"session": {"username": "alice"}}
+    assert "Set-Cookie" in response.headers
+
+    response = client.get("/view")
+    assert response.status_code == 200
+    assert response.json() == {"session": {"username": "alice"}}
+
+
+def test_session_clear():
+    app = create_app()
+    client = TestClient(app)
+
+    # Set session data
+    client.post("/update", json={"username": "alice"})
+
+    # Clear session
+    response = client.post("/clear")
+    assert response.status_code == 200
+    assert "Set-Cookie" in response.headers
+    # Cookie should be expired/deleted
+    assert "Max-Age=0" in response.headers["Set-Cookie"]
+
+
+def test_readonly_session_no_set_cookie():
+    """Reading session without mutation should not send Set-Cookie."""
+    app = create_app()
+    client = TestClient(app)
+
+    # First set some session data
+    client.post("/update", json={"username": "alice"})
+
+    # Now just view - should NOT send Set-Cookie
+    response = client.get("/view")
+    assert response.status_code == 200
+    assert response.json() == {"session": {"username": "alice"}}
+    assert "Set-Cookie" not in response.headers
+
+
+def test_empty_session_no_set_cookie():
+    """Empty session that is never modified should not send Set-Cookie."""
+    app = create_app()
+    client = TestClient(app)
+
+    response = client.get("/view")
+    assert response.status_code == 200
+    assert response.json() == {"session": {}}
+    assert "Set-Cookie" not in response.headers
+
+
+def test_session_mutation_sends_set_cookie():
+    """Mutating session should always send Set-Cookie."""
+    app = create_app()
+    client = TestClient(app)
+
+    response = client.post("/update", json={"key": "value"})
+    assert response.status_code == 200
+    assert "Set-Cookie" in response.headers
+
+
+def test_concurrent_requests_independent_sessions():
+    """Concurrent requests should have independent session state."""
+    import threading
+
+    app = create_app()
+    results = {}
+
+    def make_request(key, value, result_key):
+        client = TestClient(app)
+        client.post("/update", json={key: value})
+        response = client.get("/view")
+        results[result_key] = response.json()["session"]
+
+    t1 = threading.Thread(target=make_request, args=("user1", "alice", "t1"))
+    t2 = threading.Thread(target=make_request, args=("user2", "bob", "t2"))
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    assert results["t1"] == {"user1": "alice"}
+    assert results["t2"] == {"user2": "bob"}
+
+
+def test_session_cookie_not_resent_if_unchanged():
+    """If session data is read but not changed, cookie should not be resent."""
+    app = create_app()
+    client = TestClient(app)
+
+    # Set initial session
+    client.post("/update", json={"foo": "bar"})
+
+    # Multiple reads should not resend cookie
+    for _ in range(3):
+        response = client.get("/view")
+        assert "Set-Cookie" not in response.headers, \
+            "Set-Cookie should not be sent for read-only session access"
+*** End Patch

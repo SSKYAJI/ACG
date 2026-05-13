@@ -12,12 +12,11 @@ import math
 import subprocess
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
-
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = Path(__file__).resolve().parent
@@ -269,8 +268,7 @@ def rg_analysis_hits() -> list[str]:
             cwd=ROOT,
             check=True,
             text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
         )
     except (FileNotFoundError, subprocess.CalledProcessError):
         hits = [
@@ -343,7 +341,7 @@ def write_failure(lines: list[str]) -> None:
 
 def make_report_json(rows: list[dict[str, Any]], analysis_hits: list[str]) -> dict[str, Any]:
     return {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "codebases": rows,
         "analysis_search_hits": analysis_hits,
     }

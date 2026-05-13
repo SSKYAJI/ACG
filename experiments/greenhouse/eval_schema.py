@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from acg.enforce import validate_write
+from acg.runtime_proposal import proposal_status_counts_dict
 from acg.schema import AgentLock, Task
 
 EVAL_VERSION = "0.1"
@@ -84,6 +85,9 @@ class TaskArtifacts:
     session_id: str | None = None
     branch: str | None = None
     commit: str | None = None
+    # Suite-level single_agent: first task may carry a truncated raw model body
+    # for audits when apply_patch parsing fails.
+    raw_reply: str | None = None
 
 
 @dataclass
@@ -132,6 +136,9 @@ class EvalTask:
     artifacts: TaskArtifacts = field(default_factory=TaskArtifacts)
     # --- honest-completion-metrics fields (b94d2f0a) ---
     patch_na_reason: str | None = None
+    # --- worker proposal diagnostics (runtime / local backends) ---
+    proposal_status: str | None = None
+    proposal_write_count: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -208,8 +215,20 @@ class SummaryMetrics:
     tokens_worker_prompt_total: int | None = None
     tokens_prompt_method: str | None = None
     tokens_planner_total: int | None = None
+    tokens_planner_completion_total: int | None = None
+    tokens_planner_method: str | None = None
     tokens_scope_review_total: int | None = None
     tokens_all_in: int | None = None
+    # ---- Compile-step accounting (honest paper numbers) ----
+    # ``compile_wall_seconds`` and ``compile_cost_usd`` are propagated from the
+    # lockfile generator. ``total_wall_seconds_with_compile`` and
+    # ``total_cost_usd_with_compile`` are the runtime+compile sums the paper
+    # should report as the headline numbers; the bare ``wall_time_seconds`` /
+    # ``cost_usd_total`` continue to expose the runtime-only view.
+    compile_wall_seconds: float | None = None
+    compile_cost_usd: float | None = None
+    total_wall_seconds_with_compile: float | None = None
+    total_cost_usd_with_compile: float | None = None
     # Sum of per-task ``tokens_completion`` (real output tokens reported by
     # the OpenAI-compatible ``usage`` block on the local backend).
     tokens_completion_total: int | None = None
@@ -222,9 +241,7 @@ class SummaryMetrics:
     cost_method: str | None = None
     cost_source: str | None = None
     applied_changed_files_total: int | None = None
-    integration_burden: IntegrationBurdenMetrics = field(
-        default_factory=IntegrationBurdenMetrics
-    )
+    integration_burden: IntegrationBurdenMetrics = field(default_factory=IntegrationBurdenMetrics)
     # --- honest-completion-metrics fields (b94d2f0a) ---
     patch_na_count: int = 0
     typecheck_pass_count: int = 0
@@ -234,6 +251,8 @@ class SummaryMetrics:
     cost_per_completed_task: float | None = None
     oob_files_per_task_mean: float | None = None
     replan_rescued_count: int = 0
+    proposal_status_counts: dict[str, int] = field(default_factory=dict)
+    model_silence_count: int = 0
 
 
 @dataclass
@@ -389,22 +408,14 @@ def compute_integration_burden(tasks: list[EvalTask]) -> IntegrationBurdenMetric
     write sets for mock/local runs or applied diffs for Devin/applied-diff
     runs. Optional line stats are included only when task metrics provide them.
     """
-    changed_mentions = [
-        file
-        for task in tasks
-        for file in task.actual_changed_files
-        if file
-    ]
+    changed_mentions = [file for task in tasks for file in task.actual_changed_files if file]
     changed_unique = set(changed_mentions)
     file_touch_counts: dict[str, int] = {}
     for file in changed_mentions:
         file_touch_counts[file] = file_touch_counts.get(file, 0) + 1
 
     blocked_files = [
-        event.file
-        for task in tasks
-        for event in task.blocked_write_events
-        if event.file
+        event.file for task in tasks for event in task.blocked_write_events if event.file
     ]
     blocked_events_count = sum(len(task.blocked_write_events) for task in tasks)
     added_values = [
@@ -441,9 +452,7 @@ def compute_integration_burden(tasks: list[EvalTask]) -> IntegrationBurdenMetric
         unique_changed_files=len(changed_unique),
         duplicate_file_touches=len(changed_mentions) - len(changed_unique),
         overlapping_task_pairs=compute_overlap_pairs(tasks),
-        overlapping_files=sorted(
-            file for file, count in file_touch_counts.items() if count >= 2
-        ),
+        overlapping_files=sorted(file for file, count in file_touch_counts.items() if count >= 2),
         out_of_bounds_files_total=sum(len(t.out_of_bounds_files) for t in tasks),
         blocked_events_total=blocked_events_count,
         review_file_mentions_total=len(changed_mentions) + blocked_events_count,
@@ -514,12 +523,16 @@ def compute_summary_metrics(
     merge_conflicts: int = 0,
     tokens_orchestrator_overhead: int | None = None,
     tokens_planner_total: int | None = None,
+    tokens_planner_completion_total: int | None = None,
+    tokens_planner_method: str | None = None,
     tokens_scope_review_total: int | None = None,
     tokens_prompt_method: str | None = None,
     tokens_completion_method: str | None = None,
     cost_usd_total: float | None = None,
     cost_method: str | None = None,
     cost_source: str | None = None,
+    compile_wall_seconds: float | None = None,
+    compile_cost_usd: float | None = None,
     evidence_kind: str | None = None,
 ) -> SummaryMetrics:
     """Aggregate per-task data into the run-level summary.
@@ -583,8 +596,29 @@ def compute_summary_metrics(
     if cost_usd_total is None and task_cost_values:
         cost_usd_total = round(sum(task_cost_values), 8)
         cost_method = cost_method or "sum_provider_reported_task_costs"
-        sources = sorted({t.metrics.cost_source or "provider_response" for t in tasks if t.metrics.cost_usd is not None})
+        sources = sorted(
+            {
+                t.metrics.cost_source or "provider_response"
+                for t in tasks
+                if t.metrics.cost_usd is not None
+            }
+        )
         cost_source = cost_source or ",".join(sources)
+
+    # Honest paper totals: amortizing the one-time compile cost across the
+    # runtime cost. Reviewers (rightly) want both numbers visible — the bare
+    # runtime view (``wall_time_seconds`` / ``cost_usd_total``) and the
+    # combined-with-compile view (``total_*_with_compile``).
+    total_wall_seconds_with_compile: float | None = None
+    if compile_wall_seconds is not None or wall_time_seconds > 0:
+        total_wall_seconds_with_compile = round(
+            float(wall_time_seconds) + float(compile_wall_seconds or 0.0), 4
+        )
+    total_cost_usd_with_compile: float | None = None
+    if cost_usd_total is not None or compile_cost_usd is not None:
+        total_cost_usd_with_compile = round(
+            float(cost_usd_total or 0.0) + float(compile_cost_usd or 0.0), 8
+        )
 
     applied_changed = sum(
         len(t.actual_changed_files)
@@ -593,9 +627,7 @@ def compute_summary_metrics(
     )
 
     # --- honest-completion-metrics fields (b94d2f0a) ---
-    patch_na_count = sum(
-        1 for t in tasks if getattr(t.metrics, "patch_applies", None) is False
-    )
+    patch_na_count = sum(1 for t in tasks if getattr(t.metrics, "patch_applies", None) is False)
     typecheck_pass_count = sum(
         1
         for t in tasks
@@ -610,11 +642,7 @@ def compute_summary_metrics(
     )
     applied_like = bool(evidence_kind and "applied_diff" in evidence_kind.lower())
     typecheck_skipped_count = (
-        sum(
-            1
-            for t in tasks
-            if not bool(getattr(t.metrics, "typecheck_ran", False))
-        )
+        sum(1 for t in tasks if not bool(getattr(t.metrics, "typecheck_ran", False)))
         if applied_like
         else 0
     )
@@ -639,6 +667,16 @@ def compute_summary_metrics(
         1 for t in tasks if len(getattr(t, "approved_replan_files", []) or []) > 0
     )
 
+    proposal_status_counts = proposal_status_counts_dict()
+    for t in tasks:
+        ps = getattr(t, "proposal_status", None) or "ok"
+        proposal_status_counts[ps] = proposal_status_counts.get(ps, 0) + 1
+    model_silence_count = sum(
+        1
+        for t in tasks
+        if getattr(t, "proposal_write_count", None) is not None and t.proposal_write_count == 0
+    )
+
     return SummaryMetrics(
         tasks_total=total,
         tasks_completed=completed,
@@ -661,6 +699,8 @@ def compute_summary_metrics(
         tokens_worker_prompt_total=prompt_total,
         tokens_prompt_method=tokens_prompt_method if prompt_total is not None else None,
         tokens_planner_total=tokens_planner_total,
+        tokens_planner_completion_total=tokens_planner_completion_total,
+        tokens_planner_method=tokens_planner_method,
         tokens_scope_review_total=tokens_scope_review_total,
         tokens_all_in=tokens_all_in,
         tokens_completion_total=completion_total,
@@ -671,6 +711,14 @@ def compute_summary_metrics(
         cost_usd_total=cost_usd_total,
         cost_method=cost_method,
         cost_source=cost_source,
+        compile_wall_seconds=(
+            round(compile_wall_seconds, 4) if compile_wall_seconds is not None else None
+        ),
+        compile_cost_usd=(
+            round(compile_cost_usd, 8) if compile_cost_usd is not None else None
+        ),
+        total_wall_seconds_with_compile=total_wall_seconds_with_compile,
+        total_cost_usd_with_compile=total_cost_usd_with_compile,
         applied_changed_files_total=applied_changed,
         integration_burden=compute_integration_burden(tasks),
         patch_na_count=patch_na_count,
@@ -681,6 +729,8 @@ def compute_summary_metrics(
         cost_per_completed_task=cost_per_completed_task,
         oob_files_per_task_mean=oob_files_per_task_mean,
         replan_rescued_count=replan_rescued_count,
+        proposal_status_counts=proposal_status_counts,
+        model_silence_count=model_silence_count,
     )
 
 

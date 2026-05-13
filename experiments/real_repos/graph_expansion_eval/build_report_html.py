@@ -700,8 +700,6 @@ def render_plans(data: dict[str, Any]) -> str:
     sections = []
     for stem in sorted(locks.keys()):
         lock = locks[stem]
-        repo = lock.get("repo", {}).get("name") or lock.get("repo", {}).get("path") or stem.split("-", 1)[0]
-        gen = lock.get("generated_at", "")
         groups = (lock.get("execution_plan") or {}).get("groups") or []
         tasks = lock.get("tasks") or []
         if not tasks:

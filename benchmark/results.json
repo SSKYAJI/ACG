@@ -3,22 +3,112 @@
     "demo-app": {
       "precision@5": 0.275,
       "recall@5": 0.5416666666666666,
-      "wall_s": 0.1257349580009759
+      "wall_s": 0.09770879199641058
     },
     "express": {
       "precision@5": 0.125,
       "recall@5": 0.2708333333333333,
-      "wall_s": 1.279741374997684
+      "wall_s": 1.275157541000226
     },
     "realworld": {
       "precision@5": 0.23333333333333336,
       "recall@5": 0.36666666666666664,
-      "wall_s": 0.43007150000266847
+      "wall_s": 44.07960008399823
     },
     "t3-app": {
       "precision@5": 0.05,
       "recall@5": 0.25,
-      "wall_s": 2.882544083000539
+      "wall_s": 2.6893626669989317
+    }
+  },
+  "baselines": {
+    "all_files_top_k": {
+      "demo-app": {
+        "precision@5": 0.1,
+        "recall@5": 0.17708333333333331,
+        "wall_s": 0.01657037500262959
+      },
+      "express": {
+        "precision@5": 0.1,
+        "recall@5": 0.22916666666666666,
+        "wall_s": 0.13927395900100237
+      },
+      "realworld": {
+        "precision@5": 0.2333333333333333,
+        "recall@5": 0.30277777777777776,
+        "wall_s": 4.748828541996772
+      },
+      "t3-app": {
+        "precision@5": 0.0,
+        "recall@5": 0.0,
+        "wall_s": 0.21095775000139838
+      }
+    },
+    "bm25_only": {
+      "demo-app": {
+        "precision@5": 0.325,
+        "recall@5": 0.7291666666666666,
+        "wall_s": 0.0341527499986114
+      },
+      "express": {
+        "precision@5": 0.225,
+        "recall@5": 0.5208333333333333,
+        "wall_s": 0.3904317499982426
+      },
+      "realworld": {
+        "precision@5": 0.3,
+        "recall@5": 0.4777777777777777,
+        "wall_s": 10.383283875002235
+      },
+      "t3-app": {
+        "precision@5": 0.175,
+        "recall@5": 0.6875,
+        "wall_s": 0.9094705419993261
+      }
+    },
+    "last_commit_files": {
+      "demo-app": {
+        "precision@5": 0.0,
+        "recall@5": 0.0,
+        "wall_s": 0.10468395800126018
+      },
+      "express": {
+        "precision@5": 0.0,
+        "recall@5": 0.0,
+        "wall_s": 0.10217633299907902
+      },
+      "realworld": {
+        "precision@5": 0.0,
+        "recall@5": 0.0,
+        "wall_s": 0.07365433299855795
+      },
+      "t3-app": {
+        "precision@5": 0.0,
+        "recall@5": 0.0,
+        "wall_s": 0.11024737499974435
+      }
+    },
+    "random_at_k": {
+      "demo-app": {
+        "precision@5": 0.05,
+        "recall@5": 0.09375,
+        "wall_s": 0.013024666004639585
+      },
+      "express": {
+        "precision@5": 0.025,
+        "recall@5": 0.0625,
+        "wall_s": 0.0971186660026433
+      },
+      "realworld": {
+        "precision@5": 0.13333333333333333,
+        "recall@5": 0.2638888888888889,
+        "wall_s": 4.7805781249990105
+      },
+      "t3-app": {
+        "precision@5": 0.0,
+        "recall@5": 0.0,
+        "wall_s": 0.1653347500032396
+      }
     }
   },
   "with_embeddings": {}

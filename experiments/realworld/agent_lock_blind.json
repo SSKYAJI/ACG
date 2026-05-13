@@ -1,15 +1,15 @@
 {
   "version": "1.0",
-  "generated_at": "2026-05-11T20:43:36.770731Z",
+  "generated_at": "2026-05-12T03:35:25.344597Z",
   "generator": {
     "tool": "acg",
     "version": "0.1.0",
-    "model": "qwen/qwen3-coder-30b-a3b-instruct",
-    "tokens_planner_total": null,
-    "tokens_scope_review_total": 9509
+    "model": "moonshotai/kimi-k2.6",
+    "tokens_planner_total": 19685,
+    "tokens_scope_review_total": 18227
   },
   "repo": {
-    "root": "experiments/realworld/checkout",
+    "root": "/Users/prajit/Desktop/projects/cognition/experiments/realworld/checkout",
     "git_url": null,
     "commit": null,
     "languages": [
@@ -22,43 +22,81 @@
       "prompt": "Add global API rate limiting to the application. Use a NestJS-compatible throttling library. Configure a default of 100 requests per 60 seconds. Apply it globally so all endpoints are protected.",
       "predicted_writes": [
         {
-          "path": "src/main.ts",
-          "confidence": 0.9,
-          "reason": "Task requires applying rate limiting globally, which is typically configured in the main application file. Signals: bm25, llm. Scope review kept this file at its existing tier."
-        }
-      ],
-      "allowed_paths": [
-        "src/main.ts"
-      ],
-      "candidate_context_paths": [
-        "src/app.module.ts",
-        "package.json"
-      ],
-      "file_scopes": [
-        {
-          "path": "src/main.ts",
-          "tier": "must_write",
-          "score": 0.9,
-          "signals": [
-            "bm25",
-            "llm",
-            "scope_review"
-          ],
-          "reason": "Task requires applying rate limiting globally, which is typically configured in the main application file. Signals: bm25, llm. Scope review kept this file at its existing tier."
-        },
-        {
           "path": "src/app.module.ts",
-          "tier": "candidate_context",
-          "score": 0.8,
-          "signals": [
-            "bm25",
-            "llm",
-            "scope_review"
-          ],
-          "reason": "The AppModule is the root module where global configurations like middleware or guards are often applied. Candidate context only; requires replan before write. Signals: bm25, llm. Scope review kept this file at its existing tier."
+          "confidence": 0.95,
+          "reason": "Import ThrottlerModule and configure global APP_GUARD for 100 req per 60s. Signals: bm25, llm. Scope review kept this file at its existing tier."
         },
         {
           "path": "package.json",
+          "confidence": 0.9,
+          "reason": "Add NestJS throttling library dependency. Signals: llm, package. Scope review kept this file at its existing tier."
+        }
+      ],
+      "allowed_paths": [
+        "package.json",
+        "src/app.module.ts"
+      ],
+      "candidate_context_paths": [
+        "src/app.controller.ts",
+        "src/profile/profile.controller.ts",
+        "src/shared/pipes/validation.pipe.ts",
+        "src/tag/tag.controller.ts"
+      ],
+      "file_scopes": [
+        {
+          "path": "src/app.module.ts",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "Import ThrottlerModule and configure global APP_GUARD for 100 req per 60s. Signals: bm25, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "package.json",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "llm",
+            "package",
+            "scope_review"
+          ],
+          "reason": "Add NestJS throttling library dependency. Signals: llm, package. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/app.controller.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.controller.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/shared/pipes/validation.pipe.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/tag/tag.controller.ts",
           "tier": "candidate_context",
           "score": 0.72,
           "signals": [
@@ -77,88 +115,579 @@
       "prompt": "Add role-based access control to the application. Users should have a role field (user or admin). Create a guard that checks the current user's role against a required role. Register it so endpoints can be decorated with a role requirement.",
       "predicted_writes": [
         {
-          "path": "src/user/dto/index.ts",
-          "confidence": 0.9,
-          "reason": "personalized PageRank rank #7, top symbol matches: CreateUserDto, LoginUserDto, UpdateUserDto.; BM25 lexical match over path, identifiers, imports, docstrings (score 6.55). Signals: bm25, hint, pagerank. Scope review requested a drop, but protected evidence kept it."
-        },
-        {
           "path": "src/user/user.entity.ts",
-          "confidence": 0.9,
-          "reason": "Task requires adding a role field to users, and user.entity.ts defines the user model. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
-        }
-      ],
-      "allowed_paths": [
-        "src/user/dto/**",
-        "src/user/user.entity.ts"
-      ],
-      "candidate_context_paths": [
-        "src/user/user.interface.ts",
-        "src/user/user.module.ts",
-        "src/user/user.service.ts",
-        "src/shared/pipes/validation.pipe.ts",
-        "src/user/auth.middleware.ts",
-        "src/user/user.controller.ts"
-      ],
-      "file_scopes": [
-        {
-          "path": "src/user/dto/index.ts",
-          "tier": "must_write",
-          "score": 0.9,
-          "signals": [
-            "bm25",
-            "hint",
-            "pagerank",
-            "scope_review"
-          ],
-          "reason": "personalized PageRank rank #7, top symbol matches: CreateUserDto, LoginUserDto, UpdateUserDto.; BM25 lexical match over path, identifiers, imports, docstrings (score 6.55). Signals: bm25, hint, pagerank. Scope review requested a drop, but protected evidence kept it."
-        },
-        {
-          "path": "src/user/user.entity.ts",
-          "tier": "must_write",
-          "score": 0.9,
-          "signals": [
-            "bm25",
-            "hint",
-            "llm",
-            "scope_review"
-          ],
-          "reason": "Task requires adding a role field to users, and user.entity.ts defines the user model. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
+          "confidence": 0.95,
+          "reason": "Must add role column to the User database entity. Signals: bm25, hint, llm, module_name. Scope review kept this file at its existing tier."
         },
         {
           "path": "src/user/user.interface.ts",
-          "tier": "candidate_context",
-          "score": 0.8,
-          "signals": [
-            "graph",
-            "hint",
-            "llm",
-            "scope_review"
-          ],
-          "reason": "User interface needs to be updated to include the role field for role-based access control. Candidate context only; requires replan before write. Signals: graph, hint, llm. Scope review kept this file at its existing tier."
+          "confidence": 0.95,
+          "reason": "Must add role field to user response and data interfaces. Signals: graph, hint, llm, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/auth.middleware.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #5, top symbol matches: use, user. Signals: auth_role, hint, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/dto/index.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #7, top symbol matches: CreateUserDto, LoginUserDto, UpdateUserDto.; BM25 lexical match over path, identifiers, imports, docstrings (score 6.55). Signals: bm25, hint, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.controller.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #4, top symbol matches: UserController, _user, create.; BM25 lexical match over path, identifiers, imports, docstrings (score 5.41). Signals: bm25, hint, module_name, pagerank. Scope review kept this file at its existing tier."
         },
         {
           "path": "src/user/user.module.ts",
-          "tier": "candidate_context",
-          "score": 0.8,
+          "confidence": 0.85,
+          "reason": "Must register the new RolesGuard as a provider and export it. Signals: graph, hint, llm, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.service.ts",
+          "confidence": 0.85,
+          "reason": "Must populate the role field when constructing user response objects. Signals: hint, llm, module_name, pagerank. Scope review kept this file at its existing tier."
+        }
+      ],
+      "allowed_paths": [
+        "src/user/auth.middleware.ts",
+        "src/user/dto/**",
+        "src/user/user.controller.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.module.ts",
+        "src/user/user.service.ts"
+      ],
+      "candidate_context_paths": [
+        "src/article/article.module.ts",
+        "src/main.ts",
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.module.ts",
+        "src/tag/tag.controller.ts"
+      ],
+      "file_scopes": [
+        {
+          "path": "src/user/user.entity.ts",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "module_name",
+            "scope_review"
+          ],
+          "reason": "Must add role column to the User database entity. Signals: bm25, hint, llm, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.interface.ts",
+          "tier": "must_write",
+          "score": 0.95,
           "signals": [
             "graph",
             "hint",
             "llm",
+            "module_name",
             "scope_review"
           ],
-          "reason": "User module needs to register guard and potentially new role-related services or providers. Candidate context only; requires replan before write. Signals: graph, hint, llm. Scope review kept this file at its existing tier."
+          "reason": "Must add role field to user response and data interfaces. Signals: graph, hint, llm, module_name. Scope review kept this file at its existing tier."
         },
         {
-          "path": "src/user/user.service.ts",
-          "tier": "candidate_context",
-          "score": 0.8,
+          "path": "src/user/auth.middleware.ts",
+          "tier": "must_write",
+          "score": 0.9,
           "signals": [
+            "auth_role",
             "hint",
-            "llm",
             "pagerank",
             "scope_review"
           ],
-          "reason": "User service handles user-related logic and needs to support role-based access control. Candidate context only; requires replan before write. Signals: hint, llm, pagerank. Scope review kept this file at its existing tier."
+          "reason": "personalized PageRank rank #5, top symbol matches: use, user. Signals: auth_role, hint, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/dto/index.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "hint",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "personalized PageRank rank #7, top symbol matches: CreateUserDto, LoginUserDto, UpdateUserDto.; BM25 lexical match over path, identifiers, imports, docstrings (score 6.55). Signals: bm25, hint, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.controller.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "hint",
+            "module_name",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "personalized PageRank rank #4, top symbol matches: UserController, _user, create.; BM25 lexical match over path, identifiers, imports, docstrings (score 5.41). Signals: bm25, hint, module_name, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.module.ts",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "graph",
+            "hint",
+            "llm",
+            "module_name",
+            "scope_review"
+          ],
+          "reason": "Must register the new RolesGuard as a provider and export it. Signals: graph, hint, llm, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.service.ts",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "hint",
+            "llm",
+            "module_name",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "Must populate the role field when constructing user response objects. Signals: hint, llm, module_name, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/article/article.module.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/main.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.controller.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.module.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/tag/tag.controller.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    },
+    {
+      "id": "add-article-bookmarks",
+      "prompt": "Add a bookmarking feature so users can save articles for later, separate from the existing favorites system. Users should be able to bookmark and unbookmark articles via the API. Store the bookmark relationship in the database.",
+      "predicted_writes": [
+        {
+          "path": "src/article/article.controller.ts",
+          "confidence": 0.95,
+          "reason": "Add bookmark and unbookmark API endpoints Signals: bm25, hint, llm, module_name, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/article/article.service.ts",
+          "confidence": 0.95,
+          "reason": "Add bookmark/unbookmark business logic and persistence queries Signals: bm25, hint, llm, module_name, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.interface.ts",
+          "confidence": 0.92,
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) src/article/article.interface.ts, src/user/user.controller.ts, src/user/user.service.ts. Signals: graph, hint, module_name. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.module.ts",
+          "confidence": 0.92,
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) src/user/auth.middleware.ts, src/user/user.controller.ts, src/user/user.service.ts. Signals: graph, hint, module_name. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.entity.ts",
+          "confidence": 0.9,
+          "reason": "Add bookmark relationship mapping to article Signals: bm25, hint, llm, module_name, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.controller.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #4, top symbol matches: UserController, _user, user. Signals: hint, module_name, pagerank. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.entity.ts",
+          "confidence": 0.9,
+          "reason": "Add inverse bookmark relationship mapping to user Signals: bm25, hint, llm, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.service.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #2, top symbol matches: UserService, buildUserRO, newUser. Signals: hint, module_name, pagerank. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.module.ts",
+          "confidence": 0.85,
+          "reason": "Import and register the new bookmark entity/repository Signals: bm25, hint, llm, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/article/article.interface.ts",
+          "confidence": 0.8,
+          "reason": "Add bookmarked flag to article response object Signals: bm25, hint, llm, module_name. Scope review kept this file at its existing tier."
+        }
+      ],
+      "allowed_paths": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/user/user.controller.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.module.ts",
+        "src/user/user.service.ts"
+      ],
+      "candidate_context_paths": [
+        "src/app.module.ts",
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.module.ts",
+        "src/shared/base.controller.ts",
+        "src/shared/pipes/validation.pipe.ts"
+      ],
+      "file_scopes": [
+        {
+          "path": "src/article/article.controller.ts",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "module_name",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "Add bookmark and unbookmark API endpoints Signals: bm25, hint, llm, module_name, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/article/article.service.ts",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "module_name",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "Add bookmark/unbookmark business logic and persistence queries Signals: bm25, hint, llm, module_name, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.interface.ts",
+          "tier": "must_write",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "hint",
+            "module_name",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) src/article/article.interface.ts, src/user/user.controller.ts, src/user/user.service.ts. Signals: graph, hint, module_name. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.module.ts",
+          "tier": "must_write",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "hint",
+            "module_name",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) src/user/auth.middleware.ts, src/user/user.controller.ts, src/user/user.service.ts. Signals: graph, hint, module_name. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.entity.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "module_name",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "Add bookmark relationship mapping to article Signals: bm25, hint, llm, module_name, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.controller.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "hint",
+            "module_name",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "personalized PageRank rank #4, top symbol matches: UserController, _user, user. Signals: hint, module_name, pagerank. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.entity.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "module_name",
+            "scope_review"
+          ],
+          "reason": "Add inverse bookmark relationship mapping to user Signals: bm25, hint, llm, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.service.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "hint",
+            "module_name",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "personalized PageRank rank #2, top symbol matches: UserService, buildUserRO, newUser. Signals: hint, module_name, pagerank. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.module.ts",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "module_name",
+            "scope_review"
+          ],
+          "reason": "Import and register the new bookmark entity/repository Signals: bm25, hint, llm, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/article/article.interface.ts",
+          "tier": "must_write",
+          "score": 0.8,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "module_name",
+            "scope_review"
+          ],
+          "reason": "Add bookmarked flag to article response object Signals: bm25, hint, llm, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/app.module.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.controller.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.module.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/shared/base.controller.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/shared/pipes/validation.pipe.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 2,
+      "rationale": null
+    },
+    {
+      "id": "extend-tag-crud",
+      "prompt": "Extend the tag system with write operations. Currently tags can only be read. Add the ability to create new tags and delete existing ones via the API.",
+      "predicted_writes": [
+        {
+          "path": "src/tag/tag.controller.ts",
+          "confidence": 0.95,
+          "reason": "Task requires adding create and delete API endpoints to the tag module. Signals: bm25, hint, llm, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/tag/tag.service.ts",
+          "confidence": 0.95,
+          "reason": "Task requires implementing create and delete business logic for tags. Signals: bm25, hint, llm, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/tag/tag.entity.ts",
+          "confidence": 0.75,
+          "reason": "Module-name seed: task tokens align with module 'src/tag'; coordinated NestJS cluster file. Signals: bm25, hint, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/tag/tag.module.ts",
+          "confidence": 0.75,
+          "reason": "Module-name seed: task tokens align with module 'src/tag'; coordinated NestJS cluster file. Signals: bm25, hint, module_name. Scope review kept this file at its existing tier."
+        }
+      ],
+      "allowed_paths": [
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.entity.ts",
+        "src/tag/tag.module.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "candidate_context_paths": [
+        "src/article/dto/create-article.dto.ts",
+        "src/main.ts",
+        "src/shared/base.controller.ts",
+        "src/shared/pipes/validation.pipe.ts",
+        "src/user/auth.middleware.ts"
+      ],
+      "file_scopes": [
+        {
+          "path": "src/tag/tag.controller.ts",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "module_name",
+            "scope_review"
+          ],
+          "reason": "Task requires adding create and delete API endpoints to the tag module. Signals: bm25, hint, llm, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/tag/tag.service.ts",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "module_name",
+            "scope_review"
+          ],
+          "reason": "Task requires implementing create and delete business logic for tags. Signals: bm25, hint, llm, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/tag/tag.entity.ts",
+          "tier": "must_write",
+          "score": 0.75,
+          "signals": [
+            "bm25",
+            "hint",
+            "module_name",
+            "scope_review"
+          ],
+          "reason": "Module-name seed: task tokens align with module 'src/tag'; coordinated NestJS cluster file. Signals: bm25, hint, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/tag/tag.module.ts",
+          "tier": "must_write",
+          "score": 0.75,
+          "signals": [
+            "bm25",
+            "hint",
+            "module_name",
+            "scope_review"
+          ],
+          "reason": "Module-name seed: task tokens align with module 'src/tag'; coordinated NestJS cluster file. Signals: bm25, hint, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/article/dto/create-article.dto.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/main.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/shared/base.controller.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
         },
         {
           "path": "src/shared/pipes/validation.pipe.ts",
@@ -173,179 +702,12 @@
         {
           "path": "src/user/auth.middleware.ts",
           "tier": "candidate_context",
-          "score": 0.7,
+          "score": 0.72,
           "signals": [
-            "hint",
-            "llm",
-            "pagerank",
+            "planner",
             "scope_review"
           ],
-          "reason": "Authentication middleware may need to be updated to check user roles during request processing. Candidate context only; requires replan before write. Signals: hint, llm, pagerank. Scope review kept this file at its existing tier."
-        },
-        {
-          "path": "src/user/user.controller.ts",
-          "tier": "candidate_context",
-          "score": 0.7,
-          "signals": [
-            "bm25",
-            "hint",
-            "llm",
-            "pagerank",
-            "scope_review"
-          ],
-          "reason": "User controller may require modifications to support role-based endpoints. Candidate context only; requires replan before write. Signals: bm25, hint, llm, pagerank. Scope review kept this file at its existing tier."
-        }
-      ],
-      "depends_on": [],
-      "parallel_group": 1,
-      "rationale": null
-    },
-    {
-      "id": "add-article-bookmarks",
-      "prompt": "Add a bookmarking feature so users can save articles for later, separate from the existing favorites system. Users should be able to bookmark and unbookmark articles via the API. Store the bookmark relationship in the database.",
-      "predicted_writes": [
-        {
-          "path": "src/user/user.entity.ts",
-          "confidence": 0.9,
-          "reason": "Bookmarking involves user-article relationships, so the user entity needs updates to support this feature. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
-        }
-      ],
-      "allowed_paths": [
-        "src/user/user.entity.ts"
-      ],
-      "candidate_context_paths": [
-        "src/article/article.controller.ts",
-        "src/article/article.entity.ts",
-        "src/article/article.service.ts",
-        "src/user/user.service.ts"
-      ],
-      "file_scopes": [
-        {
-          "path": "src/user/user.entity.ts",
-          "tier": "must_write",
-          "score": 0.9,
-          "signals": [
-            "bm25",
-            "hint",
-            "llm",
-            "scope_review"
-          ],
-          "reason": "Bookmarking involves user-article relationships, so the user entity needs updates to support this feature. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
-        },
-        {
-          "path": "src/article/article.controller.ts",
-          "tier": "candidate_context",
-          "score": 0.9,
-          "signals": [
-            "bm25",
-            "hint",
-            "llm",
-            "pagerank",
-            "scope_review"
-          ],
-          "reason": "The controller handles API endpoints for articles including bookmarking functionality. Candidate context only; requires replan before write. Signals: bm25, hint, llm, pagerank. Scope review kept this file at its existing tier."
-        },
-        {
-          "path": "src/article/article.entity.ts",
-          "tier": "candidate_context",
-          "score": 0.9,
-          "signals": [
-            "bm25",
-            "hint",
-            "llm",
-            "pagerank",
-            "scope_review"
-          ],
-          "reason": "Task involves storing bookmark relationships, requiring modification of the article entity to support bookmarking. Candidate context only; requires replan before write. Signals: bm25, hint, llm, pagerank. Scope review kept this file at its existing tier."
-        },
-        {
-          "path": "src/article/article.service.ts",
-          "tier": "candidate_context",
-          "score": 0.9,
-          "signals": [
-            "bm25",
-            "hint",
-            "llm",
-            "pagerank",
-            "scope_review"
-          ],
-          "reason": "The service layer needs to implement the logic for bookmarking and unbookmarking articles. Candidate context only; requires replan before write. Signals: bm25, hint, llm, pagerank. Scope review kept this file at its existing tier."
-        },
-        {
-          "path": "src/user/user.service.ts",
-          "tier": "candidate_context",
-          "score": 0.7,
-          "signals": [
-            "hint",
-            "llm",
-            "pagerank",
-            "scope_review"
-          ],
-          "reason": "User-related operations are involved in bookmarking; may need changes to manage user bookmarks. Candidate context only; requires replan before write. Signals: hint, llm, pagerank. Scope review requested a drop, but protected evidence kept it."
-        }
-      ],
-      "depends_on": [],
-      "parallel_group": 2,
-      "rationale": null
-    },
-    {
-      "id": "extend-tag-crud",
-      "prompt": "Extend the tag system with write operations. Currently tags can only be read. Add the ability to create new tags and delete existing ones via the API.",
-      "predicted_writes": [
-        {
-          "path": "src/tag/tag.controller.ts",
-          "confidence": 0.9,
-          "reason": "Task requires adding write operations to the tag system, and the tag controller handles API endpoints. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
-        },
-        {
-          "path": "src/tag/tag.service.ts",
-          "confidence": 0.9,
-          "reason": "The tag service contains the business logic for tag operations and must be updated to support create and delete. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
-        }
-      ],
-      "allowed_paths": [
-        "src/tag/tag.controller.ts",
-        "src/tag/tag.service.ts"
-      ],
-      "candidate_context_paths": [
-        "src/tag/tag.entity.ts"
-      ],
-      "file_scopes": [
-        {
-          "path": "src/tag/tag.controller.ts",
-          "tier": "must_write",
-          "score": 0.9,
-          "signals": [
-            "bm25",
-            "hint",
-            "llm",
-            "scope_review"
-          ],
-          "reason": "Task requires adding write operations to the tag system, and the tag controller handles API endpoints. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
-        },
-        {
-          "path": "src/tag/tag.service.ts",
-          "tier": "must_write",
-          "score": 0.9,
-          "signals": [
-            "bm25",
-            "hint",
-            "llm",
-            "scope_review"
-          ],
-          "reason": "The tag service contains the business logic for tag operations and must be updated to support create and delete. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
-        },
-        {
-          "path": "src/tag/tag.entity.ts",
-          "tier": "candidate_context",
-          "score": 0.7,
-          "signals": [
-            "bm25",
-            "hint",
-            "llm",
-            "scope_review"
-          ],
-          "reason": "The tag entity defines the data structure and may need updates to support write operations. Candidate context only; requires replan before write. Signals: bm25, hint, llm. Scope review requested a drop, but protected evidence kept it."
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
         }
       ],
       "depends_on": [],
@@ -355,40 +717,215 @@
     {
       "id": "add-article-search",
       "prompt": "Add full-text search to the articles API. Users should be able to search articles by keywords matching against the title and body fields. Return paginated results.",
-      "predicted_writes": [],
-      "allowed_paths": [],
-      "candidate_context_paths": [
+      "predicted_writes": [
+        {
+          "path": "src/article/article.controller.ts",
+          "confidence": 0.95,
+          "reason": "Must add or modify an endpoint to accept search keywords and return paginated article results. Signals: bm25, hint, llm, module_name, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/article/article.service.ts",
+          "confidence": 0.95,
+          "reason": "Must implement search logic to query title and body fields and return paginated results. Signals: bm25, hint, llm, module_name, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.interface.ts",
+          "confidence": 0.92,
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) src/user/user.controller.ts, src/user/user.service.ts. Signals: graph, module_name. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.entity.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #8, top symbol matches: ArticleEntity.; BM25 lexical match over path, identifiers, imports, docstrings (score 9.95). Signals: bm25, hint, module_name, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.controller.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #4, top symbol matches: UserController, _user, user. Signals: module_name, pagerank. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.service.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #2, top symbol matches: UserService, buildUserRO, findByEmail. Signals: module_name, pagerank. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.interface.ts",
+          "confidence": 0.75,
+          "reason": "Module-name seed: task tokens align with module 'src/article'; coordinated NestJS cluster file. Signals: bm25, hint, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/article/article.module.ts",
+          "confidence": 0.75,
+          "reason": "Module-name seed: task tokens align with module 'src/article'; coordinated NestJS cluster file. Signals: bm25, hint, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.entity.ts",
+          "confidence": 0.75,
+          "reason": "Module-name seed: task tokens align with module 'src/user'; coordinated NestJS cluster file. Signals: bm25, module_name. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.module.ts",
+          "confidence": 0.75,
+          "reason": "Module-name seed: task tokens align with module 'src/user'; coordinated NestJS cluster file. Signals: cluster, module_name. Scope review requested a drop, but protected evidence kept it."
+        }
+      ],
+      "allowed_paths": [
         "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.module.ts",
         "src/article/article.service.ts",
-        "src/shared/base.controller.ts",
-        "src/article/article.entity.ts"
+        "src/user/user.controller.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.module.ts",
+        "src/user/user.service.ts"
+      ],
+      "candidate_context_paths": [
+        "package.json",
+        "src/app.module.ts",
+        "src/shared/base.controller.ts"
       ],
       "file_scopes": [
         {
           "path": "src/article/article.controller.ts",
-          "tier": "candidate_context",
-          "score": 0.9,
+          "tier": "must_write",
+          "score": 0.95,
           "signals": [
             "bm25",
             "hint",
             "llm",
+            "module_name",
             "pagerank",
             "scope_review"
           ],
-          "reason": "Task requires adding search functionality to articles API, and controller handles API endpoints. Candidate context only; requires replan before write. Signals: bm25, hint, llm, pagerank. Scope review kept this file at its existing tier."
+          "reason": "Must add or modify an endpoint to accept search keywords and return paginated article results. Signals: bm25, hint, llm, module_name, pagerank. Scope review kept this file at its existing tier."
         },
         {
           "path": "src/article/article.service.ts",
-          "tier": "candidate_context",
-          "score": 0.9,
+          "tier": "must_write",
+          "score": 0.95,
           "signals": [
             "bm25",
             "hint",
             "llm",
+            "module_name",
             "pagerank",
             "scope_review"
           ],
-          "reason": "Service layer needs to implement full-text search logic and pagination for articles. Candidate context only; requires replan before write. Signals: bm25, hint, llm, pagerank. Scope review kept this file at its existing tier."
+          "reason": "Must implement search logic to query title and body fields and return paginated results. Signals: bm25, hint, llm, module_name, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.interface.ts",
+          "tier": "must_write",
+          "score": 0.92,
+          "signals": [
+            "graph",
+            "module_name",
+            "scope_review"
+          ],
+          "reason": "Graph expansion: local import/type edge from high-confidence seed(s) src/user/user.controller.ts, src/user/user.service.ts. Signals: graph, module_name. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.entity.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "hint",
+            "module_name",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "personalized PageRank rank #8, top symbol matches: ArticleEntity.; BM25 lexical match over path, identifiers, imports, docstrings (score 9.95). Signals: bm25, hint, module_name, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.controller.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "module_name",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "personalized PageRank rank #4, top symbol matches: UserController, _user, user. Signals: module_name, pagerank. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.service.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "module_name",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "personalized PageRank rank #2, top symbol matches: UserService, buildUserRO, findByEmail. Signals: module_name, pagerank. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.interface.ts",
+          "tier": "must_write",
+          "score": 0.75,
+          "signals": [
+            "bm25",
+            "hint",
+            "module_name",
+            "scope_review"
+          ],
+          "reason": "Module-name seed: task tokens align with module 'src/article'; coordinated NestJS cluster file. Signals: bm25, hint, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/article/article.module.ts",
+          "tier": "must_write",
+          "score": 0.75,
+          "signals": [
+            "bm25",
+            "hint",
+            "module_name",
+            "scope_review"
+          ],
+          "reason": "Module-name seed: task tokens align with module 'src/article'; coordinated NestJS cluster file. Signals: bm25, hint, module_name. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.entity.ts",
+          "tier": "must_write",
+          "score": 0.75,
+          "signals": [
+            "bm25",
+            "module_name",
+            "scope_review"
+          ],
+          "reason": "Module-name seed: task tokens align with module 'src/user'; coordinated NestJS cluster file. Signals: bm25, module_name. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.module.ts",
+          "tier": "must_write",
+          "score": 0.75,
+          "signals": [
+            "cluster",
+            "module_name",
+            "scope_review"
+          ],
+          "reason": "Module-name seed: task tokens align with module 'src/user'; coordinated NestJS cluster file. Signals: cluster, module_name. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "package.json",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/app.module.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
         },
         {
           "path": "src/shared/base.controller.ts",
@@ -399,23 +936,10 @@
             "scope_review"
           ],
           "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
-        },
-        {
-          "path": "src/article/article.entity.ts",
-          "tier": "candidate_context",
-          "score": 0.7,
-          "signals": [
-            "bm25",
-            "hint",
-            "llm",
-            "pagerank",
-            "scope_review"
-          ],
-          "reason": "Entity may need modifications to support full-text search indexing or query optimization. Candidate context only; requires replan before write. Signals: bm25, hint, llm, pagerank. Scope review kept this file at its existing tier."
         }
       ],
       "depends_on": [],
-      "parallel_group": 1,
+      "parallel_group": 3,
       "rationale": null
     },
     {
@@ -424,8 +948,8 @@
       "predicted_writes": [
         {
           "path": "src/app.controller.ts",
-          "confidence": 0.9,
-          "reason": "Adding a health check endpoint typically involves modifying the main application controller to include the new route. Signals: llm, planner. Scope review kept this file at its existing tier."
+          "confidence": 0.95,
+          "reason": "Root controller is the natural place to add a top-level health check endpoint. Signals: llm, planner. Scope review kept this file at its existing tier."
         }
       ],
       "allowed_paths": [
@@ -433,20 +957,19 @@
       ],
       "candidate_context_paths": [
         "src/app.module.ts",
-        "src/shared/base.controller.ts",
-        "src/user/user.service.ts"
+        "package.json"
       ],
       "file_scopes": [
         {
           "path": "src/app.controller.ts",
           "tier": "must_write",
-          "score": 0.9,
+          "score": 0.95,
           "signals": [
             "llm",
             "planner",
             "scope_review"
           ],
-          "reason": "Adding a health check endpoint typically involves modifying the main application controller to include the new route. Signals: llm, planner. Scope review kept this file at its existing tier."
+          "reason": "Root controller is the natural place to add a top-level health check endpoint. Signals: llm, planner. Scope review kept this file at its existing tier."
         },
         {
           "path": "src/app.module.ts",
@@ -458,20 +981,10 @@
             "pagerank",
             "scope_review"
           ],
-          "reason": "The main application module may need to be updated to register the new health check module or controller. Candidate context only; requires replan before write. Signals: bm25, llm, pagerank. Scope review kept this file at its existing tier."
+          "reason": "Likely to import and register a new health module or controller. Candidate context only; requires replan before write. Signals: bm25, llm, pagerank. Scope review kept this file at its existing tier."
         },
         {
-          "path": "src/shared/base.controller.ts",
-          "tier": "candidate_context",
-          "score": 0.72,
-          "signals": [
-            "planner",
-            "scope_review"
-          ],
-          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
-        },
-        {
-          "path": "src/user/user.service.ts",
+          "path": "package.json",
           "tier": "candidate_context",
           "score": 0.72,
           "signals": [
@@ -491,7 +1004,6 @@
       {
         "id": 1,
         "tasks": [
-          "add-article-search",
           "add-health-check",
           "add-rate-limiting",
           "add-user-roles",
@@ -509,19 +1021,66 @@
         "waits_for": [
           1
         ]
+      },
+      {
+        "id": 3,
+        "tasks": [
+          "add-article-search"
+        ],
+        "type": "serial",
+        "waits_for": [
+          2
+        ]
       }
     ]
   },
   "conflicts_detected": [
     {
       "files": [
-        "src/user/user.entity.ts"
+        "src/user/user.controller.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.module.ts",
+        "src/user/user.service.ts"
       ],
       "between_tasks": [
         "add-user-roles",
         "add-article-bookmarks"
       ],
-      "resolution": "Serialize add-article-bookmarks after add-user-roles; both modify src/user/user.entity.ts"
+      "resolution": "Serialize add-article-bookmarks after add-user-roles; both modify src/user/user.controller.ts, src/user/user.entity.ts, src/user/user.interface.ts, src/user/user.module.ts, src/user/user.service.ts"
+    },
+    {
+      "files": [
+        "src/user/user.controller.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.module.ts",
+        "src/user/user.service.ts"
+      ],
+      "between_tasks": [
+        "add-user-roles",
+        "add-article-search"
+      ],
+      "resolution": "Serialize add-article-search after add-user-roles; both modify src/user/user.controller.ts, src/user/user.entity.ts, src/user/user.interface.ts, src/user/user.module.ts, src/user/user.service.ts"
+    },
+    {
+      "files": [
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/article/article.module.ts",
+        "src/article/article.service.ts",
+        "src/user/user.controller.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.module.ts",
+        "src/user/user.service.ts"
+      ],
+      "between_tasks": [
+        "add-article-bookmarks",
+        "add-article-search"
+      ],
+      "resolution": "Serialize add-article-search after add-article-bookmarks; both modify src/article/article.controller.ts, src/article/article.entity.ts, src/article/article.interface.ts, src/article/article.module.ts, src/article/article.service.ts, src/user/user.controller.ts, src/user/user.entity.ts, src/user/user.interface.ts, src/user/user.module.ts, src/user/user.service.ts"
     }
   ]
 }

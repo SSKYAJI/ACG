@@ -55,12 +55,14 @@ class StubRuntimeLLM:
         reasoning: str = "",
         url: str = "stub://runtime",
         model: str = "stub",
+        finish_reason: str = "stop",
     ) -> None:
         self._replies = replies or {}
         self._router = router
         self._reasoning = reasoning
         self.url = url
         self.model = model
+        self._finish_reason = finish_reason
         # Recorded for ordering assertions.
         self.calls: list[tuple[str, float]] = []
         self.delays: dict[str, float] = {}
@@ -72,7 +74,7 @@ class StubRuntimeLLM:
         self,
         messages: list[dict[str, str]],
         *,
-        max_tokens: int = 700,
+        max_tokens: int | None = None,
         temperature: float = 0.2,
     ) -> LLMReply:
         del max_tokens, temperature
@@ -104,7 +106,7 @@ class StubRuntimeLLM:
             content=content,
             reasoning=self._reasoning if matched_task is None else "",
             completion_tokens=len(content) // 4,
-            finish_reason="stop",
+            finish_reason=self._finish_reason,
             wall_s=delay,
         )
 
@@ -1208,6 +1210,194 @@ def test_runtime_llm_includes_seed_only_when_env_is_set(
     assert fake_client.calls[-1]["json"]["seed"] == 17
 
 
+def test_runtime_llm_omits_max_tokens_when_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from acg.runtime import RuntimeLLM
+
+    class FakeResponse:
+        status_code = 200
+        headers: dict[str, str] = {}
+        text = "{}"
+
+        def json(self) -> dict[str, object]:
+            return {
+                "choices": [
+                    {
+                        "message": {"content": "ok", "reasoning_content": ""},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            }
+
+    class FakeAsyncClient:
+        def __init__(self, timeout: float) -> None:
+            self.calls: list[dict[str, object]] = []
+
+        async def post(
+            self,
+            endpoint: str,
+            json: dict[str, object],
+            headers: dict[str, str],
+        ) -> FakeResponse:
+            self.calls.append({"json": json})
+            return FakeResponse()
+
+        async def aclose(self) -> None:
+            return None
+
+    fake_client = FakeAsyncClient(timeout=1.0)
+    monkeypatch.setattr("acg.runtime.httpx.AsyncClient", lambda timeout: fake_client)
+    monkeypatch.delenv("ACG_LLM_SEED", raising=False)
+    llm = RuntimeLLM(base_url="http://example.invalid/v1", model="demo", api_key="key")
+    asyncio.run(llm.complete([{"role": "user", "content": "hello"}], max_tokens=None))
+    assert "max_tokens" not in fake_client.calls[-1]["json"]
+
+
+def test_runtime_llm_includes_max_tokens_when_positive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from acg.runtime import RuntimeLLM
+
+    class FakeResponse:
+        status_code = 200
+        headers: dict[str, str] = {}
+        text = "{}"
+
+        def json(self) -> dict[str, object]:
+            return {
+                "choices": [
+                    {
+                        "message": {"content": "ok", "reasoning_content": ""},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            }
+
+    class FakeAsyncClient:
+        def __init__(self, timeout: float) -> None:
+            self.calls: list[dict[str, object]] = []
+
+        async def post(
+            self,
+            endpoint: str,
+            json: dict[str, object],
+            headers: dict[str, str],
+        ) -> FakeResponse:
+            self.calls.append({"json": json})
+            return FakeResponse()
+
+        async def aclose(self) -> None:
+            return None
+
+    fake_client = FakeAsyncClient(timeout=1.0)
+    monkeypatch.setattr("acg.runtime.httpx.AsyncClient", lambda timeout: fake_client)
+    monkeypatch.delenv("ACG_LLM_SEED", raising=False)
+    llm = RuntimeLLM(base_url="http://example.invalid/v1", model="demo", api_key="key")
+    asyncio.run(llm.complete([{"role": "user", "content": "hello"}], max_tokens=2048))
+    assert fake_client.calls[-1]["json"]["max_tokens"] == 2048
+
+
+def test_runtime_llm_retries_429_with_retry_after(monkeypatch: pytest.MonkeyPatch) -> None:
+    from acg.runtime import RuntimeLLM
+
+    class FakeResponse:
+        def __init__(
+            self,
+            status_code: int,
+            headers: dict[str, str] | None = None,
+            text: str = "",
+            payload: dict[str, object] | None = None,
+        ) -> None:
+            self.status_code = status_code
+            self.headers = headers or {}
+            self.text = text or "{}"
+            self._payload = payload
+
+        def json(self) -> dict[str, object]:
+            if self._payload is not None:
+                return self._payload
+            return {
+                "choices": [
+                    {
+                        "message": {"content": "ok", "reasoning_content": ""},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            }
+
+    ok_payload: dict[str, object] = {
+        "choices": [
+            {
+                "message": {"content": "ok-after-retry", "reasoning_content": ""},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+    }
+    calls = {"n": 0}
+
+    class FakeAsyncClient:
+        def __init__(self, timeout: float) -> None:
+            del timeout
+
+        async def post(
+            self,
+            endpoint: str,
+            json: dict[str, object],
+            headers: dict[str, str],
+        ) -> FakeResponse:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return FakeResponse(429, headers={"retry-after": "0"})
+            return FakeResponse(200, payload=ok_payload)
+
+        async def aclose(self) -> None:
+            return None
+
+    monkeypatch.setattr("acg.runtime.httpx.AsyncClient", lambda timeout: FakeAsyncClient(timeout))
+    monkeypatch.delenv("ACG_LLM_SEED", raising=False)
+    llm = RuntimeLLM(base_url="http://example.invalid/v1", model="demo", api_key="key")
+    reply = asyncio.run(llm.complete([{"role": "user", "content": "hello"}]))
+    assert reply.content == "ok-after-retry"
+    assert calls["n"] == 2
+
+
+def test_run_worker_treats_finish_length_as_error(
+    lock: AgentLock,
+    empty_repo_graph: dict[str, object],
+) -> None:
+    task = next(t for t in lock.tasks if t.id == "oauth")
+    sub = StubRuntimeLLM(
+        replies={"oauth": json.dumps({"writes": []})},
+        finish_reason="length",
+    )
+    worker: WorkerResult = asyncio.run(run_worker(task, lock, empty_repo_graph, sub, group_id=1))
+    assert worker.error and worker.error.startswith("finish_reason=length")
+    assert worker.proposals == []
+
+
+def test_run_worker_emits_heartbeat_on_long_call(
+    lock: AgentLock,
+    empty_repo_graph: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import acg.runtime as runtime_mod
+
+    monkeypatch.setattr(runtime_mod, "WORKER_HEARTBEAT_S", 0.02)
+    rec = RecordingConsole()
+    monkeypatch.setattr(runtime_mod, "_console_err", rec)
+
+    task = next(t for t in lock.tasks if t.id == "oauth")
+    sub = StubRuntimeLLM(replies={"oauth": json.dumps({"writes": []})})
+    sub.set_delay("oauth", 0.05)
+    asyncio.run(run_worker(task, lock, empty_repo_graph, sub, group_id=1))
+    assert any("still waiting" in m for m in rec.messages)
+
+
 def test_banner_includes_env_values(
     lock: AgentLock,
     empty_repo_graph: dict[str, object],
@@ -1323,6 +1513,8 @@ def test_parse_apply_envelope_returns_one_proposal_per_file() -> None:
     for r in rows:
         assert r["envelope"].startswith("*** Begin Patch")
         assert r["envelope"].endswith("*** End Patch")
+
+
 def test_worker_proposal_with_content_is_parsed(
     lock: AgentLock, empty_repo_graph: dict[str, object]
 ) -> None:

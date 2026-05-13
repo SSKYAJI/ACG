@@ -1,0 +1,772 @@
+Looking at this task, I need to implement a `SessionMiddleware` that:
+1. Distinguishes session access (read) from mutation (write)
+2. Avoids sending `Set-Cookie` for unchanged sessions
+3. Preserves cookie clearing behavior
+4. Adds regression coverage for concurrent/read-only session flows
+
+Let me create a complete implementation.
+
+*** Begin Patch
+*** Add File: session/session.go
++ package session
++ 
++ import (
++ 	"context"
++ 	"crypto/hmac"
++ 	"crypto/rand"
++ 	"crypto/sha256"
++ 	"encoding/base64"
++ 	"encoding/json"
++ 	"errors"
++ 	"fmt"
++ 	"net/http"
++ 	"strings"
++ 	"sync"
++ 	"time"
++ )
++ 
++ // ErrSessionNotFound is returned when no session cookie is present.
++ var ErrSessionNotFound = errors.New("session: no session cookie found")
++ 
++ // ErrInvalidSignature is returned when the session cookie signature is invalid.
++ var ErrInvalidSignature = errors.New("session: invalid cookie signature")
++ 
++ // contextKey is an unexported type for context keys in this package.
++ type contextKey struct{ name string }
++ 
++ var sessionContextKey = &contextKey{"session"}
++ 
++ // Session holds the session data and tracks whether it has been mutated.
++ type Session struct {
++ 	mu      sync.RWMutex
++ 	data    map[string]interface{}
++ 	dirty   bool
++ 	cleared bool
++ 	id      string
++ }
++ 
++ // newSession creates a new empty session with a freshly generated ID.
++ func newSession() (*Session, error) {
++ 	id, err := generateID()
++ 	if err != nil {
++ 		return nil, err
++ 	}
++ 	return &Session{
++ 		data: make(map[string]interface{}),
++ 		id:   id,
++ 	}, nil
++ }
++ 
++ // loadSession creates a Session from previously decoded data.
++ func loadSession(id string, data map[string]interface{}) *Session {
++ 	return &Session{
++ 		data: data,
++ 		id:   id,
++ 	}
++ }
++ 
++ // ID returns the session identifier.
++ func (s *Session) ID() string {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	return s.id
++ }
++ 
++ // Get retrieves a value from the session. This is a read-only operation
++ // and does NOT mark the session as dirty.
++ func (s *Session) Get(key string) (interface{}, bool) {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	v, ok := s.data[key]
++ 	return v, ok
++ }
++ 
++ // Set stores a value in the session and marks the session as dirty (mutated).
++ func (s *Session) Set(key string, value interface{}) {
++ 	s.mu.Lock()
++ 	defer s.mu.Unlock()
++ 	s.data[key] = value
++ 	s.dirty = true
++ }
++ 
++ // Delete removes a key from the session and marks the session as dirty.
++ func (s *Session) Delete(key string) {
++ 	s.mu.Lock()
++ 	defer s.mu.Unlock()
++ 	delete(s.data, key)
++ 	s.dirty = true
++ }
++ 
++ // Clear removes all data from the session and marks it for cookie removal.
++ // After Clear, the middleware will send a Set-Cookie header that expires
++ // the cookie immediately, regardless of whether the session was previously
++ // persisted.
++ func (s *Session) Clear() {
++ 	s.mu.Lock()
++ 	defer s.mu.Unlock()
++ 	s.data = make(map[string]interface{})
++ 	s.dirty = true
++ 	s.cleared = true
++ }
++ 
++ // IsDirty reports whether the session has been mutated since it was loaded.
++ func (s *Session) IsDirty() bool {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	return s.dirty
++ }
++ 
++ // IsCleared reports whether Clear has been called on this session.
++ func (s *Session) IsCleared() bool {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	return s.cleared
++ }
++ 
++ // Keys returns a snapshot of all keys currently in the session.
++ func (s *Session) Keys() []string {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	keys := make([]string, 0, len(s.data))
++ 	for k := range s.data {
++ 		keys = append(keys, k)
++ 	}
++ 	return keys
++ }
++ 
++ // Snapshot returns a shallow copy of the session data map.
++ // This is a read-only operation and does NOT mark the session as dirty.
++ func (s *Session) Snapshot() map[string]interface{} {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	out := make(map[string]interface{}, len(s.data))
++ 	for k, v := range s.data {
++ 		out[k] = v
++ 	}
++ 	return out
++ }
++ 
++ // Options configures the SessionMiddleware.
++ type Options struct {
++ 	// CookieName is the name of the session cookie. Defaults to "session".
++ 	CookieName string
++ 
++ 	// Secret is used to sign the session cookie. Required.
++ 	Secret []byte
++ 
++ 	// MaxAge is the cookie Max-Age in seconds. 0 means session cookie.
++ 	MaxAge int
++ 
++ 	// Path is the cookie Path. Defaults to "/".
++ 	Path string
++ 
++ 	// Domain is the cookie Domain.
++ 	Domain string
++ 
++ 	// Secure sets the Secure flag on the cookie.
++ 	Secure bool
++ 
++ 	// HttpOnly sets the HttpOnly flag on the cookie. Defaults to true.
++ 	HttpOnly bool
++ 
++ 	// SameSite sets the SameSite attribute on the cookie.
++ 	SameSite http.SameSite
++ }
++ 
++ func (o *Options) cookieName() string {
++ 	if o.CookieName == "" {
++ 		return "session"
++ 	}
++ 	return o.CookieName
++ }
++ 
++ func (o *Options) cookiePath() string {
++ 	if o.Path == "" {
++ 		return "/"
++ 	}
++ 	return o.Path
++ }
++ 
++ // Middleware is the HTTP session middleware.
++ type Middleware struct {
++ 	opts Options
++ }
++ 
++ // New creates a new SessionMiddleware with the given options.
++ func New(opts Options) *Middleware {
++ 	return &Middleware{opts: opts}
++ }
++ 
++ // Handler wraps the provided http.Handler with session management.
++ //
++ // Behavior:
++ //   - Loads the session from the signed cookie (or creates a new one).
++ //   - Injects the *Session into the request context.
++ //   - After the inner handler returns:
++ //     - If the session was cleared, sends an expiring Set-Cookie header.
++ //     - If the session was mutated (dirty), encodes and sends a new Set-Cookie.
++ //     - If the session was only read (not dirty), no Set-Cookie is sent.
++ func (m *Middleware) Handler(next http.Handler) http.Handler {
++ 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		sess, err := m.loadFromRequest(r)
++ 		if err != nil {
++ 			// Could not decode existing cookie; start a fresh session.
++ 			sess, err = newSession()
++ 			if err != nil {
++ 				http.Error(w, "internal server error", http.StatusInternalServerError)
++ 				return
++ 			}
++ 		}
++ 
++ 		ctx := context.WithValue(r.Context(), sessionContextKey, sess)
++ 		next.ServeHTTP(w, r.WithContext(ctx))
++ 
++ 		// Post-handler: decide whether to write a Set-Cookie header.
++ 		if sess.IsCleared() {
++ 			m.clearCookie(w)
++ 			return
++ 		}
++ 		if sess.IsDirty() {
++ 			if err := m.saveCookie(w, sess); err != nil {
++ 				// Best-effort: log would go here in production code.
++ 				_ = err
++ 			}
++ 		}
++ 		// If neither cleared nor dirty, no Set-Cookie is written.
++ 	})
++ }
++ 
++ // FromContext retrieves the *Session from the context.
++ // Returns nil if no session is present.
++ func FromContext(ctx context.Context) *Session {
++ 	s, _ := ctx.Value(sessionContextKey).(*Session)
++ 	return s
++ }
++ 
++ // Must retrieves the *Session from the context and panics if not present.
++ func Must(ctx context.Context) *Session {
++ 	s := FromContext(ctx)
++ 	if s == nil {
++ 		panic("session: no session in context — did you forget to use SessionMiddleware?")
++ 	}
++ 	return s
++ }
++ 
++ // ---- internal helpers ----
++ 
++ // cookiePayload is the structure serialised into the cookie value.
++ type cookiePayload struct {
++ 	ID   string                 `json:"id"`
++ 	Data map[string]interface{} `json:"data"`
++ }
++ 
++ func (m *Middleware) loadFromRequest(r *http.Request) (*Session, error) {
++ 	cookie, err := r.Cookie(m.opts.cookieName())
++ 	if err != nil {
++ 		return nil, ErrSessionNotFound
++ 	}
++ 	payload, err := m.decode(cookie.Value)
++ 	if err != nil {
++ 		return nil, err
++ 	}
++ 	return loadSession(payload.ID, payload.Data), nil
++ }
++ 
++ func (m *Middleware) saveCookie(w http.ResponseWriter, sess *Session) error {
++ 	sess.mu.RLock()
++ 	payload := cookiePayload{
++ 		ID:   sess.id,
++ 		Data: sess.data,
++ 	}
++ 	sess.mu.RUnlock()
++ 
++ 	value, err := m.encode(payload)
++ 	if err != nil {
++ 		return fmt.Errorf("session: encode: %w", err)
++ 	}
++ 
++ 	http.SetCookie(w, &http.Cookie{
++ 		Name:     m.opts.cookieName(),
++ 		Value:    value,
++ 		Path:     m.opts.cookiePath(),
++ 		Domain:   m.opts.Domain,
++ 		MaxAge:   m.opts.MaxAge,
++ 		Secure:   m.opts.Secure,
++ 		HttpOnly: m.opts.HttpOnly,
++ 		SameSite: m.opts.SameSite,
++ 	})
++ 	return nil
++ }
++ 
++ func (m *Middleware) clearCookie(w http.ResponseWriter) {
++ 	http.SetCookie(w, &http.Cookie{
++ 		Name:     m.opts.cookieName(),
++ 		Value:    "",
++ 		Path:     m.opts.cookiePath(),
++ 		Domain:   m.opts.Domain,
++ 		MaxAge:   -1,
++ 		Expires:  time.Unix(0, 0),
++ 		Secure:   m.opts.Secure,
++ 		HttpOnly: m.opts.HttpOnly,
++ 		SameSite: m.opts.SameSite,
++ 	})
++ }
++ 
++ // encode serialises and signs the payload.
++ // Format: base64(json) + "." + base64(hmac)
++ func (m *Middleware) encode(p cookiePayload) (string, error) {
++ 	raw, err := json.Marshal(p)
++ 	if err != nil {
++ 		return "", err
++ 	}
++ 	encoded := base64.RawURLEncoding.EncodeToString(raw)
++ 	sig := m.sign(encoded)
++ 	return encoded + "." + sig, nil
++ }
++ 
++ // decode verifies the signature and deserialises the payload.
++ func (m *Middleware) decode(value string) (cookiePayload, error) {
++ 	parts := strings.SplitN(value, ".", 2)
++ 	if len(parts) != 2 {
++ 		return cookiePayload{}, ErrInvalidSignature
++ 	}
++ 	encoded, sig := parts[0], parts[1]
++ 	expected := m.sign(encoded)
++ 	if !hmac.Equal([]byte(sig), []byte(expected)) {
++ 		return cookiePayload{}, ErrInvalidSignature
++ 	}
++ 	raw, err := base64.RawURLEncoding.DecodeString(encoded)
++ 	if err != nil {
++ 		return cookiePayload{}, fmt.Errorf("session: base64 decode: %w", err)
++ 	}
++ 	var p cookiePayload
++ 	if err := json.Unmarshal(raw, &p); err != nil {
++ 		return cookiePayload{}, fmt.Errorf("session: json unmarshal: %w", err)
++ 	}
++ 	return p, nil
++ }
++ 
++ func (m *Middleware) sign(data string) string {
++ 	mac := hmac.New(sha256.New, m.opts.Secret)
++ 	mac.Write([]byte(data))
++ 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
++ }
++ 
++ // generateID produces a cryptographically random 128-bit session identifier.
++ func generateID() (string, error) {
++ 	b := make([]byte, 16)
++ 	if _, err := rand.Read(b); err != nil {
++ 		return "", fmt.Errorf("session: generate id: %w", err)
++ 	}
++ 	return base64.RawURLEncoding.EncodeToString(b), nil
++ }
+*** Add File: session/session_test.go
++ package session_test
++ 
++ import (
++ 	"net/http"
++ 	"net/http/httptest"
++ 	"strings"
++ 	"sync"
++ 	"testing"
++ 
++ 	"github.com/example/repo/session"
++ )
++ 
++ var testSecret = []byte("super-secret-key-for-tests-only!")
++ 
++ func newMiddleware() *session.Middleware {
++ 	return session.New(session.Options{
++ 		Secret:   testSecret,
++ 		HttpOnly: true,
++ 	})
++ }
++ 
++ // extractCookie returns the Set-Cookie header value for the session cookie,
++ // or "" if none was set.
++ func extractCookie(rr *httptest.ResponseRecorder) string {
++ 	for _, v := range rr.Result().Header["Set-Cookie"] {
++ 		if strings.HasPrefix(v, "session=") {
++ 			return v
++ 		}
++ 	}
++ 	return ""
++ }
++ 
++ // ---- basic read/write ----
++ 
++ func TestSetCookieOnMutation(t *testing.T) {
++ 	mw := newMiddleware()
++ 
++ 	handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		sess := session.Must(r.Context())
++ 		sess.Set("user", "alice")
++ 		w.WriteHeader(http.StatusOK)
++ 	}))
++ 
++ 	rr := httptest.NewRecorder()
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	handler.ServeHTTP(rr, req)
++ 
++ 	if got := extractCookie(rr); got == "" {
++ 		t.Fatal("expected Set-Cookie header after session mutation, got none")
++ 	}
++ }
++ 
++ func TestNoSetCookieOnReadOnly(t *testing.T) {
++ 	mw := newMiddleware()
++ 
++ 	// First request: create a session with data.
++ 	var cookieHeader string
++ 	{
++ 		handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			sess := session.Must(r.Context())
++ 			sess.Set("user", "bob")
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		rr := httptest.NewRecorder()
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		handler.ServeHTTP(rr, req)
++ 		cookieHeader = extractCookie(rr)
++ 		if cookieHeader == "" {
++ 			t.Fatal("expected Set-Cookie on first (write) request")
++ 		}
++ 	}
++ 
++ 	// Second request: read-only — must NOT produce a new Set-Cookie.
++ 	{
++ 		handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			sess := session.Must(r.Context())
++ 			v, ok := sess.Get("user")
++ 			if !ok {
++ 				t.Error("expected 'user' key in session")
++ 			}
++ 			if v != "bob" {
++ 				t.Errorf("expected user=bob, got %v", v)
++ 			}
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 
++ 		rr := httptest.NewRecorder()
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		// Attach the cookie from the first response.
++ 		cookieValue := strings.SplitN(strings.TrimPrefix(cookieHeader, "session="), ";", 2)[0]
++ 		req.AddCookie(&http.Cookie{Name: "session", Value: cookieValue})
++ 		handler.ServeHTTP(rr, req)
++ 
++ 		if got := extractCookie(rr); got != "" {
++ 			t.Fatalf("expected NO Set-Cookie on read-only request, got: %s", got)
++ 		}
++ 	}
++ }
++ 
++ // ---- cookie clearing ----
++ 
++ func TestClearSendsExpiringCookie(t *testing.T) {
++ 	mw := newMiddleware()
++ 
++ 	// Establish a session first.
++ 	var cookieValue string
++ 	{
++ 		handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			session.Must(r.Context()).Set("k", "v")
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		rr := httptest.NewRecorder()
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		handler.ServeHTTP(rr, req)
++ 		raw := extractCookie(rr)
++ 		cookieValue = strings.SplitN(strings.TrimPrefix(raw, "session="), ";", 2)[0]
++ 	}
++ 
++ 	// Now clear the session.
++ 	handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		session.Must(r.Context()).Clear()
++ 		w.WriteHeader(http.StatusOK)
++ 	}))
++ 	rr := httptest.NewRecorder()
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	req.AddCookie(&http.Cookie{Name: "session", Value: cookieValue})
++ 	handler.ServeHTTP(rr, req)
++ 
++ 	setCookie := extractCookie(rr)
++ 	if setCookie == "" {
++ 		t.Fatal("expected Set-Cookie header after Clear(), got none")
++ 	}
++ 	// The cookie must have MaxAge=-1 or contain "max-age=0" / expires in the past.
++ 	lower := strings.ToLower(setCookie)
++ 	if !strings.Contains(lower, "max-age=-1") && !strings.Contains(lower, "max-age=0") &&
++ 		!strings.Contains(lower, "expires=thu, 01 jan 1970") {
++ 		t.Errorf("expected expiring cookie, got: %s", setCookie)
++ 	}
++ }
++ 
++ func TestClearOnNewSessionSendsExpiringCookie(t *testing.T) {
++ 	// Even if there was no prior cookie, Clear() should still send an expiring
++ 	// Set-Cookie so any client-side remnant is removed.
++ 	mw := newMiddleware()
++ 
++ 	handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		session.Must(r.Context()).Clear()
++ 		w.WriteHeader(http.StatusOK)
++ 	}))
++ 
++ 	rr := httptest.NewRecorder()
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	handler.ServeHTTP(rr, req)
++ 
++ 	setCookie := extractCookie(rr)
++ 	if setCookie == "" {
++ 		t.Fatal("expected Set-Cookie header after Clear() even on new session")
++ 	}
++ }
++ 
++ // ---- session data persistence across requests ----
++ 
++ func TestDataPersistsAcrossRequests(t *testing.T) {
++ 	mw := newMiddleware()
++ 
++ 	// Write.
++ 	var cookieValue string
++ 	{
++ 		handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			sess := session.Must(r.Context())
++ 			sess.Set("counter", float64(42)) // JSON numbers decode as float64
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		rr := httptest.NewRecorder()
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		handler.ServeHTTP(rr, req)
++ 		raw := extractCookie(rr)
++ 		cookieValue = strings.SplitN(strings.TrimPrefix(raw, "session="), ";", 2)[0]
++ 	}
++ 
++ 	// Read back.
++ 	handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		sess := session.Must(r.Context())
++ 		v, ok := sess.Get("counter")
++ 		if !ok {
++ 			t.Error("counter key missing")
++ 			return
++ 		}
++ 		if v.(float64) != 42 {
++ 			t.Errorf("expected 42, got %v", v)
++ 		}
++ 		w.WriteHeader(http.StatusOK)
++ 	}))
++ 	rr := httptest.NewRecorder()
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	req.AddCookie(&http.Cookie{Name: "session", Value: cookieValue})
++ 	handler.ServeHTTP(rr, req)
++ }
++ 
++ // ---- tampered cookie ----
++ 
++ func TestTamperedCookieStartsFreshSession(t *testing.T) {
++ 	mw := newMiddleware()
++ 
++ 	handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		sess := session.Must(r.Context())
++ 		// A tampered cookie should yield an empty session.
++ 		if keys := sess.Keys(); len(keys) != 0 {
++ 			t.Errorf("expected empty session, got keys: %v", keys)
++ 		}
++ 		w.WriteHeader(http.StatusOK)
++ 	}))
++ 
++ 	rr := httptest.NewRecorder()
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	req.AddCookie(&http.Cookie{Name: "session", Value: "tampered.invalidsignature"})
++ 	handler.ServeHTTP(rr, req)
++ }
++ 
++ // ---- delete key ----
++ 
++ func TestDeleteMarksDirty(t *testing.T) {
++ 	mw := newMiddleware()
++ 
++ 	// Write a key.
++ 	var cookieValue string
++ 	{
++ 		handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			session.Must(r.Context()).Set("tmp", "yes")
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		rr := httptest.NewRecorder()
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		handler.ServeHTTP(rr, req)
++ 		raw := extractCookie(rr)
++ 		cookieValue = strings.SplitN(strings.TrimPrefix(raw, "session="), ";", 2)[0]
++ 	}
++ 
++ 	// Delete the key — should produce a new Set-Cookie.
++ 	handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		session.Must(r.Context()).Delete("tmp")
++ 		w.WriteHeader(http.StatusOK)
++ 	}))
++ 	rr := httptest.NewRecorder()
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	req.AddCookie(&http.Cookie{Name: "session", Value: cookieValue})
++ 	handler.ServeHTTP(rr, req)
++ 
++ 	if got := extractCookie(rr); got == "" {
++ 		t.Fatal("expected Set-Cookie after Delete(), got none")
++ 	}
++ }
++ 
++ // ---- concurrent read-only access ----
++ 
++ func TestConcurrentReadOnlyNoSetCookie(t *testing.T) {
++ 	mw := newMiddleware()
++ 
++ 	// Seed a session.
++ 	var cookieValue string
++ 	{
++ 		handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			session.Must(r.Context()).Set("shared", "data")
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		rr := httptest.NewRecorder()
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		handler.ServeHTTP(rr, req)
++ 		raw := extractCookie(rr)
++ 		cookieValue = strings.SplitN(strings.TrimPrefix(raw, "session="), ";", 2)[0]
++ 	}
++ 
++ 	// Simulate concurrent read-only requests.
++ 	const goroutines = 50
++ 	var wg sync.WaitGroup
++ 	wg.Add(goroutines)
++ 
++ 	handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		sess := session.Must(r.Context())
++ 		v, ok := sess.Get("shared")
++ 		if !ok || v != "data" {
++ 			t.Errorf("unexpected session data: ok=%v v=%v", ok, v)
++ 		}
++ 		w.WriteHeader(http.StatusOK)
++ 	}))
++ 
++ 	for i := 0; i < goroutines; i++ {
++ 		go func() {
++ 			defer wg.Done()
++ 			rr := httptest.NewRecorder()
++ 			req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 			req.AddCookie(&http.Cookie{Name: "session", Value: cookieValue})
++ 			handler.ServeHTTP(rr, req)
++ 
++ 			if got := extractCookie(rr); got != "" {
++ 				t.Errorf("concurrent read-only: unexpected Set-Cookie: %s", got)
++ 			}
++ 		}()
++ 	}
++ 	wg.Wait()
++ }
++ 
++ // ---- concurrent mixed read/write ----
++ 
++ func TestConcurrentMixedAccessNoPanic(t *testing.T) {
++ 	// Each request gets its own Session instance (loaded from the same cookie),
++ 	// so concurrent writes to different Session objects must not race.
++ 	mw := newMiddleware()
++ 
++ 	var cookieValue string
++ 	{
++ 		handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			session.Must(r.Context()).Set("base", "value")
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		rr := httptest.NewRecorder()
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		handler.ServeHTTP(rr, req)
++ 		raw := extractCookie(rr)
++ 		cookieValue = strings.SplitN(strings.TrimPrefix(raw, "session="), ";", 2)[0]
++ 	}
++ 
++ 	const goroutines = 50
++ 	var wg sync.WaitGroup
++ 	wg.Add(goroutines)
++ 
++ 	handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		sess := session.Must(r.Context())
++ 		if i := r.Header.Get("X-Write"); i != "" {
++ 			sess.Set("key", i)
++ 		} else {
++ 			sess.Get("base")
++ 		}
++ 		w.WriteHeader(http.StatusOK)
++ 	}))
++ 
++ 	for i := 0; i < goroutines; i++ {
++ 		go func(n int) {
++ 			defer wg.Done()
++ 			rr := httptest.NewRecorder()
++ 			req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 			req.AddCookie(&http.Cookie{Name: "session", Value: cookieValue})
++ 			if n%2 == 0 {
++ 				req.Header.Set("X-Write", "yes")
++ 			}
++ 			handler.ServeHTTP(rr, req)
++ 		}(i)
++ 	}
++ 	wg.Wait()
++ }
++ 
++ // ---- Snapshot does not mark dirty ----
++ 
++ func TestSnapshotDoesNotMarkDirty(t *testing.T) {
++ 	mw := newMiddleware()
++ 
++ 	var cookieValue string
++ 	{
++ 		handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			session.Must(r.Context()).Set("x", 1)
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		rr := httptest.NewRecorder()
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		handler.ServeHTTP(rr, req)
++ 		raw := extractCookie(rr)
++ 		cookieValue = strings.SplitN(strings.TrimPrefix(raw, "session="), ";", 2)[0]
++ 	}
++ 
++ 	handler := mw.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		snap := session.Must(r.Context()).Snapshot()
++ 		_ = snap // read-only use
++ 		w.WriteHeader(http.StatusOK)
++ 	}))
++ 	rr := httptest.NewRecorder()
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	req.AddCookie(&http.Cookie{Name: "session", Value: cookieValue})
++ 	handler.ServeHTTP(rr, req)
++ 
++ 	if got := extractCookie(rr); got != "" {
++ 		t.Fatalf("Snapshot() must not mark session dirty; got Set-Cookie: %s", got)
++ 	}
++ }
++ 
++ // ---- FromContext returns nil when no middleware ----
++ 
++ func TestFromContextNilWhenNoMiddleware(t *testing.T) {
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	if s := session.FromContext(req.Context()); s != nil {
++ 		t.Errorf("expected nil, got %v", s)
++ 	}
++ }
++ 
++ // ---- Must panics when no middleware ----
++ 
++ func TestMustPanicsWhenNoMiddleware(t *testing.T) {
++ 	defer func() {
++ 		if r := recover(); r == nil {
++ 			t.Error("expected panic from Must() with no session in context")
++ 		}
++ 	}()
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	session.Must(req.Context())
++ }
+*** Add File: session/go.mod
++ module github.com/example/repo/session
++ 
++ go 1.21
+*** End Patch

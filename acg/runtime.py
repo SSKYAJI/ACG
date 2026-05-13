@@ -27,11 +27,15 @@ Environment variables (read by :meth:`RuntimeConfig.from_env`):
 ``ACG_LLM_MODEL``             Sub-agent model id
 ``ACG_LLM_API_KEY``           Sub-agent bearer token
 ``ACG_MOCK_LLM``              ``1`` ⇒ short-circuit to :class:`MockRuntimeLLM`
-``ACG_SUB_MAX_TOKENS``        Per-worker ``max_tokens`` (default ``65536``);
-                              set lower for 32k-context endpoints (e.g.
-                              standard ``moonshotai/kimi-k2.6`` ⇒ ``16384``).
-``ACG_ORCH_MAX_TOKENS``       Orchestrator ``max_tokens`` (default ``8192``).
+``ACG_SUB_MAX_TOKENS``        Optional per-worker ``max_tokens`` override; unset /
+                              ``0`` / ``none`` falls through to ``ACG_WORKER_MAX_TOKENS``.
+``ACG_WORKER_MAX_TOKENS``     Default worker ``max_tokens`` when ``ACG_SUB_MAX_TOKENS``
+                              is unset (default ``4096``).
+``ACG_ORCH_MAX_TOKENS``       Optional orchestrator ``max_tokens`` (same rules).
+``ACG_REQUEST_TIMEOUT_S``     HTTP timeout for runtime LLM calls (default ``900``).
 ``ACG_PERF_TRACE``            Optional path for a GX10 perf trace JSON
+``ACG_LLM_EXTRA_PARAMS_JSON`` Optional JSON object merged into worker/orchestrator
+                              ``/chat/completions`` requests (provider-specific keys).
 ============================  ==================================================
 """
 
@@ -42,7 +46,7 @@ import json
 import os
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -53,8 +57,15 @@ from rich.markup import escape as _rich_escape
 
 from . import enforce
 from .compiler import promote_candidate_paths
+from .llm import parse_acg_llm_extra_params_json
 from .perf import PerfRecorder
 from .repo_graph import scan_context_graph
+from .runtime_proposal import (
+    PROPOSAL_OK,
+    PROPOSAL_TRANSPORT_ERROR,
+    PROPOSAL_TRUNCATED,
+    classify_zero_proposal_reply,
+)
 from .schema import AgentLock, Group, Task
 
 # ---------------------------------------------------------------------------
@@ -64,16 +75,11 @@ from .schema import AgentLock, Group, Task
 DEFAULT_ORCH_URL = "http://gx10-f2c9:8081/v1"
 DEFAULT_SUB_URL = "http://gx10-f2c9:8080/v1"
 DEFAULT_MODEL = "gemma"
-DEFAULT_TIMEOUT_S = 180.0
-
-# Defaults sized for frontier coder models on long-context endpoints
-# (e.g. Kimi K2.6 Nitro / GPT-5.3-Codex / Claude 4.5 Sonnet). Workers must
-# emit a complete ``apply_patch`` envelope in a single response; truncating
-# at 4k turned applied-diff runs into PATCH_NA noise. Override per env via
-# ``ACG_SUB_MAX_TOKENS`` / ``ACG_ORCH_MAX_TOKENS`` for smaller context windows.
-ORCH_MAX_TOKENS = 8192
-SUB_MAX_TOKENS = 65536
+DEFAULT_TIMEOUT_S = 900.0
 TEMPERATURE = 0.2
+
+# Periodic stderr line while awaiting a worker/sub-agent HTTP response (not streaming).
+WORKER_HEARTBEAT_S = 30.0
 
 # Top N files (sorted by import-fan-in) embedded in worker prompts so workers
 # propose grounded paths instead of inventing plausible ones.
@@ -101,8 +107,9 @@ class RuntimeConfig:
     sub_url: str = DEFAULT_SUB_URL
     sub_model: str = DEFAULT_MODEL
     sub_api_key: str = ""
-    orch_max_tokens: int = ORCH_MAX_TOKENS
-    sub_max_tokens: int = SUB_MAX_TOKENS
+    orch_max_tokens: int | None = None
+    sub_max_tokens: int | None = None
+    worker_max_tokens: int = 4096
     request_timeout_s: float = DEFAULT_TIMEOUT_S
     perf_trace_path: Path | None = None
     engine: str = "unknown"
@@ -115,6 +122,7 @@ class RuntimeConfig:
     auto_replan: bool = False
     model_sha: str = ""
     sequential: bool = False
+    extra_params: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_env(cls) -> RuntimeConfig:
@@ -137,8 +145,11 @@ class RuntimeConfig:
             auto_replan=_env_bool("ACG_AUTO_REPLAN", False),
             model_sha=os.environ.get("ACG_LLM_MODEL_SHA", ""),
             sequential=_env_bool("ACG_SEQUENTIAL", False),
-            sub_max_tokens=_env_int("ACG_SUB_MAX_TOKENS", SUB_MAX_TOKENS),
-            orch_max_tokens=_env_int("ACG_ORCH_MAX_TOKENS", ORCH_MAX_TOKENS),
+            sub_max_tokens=env_int_or_none("ACG_SUB_MAX_TOKENS"),
+            worker_max_tokens=max(1, _env_int("ACG_WORKER_MAX_TOKENS", 4096)),
+            orch_max_tokens=env_int_or_none("ACG_ORCH_MAX_TOKENS"),
+            request_timeout_s=_env_float("ACG_REQUEST_TIMEOUT_S", DEFAULT_TIMEOUT_S),
+            extra_params=parse_acg_llm_extra_params_json(),
         )
 
     def public(self) -> dict[str, Any]:
@@ -149,6 +160,7 @@ class RuntimeConfig:
             "sub_url": self.sub_url,
             "sub_model": self.sub_model,
             "auto_replan": self.auto_replan,
+            "worker_max_tokens": self.worker_max_tokens,
         }
 
     def perf_public(self) -> dict[str, Any]:
@@ -180,6 +192,34 @@ def _env_int(name: str, default: int) -> int:
         return default
     try:
         return max(0, int(raw))
+    except ValueError:
+        return default
+
+
+def env_int_or_none(name: str) -> int | None:
+    """Parse a positive int from the environment, or ``None`` to omit caps.
+
+    Unset, empty, ``0``, or ``none`` (case-insensitive) all mean "do not cap".
+    """
+    raw = os.environ.get(name)
+    if raw is None or not str(raw).strip():
+        return None
+    stripped = str(raw).strip()
+    if stripped.lower() in {"0", "none"}:
+        return None
+    try:
+        n = int(stripped)
+        return n if n > 0 else None
+    except ValueError:
+        return None
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        return float(raw)
     except ValueError:
         return default
 
@@ -220,7 +260,7 @@ class RuntimeLLMProtocol(Protocol):
         self,
         messages: list[dict[str, str]],
         *,
-        max_tokens: int = ...,
+        max_tokens: int | None = ...,
         temperature: float = ...,
     ) -> LLMReply: ...
 
@@ -242,37 +282,42 @@ class RuntimeLLM:
         model: str = DEFAULT_MODEL,
         api_key: str = "",
         timeout: float = DEFAULT_TIMEOUT_S,
+        extra_params: dict[str, Any] | None = None,
     ) -> None:
         self.url = base_url.rstrip("/")
         self.model = model
         self.api_key = api_key
         self._client = httpx.AsyncClient(timeout=timeout)
+        self.extra_params: dict[str, Any] = dict(extra_params or {})
 
     async def complete(
         self,
         messages: list[dict[str, str]],
         *,
-        max_tokens: int = SUB_MAX_TOKENS,
+        max_tokens: int | None = None,
         temperature: float = TEMPERATURE,
     ) -> LLMReply:
         """POST to ``/chat/completions`` and return a populated :class:`LLMReply`.
 
-        Retries once on transport error; raises :class:`RuntimeLLMError` on
+        Retries once on transport error and once on HTTP 429/503 when the
+        server sends ``Retry-After``. Raises :class:`RuntimeLLMError` on other
         non-2xx responses or after the second transport failure.
         """
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
-            "max_tokens": max_tokens,
             "temperature": temperature,
             "stream": False,
         }
+        if max_tokens is not None and max_tokens > 0:
+            payload["max_tokens"] = max_tokens
         seed_env = os.environ.get("ACG_LLM_SEED")
         if seed_env is not None and seed_env.strip():
             try:
                 payload["seed"] = int(seed_env)
             except ValueError:
                 pass
+        payload.update(self.extra_params)
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
@@ -288,6 +333,15 @@ class RuntimeLLM:
                 if attempt == 0:
                     continue
                 raise RuntimeLLMError(f"transport error contacting {endpoint}: {exc}") from exc
+
+            if response.status_code in (429, 503) and attempt == 0:
+                raw_retry = response.headers.get("retry-after", "2")
+                try:
+                    wait_s = max(0, int(float(str(raw_retry).strip())))
+                except ValueError:
+                    wait_s = 2
+                await asyncio.sleep(wait_s)
+                continue
 
             if response.status_code >= 400:
                 raise RuntimeLLMError(
@@ -459,16 +513,22 @@ class MockRuntimeLLM:
     fixture trace in ``demo-app/.acg/run_trace.json``.
     """
 
-    def __init__(self, role: str = "worker", model: str = "mock-runtime") -> None:
+    def __init__(
+        self,
+        role: str = "worker",
+        model: str = "mock-runtime",
+        worker_replies_by_task_id: dict[str, LLMReply] | None = None,
+    ) -> None:
         self.role = role
         self.model = model
         self.url = f"mock://{role}"
+        self._worker_replies_by_task_id = dict(worker_replies_by_task_id or {})
 
     async def complete(
         self,
         messages: list[dict[str, str]],
         *,
-        max_tokens: int = SUB_MAX_TOKENS,
+        max_tokens: int | None = None,
         temperature: float = TEMPERATURE,
     ) -> LLMReply:
         del max_tokens, temperature  # unused
@@ -484,6 +544,10 @@ class MockRuntimeLLM:
                 finish_reason="stop",
                 wall_s=0.01,
             )
+
+        for task_id, override in self._worker_replies_by_task_id.items():
+            if f"Task id: {task_id}" in user_blob:
+                return override
 
         for task_id, proposals in _MOCK_WORKER_PROPOSALS.items():
             if f"Task id: {task_id}" in user_blob:
@@ -548,6 +612,7 @@ class WorkerResult:
     prompt_tokens: int | None = None
     cost_usd: float | None = None
     cost_source: str | None = None
+    proposal_status: str = PROPOSAL_OK
 
 
 @dataclass
@@ -821,11 +886,53 @@ def _is_directoryish(path: str) -> bool:
     return "." not in last
 
 
+_WORKER_FILE_CONTENT_MAX_BYTES = 16_000
+_WORKER_FILE_CONTENT_TOTAL_CAP = 64_000
+
+
+def _read_repo_file_for_prompt(
+    repo_root: Path, rel_path: str, max_bytes: int = _WORKER_FILE_CONTENT_MAX_BYTES
+) -> str | None:
+    """Read a repo-relative file for inline inclusion in a worker prompt.
+
+    Returns ``None`` if the path is unsafe, missing, or unreadable so the
+    caller can skip the file rather than abort. Truncates at ``max_bytes``
+    with an explicit marker so the agent knows the rest exists; this keeps
+    a single huge file from monopolizing the context budget while still
+    grounding the model in the file's real shape.
+    """
+    raw = rel_path.strip().replace("\\", "/")
+    if not raw or raw.startswith("/") or ".." in Path(raw).parts:
+        return None
+    full = repo_root / raw
+    try:
+        resolved = full.resolve()
+        resolved.relative_to(repo_root.resolve())
+    except (OSError, ValueError):
+        return None
+    if not resolved.is_file():
+        return None
+    try:
+        data = resolved.read_bytes()
+    except OSError:
+        return None
+    if len(data) > max_bytes:
+        head = data[:max_bytes].decode("utf-8", errors="replace")
+        return head + f"\n# … [truncated; original file is {len(data)} bytes]\n"
+    return data.decode("utf-8", errors="replace")
+
+
+def _format_file_blob_for_prompt(rel_path: str, content: str) -> str:
+    """Wrap a file body in a fenced header the worker can read unambiguously."""
+    return f"--- BEGIN FILE: {rel_path} ---\n{content.rstrip()}\n--- END FILE: {rel_path} ---"
+
+
 def _build_worker_prompt(
     task: Task,
     repo_graph: dict[str, Any],
     *,
     include_lockfile_hints: bool = True,
+    repo_root: Path | None = None,
 ) -> list[dict[str, str]]:
     """Construct the worker messages.
 
@@ -837,6 +944,18 @@ def _build_worker_prompt(
     When ``include_lockfile_hints`` is false, the user message omits predicted
     writes and candidate-context lists so workers only see the task text and
     the global top-K repo file list (used for blind baselines).
+
+    When ``repo_root`` is provided and ``include_lockfile_hints`` is true,
+    the actual file content of each :attr:`Task.predicted_writes` path is
+    inlined into the prompt (capped per-file at
+    :data:`_WORKER_FILE_CONTENT_MAX_BYTES` and total at
+    :data:`_WORKER_FILE_CONTENT_TOTAL_CAP`). Without this content, even
+    frontier-tier models hallucinate file state and emit ``Update File``
+    hunks whose context lines do not match the file on disk — apply_patch
+    silently no-ops in that case (every applied-diff smoke shipped
+    ``EMPTY_PATCH`` until this fix). This is the load-bearing reason ACG's
+    lockfile is more than write-authority: it drives precise context
+    inclusion in worker prompts.
     """
     files = _top_files(repo_graph)
     file_block = "\n".join(f"  - {p}" for p in files) or "  (graph empty)"
@@ -876,6 +995,38 @@ def _build_worker_prompt(
                 )
                 break
 
+        # Inline file contents for predicted_writes paths when ``repo_root`` is
+        # available. Without this, the agent guesses what each file contains
+        # and emits ``Update File`` hunks whose context lines don't match disk
+        # — apply_patch silently no-ops, every applied-diff run reports
+        # EMPTY_PATCH regardless of model quality.
+        content_block = ""
+        if repo_root is not None and hard_paths:
+            chunks: list[str] = []
+            total_bytes = 0
+            for rel in hard_paths:
+                if total_bytes >= _WORKER_FILE_CONTENT_TOTAL_CAP:
+                    chunks.append(
+                        f"--- SKIPPED FILE: {rel} (content budget exhausted) ---"
+                    )
+                    continue
+                body = _read_repo_file_for_prompt(repo_root, rel)
+                if body is None:
+                    chunks.append(
+                        f"--- NEW FILE: {rel} (does not exist yet — use *** Add File) ---"
+                    )
+                else:
+                    chunks.append(_format_file_blob_for_prompt(rel, body))
+                    total_bytes += len(body)
+            if chunks:
+                content_block = (
+                    "\nCurrent file contents (truncated where noted). Your "
+                    "*** Update File hunks MUST cite exact context lines from "
+                    "these files; do not guess line shapes from memory.\n\n"
+                    + "\n\n".join(chunks)
+                    + "\n"
+                )
+
         user = (
             f"Task id: {task.id}\n"
             f"Task: {task.prompt}\n"
@@ -888,6 +1039,7 @@ def _build_worker_prompt(
             f"{candidate_block}\n"
             f"Available files in this repo (top {len(files)} by importance):\n"
             f"{file_block}{extra_hint}"
+            f"{content_block}"
         )
     else:
         user = (
@@ -975,6 +1127,45 @@ _console = Console()
 _console_err = Console(stderr=True, no_color=False)
 
 
+async def _heartbeat_while_llm_pending(task_id: str, llm_task: asyncio.Task[LLMReply]) -> None:
+    """Emit a stderr line every :data:`WORKER_HEARTBEAT_S` until ``llm_task`` completes."""
+    interval = WORKER_HEARTBEAT_S
+    t0 = time.perf_counter()
+    while True:
+        await asyncio.sleep(interval)
+        if llm_task.done():
+            return
+        elapsed = time.perf_counter() - t0
+        _console_err.print(
+            f"[worker {task_id}] still waiting at {elapsed:.0f}s...",
+            markup=False,
+            highlight=False,
+        )
+
+
+async def complete_llm_with_heartbeat(
+    llm: RuntimeLLMProtocol,
+    *,
+    task_id: str,
+    messages: list[dict[str, str]],
+    max_tokens: int | None,
+    temperature: float = TEMPERATURE,
+) -> LLMReply:
+    """Await ``llm.complete`` while emitting periodic stderr heartbeats."""
+    llm_task: asyncio.Task[LLMReply] = asyncio.create_task(
+        llm.complete(messages, max_tokens=max_tokens, temperature=temperature)
+    )
+    hb_task = asyncio.create_task(_heartbeat_while_llm_pending(task_id, llm_task))
+    try:
+        return await llm_task
+    finally:
+        hb_task.cancel()
+        try:
+            await hb_task
+        except asyncio.CancelledError:
+            pass
+
+
 def _now_iso() -> str:
     """Return a UTC ISO-8601 timestamp."""
     return datetime.now(UTC).isoformat()
@@ -1029,18 +1220,39 @@ async def run_worker(
     config: RuntimeConfig | None = None,
     perf: PerfRecorder | None = None,
     include_lockfile_hints: bool = True,
+    repo_root: Path | None = None,
 ) -> WorkerResult:
-    """Run a single sub-agent and validate every proposed write."""
+    """Run a single sub-agent and validate every proposed write.
+
+    When ``repo_root`` is supplied, the worker prompt includes the actual
+    content of each predicted-writes file so the agent can emit hunks whose
+    context lines match disk (see :func:`_build_worker_prompt`). Without it,
+    applied-diff workflows uniformly fail with ``EMPTY_PATCH``.
+    """
     cfg = config or RuntimeConfig.from_env()
-    if max_tokens is None:
-        max_tokens = cfg.sub_max_tokens
+    effective_max_tokens = max_tokens
+    if effective_max_tokens is None:
+        effective_max_tokens = cfg.sub_max_tokens
+    if effective_max_tokens is None:
+        effective_max_tokens = cfg.worker_max_tokens
     _console.print(f"[blue][worker {task.id}][/] starting (group {group_id})")
-    messages = _build_worker_prompt(task, repo_graph, include_lockfile_hints=include_lockfile_hints)
+    messages = _build_worker_prompt(
+        task,
+        repo_graph,
+        include_lockfile_hints=include_lockfile_hints,
+        repo_root=repo_root,
+    )
     error: str | None = None
     if perf:
         perf.mark_task_start(task.id, group_id)
     try:
-        reply = await llm.complete(messages, max_tokens=max_tokens)
+        reply = await complete_llm_with_heartbeat(
+            llm,
+            task_id=task.id,
+            messages=messages,
+            max_tokens=effective_max_tokens,
+            temperature=TEMPERATURE,
+        )
         if perf:
             perf.mark_first_token(task.id)
     except RuntimeLLMError as exc:
@@ -1069,6 +1281,44 @@ async def run_worker(
             blocked_count=0,
             error=error,
             prompt_tokens=None,
+            proposal_status=PROPOSAL_TRANSPORT_ERROR,
+        )
+
+    if (reply.finish_reason or "").lower() == "length":
+        max_desc = (
+            str(effective_max_tokens) if effective_max_tokens is not None else "provider-native"
+        )
+        error = f"finish_reason=length; output truncated at max_tokens={max_desc}"
+        _console_err.print(
+            f"[bold red][worker {task.id}] LLM finish_reason=length — {error}",
+            markup=False,
+            highlight=False,
+        )
+        if perf:
+            perf.mark_task_end(
+                task.id,
+                input_tokens=_task_input_tokens(
+                    task, repo_graph, include_lockfile_hints=include_lockfile_hints
+                ),
+                output_tokens=reply.completion_tokens,
+            )
+        return WorkerResult(
+            task_id=task.id,
+            group_id=group_id,
+            url=llm.url,
+            model=llm.model,
+            wall_s=reply.wall_s,
+            completion_tokens=reply.completion_tokens,
+            finish_reason=reply.finish_reason,
+            raw_content=reply.content,
+            proposals=[],
+            allowed_count=0,
+            blocked_count=0,
+            error=error,
+            prompt_tokens=reply.prompt_tokens,
+            cost_usd=reply.cost_usd,
+            cost_source=reply.cost_source,
+            proposal_status=PROPOSAL_TRUNCATED,
         )
 
     raw_proposals = _parse_apply_envelope(reply.content)
@@ -1086,6 +1336,14 @@ async def run_worker(
         f"[blue][worker {task.id}][/] proposed {len(raw_proposals)} writes "
         f"({reply.wall_s:.2f}s, {reply.completion_tokens} tokens)"
     )
+
+    if raw_proposals:
+        proposal_status = PROPOSAL_OK
+    else:
+        proposal_status = classify_zero_proposal_reply(
+            raw_content=reply.content,
+            finish_reason=reply.finish_reason or "",
+        )
 
     proposals: list[Proposal] = []
     allowed_count = 0
@@ -1183,6 +1441,7 @@ async def run_worker(
         prompt_tokens=reply.prompt_tokens,
         cost_usd=reply.cost_usd,
         cost_source=reply.cost_source,
+        proposal_status=proposal_status,
     )
 
 
@@ -1293,7 +1552,9 @@ async def run_lockfile(
         highlight=False,
     )
     _console_err.print(
-        f"[acg] backend {_p['model_id']} ctx={cfg.sub_max_tokens} "
+        f"[acg] backend {_p['model_id']} ctx="
+        f"{cfg.sub_max_tokens if cfg.sub_max_tokens is not None else cfg.worker_max_tokens} "
+        f"(worker_max_tokens={cfg.worker_max_tokens}) "
         f"worker-concurrency={_p['worker_concurrency']} "
         f"grace-overlap={_p['grace_overlap']}",
         markup=False,
@@ -1412,7 +1673,10 @@ __all__ = [
     "RuntimeLLM",
     "RuntimeLLMError",
     "RuntimeLLMProtocol",
+    "WORKER_HEARTBEAT_S",
     "WorkerResult",
+    "complete_llm_with_heartbeat",
+    "env_int_or_none",
     "run_group",
     "run_lockfile",
     "run_orchestrator",

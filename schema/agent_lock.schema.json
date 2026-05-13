@@ -34,12 +34,31 @@
         "tokens_planner_total": {
           "type": ["integer", "null"],
           "minimum": 0,
-          "description": "Estimated prompt tokens spent by the optional task-planning orchestrator."
+          "description": "Planner prompt tokens consumed during compile. Sum of provider-reported usage.prompt_tokens when available; chars//4 estimate otherwise (see tokens_planner_method)."
         },
         "tokens_scope_review_total": {
           "type": ["integer", "null"],
           "minimum": 0,
           "description": "Estimated prompt tokens spent by compile-time scope review."
+        },
+        "tokens_planner_completion_total": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Provider-reported completion tokens summed across planner LLM calls during compile."
+        },
+        "tokens_planner_method": {
+          "type": ["string", "null"],
+          "description": "Source of tokens_planner_total: 'provider_usage', 'estimate_chars_div_4', or 'none'."
+        },
+        "compile_wall_seconds": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Wall-clock seconds spent inside compile_lockfile, including all planner LLM calls."
+        },
+        "compile_cost_usd": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Sum of provider-reported per-call USD cost across planner LLM calls during compile."
         }
       }
     },

@@ -1,0 +1,71 @@
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ proposed 2 writes (14.26s, 1491 tokens)
+   ALLOWED pr3148-jinja2-autoescape → starlette/templating.py
+   BLOCKED pr3148-jinja2-autoescape → tests/test_templating.py: path 
+'tests/test_templating.py' is outside task 'pr3148-jinja2-autoescape''s 
+allowed_paths (starlette/templating.py, tests/test_templates.py)
+ proposed 2 writes (25.58s, 5393 tokens)
+   ALLOWED pr3166-session-middleware → starlette/middleware/sessions.py
+   BLOCKED pr3166-session-middleware → tests/test_session_middleware.py: path 
+'tests/test_session_middleware.py' is outside task 'pr3166-session-middleware''s
+allowed_paths (starlette/middleware/sessions.py, tests/middleware/**)
+[worker pr3137-cors-credentials-origin] still waiting at 30s...
+ proposed 1 writes (31.76s, 515 tokens)
+   ALLOWED pr3137-cors-credentials-origin → starlette/middleware/cors.py
+[naive_parallel_blind/local] wrote experiments/real_repos/starlette/runs_deepseek_n5/seed1_final/eval_run_naive_parallel_blind.json — completed=1/3, evidence=naive_parallel_blind_proposed_write_set, overlaps=0, oob=2, blocked=0, wall=31.770s
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+[worker pr3148-jinja2-autoescape] still waiting at 30s...
+[worker pr3166-session-middleware] still waiting at 30s...
+[worker pr3137-cors-credentials-origin] still waiting at 30s...
+ proposed 2 writes (35.41s, 1190 tokens)
+   ALLOWED pr3148-jinja2-autoescape → starlette/templating.py
+   ALLOWED pr3148-jinja2-autoescape → tests/test_templates.py
+ proposed 2 writes (51.53s, 4856 tokens)
+   ALLOWED pr3137-cors-credentials-origin → starlette/middleware/cors.py
+   ALLOWED pr3137-cors-credentials-origin → tests/middleware/test_cors.py
+[worker pr3166-session-middleware] still waiting at 60s...
+[worker pr3166-session-middleware] still waiting at 90s...
+[worker pr3166-session-middleware] still waiting at 120s...
+ proposed 2 writes (124.54s, 2502 tokens)
+   ALLOWED pr3166-session-middleware → starlette/middleware/sessions.py
+   ALLOWED pr3166-session-middleware → tests/middleware/test_session.py
+[naive_parallel/local] wrote experiments/real_repos/starlette/runs_deepseek_n5/seed1_final/eval_run_naive.json — completed=3/3, evidence=proposed_write_set, overlaps=0, oob=0, blocked=0, wall=124.544s
+ starting (group 1)
+ starting (group 1)
+ proposed 2 writes (8.77s, 867 tokens)
+   ALLOWED pr3137-cors-credentials-origin → starlette/middleware/cors.py
+   ALLOWED pr3137-cors-credentials-origin → tests/middleware/test_cors.py
+[worker pr3166-session-middleware] still waiting at 30s...
+ proposed 2 writes (31.21s, 2863 tokens)
+   ALLOWED pr3166-session-middleware → starlette/middleware/sessions.py
+   ALLOWED pr3166-session-middleware → tests/middleware/test_session.py
+ starting (group 2)
+[worker pr3148-jinja2-autoescape] still waiting at 30s...
+ proposed 2 writes (36.48s, 3731 tokens)
+   ALLOWED pr3148-jinja2-autoescape → starlette/templating.py
+   ALLOWED pr3148-jinja2-autoescape → tests/test_templates.py
+[acg_planned_full_context/local] wrote experiments/real_repos/starlette/runs_deepseek_n5/seed1_final/eval_run_acg_full_context.json — completed=3/3, evidence=proposed_write_set, overlaps=0, oob=0, blocked=0, wall=67.702s
+ starting (group 1)
+ starting (group 1)
+ proposed 2 writes (18.10s, 1693 tokens)
+   ALLOWED pr3137-cors-credentials-origin → starlette/middleware/cors.py
+   ALLOWED pr3137-cors-credentials-origin → tests/middleware/test_cors.py
+[worker pr3166-session-middleware] still waiting at 30s...
+[worker pr3166-session-middleware] still waiting at 60s...
+[worker pr3166-session-middleware] still waiting at 90s...
+[worker pr3166-session-middleware] still waiting at 120s...
+ proposed 2 writes (133.68s, 3063 tokens)
+   ALLOWED pr3166-session-middleware → starlette/middleware/sessions.py
+   ALLOWED pr3166-session-middleware → tests/middleware/test_session.py
+ starting (group 2)
+ proposed 2 writes (16.78s, 1581 tokens)
+   ALLOWED pr3148-jinja2-autoescape → starlette/templating.py
+   ALLOWED pr3148-jinja2-autoescape → tests/test_templates.py
+[acg_planned/local] wrote experiments/real_repos/starlette/runs_deepseek_n5/seed1_final/eval_run_acg.json — completed=3/3, evidence=proposed_write_set, overlaps=0, oob=0, blocked=0, wall=150.471s
+[worker single_agent] still waiting at 30s...
+[single_agent/local] wrote experiments/real_repos/starlette/runs_deepseek_n5/seed1_final/eval_run_single_agent.json — completed=3/3, evidence=suite_proposed_write_set, overlaps=3, oob=0, blocked=0, wall=55.354s
+[combined] wrote experiments/real_repos/starlette/runs_deepseek_n5/seed1_final/eval_run_combined.json

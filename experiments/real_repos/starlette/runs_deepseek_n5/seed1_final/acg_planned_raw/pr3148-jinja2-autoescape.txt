@@ -1,0 +1,55 @@
+*** Begin Patch
+*** Update File: starlette/templating.py
+@@
+-from jinja2 import Environment, FileSystemLoader
++from jinja2 import Environment, FileSystemLoader, select_autoescape
+@@
+             self.env = Environment(
+-                loader=FileSystemLoader(directory), **env_options
++                loader=FileSystemLoader(directory),
++                autoescape=select_autoescape(),
++                **env_options
+             )
+*** Update File: tests/test_templates.py
+@@
++def test_autoescape_html(tmp_path):
++    from starlette.templating import Jinja2Templates
++    templates_dir = tmp_path / "templates"
++    templates_dir.mkdir()
++    (templates_dir / "page.html").write_text("<html>{{ content }}</html>")
++    templates = Jinja2Templates(directory=templates_dir)
++    template = templates.get_template("page.html")
++    content = "<script>alert('xss')</script>"
++    rendered = template.render({"content": content})
++    assert "&lt;script&gt;" in rendered
++    assert "alert" not in rendered
++
++
++def test_autoescape_txt(tmp_path):
++    from starlette.templating import Jinja2Templates
++    templates_dir = tmp_path / "templates"
++    templates_dir.mkdir()
++    (templates_dir / "text.txt").write_text("{{ content }}")
++    templates = Jinja2Templates(directory=templates_dir)
++    template = templates.get_template("text.txt")
++    content = "<script>alert('xss')</script>"
++    rendered = template.render({"content": content})
++    # .txt is not autoescaped by select_autoescape
++    assert "<script>" in rendered
++    assert "alert" in rendered
++
++
++def test_autoescape_custom_env(tmp_path):
++    from jinja2 import Environment, FileSystemLoader
++    from starlette.templating import Jinja2Templates
++    templates_dir = tmp_path / "templates"
++    templates_dir.mkdir()
++    (templates_dir / "page.html").write_text("{{ content }}")
++    env = Environment(loader=FileSystemLoader(templates_dir), autoescape=False)
++    templates = Jinja2Templates(env=env)
++    template = templates.get_template("page.html")
++    content = "<script>alert('xss')</script>"
++    rendered = template.render({"content": content})
++    assert "<script>" in rendered
++    assert "alert" in rendered
+*** End Patch

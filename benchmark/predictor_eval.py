@@ -10,11 +10,12 @@ needed.
 
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 import sys
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,7 @@ from acg.index.framework import FrameworkIndexer  # noqa: E402
 from acg.index.pagerank import PageRankIndexer  # noqa: E402
 from acg.index.types import Indexer  # noqa: E402
 from acg.schema import TaskInput, TaskInputHints  # noqa: E402
+from benchmark import baselines as baseline_mod  # noqa: E402
 
 FIXTURE_DIR = ROOT / "benchmark" / "fixtures"
 RESULTS_PATH = ROOT / "benchmark" / "results.json"
@@ -92,6 +94,31 @@ def evaluate_dataset(
         predictions = [
             write.path for write in aggregate(_task(row), repo, {}, indexers=indexers, top_n=5)
         ]
+        hits = len(set(predictions) & truth)
+        recall_total += hits / len(truth) if truth else 1.0
+        precision_total += hits / 5
+    wall_s = time.perf_counter() - start
+    return {
+        "recall@5": recall_total / len(rows),
+        "precision@5": precision_total / len(rows),
+        "wall_s": wall_s,
+    }
+
+
+def evaluate_dataset_path_predictor(
+    name: str,
+    predict: Callable[[TaskInput, Path, int], list[str]],
+) -> dict[str, float]:
+    """Same metrics as :func:`evaluate_dataset`, using a path-list baseline."""
+
+    rows = _load_fixture(name)
+    repo = _repo_for_dataset(name)
+    start = time.perf_counter()
+    recall_total = 0.0
+    precision_total = 0.0
+    for row in rows:
+        truth = set(row["ground_truth_paths"])
+        predictions = predict(_task(row), repo, 5)[:5]
         hits = len(set(predictions) & truth)
         recall_total += hits / len(truth) if truth else 1.0
         precision_total += hits / 5
@@ -188,24 +215,100 @@ def _markdown(payload: dict[str, dict[str, dict[str, float]]]) -> str:
     return "\n".join(sections)
 
 
+def _combined_baseline_table(
+    base: dict[str, dict[str, float]],
+    baselines: dict[str, dict[str, dict[str, float]]],
+) -> str:
+    """Markdown: ACG vs bm25 / last commit / largest files / random + delta vs best baseline."""
+
+    order = ("bm25_only", "last_commit_files", "all_files_top_k", "random_at_k")
+    header = (
+        "| dataset | recall@5 ACG | recall@5 bm25_only | recall@5 last_commit | "
+        "recall@5 all_files | recall@5 random | Δ_ACG_vs_best_baseline |"
+    )
+    sep = "| --- | ---: | ---: | ---: | ---: | ---: | ---: |"
+    lines = [header, sep]
+    keys = sorted(base.keys())
+    deltas: list[float] = []
+    col_keys = [k for k in order if k in baselines]
+    for ds in keys:
+        acg_r = base[ds]["recall@5"]
+        br = {k: baselines[k][ds]["recall@5"] for k in col_keys}
+        best = max(br.values()) if br else 0.0
+        delta = acg_r - best
+        deltas.append(delta)
+        cells = [f"{acg_r:.2f}"]
+        for k in col_keys:
+            cells.append(f"{br[k]:.2f}")
+        lines.append(f"| {ds} | " + " | ".join(cells) + f" | {delta:+.2f} |")
+    if keys:
+        mean_acg = sum(base[k]["recall@5"] for k in keys) / len(keys)
+        mean_cells = [f"{mean_acg:.2f}"]
+        mean_br: dict[str, float] = {}
+        for k in col_keys:
+            mean_br[k] = sum(baselines[k][dk]["recall@5"] for dk in keys) / len(keys)
+            mean_cells.append(f"{mean_br[k]:.2f}")
+        mean_delta = sum(deltas) / len(deltas)
+        lines.append("| mean | " + " | ".join(mean_cells) + f" | {mean_delta:+.2f} |")
+    return "\n".join(lines)
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--include-baselines",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Run trivial baselines and print the combined comparison table (default: on).",
+    )
+    args = parser.parse_args()
+
     base_results: dict[str, dict[str, float]] = {}
     embed_results: dict[str, dict[str, float]] = {}
     embed_indexers = _indexers_with_embeddings()
-    for name in ("demo-app", "t3-app", "express", "realworld"):
+    dataset_names = ("demo-app", "t3-app", "express", "realworld")
+    for name in dataset_names:
         base_results[name] = evaluate_dataset(name, indexers=None)
         if embed_indexers is not None:
             embed_results[name] = evaluate_dataset(name, indexers=embed_indexers)
-    payload: dict[str, dict[str, dict[str, float]]] = {
+
+    payload: dict[str, Any] = {
         "base": base_results,
         "with_embeddings": embed_results,
     }
+
+    if args.include_baselines:
+        rng = baseline_mod.RandomAtK(seed=0)
+        all_top = baseline_mod.AllFilesTopK()
+        bm25 = baseline_mod.Bm25Only()
+        last_c = baseline_mod.LastCommitFiles()
+        baseline_predictors = (bm25, last_c, all_top, rng)
+        baselines_out: dict[str, dict[str, dict[str, float]]] = {}
+        for pred in baseline_predictors:
+            baselines_out[pred.name] = {}
+            for name in dataset_names:
+                baselines_out[pred.name][name] = evaluate_dataset_path_predictor(name, pred.predict)
+        payload["baselines"] = baselines_out
+
     RESULTS_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
-    print(_markdown(payload))
+
+    if args.include_baselines:
+        print("## ACG vs trivial baselines (recall@5)")
+        print("")
+        print(_combined_baseline_table(base_results, payload["baselines"]))
+        print("")
+    else:
+        print(_markdown(payload))
+
     if embed_indexers is None:
         print(
             "\n# embeddings extra not installed — install with `pip install -e '.[index-vector]'`"
         )
+    if args.include_baselines and embed_indexers is not None:
+        print("")
+        print("## With embeddings (Δ vs base indexers)")
+        print("")
+        print(_delta_table(base_results, embed_results))
 
 
 if __name__ == "__main__":

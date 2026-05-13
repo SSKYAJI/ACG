@@ -9,13 +9,14 @@ else is delegated to :mod:`acg.predictor` and :mod:`acg.solver`.
 from __future__ import annotations
 
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
 from typing import Any
 
 from . import __version__
-from .llm import LLMProtocol
+from .llm import LLMProtocol, LLMUsage
 from .schema import (
     AgentLock,
     ExecutionPlan,
@@ -123,12 +124,22 @@ def _detect_languages(repo_graph: dict[str, Any]) -> list[str]:
     return languages or ["unknown"]
 
 
+_DEFAULT_COMPILE_TASK_CONCURRENCY = 3
+
+
 def _compile_task_concurrency() -> int:
-    raw = os.environ.get("ACG_COMPILE_TASK_CONCURRENCY", "1")
+    """Resolve the per-compile thread-pool size.
+
+    Defaults to 3: the predictor's LLM calls are I/O-bound, so 3 threads
+    typically max OpenRouter / Groq paid-tier rate limits without
+    saturating CPU. Override with ``ACG_COMPILE_TASK_CONCURRENCY`` (set to
+    ``1`` to force serial when debugging or hitting rate limits).
+    """
+    raw = os.environ.get("ACG_COMPILE_TASK_CONCURRENCY", str(_DEFAULT_COMPILE_TASK_CONCURRENCY))
     try:
         n = int(raw)
     except ValueError:
-        return 1
+        return _DEFAULT_COMPILE_TASK_CONCURRENCY
     return max(1, n)
 
 
@@ -139,13 +150,38 @@ def _predict_one_task_compile(
     repo_path: Path,
     llm: LLMProtocol,
     isolated_clients: bool,
-) -> tuple[TaskInput, Any]:
-    """Run predictor for one task (used serially or from a thread pool)."""
+) -> tuple[TaskInput, Any, LLMUsage]:
+    """Run predictor for one task (used serially or from a thread pool).
+
+    Returns the per-task usage delta as the third tuple element so the caller
+    can aggregate across threads. For the shared-client path
+    (``isolated_clients=False``), the delta is taken before/after the call so
+    multiple sequential invocations on the same shared client do not
+    double-count.
+    """
     from .llm import LLMClient
     from .predictor import predict_file_scopes_with_usage
 
-    client: LLMProtocol = LLMClient.from_env() if isolated_clients else llm
-    return ti, predict_file_scopes_with_usage(ti, repo_graph, client, repo_root=repo_path)
+    client: LLMProtocol = LLMClient.from_env_for_compile() if isolated_clients else llm
+    # Test stubs may not implement ``usage_total`` (LLMProtocol attribute is
+    # checked by Pyright but runtime stubs predate it). Fall back to a fresh
+    # zeroed delta — the prediction itself is unaffected.
+    usage_attr = getattr(client, "usage_total", None)
+    if usage_attr is None:
+        prediction = predict_file_scopes_with_usage(ti, repo_graph, client, repo_root=repo_path)
+        return ti, prediction, LLMUsage()
+    before = usage_attr.snapshot()
+    prediction = predict_file_scopes_with_usage(ti, repo_graph, client, repo_root=repo_path)
+    after = usage_attr.snapshot()
+    delta = LLMUsage(
+        prompt_tokens=after.prompt_tokens - before.prompt_tokens,
+        completion_tokens=after.completion_tokens - before.completion_tokens,
+        cost_usd=after.cost_usd - before.cost_usd,
+        wall_seconds=after.wall_seconds - before.wall_seconds,
+        calls=after.calls - before.calls,
+        source=after.source,
+    )
+    return ti, prediction, delta
 
 
 def compile_lockfile(
@@ -172,7 +208,9 @@ def compile_lockfile(
     heuristic_deps = _heuristic_dependencies(tasks_input.tasks)
     tasks: list[Task] = []
     scope_review_tokens_total = 0
-    compile_planner_tokens_total = 0
+    compile_planner_tokens_estimate = 0
+    compile_usage_total = LLMUsage()
+    compile_started = time.perf_counter()
 
     workers = _compile_task_concurrency()
     task_inputs = list(tasks_input.tasks)
@@ -200,10 +238,17 @@ def compile_lockfile(
             for ti in task_inputs
         ]
 
-    for ti, prediction in predictions:
+    for ti, prediction, usage_delta in predictions:
         file_scopes = prediction.scopes
         scope_review_tokens_total += prediction.scope_review_tokens
-        compile_planner_tokens_total += prediction.planner_tokens
+        compile_planner_tokens_estimate += prediction.planner_tokens
+        compile_usage_total.add(
+            prompt_tokens=usage_delta.prompt_tokens,
+            completion_tokens=usage_delta.completion_tokens,
+            cost_usd=usage_delta.cost_usd,
+            wall_seconds=usage_delta.wall_seconds,
+            source=usage_delta.source,
+        )
         writes = _must_writes(file_scopes)
         allowed_paths = _build_allowed_paths(writes)
         tasks.append(
@@ -230,7 +275,24 @@ def compile_lockfile(
     for task in tasks:
         task.parallel_group = group_by_task.get(task.id)
 
-    tokens_planner_total = (tasks_input.tokens_planner_total or 0) + compile_planner_tokens_total
+    use_provider = compile_usage_total.source == "provider"
+    if use_provider:
+        tokens_planner_total = compile_usage_total.prompt_tokens
+        tokens_planner_method = "provider_usage"
+    else:
+        tokens_planner_total = (
+            tasks_input.tokens_planner_total or 0
+        ) + compile_planner_tokens_estimate
+        tokens_planner_method = "estimate_chars_div_4" if tokens_planner_total else "none"
+    tokens_planner_completion_total = (
+        compile_usage_total.completion_tokens if use_provider else None
+    )
+    compile_wall_seconds = round(time.perf_counter() - compile_started, 4)
+    compile_cost_usd = (
+        round(compile_usage_total.cost_usd, 8)
+        if use_provider and compile_usage_total.cost_usd > 0
+        else None
+    )
 
     return AgentLock(
         version="1.0",
@@ -241,6 +303,10 @@ def compile_lockfile(
             model=llm.model,
             tokens_planner_total=tokens_planner_total,
             tokens_scope_review_total=scope_review_tokens_total or None,
+            tokens_planner_completion_total=tokens_planner_completion_total,
+            tokens_planner_method=tokens_planner_method,
+            compile_wall_seconds=compile_wall_seconds,
+            compile_cost_usd=compile_cost_usd,
         ),
         repo=Repo(root=str(repo_path), languages=_detect_languages(repo_graph)),
         tasks=tasks,

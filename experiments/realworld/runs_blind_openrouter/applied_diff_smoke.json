@@ -1,0 +1,22 @@
+{
+  "strategy": "acg_planned",
+  "wall_time_seconds": 120.0,
+  "repo_path": "experiments/realworld/checkout",
+  "base_ref": "HEAD~1",
+  "tasks": [
+    {
+      "task_id": "add-rate-limiting",
+      "status": "completed",
+      "branch": "acg-applied-diff-smoke",
+      "actual_changed_files": ["src/main.ts"],
+      "test": {
+        "command": "npm test -- --runInBand",
+        "ran": false,
+        "exit_code": null,
+        "passed": null
+      },
+      "wall_time_seconds": 120.0,
+      "diff_stats": {"added": 3, "deleted": 1}
+    }
+  ]
+}

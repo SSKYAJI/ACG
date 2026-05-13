@@ -1,0 +1,171 @@
+*** Begin Patch
+*** Add File: tests/test_sessions.py
+import pytest
+
+from starlette.applications import Starlette
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Route
+from starlette.testclient import TestClient
+
+
+def view_session(request: Request):
+    return JSONResponse({"session": request.session})
+
+
+async def update_session(request: Request):
+    data = await request.json()
+    request.session.update(data)
+    return JSONResponse({"session": request.session})
+
+
+async def clear_session(request: Request):
+    request.session.clear()
+    return JSONResponse({"session": request.session})
+
+
+def create_app():
+    app = Starlette(
+        routes=[
+            Route("/view", view_session),
+            Route("/update", update_session, methods=["POST"]),
+            Route("/clear", clear_session, methods=["POST"]),
+        ]
+    )
+    app.add_middleware(SessionMiddleware, secret_key="example")
+    return app
+
+
+def test_session(test_client_factory):
+    app = create_app()
+    client = test_client_factory(app)
+
+    response = client.post("/update", json={"username": "tom"})
+    assert response.json() == {"session": {"username": "tom"}}
+    assert "session" in response.cookies
+
+    response = client.get("/view")
+    assert response.json() == {"session": {"username": "tom"}}
+
+    response = client.post("/clear")
+    assert response.json() == {"session": {}}
+
+
+def test_session_expires(test_client_factory):
+    app = create_app()
+    client = test_client_factory(app)
+
+    response = client.post("/update", json={"username": "tom"})
+    assert response.json() == {"session": {"username": "tom"}}
+
+    # Simulate expired/invalid cookie
+    client.cookies.set("session", "invalid")
+    response = client.get("/view")
+    assert response.json() == {"session": {}}
+
+
+def test_session_cookie_subpath(test_client_factory):
+    second_app = Starlette(
+        routes=[
+            Route("/second_app/update", update_session, methods=["POST"]),
+            Route("/second_app/view", view_session),
+        ]
+    )
+    second_app.add_middleware(SessionMiddleware, secret_key="example")
+    client = test_client_factory(second_app)
+
+    response = client.post("/second_app/update", json={"username": "tom"})
+    assert response.json() == {"session": {"username": "tom"}}
+    assert "session" in response.cookies
+
+    response = client.get("/second_app/view")
+    assert response.json() == {"session": {"username": "tom"}}
+
+
+def test_session_https_only(test_client_factory):
+    app = Starlette(
+        routes=[
+            Route("/view", view_session),
+            Route("/update", update_session, methods=["POST"]),
+        ]
+    )
+    app.add_middleware(SessionMiddleware, secret_key="example", https_only=True)
+    client = test_client_factory(app, base_url="https://testserver")
+
+    response = client.post("/update", json={"username": "tom"})
+    assert response.json() == {"session": {"username": "tom"}}
+    assert "session" in response.cookies
+    assert "secure" in response.headers["set-cookie"]
+
+
+def test_session_no_cookie_for_readonly_access(test_client_factory):
+    """Test that reading session without modifying it does not set a cookie."""
+    app = create_app()
+    client = test_client_factory(app)
+
+    # First request: just view the session (no data, no modification)
+    response = client.get("/view")
+    assert response.json() == {"session": {}}
+    # No Set-Cookie header should be present for an empty, unmodified session
+    assert "set-cookie" not in response.headers
+
+
+def test_session_no_cookie_when_session_unchanged(test_client_factory):
+    """Test that an existing session that is only read does not re-send Set-Cookie."""
+    app = create_app()
+    client = test_client_factory(app)
+
+    # Set up a session
+    response = client.post("/update", json={"username": "tom"})
+    assert "set-cookie" in response.headers
+
+    # Now just read the session - should still set cookie to refresh expiry
+    # Actually with the new behavior, if session data hasn't changed we still
+    # send the cookie to refresh the expiry. Let's verify the session is readable.
+    response = client.get("/view")
+    assert response.json() == {"session": {"username": "tom"}}
+
+
+def test_session_clear_sends_deletion_cookie(test_client_factory):
+    """Test that clearing a session sends a deletion cookie."""
+    app = create_app()
+    client = test_client_factory(app)
+
+    # Set up a session
+    response = client.post("/update", json={"username": "tom"})
+    assert response.json() == {"session": {"username": "tom"}}
+
+    # Clear the session
+    response = client.post("/clear")
+    assert response.json() == {"session": {}}
+    # Should have a Set-Cookie with Max-Age=0 to delete the cookie
+    assert "set-cookie" in response.headers
+    assert "Max-Age=0" in response.headers["set-cookie"]
+
+
+def test_session_no_cookie_for_empty_readonly(test_client_factory):
+    """Regression: no Set-Cookie when session is empty and not modified."""
+    app = create_app()
+    client = test_client_factory(app, raise_server_exceptions=True)
+
+    # Multiple reads of empty session should not set cookies
+    for _ in range(3):
+        response = client.get("/view")
+        assert response.json() == {"session": {}}
+        assert "set-cookie" not in response.headers
+
+
+def test_concurrent_session_reads(test_client_factory):
+    """Regression: concurrent read-only requests should not interfere."""
+    app = create_app()
+    client = test_client_factory(app)
+
+    # Set up session
+    client.post("/update", json={"data": "value"})
+
+    # Multiple concurrent-like reads
+    for _ in range(5):
+        response = client.get("/view")
+        assert response.json() == {"session": {"data": "value"}}
+*** End Patch

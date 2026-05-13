@@ -16,6 +16,11 @@ _FAKE_CMD = [_FAKE_NPX, "--no-install", "tsc", "--noEmit"]
 def checkout_dir(tmp_path: Path) -> Path:
     p = tmp_path / "checkout"
     p.mkdir()
+    # Mark the fixture as a TypeScript checkout so run_tsc_noemit doesn't
+    # short-circuit with skip_reason="NOT_TYPESCRIPT". The presence-of-
+    # tsconfig probe is the cheap escape hatch for Python / Java repos
+    # added alongside the Python apply-and-test pipeline.
+    (p / "tsconfig.json").write_text("{}\n")
     return p
 
 

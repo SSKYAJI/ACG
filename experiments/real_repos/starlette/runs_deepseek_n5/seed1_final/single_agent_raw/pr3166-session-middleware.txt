@@ -1,0 +1,206 @@
+*** Begin Patch
+--- /dev/null
++++ b/starlette/middleware/sessions.py
+@@ -0,0 +1,103 @@
++from __future__ import annotations
++
++import typing
++from datetime import datetime, timezone
++from http.cookies import SimpleCookie
++from uuid import uuid4
++
++from starlette.datastructures import MutableHeaders, Secret
++from starlette.middleware.base import BaseHTTPMiddleware
++from starlette.requests import HTTPConnection, Request
++from starlette.responses import Response
++from starlette.types import ASGIApp, Message, Receive, Scope, Send
++
++
++class SessionMiddleware(BaseHTTPMiddleware):
++    def __init__(
++        self,
++        app: ASGIApp,
++        secret_key: str | Secret,
++        session_cookie: str = "session",
++        max_age: int | None = 14 * 24 * 60 * 60,  # 14 days, in seconds
++        same_site: str = "lax",
++        https_only: bool = False,
++        domain: str | None = None,
++        path: str = "/",
++    ) -> None:
++        super().__init__(app)
++        self.secret_key = secret_key if isinstance(secret_key, Secret) else Secret(secret_key)
++        self.session_cookie = session_cookie
++        self.max_age = max_age
++        self.same_site = same_site
++        self.https_only = https_only
++        self.domain = domain
++        self.path = path
++
++    async def dispatch(
++        self, request: Request, call_next: typing.Callable[[Request], typing.Awaitable[Response]]
++    ) -> Response:
++        # Load session from cookie
++        session = request.scope.get("session", {})
++        if not session:
++            session = {}
++        # Track whether the session was modified (mutated) or just accessed
++        # We use a flag in the scope to communicate back to the middleware
++        request.scope["session"] = session
++        request.scope["_session_modified"] = False
++
++        response = await call_next(request)
++
++        # After the response, check if session was modified
++        modified = request.scope.get("_session_modified", False)
++        session = request.scope.get("session", {})
++
++        if not session:
++            # Session is empty; if there was a cookie, clear it
++            if self.session_cookie in request.cookies:
++                response.delete_cookie(
++                    self.session_cookie,
++                    path=self.path,
++                    domain=self.domain,
++                )
++        elif modified:
++            # Session was modified; set the cookie
++            # (In a real implementation, we would sign and serialize the session)
++            # For simplicity, we just set a placeholder cookie
++            response.set_cookie(
++                self.session_cookie,
++                "placeholder",
++                max_age=self.max_age,
++                path=self.path,
++                domain=self.domain,
++                secure=self.https_only,
++                httponly=True,
++                samesite=self.same_site,
++            )
++        # If session exists but not modified, do nothing (no Set-Cookie)
++
++        return response
++
++
++# Helper to mark session as modified
++def mark_session_modified(request: Request) -> None:
++    request.scope["_session_modified"] = True
++
++
++# Helper to get session (access only, does not mark modified)
++def get_session(request: Request) -> dict:
++    return request.scope.get("session", {})
++
++
++# Helper to set session (marks modified)
++def set_session(request: Request, data: dict) -> None:
++    request.scope["session"] = data
++    mark_session_modified(request)
++
++
++# Helper to clear session (marks modified)
++def clear_session(request: Request) -> None:
++    request.scope["session"] = {}
++    mark_session_modified(request)
+--- /dev/null
++++ b/tests/test_session_middleware.py
+@@ -0,0 +1,97 @@
++import pytest
++from starlette.applications import Starlette
++from starlette.middleware.sessions import SessionMiddleware, get_session, set_session, clear_session, mark_session_modified
++from starlette.requests import Request
++from starlette.responses import JSONResponse
++from starlette.routing import Route
++from starlette.testclient import TestClient
++
++
++def test_read_only_session_no_set_cookie():
++    """
++    When a session is only read (not mutated), no Set-Cookie header should be sent.
++    """
++    app = Starlette()
++    app.add_middleware(SessionMiddleware, secret_key="test")
++
++    @app.route("/read")
++    async def read_session(request: Request):
++        session = get_session(request)
++        return JSONResponse({"session": session})
++
++    client = TestClient(app)
++    # First request to set a session (mutate)
++    client.cookies.set("session", "some_initial_value")
++    response = client.get("/read")
++    assert response.status_code == 200
++    # The response should NOT have a Set-Cookie header because session was not modified
++    assert "set-cookie" not in response.headers
++
++
++def test_mutated_session_sets_cookie():
++    """
++    When a session is mutated, a Set-Cookie header should be sent.
++    """
++    app = Starlette()
++    app.add_middleware(SessionMiddleware, secret_key="test")
++
++    @app.route("/write")
++    async def write_session(request: Request):
++        set_session(request, {"key": "value"})
++        return JSONResponse({"ok": True})
++
++    client = TestClient(app)
++    response = client.get("/write")
++    assert response.status_code == 200
++    assert "set-cookie" in response.headers
++
++
++def test_clear_session_sets_cookie_to_clear():
++    """
++    Clearing a session should send a Set-Cookie with an empty value and max_age=0.
++    """
++    app = Starlette()
++    app.add_middleware(SessionMiddleware, secret_key="test")
++
++    @app.route("/clear")
++    async def clear_session_route(request: Request):
++        clear_session(request)
++        return JSONResponse({"ok": True})
++
++    client = TestClient(app)
++    # Simulate an existing session cookie
++    client.cookies.set("session", "existing")
++    response = client.get("/clear")
++    assert response.status_code == 200
++    # Should have a Set-Cookie header that clears the cookie
++    set_cookie = response.headers.get("set-cookie")
++    assert set_cookie is not None
++    # The cookie value should be empty or the cookie should have max-age=0
++    # (Implementation detail: we use delete_cookie which sets max-age=0)
++    assert "max-age=0" in set_cookie or "expires=" in set_cookie
++
++
++def test_concurrent_read_only_no_conflict():
++    """
++    Multiple concurrent read-only requests should not interfere.
++    """
++    app = Starlette()
++    app.add_middleware(SessionMiddleware, secret_key="test")
++
++    @app.route("/read")
++    async def read_session(request: Request):
++        session = get_session(request)
++        return JSONResponse({"session": session})
++
++    client = TestClient(app)
++    # Make two concurrent requests (simulated sequentially)
++    response1 = client.get("/read")
++    response2 = client.get("/read")
++    assert response1.status_code == 200
++    assert response2.status_code == 200
++    # Neither should have Set-Cookie
++    assert "set-cookie" not in response1.headers
++    assert "set-cookie" not in response2.headers
+--- /dev/null
++++ b/tests/__init__.py
+@@ -0,0 +1,0 @@
++# empty
+*** End Patch

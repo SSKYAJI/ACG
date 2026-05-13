@@ -1,0 +1,178 @@
+*** Begin Patch
+*** Add File: tests/test_templating.py
+import os
+
+import pytest
+
+from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.requests import Request
+from starlette.routing import Route
+from starlette.templating import Jinja2Templates
+from starlette.testclient import TestClient
+
+try:
+    import jinja2
+except ImportError:
+    jinja2 = None
+
+pytestmark = pytest.mark.skipif(jinja2 is None, reason="jinja2 not installed")
+
+
+@pytest.fixture
+def tmpdir_with_templates(tmp_path):
+    return tmp_path
+
+
+def test_templates_render(tmpdir_with_templates):
+    templates_dir = tmpdir_with_templates
+    (templates_dir / "index.html").write_text("<html>Hello {{ name }}</html>")
+
+    templates = Jinja2Templates(directory=str(templates_dir))
+
+    def homepage(request):
+        return templates.TemplateResponse("index.html", {"request": request, "name": "World"})
+
+    app = Starlette(routes=[Route("/", homepage)])
+    client = TestClient(app)
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "Hello World" in response.text
+
+
+def test_templates_autoescape_html(tmpdir_with_templates):
+    """Test that HTML files are autoescaped by default."""
+    templates_dir = tmpdir_with_templates
+    (templates_dir / "index.html").write_text("<html>{{ name }}</html>")
+
+    templates = Jinja2Templates(directory=str(templates_dir))
+
+    def homepage(request):
+        return templates.TemplateResponse(
+            "index.html", {"request": request, "name": "<script>alert('xss')</script>"}
+        )
+
+    app = Starlette(routes=[Route("/", homepage)])
+    client = TestClient(app)
+    response = client.get("/")
+    assert response.status_code == 200
+    # The script tag should be escaped
+    assert "<script>" not in response.text
+    assert "&lt;script&gt;" in response.text
+
+
+def test_templates_autoescape_xml(tmpdir_with_templates):
+    """Test that XML files are autoescaped by default."""
+    templates_dir = tmpdir_with_templates
+    (templates_dir / "feed.xml").write_text("<feed>{{ content }}</feed>")
+
+    templates = Jinja2Templates(directory=str(templates_dir))
+
+    def feed(request):
+        return templates.TemplateResponse(
+            "feed.xml", {"request": request, "content": "<b>bold</b>"}
+        )
+
+    app = Starlette(routes=[Route("/feed", feed)])
+    client = TestClient(app)
+    response = client.get("/feed")
+    assert response.status_code == 200
+    assert "<b>" not in response.text
+    assert "&lt;b&gt;" in response.text
+
+
+def test_templates_no_autoescape_txt(tmpdir_with_templates):
+    """Test that non-HTML/XML files are not autoescaped by default."""
+    templates_dir = tmpdir_with_templates
+    (templates_dir / "email.txt").write_text("Hello {{ name }}")
+
+    templates = Jinja2Templates(directory=str(templates_dir))
+
+    def email(request):
+        return templates.TemplateResponse(
+            "email.txt", {"request": request, "name": "<World>"}
+        )
+
+    app = Starlette(routes=[Route("/email", email)])
+    client = TestClient(app)
+    response = client.get("/email")
+    assert response.status_code == 200
+    # Text files should NOT be escaped
+    assert "<World>" in response.text
+
+
+def test_templates_require_request_in_context(tmpdir_with_templates):
+    templates_dir = tmpdir_with_templates
+    (templates_dir / "index.html").write_text("<html>Hello</html>")
+
+    templates = Jinja2Templates(directory=str(templates_dir))
+
+    def homepage(request):
+        return templates.TemplateResponse("index.html", {})
+
+    app = Starlette(routes=[Route("/", homepage)])
+    client = TestClient(app, raise_server_exceptions=True)
+    with pytest.raises(ValueError, match='context must include a "request" key'):
+        client.get("/")
+
+
+def test_templates_from_env(tmpdir_with_templates):
+    """Test creating Jinja2Templates from an existing environment."""
+    templates_dir = tmpdir_with_templates
+    (templates_dir / "index.html").write_text("<html>{{ name }}</html>")
+
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(str(templates_dir)),
+        autoescape=False,
+    )
+    templates = Jinja2Templates.from_env(env)
+
+    def homepage(request):
+        return templates.TemplateResponse(
+            "index.html", {"request": request, "name": "<b>bold</b>"}
+        )
+
+    app = Starlette(routes=[Route("/", homepage)])
+    client = TestClient(app)
+    response = client.get("/")
+    assert response.status_code == 200
+    # autoescape=False means raw HTML passes through
+    assert "<b>bold</b>" in response.text
+
+
+def test_templates_custom_autoescape_false(tmpdir_with_templates):
+    """Test that caller-supplied autoescape=False is respected."""
+    templates_dir = tmpdir_with_templates
+    (templates_dir / "index.html").write_text("<html>{{ name }}</html>")
+
+    templates = Jinja2Templates(directory=str(templates_dir), autoescape=False)
+
+    def homepage(request):
+        return templates.TemplateResponse(
+            "index.html", {"request": request, "name": "<script>xss</script>"}
+        )
+
+    app = Starlette(routes=[Route("/", homepage)])
+    client = TestClient(app)
+    response = client.get("/")
+    assert response.status_code == 200
+    # With autoescape=False, the raw HTML should pass through
+    assert "<script>xss</script>" in response.text
+
+
+def test_templates_url_for(tmpdir_with_templates):
+    templates_dir = tmpdir_with_templates
+    (templates_dir / "index.html").write_text(
+        '<html><a href="{{ url_for(\'homepage\') }}">Home</a></html>'
+    )
+
+    def homepage(request):
+        return templates.TemplateResponse("index.html", {"request": request})
+
+    templates = Jinja2Templates(directory=str(templates_dir))
+    app = Starlette(routes=[Route("/", homepage, name="homepage")])
+    client = TestClient(app)
+    response = client.get("/")
+    assert response.status_code == 200
+    assert 'href="http://testserver/"' in response.text
+*** End Patch

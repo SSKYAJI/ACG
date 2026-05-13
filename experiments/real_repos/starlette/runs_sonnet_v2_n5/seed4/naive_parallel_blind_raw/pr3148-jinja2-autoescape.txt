@@ -1,0 +1,222 @@
+I'll analyze the task and create the necessary changes for making Jinja2Templates use Jinja2's `select_autoescape` by default.
+
+Let me create the implementation:
+
+*** Begin Patch
+*** Add File: starlette/templating.py
++ import typing
++ 
++ from jinja2 import Environment, FileSystemLoader, select_autoescape
++ 
++ 
++ class _TemplateResponse:
++     def __init__(self, template, context, status_code=200, headers=None, media_type=None, background=None):
++         self.template = template
++         self.context = context
++         self.status_code = status_code
++         self.headers = headers or {}
++         self.media_type = media_type or "text/html"
++         self.background = background
++         self.body = template.render(context).encode("utf-8")
++ 
++     async def __call__(self, scope, receive, send):
++         prefix = "HTTP/"
++         await send(
++             {
++                 "type": "http.response.start",
++                 "status": self.status_code,
++                 "headers": [
++                     [b"content-type", (self.media_type + "; charset=utf-8").encode("latin-1")],
++                     [b"content-length", str(len(self.body)).encode("latin-1")],
++                 ],
++             }
++         )
++         await send({"type": "http.response.body", "body": self.body})
++         if self.background is not None:
++             await self.background()
++ 
++ 
++ class Jinja2Templates:
++     """
++     templates = Jinja2Templates("templates")
++ 
++     return templates.TemplateResponse("index.html", {"request": request})
++     """
++ 
++     def __init__(
++         self,
++         directory: typing.Union[str, None] = None,
++         *,
++         env: typing.Union[Environment, None] = None,
++     ) -> None:
++         if env is not None:
++             self.env = env
++         elif directory is not None:
++             self.env = self._create_env(directory)
++         else:
++             raise ValueError("Either 'directory' or 'env' must be provided.")
++ 
++     def _create_env(self, directory: str) -> Environment:
++         loader = FileSystemLoader(directory)
++         env = Environment(
++             loader=loader,
++             autoescape=select_autoescape(),
++         )
++         return env
++ 
++     def get_template(self, name: str):
++         return self.env.get_template(name)
++ 
++     def TemplateResponse(
++         self,
++         name: str,
++         context: dict = None,
++         status_code: int = 200,
++         headers: dict = None,
++         media_type: str = None,
++         background=None,
++     ) -> _TemplateResponse:
++         if context is None:
++             context = {}
++         template = self.get_template(name)
++         return _TemplateResponse(
++             template,
++             context,
++             status_code=status_code,
++             headers=headers,
++             media_type=media_type,
++             background=background,
++         )
+*** Add File: tests/test_templating.py
++ import os
++ import pytest
++ from jinja2 import Environment, FileSystemLoader
++ 
++ from starlette.templating import Jinja2Templates
++ 
++ 
++ TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
++ 
++ 
++ @pytest.fixture(autouse=True)
++ def setup_templates(tmp_path):
++     """Create a temporary templates directory with test templates."""
++     templates_dir = tmp_path / "templates"
++     templates_dir.mkdir()
++ 
++     # A simple HTML template
++     (templates_dir / "index.html").write_text(
++         "<html><body>Hello, {{ name }}!</body></html>"
++     )
++ 
++     # A template that renders user-supplied content (to test autoescape)
++     (templates_dir / "escape_test.html").write_text(
++         "<html><body>{{ user_input }}</body></html>"
++     )
++ 
++     # A text template (non-HTML)
++     (templates_dir / "plain.txt").write_text("Hello, {{ name }}!")
++ 
++     return templates_dir
++ 
++ 
++ def test_jinja2_templates_requires_directory_or_env():
++     """Test that Jinja2Templates raises ValueError if neither directory nor env is provided."""
++     with pytest.raises(ValueError):
++         Jinja2Templates()
++ 
++ 
++ def test_jinja2_templates_with_directory(setup_templates):
++     """Test that Jinja2Templates can be created with a directory."""
++     templates = Jinja2Templates(directory=str(setup_templates))
++     assert templates.env is not None
++ 
++ 
++ def test_jinja2_templates_with_env(setup_templates):
++     """Test that Jinja2Templates can be created with a pre-existing environment."""
++     env = Environment(loader=FileSystemLoader(str(setup_templates)))
++     templates = Jinja2Templates(env=env)
++     assert templates.env is env
++ 
++ 
++ def test_autoescape_enabled_for_html(setup_templates):
++     """Test that autoescape is enabled for HTML templates by default."""
++     templates = Jinja2Templates(directory=str(setup_templates))
++     template = templates.get_template("escape_test.html")
++     # Render with potentially dangerous user input
++     result = template.render(user_input="<script>alert('xss')</script>")
++     # The script tag should be escaped
++     assert "<script>" not in result
++     assert "&lt;script&gt;" in result
++ 
++ 
++ def test_autoescape_not_applied_to_txt(setup_templates):
++     """Test that autoescape is not applied to .txt templates by default (select_autoescape default)."""
++     templates = Jinja2Templates(directory=str(setup_templates))
++     template = templates.get_template("plain.txt")
++     # Render with potentially dangerous user input
++     result = template.render(name="<b>World</b>")
++     # In .txt files, autoescape should NOT be enabled by default
++     assert "<b>World</b>" in result
++ 
++ 
++ def test_caller_supplied_env_is_preserved(setup_templates):
++     """Test that a caller-supplied environment is used as-is (no autoescape override)."""
++     # Create an environment WITHOUT autoescape
++     env = Environment(
++         loader=FileSystemLoader(str(setup_templates)),
++         autoescape=False,
++     )
++     templates = Jinja2Templates(env=env)
++     template = templates.get_template("escape_test.html")
++     result = template.render(user_input="<script>alert('xss')</script>")
++     # Without autoescape, the script tag should NOT be escaped
++     assert "<script>" in result
++ 
++ 
++ def test_caller_supplied_env_with_autoescape(setup_templates):
++     """Test that a caller-supplied environment with autoescape=True works correctly."""
++     env = Environment(
++         loader=FileSystemLoader(str(setup_templates)),
++         autoescape=True,
++     )
++     templates = Jinja2Templates(env=env)
++     template = templates.get_template("escape_test.html")
++     result = template.render(user_input="<script>alert('xss')</script>")
++     assert "<script>" not in result
++     assert "&lt;script&gt;" in result
++ 
++ 
++ def test_template_response_renders_correctly(setup_templates):
++     """Test that TemplateResponse renders the template correctly."""
++     templates = Jinja2Templates(directory=str(setup_templates))
++     response = templates.TemplateResponse("index.html", {"name": "World"})
++     assert b"Hello, World!" in response.body
++ 
++ 
++ def test_template_response_escapes_html(setup_templates):
++     """Test that TemplateResponse escapes HTML in context variables."""
++     templates = Jinja2Templates(directory=str(setup_templates))
++     response = templates.TemplateResponse(
++         "escape_test.html", {"user_input": "<script>alert('xss')</script>"}
++     )
++     assert b"<script>" not in response.body
++     assert b"&lt;script&gt;" in response.body
++ 
++ 
++ def test_select_autoescape_default_behavior(setup_templates):
++     """
++     Test that select_autoescape() default enables autoescape for html and xml files.
++     By default, select_autoescape() enables autoescape for .html and .xml extensions.
++     """
++     templates = Jinja2Templates(directory=str(setup_templates))
++     # HTML template should have autoescape enabled
++     html_template = templates.get_template("escape_test.html")
++     html_result = html_template.render(user_input="<b>bold</b>")
++     assert "&lt;b&gt;" in html_result
++ 
++     # Text template should NOT have autoescape enabled
++     txt_template = templates.get_template("plain.txt")
++     txt_result = txt_template.render(name="<b>bold</b>")
++     assert "<b>bold</b>" in txt_result
+*** End Patch

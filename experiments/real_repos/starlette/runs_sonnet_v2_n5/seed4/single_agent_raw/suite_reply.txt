@@ -1,0 +1,1187 @@
+I'll analyze the tasks and implement the required changes. Let me start by understanding what needs to be done for each task.
+
+Task id: pr3148-jinja2-autoescape
+*** Begin Patch
+*** Add File: starlette/templating.py
+import typing
+import os
+
+try:
+    import jinja2
+
+    if hasattr(jinja2, "pass_context"):
+        pass_context = jinja2.pass_context
+    else:
+        pass_context = jinja2.contextfunction  # type: ignore[attr-defined]
+except ImportError:  # pragma: nocover
+    jinja2 = None  # type: ignore[assignment]
+
+
+class _TemplateResponse:
+    def __init__(
+        self,
+        template: typing.Any,
+        context: dict,
+        status_code: int = 200,
+        headers: typing.Optional[dict] = None,
+        media_type: str = "text/html",
+        background: typing.Any = None,
+    ):
+        self.template = template
+        self.context = context
+        self.status_code = status_code
+        self.headers = headers or {}
+        self.media_type = media_type
+        self.background = background
+
+    async def __call__(self, scope: dict, receive: typing.Any, send: typing.Any) -> None:
+        prefix = "charset="
+        charset = "utf-8"
+        content = self.template.render(self.context)
+        body = content.encode(charset)
+        await send(
+            {
+                "type": "http.response.start",
+                "status": self.status_code,
+                "headers": [
+                    [b"content-type", f"{self.media_type}; {prefix}{charset}".encode()],
+                    [b"content-length", str(len(body)).encode()],
+                ]
+                + [
+                    [k.encode(), v.encode()]
+                    for k, v in self.headers.items()
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": body})
+        if self.background is not None:
+            await self.background()
+
+
+class Jinja2Templates:
+    """
+    templates = Jinja2Templates("templates")
+
+    return templates.TemplateResponse("index.html", {"request": request})
+    """
+
+    def __init__(
+        self,
+        directory: typing.Union[str, os.PathLike, None] = None,
+        *,
+        env: typing.Optional["jinja2.Environment"] = None,
+        **env_options: typing.Any,
+    ) -> None:
+        if env is not None:
+            self.env = env
+        else:
+            assert directory is not None, "either 'directory' or 'env' argument must be passed"
+            self._setup_env_defaults(directory, **env_options)
+
+    def _setup_env_defaults(
+        self,
+        directory: typing.Union[str, os.PathLike],
+        **env_options: typing.Any,
+    ) -> None:
+        assert jinja2 is not None, "jinja2 must be installed to use Jinja2Templates"
+        loader = jinja2.FileSystemLoader(directory)
+        # Use select_autoescape by default if autoescape not explicitly provided
+        if "autoescape" not in env_options:
+            env_options["autoescape"] = jinja2.select_autoescape()
+        env_options.setdefault("loader", loader)
+        self.env = jinja2.Environment(**env_options)
+
+    def get_template(self, name: str) -> "jinja2.Template":
+        return self.env.get_template(name)
+
+    def TemplateResponse(
+        self,
+        name: str,
+        context: dict,
+        status_code: int = 200,
+        headers: typing.Optional[dict] = None,
+        media_type: str = "text/html",
+        background: typing.Any = None,
+    ) -> _TemplateResponse:
+        if "request" not in context:
+            raise ValueError('context must include a "request" key')
+        template = self.get_template(name)
+        return _TemplateResponse(
+            template,
+            context,
+            status_code=status_code,
+            headers=headers,
+            media_type=media_type,
+            background=background,
+        )
+*** End Patch
+
+Task id: pr3148-jinja2-autoescape
+*** Begin Patch
+*** Add File: tests/test_templating.py
+import os
+import sys
+import pytest
+
+# Ensure starlette is importable
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+try:
+    import jinja2
+    HAS_JINJA2 = True
+except ImportError:
+    HAS_JINJA2 = False
+
+pytestmark = pytest.mark.skipif(not HAS_JINJA2, reason="jinja2 not installed")
+
+
+@pytest.fixture
+def template_dir(tmp_path):
+    return tmp_path
+
+
+def test_autoescape_enabled_by_default(template_dir):
+    """HTML templates should have autoescape enabled by default."""
+    from starlette.templating import Jinja2Templates
+
+    # Create a template with a potentially dangerous variable
+    tmpl_file = template_dir / "test.html"
+    tmpl_file.write_text("<div>{{ content }}</div>")
+
+    templates = Jinja2Templates(directory=str(template_dir))
+    template = templates.get_template("test.html")
+    result = template.render({"content": "<script>alert('xss')</script>"})
+    # With autoescape, the script tag should be escaped
+    assert "<script>" not in result
+    assert "&lt;script&gt;" in result
+
+
+def test_autoescape_not_applied_to_txt(template_dir):
+    """Non-HTML templates should not have autoescape by default."""
+    from starlette.templating import Jinja2Templates
+
+    tmpl_file = template_dir / "test.txt"
+    tmpl_file.write_text("Hello {{ content }}")
+
+    templates = Jinja2Templates(directory=str(template_dir))
+    template = templates.get_template("test.txt")
+    result = template.render({"content": "<b>world</b>"})
+    # txt files are not autoescaped by select_autoescape default
+    assert "<b>world</b>" in result
+
+
+def test_caller_supplied_env_is_preserved(template_dir):
+    """When an env is passed directly, it should be used as-is."""
+    from starlette.templating import Jinja2Templates
+
+    tmpl_file = template_dir / "test.html"
+    tmpl_file.write_text("<div>{{ content }}</div>")
+
+    # Create env with autoescape explicitly disabled
+    loader = jinja2.FileSystemLoader(str(template_dir))
+    env = jinja2.Environment(loader=loader, autoescape=False)
+
+    templates = Jinja2Templates(env=env)
+    template = templates.get_template("test.html")
+    result = template.render({"content": "<b>bold</b>"})
+    # autoescape is disabled, so raw HTML should appear
+    assert "<b>bold</b>" in result
+
+
+def test_autoescape_can_be_overridden(template_dir):
+    """Caller can override autoescape when creating from directory."""
+    from starlette.templating import Jinja2Templates
+
+    tmpl_file = template_dir / "test.html"
+    tmpl_file.write_text("<div>{{ content }}</div>")
+
+    templates = Jinja2Templates(directory=str(template_dir), autoescape=False)
+    template = templates.get_template("test.html")
+    result = template.render({"content": "<b>bold</b>"})
+    assert "<b>bold</b>" in result
+
+
+def test_template_response_requires_request(template_dir):
+    """TemplateResponse should raise if 'request' not in context."""
+    from starlette.templating import Jinja2Templates
+
+    tmpl_file = template_dir / "test.html"
+    tmpl_file.write_text("Hello")
+
+    templates = Jinja2Templates(directory=str(template_dir))
+    with pytest.raises(ValueError, match="request"):
+        templates.TemplateResponse("test.html", {})
+
+
+def test_directory_required_without_env():
+    """Should raise if neither directory nor env is provided."""
+    from starlette.templating import Jinja2Templates
+
+    with pytest.raises(AssertionError):
+        Jinja2Templates()
+*** End Patch
+
+Task id: pr3166-session-middleware
+*** Begin Patch
+*** Add File: starlette/middleware/sessions.py
+import json
+import typing
+from base64 import b64decode, b64encode
+
+from itsdangerous import BadSignature, SignatureExpired, TimestampSigner
+from itsdangerous.exc import BadTimeSignature
+
+
+class _SessionDict(dict):
+    """
+    A dict subclass that tracks whether it has been modified.
+    """
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._modified = False
+        self._accessed = False
+
+    @property
+    def is_modified(self) -> bool:
+        return self._modified
+
+    @property
+    def is_accessed(self) -> bool:
+        return self._accessed
+
+    def __setitem__(self, key: typing.Any, value: typing.Any) -> None:
+        self._modified = True
+        self._accessed = True
+        super().__setitem__(key, value)
+
+    def __delitem__(self, key: typing.Any) -> None:
+        self._modified = True
+        self._accessed = True
+        super().__delitem__()
+
+    def __getitem__(self, key: typing.Any) -> typing.Any:
+        self._accessed = True
+        return super().__getitem__(key)
+
+    def get(self, key: typing.Any, default: typing.Any = None) -> typing.Any:
+        self._accessed = True
+        return super().get(key, default)
+
+    def __contains__(self, key: typing.Any) -> bool:
+        self._accessed = True
+        return super().__contains__(key)
+
+    def clear(self) -> None:
+        self._modified = True
+        self._accessed = True
+        super().clear()
+
+    def update(self, *args: typing.Any, **kwargs: typing.Any) -> None:  # type: ignore[override]
+        self._modified = True
+        self._accessed = True
+        super().update(*args, **kwargs)
+
+    def pop(self, *args: typing.Any) -> typing.Any:
+        self._modified = True
+        self._accessed = True
+        return super().pop(*args)
+
+    def setdefault(self, key: typing.Any, default: typing.Any = None) -> typing.Any:
+        if key not in self:
+            self._modified = True
+        self._accessed = True
+        return super().setdefault(key, default)
+
+
+class SessionMiddleware:
+    def __init__(
+        self,
+        app: typing.Any,
+        secret_key: typing.Union[str, bytes],
+        session_cookie: str = "session",
+        max_age: int = 14 * 24 * 60 * 60,  # 14 days in seconds
+        same_site: str = "lax",
+        https_only: bool = False,
+        domain: typing.Optional[str] = None,
+    ) -> None:
+        self.app = app
+        self.signer = TimestampSigner(secret_key)
+        self.session_cookie = session_cookie
+        self.max_age = max_age
+        self.https_only = https_only
+        self.domain = domain
+        self.security_flags = "httponly; samesite=" + same_site
+        if https_only:  # Secure flag can be used with HTTPS only
+            self.security_flags += "; secure"
+
+    async def __call__(
+        self, scope: dict, receive: typing.Any, send: typing.Any
+    ) -> None:
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+
+        connection_headers = dict(scope.get("headers", []))
+        initial_session_was_empty = True
+
+        if b"cookie" in connection_headers:
+            cookie_header = connection_headers[b"cookie"].decode("latin-1")
+            cookies: typing.Dict[str, str] = {}
+            for chunk in cookie_header.split(";"):
+                chunk = chunk.strip()
+                if "=" in chunk:
+                    key, _, val = chunk.partition("=")
+                    cookies[key.strip()] = val.strip()
+                else:
+                    cookies[chunk] = ""
+
+            if self.session_cookie in cookies:
+                data = cookies[self.session_cookie].encode("latin-1")
+                try:
+                    data = self.signer.unsign(data, max_age=self.max_age)
+                    scope["session"] = _SessionDict(
+                        json.loads(b64decode(data))
+                    )
+                    initial_session_was_empty = False
+                except (BadSignature, BadTimeSignature, SignatureExpired, Exception):
+                    scope["session"] = _SessionDict()
+            else:
+                scope["session"] = _SessionDict()
+        else:
+            scope["session"] = _SessionDict()
+
+        async def send_wrapper(message: dict) -> None:
+            if message["type"] == "http.response.start":
+                session: _SessionDict = scope["session"]
+                if session.is_modified:
+                    # Session was modified - save it
+                    data = b64encode(json.dumps(dict(session)).encode("utf-8"))
+                    data = self.signer.sign(data)
+                    headers = dict(message.get("headers", []))
+                    header_value = "{session_cookie}={data}; path=/; {max_age}Max-Age={max_age}; httponly; samesite={same_site}{secure}{domain}".format(  # noqa: E501
+                        session_cookie=self.session_cookie,
+                        data=data.decode("latin-1"),
+                        max_age="",
+                        same_site="lax",
+                        secure="; secure" if self.https_only else "",
+                        domain=f"; domain={self.domain}" if self.domain else "",
+                    )
+                    # Build proper cookie header
+                    cookie_parts = [
+                        f"{self.session_cookie}={data.decode('latin-1')}",
+                        "path=/",
+                        f"Max-Age={self.max_age}",
+                        "httponly",
+                        f"samesite=lax",
+                    ]
+                    if self.https_only:
+                        cookie_parts.append("secure")
+                    if self.domain:
+                        cookie_parts.append(f"domain={self.domain}")
+                    cookie_value = "; ".join(cookie_parts)
+
+                    existing_headers = list(message.get("headers", []))
+                    existing_headers.append(
+                        [b"set-cookie", cookie_value.encode("latin-1")]
+                    )
+                    message = dict(message)
+                    message["headers"] = existing_headers
+                elif not initial_session_was_empty and not session:
+                    # Session existed but is now empty - clear the cookie
+                    cookie_parts = [
+                        f"{self.session_cookie}=null",
+                        "path=/",
+                        "Max-Age=0",
+                        "httponly",
+                        "samesite=lax",
+                    ]
+                    if self.https_only:
+                        cookie_parts.append("secure")
+                    if self.domain:
+                        cookie_parts.append(f"domain={self.domain}")
+                    cookie_value = "; ".join(cookie_parts)
+
+                    existing_headers = list(message.get("headers", []))
+                    existing_headers.append(
+                        [b"set-cookie", cookie_value.encode("latin-1")]
+                    )
+                    message = dict(message)
+                    message["headers"] = existing_headers
+                # else: session not modified and was already empty - don't send Set-Cookie
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+*** End Patch
+
+Task id: pr3166-session-middleware
+*** Begin Patch
+*** Add File: tests/test_session_middleware.py
+import json
+import sys
+import os
+import pytest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+try:
+    from itsdangerous import TimestampSigner
+    from base64 import b64encode
+    HAS_ITSDANGEROUS = True
+except ImportError:
+    HAS_ITSDANGEROUS = False
+
+pytestmark = pytest.mark.skipif(
+    not HAS_ITSDANGEROUS, reason="itsdangerous not installed"
+)
+
+
+def make_app_that_reads_session():
+    """App that only reads from session, never writes."""
+    async def app(scope, receive, send):
+        session = scope.get("session", {})
+        value = session.get("key", "not_found")
+        body = json.dumps({"value": value}).encode()
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                [b"content-type", b"application/json"],
+                [b"content-length", str(len(body)).encode()],
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
+    return app
+
+
+def make_app_that_writes_session(key, value):
+    """App that writes to session."""
+    async def app(scope, receive, send):
+        scope["session"][key] = value
+        body = b"ok"
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                [b"content-type", b"text/plain"],
+                [b"content-length", str(len(body)).encode()],
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
+    return app
+
+
+def make_app_that_clears_session():
+    """App that clears the session."""
+    async def app(scope, receive, send):
+        scope["session"].clear()
+        body = b"cleared"
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                [b"content-type", b"text/plain"],
+                [b"content-length", str(len(body)).encode()],
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
+    return app
+
+
+def make_signed_cookie(data: dict, secret: str) -> str:
+    signer = TimestampSigner(secret)
+    payload = b64encode(json.dumps(data).encode("utf-8"))
+    signed = signer.sign(payload)
+    return signed.decode("latin-1")
+
+
+async def run_request(app, headers=None):
+    """Run a simple HTTP request through the ASGI app."""
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/",
+        "headers": headers or [],
+    }
+    messages = []
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        messages.append(message)
+
+    await app(scope, receive, send)
+    return messages
+
+
+def get_set_cookie_headers(messages):
+    for msg in messages:
+        if msg.get("type") == "http.response.start":
+            return [
+                v.decode("latin-1")
+                for k, v in msg.get("headers", [])
+                if k == b"set-cookie"
+            ]
+    return []
+
+
+SECRET = "test-secret-key"
+
+
+@pytest.mark.asyncio
+async def test_no_set_cookie_for_readonly_session():
+    """Read-only session access should not send Set-Cookie."""
+    from starlette.middleware.sessions import SessionMiddleware
+
+    inner = make_app_that_reads_session()
+    app = SessionMiddleware(inner, secret_key=SECRET)
+
+    messages = await run_request(app)
+    cookies = get_set_cookie_headers(messages)
+    assert cookies == [], f"Expected no Set-Cookie, got: {cookies}"
+
+
+@pytest.mark.asyncio
+async def test_set_cookie_when_session_modified():
+    """Modified session should send Set-Cookie."""
+    from starlette.middleware.sessions import SessionMiddleware
+
+    inner = make_app_that_writes_session("user", "alice")
+    app = SessionMiddleware(inner, secret_key=SECRET)
+
+    messages = await run_request(app)
+    cookies = get_set_cookie_headers(messages)
+    assert len(cookies) == 1
+    assert "session=" in cookies[0]
+    assert "Max-Age=" in cookies[0]
+
+
+@pytest.mark.asyncio
+async def test_clear_session_sends_delete_cookie():
+    """Clearing a non-empty session should send a cookie deletion."""
+    from starlette.middleware.sessions import SessionMiddleware
+
+    inner = make_app_that_clears_session()
+    app = SessionMiddleware(inner, secret_key=SECRET)
+
+    # Provide an existing session cookie
+    existing_cookie = make_signed_cookie({"key": "value"}, SECRET)
+    headers = [[b"cookie", f"session={existing_cookie}".encode("latin-1")]]
+
+    messages = await run_request(app, headers=headers)
+    cookies = get_set_cookie_headers(messages)
+    assert len(cookies) == 1
+    assert "Max-Age=0" in cookies[0]
+
+
+@pytest.mark.asyncio
+async def test_no_set_cookie_for_empty_readonly_session():
+    """Reading from an empty session should not send Set-Cookie."""
+    from starlette.middleware.sessions import SessionMiddleware
+
+    inner = make_app_that_reads_session()
+    app = SessionMiddleware(inner, secret_key=SECRET)
+
+    messages = await run_request(app)
+    cookies = get_set_cookie_headers(messages)
+    assert cookies == []
+
+
+@pytest.mark.asyncio
+async def test_existing_session_readonly_no_set_cookie():
+    """Reading from an existing session without modification should not send Set-Cookie."""
+    from starlette.middleware.sessions import SessionMiddleware
+
+    inner = make_app_that_reads_session()
+    app = SessionMiddleware(inner, secret_key=SECRET)
+
+    existing_cookie = make_signed_cookie({"key": "hello"}, SECRET)
+    headers = [[b"cookie", f"session={existing_cookie}".encode("latin-1")]]
+
+    messages = await run_request(app, headers=headers)
+    cookies = get_set_cookie_headers(messages)
+    assert cookies == [], f"Expected no Set-Cookie for read-only, got: {cookies}"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_requests_independent_sessions():
+    """Concurrent requests should have independent session state."""
+    import asyncio
+    from starlette.middleware.sessions import SessionMiddleware
+
+    results = []
+
+    async def app(scope, receive, send):
+        session = scope["session"]
+        # Simulate some async work
+        await asyncio.sleep(0)
+        session["req_id"] = scope["req_id"]
+        await asyncio.sleep(0)
+        # Verify session still has our value
+        results.append(session.get("req_id"))
+        body = b"ok"
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [[b"content-length", str(len(body)).encode()]],
+        })
+        await send({"type": "http.response.body", "body": body})
+
+    middleware = SessionMiddleware(app, secret_key=SECRET)
+
+    async def run(req_id):
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "headers": [],
+            "req_id": req_id,
+        }
+
+        async def receive():
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        async def send(message):
+            pass
+
+        await middleware(scope, receive, send)
+
+    await asyncio.gather(run(1), run(2), run(3))
+    assert sorted(results) == [1, 2, 3]
+*** End Patch
+
+Task id: pr3137-cors-credentials-origin
+*** Begin Patch
+*** Add File: starlette/middleware/cors.py
+import re
+import typing
+from starlette.datastructures import Headers
+from starlette.responses import PlainTextResponse, Response
+from starlette.types import ASGIApp, Receive, Scope, Send
+
+ALL_METHODS = ("DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT")
+SAFELISTED_HEADERS = {"Accept", "Accept-Language", "Content-Language", "Content-Type"}
+
+
+class CORSMiddleware:
+    def __init__(
+        self,
+        app: typing.Any,
+        allow_origins: typing.Sequence[str] = (),
+        allow_methods: typing.Sequence[str] = ("GET",),
+        allow_headers: typing.Sequence[str] = (),
+        allow_credentials: bool = False,
+        allow_origin_regex: typing.Optional[str] = None,
+        expose_headers: typing.Sequence[str] = (),
+        max_age: int = 600,
+    ) -> None:
+        if allow_origins and "*" in allow_origins:
+            self.allow_all_origins = True
+        else:
+            self.allow_all_origins = False
+
+        compiled_allow_origin_regex = None
+        if allow_origin_regex is not None:
+            compiled_allow_origin_regex = re.compile(allow_origin_regex)
+
+        self.app = app
+        self.allow_origins = list(allow_origins)
+        self.allow_all_headers = "*" in allow_headers
+        self.allow_headers = [h.lower() for h in allow_headers]
+        self.allow_all_methods = "*" in allow_methods
+        self.allow_methods = list(allow_methods)
+        self.allow_credentials = allow_credentials
+        self.allow_origin_regex = compiled_allow_origin_regex
+        self.expose_headers = list(expose_headers)
+        self.max_age = max_age
+
+    async def __call__(self, scope: dict, receive: typing.Any, send: typing.Any) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = Headers(scope=scope)
+        origin = headers.get("origin")
+
+        if origin is None:
+            await self.app(scope, receive, send)
+            return
+
+        if scope["method"] == "OPTIONS" and "access-control-request-method" in headers:
+            response = self.preflight_response(request_headers=headers)
+            await response(scope, receive, send)
+            return
+
+        await self.simple_response(scope, receive, send, request_headers=headers)
+
+    def is_allowed_origin(self, origin: str) -> bool:
+        if self.allow_all_origins:
+            return True
+        if origin in self.allow_origins:
+            return True
+        if self.allow_origin_regex is not None and self.allow_origin_regex.fullmatch(origin):
+            return True
+        return False
+
+    def preflight_response(self, request_headers: "Headers") -> typing.Any:
+        requested_origin = request_headers["origin"]
+        requested_method = request_headers.get("access-control-request-method")
+        requested_headers = request_headers.get("access-control-request-headers")
+
+        headers: typing.Dict[str, str] = {}
+        failures = []
+
+        if self.is_allowed_origin(requested_origin):
+            # For credentials, we must echo the specific origin
+            if self.allow_credentials:
+                headers["access-control-allow-origin"] = requested_origin
+            elif self.allow_all_origins:
+                headers["access-control-allow-origin"] = "*"
+            else:
+                headers["access-control-allow-origin"] = requested_origin
+        else:
+            failures.append("origin")
+
+        if requested_method and (
+            self.allow_all_methods or requested_method in self.allow_methods
+        ):
+            if self.allow_all_methods:
+                headers["access-control-allow-methods"] = ", ".join(ALL_METHODS)
+            else:
+                headers["access-control-allow-methods"] = ", ".join(self.allow_methods)
+        elif requested_method:
+            failures.append("method")
+
+        if requested_headers:
+            if self.allow_all_headers:
+                headers["access-control-allow-headers"] = requested_headers
+            else:
+                # Check each requested header
+                req_headers = [h.strip().lower() for h in requested_headers.split(",")]
+                for h in req_headers:
+                    if h not in self.allow_headers and h not in {s.lower() for s in SAFELISTED_HEADERS}:
+                        failures.append("headers")
+                        break
+                else:
+                    headers["access-control-allow-headers"] = requested_headers
+
+        if self.allow_credentials:
+            headers["access-control-allow-credentials"] = "true"
+
+        if self.max_age:
+            headers["access-control-max-age"] = str(self.max_age)
+
+        if failures:
+            failure_text = "Disallowed CORS " + ", ".join(failures)
+            return PlainTextResponse(failure_text, status_code=400, headers=headers)
+
+        return PlainTextResponse("OK", status_code=200, headers=headers)
+
+    async def simple_response(
+        self,
+        scope: dict,
+        receive: typing.Any,
+        send: typing.Any,
+        request_headers: "Headers",
+    ) -> None:
+        origin = request_headers["origin"]
+        origin_cookie = None
+
+        async def send_with_cors_headers(message: dict) -> None:
+            if message["type"] == "http.response.start":
+                message = dict(message)
+                headers = list(message.get("headers", []))
+                origin_to_send: typing.Optional[str] = None
+
+                if self.is_allowed_origin(origin):
+                    # If credentials are allowed or origin is explicitly listed,
+                    # echo the specific origin instead of '*'
+                    if self.allow_credentials or not self.allow_all_origins:
+                        origin_to_send = origin
+                    else:
+                        origin_to_send = "*"
+
+                if origin_to_send is not None:
+                    headers.append(
+                        [b"access-control-allow-origin", origin_to_send.encode("latin-1")]
+                    )
+                    if self.allow_credentials:
+                        headers.append(
+                            [b"access-control-allow-credentials", b"true"]
+                        )
+                    if self.expose_headers:
+                        headers.append(
+                            [
+                                b"access-control-expose-headers",
+                                ", ".join(self.expose_headers).encode("latin-1"),
+                            ]
+                        )
+                    # Add Vary header
+                    headers.append([b"vary", b"Origin"])
+
+                message["headers"] = headers
+            await send(message)
+
+        await self.app(scope, receive, send_with_cors_headers)
+*** End Patch
+
+Task id: pr3137-cors-credentials-origin
+*** Begin Patch
+*** Add File: starlette/datastructures.py
+import typing
+
+
+class Headers:
+    """
+    An immutable, case-insensitive multi-dict for HTTP headers.
+    """
+
+    def __init__(
+        self,
+        headers: typing.Optional[typing.List[typing.Tuple[bytes, bytes]]] = None,
+        scope: typing.Optional[dict] = None,
+    ) -> None:
+        self._list: typing.List[typing.Tuple[bytes, bytes]]
+        if headers is not None:
+            self._list = headers
+        elif scope is not None:
+            self._list = scope.get("headers", [])
+        else:
+            self._list = []
+
+    def __getitem__(self, key: str) -> str:
+        key_lower = key.lower().encode("latin-1")
+        for header_key, header_value in self._list:
+            if header_key.lower() == key_lower:
+                return header_value.decode("latin-1")
+        raise KeyError(key)
+
+    def get(self, key: str, default: typing.Optional[str] = None) -> typing.Optional[str]:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __contains__(self, key: object) -> bool:
+        if not isinstance(key, str):
+            return False
+        key_lower = key.lower().encode("latin-1")
+        for header_key, _ in self._list:
+            if header_key.lower() == key_lower:
+                return True
+        return False
+
+    def items(self) -> typing.List[typing.Tuple[str, str]]:
+        return [
+            (k.decode("latin-1"), v.decode("latin-1"))
+            for k, v in self._list
+        ]
+
+    def keys(self) -> typing.List[str]:
+        return [k.decode("latin-1") for k, _ in self._list]
+
+    def values(self) -> typing.List[str]:
+        return [v.decode("latin-1") for _, v in self._list]
+*** End Patch
+
+Task id: pr3137-cors-credentials-origin
+*** Begin Patch
+*** Add File: starlette/responses.py
+import typing
+import json as json_module
+
+
+class Response:
+    media_type: typing.Optional[str] = None
+    charset = "utf-8"
+
+    def __init__(
+        self,
+        content: typing.Any = None,
+        status_code: int = 200,
+        headers: typing.Optional[dict] = None,
+        media_type: typing.Optional[str] = None,
+        background: typing.Any = None,
+    ) -> None:
+        self.status_code = status_code
+        if media_type is not None:
+            self.media_type = media_type
+        self.background = background
+        self.body = self.render(content)
+        self.raw_headers = self.init_headers(headers)
+
+    def render(self, content: typing.Any) -> bytes:
+        if content is None:
+            return b""
+        if isinstance(content, bytes):
+            return content
+        return content.encode(self.charset)
+
+    def init_headers(self, headers: typing.Optional[dict] = None) -> typing.List[typing.List[bytes]]:
+        raw_headers: typing.List[typing.List[bytes]] = []
+        populate_content_length = True
+        populate_content_type = True
+
+        if headers:
+            for k, v in headers.items():
+                raw_headers.append([k.lower().encode("latin-1"), v.encode("latin-1")])
+                if k.lower() == "content-length":
+                    populate_content_length = False
+                if k.lower() == "content-type":
+                    populate_content_type = False
+
+        body = getattr(self, "body", b"")
+        if populate_content_length:
+            raw_headers.append([b"content-length", str(len(body)).encode("latin-1")])
+
+        if populate_content_type and self.media_type is not None:
+            content_type = self.media_type
+            if content_type.startswith("text/") and "charset=" not in content_type:
+                content_type += "; charset=" + self.charset
+            raw_headers.append([b"content-type", content_type.encode("latin-1")])
+
+        return raw_headers
+
+    async def __call__(self, scope: dict, receive: typing.Any, send: typing.Any) -> None:
+        await send(
+            {
+                "type": "http.response.start",
+                "status": self.status_code,
+                "headers": self.raw_headers,
+            }
+        )
+        await send({"type": "http.response.body", "body": self.body})
+        if self.background is not None:
+            await self.background()
+
+
+class PlainTextResponse(Response):
+    media_type = "text/plain"
+
+
+class JSONResponse(Response):
+    media_type = "application/json"
+
+    def render(self, content: typing.Any) -> bytes:
+        return json_module.dumps(content).encode("utf-8")
+
+
+class HTMLResponse(Response):
+    media_type = "text/html"
+*** End Patch
+
+Task id: pr3137-cors-credentials-origin
+*** Begin Patch
+*** Add File: starlette/types.py
+import typing
+
+Scope = typing.MutableMapping[str, typing.Any]
+Message = typing.MutableMapping[str, typing.Any]
+Receive = typing.Callable[[], typing.Awaitable[Message]]
+Send = typing.Callable[[Message], typing.Awaitable[None]]
+ASGIApp = typing.Callable[[Scope, Receive, Send], typing.Awaitable[None]]
+*** End Patch
+
+Task id: pr3137-cors-credentials-origin
+*** Begin Patch
+*** Add File: tests/test_cors_middleware.py
+import sys
+import os
+import pytest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+
+async def simple_app(scope, receive, send):
+    body = b"Hello"
+    await send({
+        "type": "http.response.start",
+        "status": 200,
+        "headers": [
+            [b"content-type", b"text/plain"],
+            [b"content-length", str(len(body)).encode()],
+        ],
+    })
+    await send({"type": "http.response.body", "body": body})
+
+
+def make_scope(method="GET", path="/", headers=None):
+    return {
+        "type": "http",
+        "method": method,
+        "path": path,
+        "headers": headers or [],
+    }
+
+
+async def run_request(app, scope):
+    messages = []
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        messages.append(message)
+
+    await app(scope, receive, send)
+    return messages
+
+
+def get_response_headers(messages):
+    for msg in messages:
+        if msg.get("type") == "http.response.start":
+            return {
+                k.decode("latin-1").lower(): v.decode("latin-1")
+                for k, v in msg.get("headers", [])
+            }
+    return {}
+
+
+@pytest.mark.asyncio
+async def test_allow_all_origins_no_credentials():
+    """With allow_origins=['*'] and no credentials, should return '*'."""
+    from starlette.middleware.cors import CORSMiddleware
+
+    app = CORSMiddleware(simple_app, allow_origins=["*"])
+    scope = make_scope(headers=[[b"origin", b"https://example.com"]])
+    messages = await run_request(app, scope)
+    headers = get_response_headers(messages)
+    assert headers.get("access-control-allow-origin") == "*"
+
+
+@pytest.mark.asyncio
+async def test_allow_all_origins_with_credentials_echoes_origin():
+    """With allow_origins=['*'] and allow_credentials=True, should echo the request Origin."""
+    from starlette.middleware.cors import CORSMiddleware
+
+    app = CORSMiddleware(simple_app, allow_origins=["*"], allow_credentials=True)
+    scope = make_scope(headers=[[b"origin", b"https://example.com"]])
+    messages = await run_request(app, scope)
+    headers = get_response_headers(messages)
+    # Should echo the specific origin, not '*'
+    assert headers.get("access-control-allow-origin") == "https://example.com"
+    assert headers.get("access-control-allow-credentials") == "true"
+
+
+@pytest.mark.asyncio
+async def test_allow_all_origins_with_credentials_different_origin():
+    """Different origins should each be echoed back."""
+    from starlette.middleware.cors import CORSMiddleware
+
+    app = CORSMiddleware(simple_app, allow_origins=["*"], allow_credentials=True)
+
+    for origin in ["https://foo.com", "https://bar.org", "http://localhost:3000"]:
+        scope = make_scope(headers=[[b"origin", origin.encode()]])
+        messages = await run_request(app, scope)
+        headers = get_response_headers(messages)
+        assert headers.get("access-control-allow-origin") == origin, \
+            f"Expected {origin}, got {headers.get('access-control-allow-origin')}"
+
+
+@pytest.mark.asyncio
+async def test_preflight_with_credentials_echoes_origin():
+    """Preflight with credentials should echo the specific origin."""
+    from starlette.middleware.cors import CORSMiddleware
+
+    app = CORSMiddleware(
+        simple_app,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["GET", "POST"],
+    )
+    scope = make_scope(
+        method="OPTIONS",
+        headers=[
+            [b"origin", b"https://example.com"],
+            [b"access-control-request-method", b"POST"],
+        ],
+    )
+    messages = await run_request(app, scope)
+    headers = get_response_headers(messages)
+    assert headers.get("access-control-allow-origin") == "https://example.com"
+    assert headers.get("access-control-allow-credentials") == "true"
+
+
+@pytest.mark.asyncio
+async def test_preflight_without_credentials_returns_wildcard():
+    """Preflight without credentials and allow_origins=['*'] should return '*'."""
+    from starlette.middleware.cors import CORSMiddleware
+
+    app = CORSMiddleware(
+        simple_app,
+        allow_origins=["*"],
+        allow_methods=["GET", "POST"],
+    )
+    scope = make_scope(
+        method="OPTIONS",
+        headers=[
+            [b"origin", b"https://example.com"],
+            [b"access-control-request-method", b"GET"],
+        ],
+    )
+    messages = await run_request(app, scope)
+    headers = get_response_headers(messages)
+    assert headers.get("access-control-allow-origin") == "*"
+
+
+@pytest.mark.asyncio
+async def test_disallowed_origin_no_cors_headers():
+    """Requests from disallowed origins should not get CORS headers."""
+    from starlette.middleware.cors import CORSMiddleware
+
+    app = CORSMiddleware(simple_app, allow_origins=["https://allowed.com"])
+    scope = make_scope(headers=[[b"origin", b"https://notallowed.com"]])
+    messages = await run_request(app, scope)
+    headers = get_response_headers(messages)
+    assert "access-control-allow-origin" not in headers
+
+
+@pytest.mark.asyncio
+async def test_no_origin_header_passes_through():
+    """Requests without Origin header should pass through unchanged."""
+    from starlette.middleware.cors import CORSMiddleware
+
+    app = CORSMiddleware(simple_app, allow_origins=["*"])
+    scope = make_scope()  # no origin header
+    messages = await run_request(app, scope)
+    headers = get_response_headers(messages)
+    assert "access-control-allow-origin" not in headers
+
+
+@pytest.mark.asyncio
+async def test_explicit_origin_list_echoes_origin():
+    """Explicit origin list should echo the matched origin."""
+    from starlette.middleware.cors import CORSMiddleware
+
+    app = CORSMiddleware(
+        simple_app,
+        allow_origins=["https://example.com", "https://other.com"],
+    )
+    scope = make_scope(headers=[[b"origin", b"https://example.com"]])
+    messages = await run_request(app, scope)
+    headers = get_response_headers(messages)
+    assert headers.get("access-control-allow-origin") == "https://example.com"
+
+
+@pytest.mark.asyncio
+async def test_vary_header_added():
+    """Vary: Origin should be added when CORS headers are present."""
+    from starlette.middleware.cors import CORSMiddleware
+
+    app = CORSMiddleware(simple_app, allow_origins=["*"], allow_credentials=True)
+    scope = make_scope(headers=[[b"origin", b"https://example.com"]])
+    messages = await run_request(app, scope)
+    headers = get_response_headers(messages)
+    assert headers.get("vary") == "Origin"
+*** End Patch
+
+Task id: pr3166-session-middleware
+*** Begin Patch
+*** Add File: starlette/__init__.py
+*** End Patch
+
+Task id: pr3148-jinja2-autoescape
+*** Begin Patch
+*** Add File: starlette/middleware/__init__.py
+*** End Patch

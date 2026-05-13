@@ -1,0 +1,88 @@
+=== RealWorld Nest ONLY: /Users/prajit/Desktop/projects/cognition/experiments/realworld/checkout ===
+RUN_DIR=/Users/prajit/Desktop/projects/cognition/experiments/realworld/runs_kimi_k26_applied_blind_20260511_200502
+ACG_LLM_MODEL=moonshotai/kimi-k2.6
+HEAD is now at c1c2cc4 Merge pull request #54 from mcantonbul/patch-1
+Removing .acg/
+scanned typescript repo → 
+/Users/prajit/Desktop/projects/cognition/experiments/realworld/checkout/.acg/con
+text_graph.json
+/Users/prajit/Desktop/projects/cognition/.venv/lib/python3.12/site-packages/tree_sitter/__init__.py:36: FutureWarning: Language(path, name) is deprecated. Use Language(ptr, name) instead.
+  warn("{} is deprecated. Use {} instead.".format(old, new), FutureWarning)
+wrote 
+/Users/prajit/Desktop/projects/cognition/experiments/realworld/agent_lock_blind.
+json (6 tasks, 3 groups, 3 conflicts)
+========== single_agent (applied-diff-live) ==========
+HEAD is now at c1c2cc4 Merge pull request #54 from mcantonbul/patch-1
+Removing .acg/
+[single_agent/local] wrote /Users/prajit/Desktop/projects/cognition/experiments/realworld/runs_kimi_k26_applied_blind_20260511_200502/eval_run_single_agent_applied.json — completed=0/6, evidence=suite_applied_diff, overlaps=0, oob=0, blocked=0, wall=423.241s
+========== naive_parallel (applied-diff-live) ==========
+HEAD is now at c1c2cc4 Merge pull request #54 from mcantonbul/patch-1
+Deleted branch acg-applied/add-article-bookmarks (was c1c2cc4).
+Deleted branch acg-applied/add-article-search (was c1c2cc4).
+Deleted branch acg-applied/add-health-check (was c1c2cc4).
+Deleted branch acg-applied/add-rate-limiting (was c1c2cc4).
+Deleted branch acg-applied/add-user-roles (was c1c2cc4).
+Deleted branch acg-applied/extend-tag-crud (was c1c2cc4).
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ proposed 0 writes (36.26s, 4096 tokens)
+ proposed 0 writes (42.10s, 4096 tokens)
+ proposed 0 writes (55.12s, 4096 tokens)
+ proposed 0 writes (129.33s, 4096 tokens)
+ proposed 0 writes (141.79s, 4096 tokens)
+ proposed 0 writes (312.80s, 4096 tokens)
+[naive_parallel/local] wrote /Users/prajit/Desktop/projects/cognition/experiments/realworld/runs_kimi_k26_applied_blind_20260511_200502/eval_run_naive_parallel_applied.json — completed=0/6, evidence=applied_diff, overlaps=0, oob=0, blocked=0, wall=317.505s
+========== naive_parallel_blind (applied-diff-live) ==========
+HEAD is now at c1c2cc4 Merge pull request #54 from mcantonbul/patch-1
+Deleted branch acg-applied/add-article-bookmarks (was c1c2cc4).
+Deleted branch acg-applied/add-article-search (was c1c2cc4).
+Deleted branch acg-applied/add-health-check (was c1c2cc4).
+Deleted branch acg-applied/add-rate-limiting (was c1c2cc4).
+Deleted branch acg-applied/add-user-roles (was c1c2cc4).
+Deleted branch acg-applied/extend-tag-crud (was c1c2cc4).
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ proposed 2 writes (57.68s, 2300 tokens)
+ {"can_auto_approve_replan": false, "final_outcome": "needs_replan", 
+"has_hard_conflict": true, "path": "package.json", "score": 0.72, "signals": 
+["planner", "scope_review"], "task_id": "add-health-check"}
+   NEEDS_REPLAN add-health-check → package.json: path 'package.json' is 
+candidate_context only for task 'add-health-check'; replan or approval is 
+required before write
+   BLOCKED add-health-check → app.js: path 'app.js' is outside task 
+'add-health-check''s allowed_paths (src/app.controller.ts)
+ proposed 1 writes (70.58s, 2672 tokens)
+   ALLOWED add-rate-limiting → src/app.module.ts
+ proposed 1 writes (75.71s, 3371 tokens)
+   BLOCKED extend-tag-crud → server.js: path 'server.js' is outside task 
+'extend-tag-crud''s allowed_paths (src/tag/tag.controller.ts, 
+src/tag/tag.entity.ts, src/tag/tag.module.ts, src/tag/tag.service.ts)
+ proposed 4 writes (83.69s, 3477 tokens)
+   BLOCKED add-user-roles → src/auth/role.enum.ts: path 'src/auth/role.enum.ts' 
+is outside task 'add-user-roles''s allowed_paths (src/user/auth.middleware.ts, 
+src/user/dto/**, src/user/user.controller.ts, src/user/user.entity.ts, 
+src/user/user.interface.ts, src/user/user.module.ts, src/user/user.service.ts)
+   BLOCKED add-user-roles → src/auth/roles.decorator.ts: path 
+'src/auth/roles.decorator.ts' is outside task 'add-user-roles''s allowed_paths 
+(src/user/auth.middleware.ts, src/user/dto/**, src/user/user.controller.ts, 
+src/user/user.entity.ts, src/user/user.interface.ts, src/user/user.module.ts, 
+src/user/user.service.ts)
+   BLOCKED add-user-roles → src/auth/roles.guard.ts: path 
+'src/auth/roles.guard.ts' is outside task 'add-user-roles''s allowed_paths 
+(src/user/auth.middleware.ts, src/user/dto/**, src/user/user.controller.ts, 
+src/user/user.entity.ts, src/user/user.interface.ts, src/user/user.module.ts, 
+src/user/user.service.ts)
+   BLOCKED add-user-roles → src/auth/auth.module.ts: path 
+'src/auth/auth.module.ts' is outside task 'add-user-roles''s allowed_paths 
+(src/user/auth.middleware.ts, src/user/dto/**, src/user/user.controller.ts, 
+src/user/user.entity.ts, src/user/user.interface.ts, src/user/user.module.ts, 
+src/user/user.service.ts)
+ proposed 0 writes (97.16s, 4096 tokens)

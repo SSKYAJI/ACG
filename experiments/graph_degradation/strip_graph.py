@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[2]
 EXPERIMENT_DIR = ROOT / "experiments" / "graph_degradation"
 RUNS_DIR = EXPERIMENT_DIR / "runs"

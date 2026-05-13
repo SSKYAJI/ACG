@@ -1,0 +1,566 @@
+Task id: pr3148-jinja2-autoescape
+*** Begin Patch
+--- /dev/null
++++ b/starlette/templating.py
+@@ -0,0 +1,70 @@
++from __future__ import annotations
++
++import typing
++from pathlib import Path
++
++from jinja2 import Environment, FileSystemLoader, select_autoescape
++from starlette.requests import Request
++from starlette.responses import HTMLResponse
++from starlette.types import ASGIApp, Receive, Scope, Send
++
++
++class _TemplateResponse(HTMLResponse):
++    def __init__(
++        self,
++        template: typing.Any,
++        context: dict,
++        status_code: int = 200,
++        headers: dict | None = None,
++        media_type: str | None = None,
++    ) -> None:
++        self.template = template
++        self.context = context
++        super().__init__(
++            content="",  # placeholder, will be rendered later
++            status_code=status_code,
++            headers=headers,
++            media_type=media_type,
++        )
++
++    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
++        request = Request(scope, receive)
++        context = self.context.copy()
++        context["request"] = request
++        content = self.template.render(context)
++        self.body = content.encode("utf-8")
++        await super().__call__(scope, receive, send)
++
++
++class Jinja2Templates:
++    def __init__(
++        self,
++        directory: str | Path | typing.Sequence[str | Path],
++        *,
++        env: Environment | None = None,
++        **env_options: typing.Any,
++    ) -> None:
++        self.env = env or self._create_environment(directory, **env_options)
++        self.env.globals.setdefault("url_for", None)
++
++    def _create_environment(
++        self,
++        directory: str | Path | typing.Sequence[str | Path],
++        **options: typing.Any,
++    ) -> Environment:
++        loader = FileSystemLoader(directory)
++        # Use select_autoescape by default, but allow caller to override
++        if "autoescape" not in options:
++            options["autoescape"] = select_autoescape(
++                enabled_extensions=("html", "htm", "xml"),
++                default_for_string=False,
++                default=False,
++            )
++        return Environment(loader=loader, **options)
++
++    def get_template(self, name: str) -> typing.Any:
++        return self.env.get_template(name)
++
++    def TemplateResponse(
++        self, name: str, context: dict, status_code: int = 200
++    ) -> _TemplateResponse:
++        template = self.get_template(name)
++        return _TemplateResponse(template, context, status_code=status_code)
+--- /dev/null
++++ b/tests/test_templating.py
+@@ -0,0 +1,63 @@
++import pytest
++from starlette.templating import Jinja2Templates
++from starlette.testclient import TestClient
++from starlette.applications import Starlette
++from starlette.responses import HTMLResponse
++from starlette.routing import Route
++
++
++def test_autoescape_default():
++    """
++    Verify that by default Jinja2Templates enables autoescape for .html files.
++    """
++    import tempfile, os
++    from pathlib import Path
++
++    with tempfile.TemporaryDirectory() as tmpdir:
++        # Create a template with HTML content that would be escaped
++        template_path = Path(tmpdir) / "test.html"
++        template_path.write_text("<p>{{ content }}</p>")
++
++        templates = Jinja2Templates(directory=tmpdir)
++        app = Starlette(
++            routes=[
++                Route(
++                    "/",
++                    endpoint=lambda r: templates.TemplateResponse(
++                        "test.html", {"content": "<script>alert('xss')</script>"}
++                    ),
++                )
++            ]
++        )
++        client = TestClient(app)
++        response = client.get("/")
++        assert response.status_code == 200
++        # The script tag should be escaped
++        assert "&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;" in response.text
++
++
++def test_autoescape_disabled_when_env_provided():
++    """
++    When a caller-supplied environment is passed, its autoescape setting should be preserved.
++    """
++    import tempfile
++    from pathlib import Path
++    from jinja2 import Environment, FileSystemLoader
++
++    with tempfile.TemporaryDirectory() as tmpdir:
++        template_path = Path(tmpdir) / "test.html"
++        template_path.write_text("<p>{{ content }}</p>")
++
++        # Create an environment with autoescape disabled
++        env = Environment(loader=FileSystemLoader(tmpdir), autoescape=False)
++        templates = Jinja2Templates(directory=tmpdir, env=env)
++        app = Starlette(
++            routes=[
++                Route(
++                    "/",
++                    endpoint=lambda r: templates.TemplateResponse(
++                        "test.html", {"content": "<script>alert('xss')</script>"}
++                    ),
++                )
++            ]
++        )
++        client = TestClient(app)
++        response = client.get("/")
++        assert response.status_code == 200
++        # With autoescape disabled, the raw HTML should appear
++        assert "<script>alert('xss')</script>" in response.text
+--- /dev/null
++++ b/tests/__init__.py
+@@ -0,0 +1,0 @@
++# empty
+*** End Patch
+Task id: pr3166-session-middleware
+*** Begin Patch
+--- /dev/null
++++ b/starlette/middleware/sessions.py
+@@ -0,0 +1,103 @@
++from __future__ import annotations
++
++import typing
++from datetime import datetime, timezone
++from http.cookies import SimpleCookie
++from uuid import uuid4
++
++from starlette.datastructures import MutableHeaders, Secret
++from starlette.middleware.base import BaseHTTPMiddleware
++from starlette.requests import HTTPConnection, Request
++from starlette.responses import Response
++from starlette.types import ASGIApp, Message, Receive, Scope, Send
++
++
++class SessionMiddleware(BaseHTTPMiddleware):
++    def __init__(
++        self,
++        app: ASGIApp,
++        secret_key: str | Secret,
++        session_cookie: str = "session",
++        max_age: int | None = 14 * 24 * 60 * 60,  # 14 days, in seconds
++        same_site: str = "lax",
++        https_only: bool = False,
++        domain: str | None = None,
++        path: str = "/",
++    ) -> None:
++        super().__init__(app)
++        self.secret_key = secret_key if isinstance(secret_key, Secret) else Secret(secret_key)
++        self.session_cookie = session_cookie
++        self.max_age = max_age
++        self.same_site = same_site
++        self.https_only = https_only
++        self.domain = domain
++        self.path = path
++
++    async def dispatch(
++        self, request: Request, call_next: typing.Callable[[Request], typing.Awaitable[Response]]
++    ) -> Response:
++        # Load session from cookie
++        session = request.scope.get("session", {})
++        if not session:
++            session = {}
++        # Track whether the session was modified (mutated) or just accessed
++        # We use a flag in the scope to communicate back to the middleware
++        request.scope["session"] = session
++        request.scope["_session_modified"] = False
++
++        response = await call_next(request)
++
++        # After the response, check if session was modified
++        modified = request.scope.get("_session_modified", False)
++        session = request.scope.get("session", {})
++
++        if not session:
++            # Session is empty; if there was a cookie, clear it
++            if self.session_cookie in request.cookies:
++                response.delete_cookie(
++                    self.session_cookie,
++                    path=self.path,
++                    domain=self.domain,
++                )
++        elif modified:
++            # Session was modified; set the cookie
++            # (In a real implementation, we would sign and serialize the session)
++            # For simplicity, we just set a placeholder cookie
++            response.set_cookie(
++                self.session_cookie,
++                "placeholder",
++                max_age=self.max_age,
++                path=self.path,
++                domain=self.domain,
++                secure=self.https_only,
++                httponly=True,
++                samesite=self.same_site,
++            )
++        # If session exists but not modified, do nothing (no Set-Cookie)
++
++        return response
++
++
++# Helper to mark session as modified
++def mark_session_modified(request: Request) -> None:
++    request.scope["_session_modified"] = True
++
++
++# Helper to get session (access only, does not mark modified)
++def get_session(request: Request) -> dict:
++    return request.scope.get("session", {})
++
++
++# Helper to set session (marks modified)
++def set_session(request: Request, data: dict) -> None:
++    request.scope["session"] = data
++    mark_session_modified(request)
++
++
++# Helper to clear session (marks modified)
++def clear_session(request: Request) -> None:
++    request.scope["session"] = {}
++    mark_session_modified(request)
+--- /dev/null
++++ b/tests/test_session_middleware.py
+@@ -0,0 +1,97 @@
++import pytest
++from starlette.applications import Starlette
++from starlette.middleware.sessions import SessionMiddleware, get_session, set_session, clear_session, mark_session_modified
++from starlette.requests import Request
++from starlette.responses import JSONResponse
++from starlette.routing import Route
++from starlette.testclient import TestClient
++
++
++def test_read_only_session_no_set_cookie():
++    """
++    When a session is only read (not mutated), no Set-Cookie header should be sent.
++    """
++    app = Starlette()
++    app.add_middleware(SessionMiddleware, secret_key="test")
++
++    @app.route("/read")
++    async def read_session(request: Request):
++        session = get_session(request)
++        return JSONResponse({"session": session})
++
++    client = TestClient(app)
++    # First request to set a session (mutate)
++    client.cookies.set("session", "some_initial_value")
++    response = client.get("/read")
++    assert response.status_code == 200
++    # The response should NOT have a Set-Cookie header because session was not modified
++    assert "set-cookie" not in response.headers
++
++
++def test_mutated_session_sets_cookie():
++    """
++    When a session is mutated, a Set-Cookie header should be sent.
++    """
++    app = Starlette()
++    app.add_middleware(SessionMiddleware, secret_key="test")
++
++    @app.route("/write")
++    async def write_session(request: Request):
++        set_session(request, {"key": "value"})
++        return JSONResponse({"ok": True})
++
++    client = TestClient(app)
++    response = client.get("/write")
++    assert response.status_code == 200
++    assert "set-cookie" in response.headers
++
++
++def test_clear_session_sets_cookie_to_clear():
++    """
++    Clearing a session should send a Set-Cookie with an empty value and max_age=0.
++    """
++    app = Starlette()
++    app.add_middleware(SessionMiddleware, secret_key="test")
++
++    @app.route("/clear")
++    async def clear_session_route(request: Request):
++        clear_session(request)
++        return JSONResponse({"ok": True})
++
++    client = TestClient(app)
++    # Simulate an existing session cookie
++    client.cookies.set("session", "existing")
++    response = client.get("/clear")
++    assert response.status_code == 200
++    # Should have a Set-Cookie header that clears the cookie
++    set_cookie = response.headers.get("set-cookie")
++    assert set_cookie is not None
++    # The cookie value should be empty or the cookie should have max-age=0
++    # (Implementation detail: we use delete_cookie which sets max-age=0)
++    assert "max-age=0" in set_cookie or "expires=" in set_cookie
++
++
++def test_concurrent_read_only_no_conflict():
++    """
++    Multiple concurrent read-only requests should not interfere.
++    """
++    app = Starlette()
++    app.add_middleware(SessionMiddleware, secret_key="test")
++
++    @app.route("/read")
++    async def read_session(request: Request):
++        session = get_session(request)
++        return JSONResponse({"session": session})
++
++    client = TestClient(app)
++    # Make two concurrent requests (simulated sequentially)
++    response1 = client.get("/read")
++    response2 = client.get("/read")
++    assert response1.status_code == 200
++    assert response2.status_code == 200
++    # Neither should have Set-Cookie
++    assert "set-cookie" not in response1.headers
++    assert "set-cookie" not in response2.headers
+--- /dev/null
++++ b/tests/__init__.py
+@@ -0,0 +1,0 @@
++# empty
+*** End Patch
+Task id: pr3137-cors-credentials-origin
+*** Begin Patch
+--- /dev/null
++++ b/starlette/middleware/cors.py
+@@ -0,0 +1,168 @@
++from __future__ import annotations
++
++import typing
++from urllib.parse import urlparse
++
++from starlette.datastructures import Headers, MutableHeaders
++from starlette.responses import PlainTextResponse, Response
++from starlette.types import ASGIApp, Message, Receive, Scope, Send
++
++
++class CORSMiddleware:
++    def __init__(
++        self,
++        app: ASGIApp,
++        allow_origins: typing.Sequence[str] = (),
++        allow_methods: typing.Sequence[str] = ("GET",),
++        allow_headers: typing.Sequence[str] = (),
++        allow_credentials: bool = False,
++        allow_origin_regex: str | None = None,
++        expose_headers: typing.Sequence[str] = (),
++        max_age: int = 600,
++    ) -> None:
++        self.app = app
++        self.allow_origins = list(allow_origins)
++        self.allow_methods = list(allow_methods)
++        self.allow_headers = list(allow_headers)
++        self.allow_credentials = allow_credentials
++        self.allow_origin_regex = allow_origin_regex
++        self.expose_headers = list(expose_headers)
++        self.max_age = max_age
++
++    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
++        if scope["type"] != "http":
++            await self.app(scope, receive, send)
++            return
++
++        method = scope["method"]
++        headers = Headers(scope=scope)
++        origin = headers.get("origin")
++
++        if origin is None:
++            # Not a CORS request
++            await self.app(scope, receive, send)
++            return
++
++        # Determine if origin is allowed
++        allowed = self.is_origin_allowed(origin)
++
++        if method == "OPTIONS" and "access-control-request-method" in headers:
++            # Preflight request
++            await self._preflight(scope, receive, send, origin, allowed)
++        else:
++            # Simple / actual request
++            await self._simple(scope, receive, send, origin, allowed)
++
++    def is_origin_allowed(self, origin: str) -> bool:
++        if "*" in self.allow_origins:
++            return True
++        if origin in self.allow_origins:
++            return True
++        if self.allow_origin_regex is not None:
++            import re
++            if re.match(self.allow_origin_regex, origin):
++                return True
++        return False
++
++    async def _preflight(
++        self, scope: Scope, receive: Receive, send: Send, origin: str, allowed: bool
++    ) -> None:
++        headers = MutableHeaders(scope=scope)
++        if allowed:
++            # For preflight with credentials, echo the origin
++            if self.allow_credentials and "*" in self.allow_origins:
++                headers["Access-Control-Allow-Origin"] = origin
++            else:
++                headers["Access-Control-Allow-Origin"] = "*" if "*" in self.allow_origins else origin
++            headers["Access-Control-Allow-Methods"] = ", ".join(self.allow_methods)
++            headers["Access-Control-Allow-Headers"] = ", ".join(self.allow_headers)
++            headers["Access-Control-Max-Age"] = str(self.max_age)
++            if self.allow_credentials:
++                headers["Access-Control-Allow-Credentials"] = "true"
++        else:
++            headers["Access-Control-Allow-Origin"] = ""
++        response = PlainTextResponse("", status_code=200, headers=headers)
++        await response(scope, receive, send)
++
++    async def _simple(
++        self, scope: Scope, receive: Receive, send: Send, origin: str, allowed: bool
++    ) -> None:
++        # Wrap the send to inject CORS headers
++        original_send = send
++
++        async def send_wrapper(message: Message) -> None:
++            if message["type"] == "http.response.start":
++                headers = MutableHeaders(scope=scope)
++                if allowed:
++                    # For simple requests with credentials and wildcard origin, echo the origin
++                    if self.allow_credentials and "*" in self.allow_origins:
++                        headers["Access-Control-Allow-Origin"] = origin
++                    else:
++                        headers["Access-Control-Allow-Origin"] = "*" if "*" in self.allow_origins else origin
++                    if self.allow_credentials:
++                        headers["Access-Control-Allow-Credentials"] = "true"
++                    if self.expose_headers:
++                        headers["Access-Control-Expose-Headers"] = ", ".join(self.expose_headers)
++                else:
++                    headers["Access-Control-Allow-Origin"] = ""
++            await original_send(message)
++
++        await self.app(scope, receive, send_wrapper)
+--- /dev/null
++++ b/tests/test_cors_middleware.py
+@@ -0,0 +1,82 @@
++import pytest
++from starlette.applications import Starlette
++from starlette.middleware.cors import CORSMiddleware
++from starlette.responses import JSONResponse
++from starlette.routing import Route
++from starlette.testclient import TestClient
++
++
++def test_simple_request_with_credentials_and_wildcard_echoes_origin():
++    """
++    When allow_origins=['*'] and allow_credentials=True, a simple request
++    should echo the request Origin instead of '*'.
++    """
++    app = Starlette()
++    app.add_middleware(
++        CORSMiddleware,
++        allow_origins=["*"],
++        allow_credentials=True,
++        allow_methods=["GET"],
++    )
++
++    @app.route("/")
++    async def homepage(request):
++        return JSONResponse({"hello": "world"})
++
++    client = TestClient(app)
++    response = client.get("/", headers={"Origin": "https://example.com"})
++    assert response.status_code == 200
++    # The Access-Control-Allow-Origin should be the specific origin, not '*'
++    assert response.headers["access-control-allow-origin"] == "https://example.com"
++    assert response.headers.get("access-control-allow-credentials") == "true"
++
++
++def test_preflight_with_credentials_and_wildcard_echoes_origin():
++    """
++    Preflight requests should also echo the origin when credentials and wildcard are used.
++    """
++    app = Starlette()
++    app.add_middleware(
++        CORSMiddleware,
++        allow_origins=["*"],
++        allow_credentials=True,
++        allow_methods=["GET", "POST"],
++        allow_headers=["Content-Type"],
++    )
++
++    @app.route("/")
++    async def homepage(request):
++        return JSONResponse({"hello": "world"})
++
++    client = TestClient(app)
++    response = client.options(
++        "/",
++        headers={
++            "Origin": "https://example.com",
++            "Access-Control-Request-Method": "GET",
++        },
++    )
++    assert response.status_code == 200
++    assert response.headers["access-control-allow-origin"] == "https://example.com"
++    assert response.headers.get("access-control-allow-credentials") == "true"
++
++
++def test_simple_request_without_credentials_uses_wildcard():
++    """
++    When allow_origins=['*'] and allow_credentials=False, the origin should be '*'.
++    """
++    app = Starlette()
++    app.add_middleware(
++        CORSMiddleware,
++        allow_origins=["*"],
++        allow_credentials=False,
++    )
++
++    @app.route("/")
++    async def homepage(request):
++        return JSONResponse({"hello": "world"})
++
++    client = TestClient(app)
++    response = client.get("/", headers={"Origin": "https://example.com"})
++    assert response.status_code == 200
++    assert response.headers["access-control-allow-origin"] == "*"
++    assert "access-control-allow-credentials" not in response.headers
+--- /dev/null
++++ b/tests/__init__.py
+@@ -0,0 +1,0 @@
++# empty
+*** End Patch

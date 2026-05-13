@@ -32,7 +32,16 @@ from acg.runtime import (
     RuntimeLLMProtocol,
     WorkerResult,
     _parse_apply_envelope,
+    complete_llm_with_heartbeat,
+    env_int_or_none,
     run_worker,
+)
+from acg.runtime_proposal import (
+    PROPOSAL_OK,
+    PROPOSAL_TRANSPORT_ERROR,
+    PROPOSAL_TRUNCATED,
+    PROPOSAL_UNPARSEABLE,
+    classify_zero_proposal_reply,
 )
 from acg.schema import AgentLock, Task
 from acg.typecheck import TypecheckOutcome, run_tsc_noemit
@@ -52,6 +61,10 @@ from .eval_schema import (
     task_from_lock,
 )
 
+# single_agent apply_patch mode: per-task failure when the model reply is not
+# envelopes or legacy JSON with file writes.
+UNPARSEABLE_APPLY_PATCH_ENVELOPE = "UNPARSEABLE_APPLY_PATCH_ENVELOPE"
+
 # How many predicted writes (sorted by confidence) the mock LLM echoes per task.
 # Capped so that a noisy predictor doesn't drown the eval in noise.
 LOCKFILE_ECHO_TOP_K = 8
@@ -68,16 +81,27 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-# Output ceiling for proposal-only single-agent runs. Override via
-# ``ACG_SINGLE_AGENT_MAX_TOKENS`` for budget-tight tests.
-SINGLE_AGENT_MAX_TOKENS = _env_int("ACG_SINGLE_AGENT_MAX_TOKENS", 16384)
+# Optional ceilings for suite-level single-agent LLM calls. Unset / ``0`` /
+# ``none`` omits ``max_tokens`` so the provider uses its native output budget.
+SINGLE_AGENT_MAX_TOKENS = env_int_or_none("ACG_SINGLE_AGENT_MAX_TOKENS")
+SINGLE_AGENT_APPLIED_MAX_TOKENS = env_int_or_none("ACG_SINGLE_AGENT_APPLIED_MAX_TOKENS")
 
-# Output ceiling for ``--applied-diff-live`` single-agent runs, where the
-# worker must emit one big ``apply_patch`` envelope covering every task.
-# Override via ``ACG_SINGLE_AGENT_APPLIED_MAX_TOKENS``.
-SINGLE_AGENT_APPLIED_MAX_TOKENS = _env_int(
-    "ACG_SINGLE_AGENT_APPLIED_MAX_TOKENS", 65536
-)
+
+def _merged_single_agent_max_tokens() -> int | None:
+    """Largest explicit cap when both single-agent env knobs are set."""
+    applied = SINGLE_AGENT_APPLIED_MAX_TOKENS
+    general = SINGLE_AGENT_MAX_TOKENS
+    if applied is not None and general is not None:
+        return max(applied, general)
+    if applied is not None:
+        return applied
+    return general
+
+
+def _worker_output_truncated(worker: WorkerResult) -> bool:
+    err = worker.error or ""
+    return err.startswith("finish_reason=length")
+
 
 SINGLE_AGENT_STRATEGY = "single_agent"
 NAIVE_STRATEGY = "naive_parallel"
@@ -100,6 +124,37 @@ LOCAL_STRATEGIES = (
 # Llama 3.x averages ~3.7-4.2 chars/token on English+code; 4 is a defensible
 # midpoint when a provider does not return ``usage.prompt_tokens``.
 _CHARS_PER_TOKEN = 4
+
+
+def _attach_worker_proposal_fields(eval_task: EvalTask, worker: WorkerResult) -> None:
+    eval_task.proposal_status = getattr(worker, "proposal_status", None) or PROPOSAL_OK
+    eval_task.proposal_write_count = len(worker.proposals)
+
+
+def _suite_worker_proposal_status(
+    reply: LLMReply | None,
+    *,
+    error: str | None,
+    proposals: list[Proposal],
+) -> str:
+    """Classify suite-level :class:`WorkerResult` built outside :func:`run_worker`."""
+    if error:
+        el = error.lower()
+        if "transport" in el or "contacting" in el:
+            return PROPOSAL_TRANSPORT_ERROR
+        if el.startswith("finish_reason=length"):
+            return PROPOSAL_TRUNCATED
+        return PROPOSAL_TRANSPORT_ERROR
+    if proposals:
+        return PROPOSAL_OK
+    if reply is not None and (reply.finish_reason or "").lower() == "length":
+        return PROPOSAL_TRUNCATED
+    if reply is None:
+        return PROPOSAL_TRANSPORT_ERROR
+    return classify_zero_proposal_reply(
+        raw_content=reply.content,
+        finish_reason=reply.finish_reason or "",
+    )
 
 
 def estimate_prompt_tokens(messages: list[dict[str, str]]) -> int:
@@ -184,7 +239,7 @@ class _PromptCountingLLM:
         self,
         messages: list[dict[str, str]],
         *,
-        max_tokens: int = 700,
+        max_tokens: int | None = None,
         temperature: float = 0.2,
     ) -> LLMReply:
         est = estimate_prompt_tokens(messages)
@@ -263,7 +318,7 @@ class LockfileEchoMockLLM:
         self,
         messages: list[dict[str, str]],
         *,
-        max_tokens: int = 700,
+        max_tokens: int | None = None,
         temperature: float = 0.2,
     ) -> LLMReply:
         del max_tokens, temperature
@@ -277,9 +332,11 @@ class LockfileEchoMockLLM:
                     parts: list[str] = []
                     for row in writes:
                         fp = row["file"]
-                        parts.append(
-                            f"*** Update File: {fp}\n@@\n+ // TODO acg-applied: {task_id}\n"
-                        )
+                        # JSON / YAML / etc. cannot accept TS-style line comments; the
+                        # apply-and-test smoke uses real repos with package.json writes.
+                        if not (fp.endswith(".ts") or fp.endswith(".tsx")):
+                            continue
+                        parts.append(f"*** Update File: {fp}\n@@\n+// acg-mock-applied:{task_id}\n")
                     envelope = "*** Begin Patch\n" + "\n".join(parts) + "\n*** End Patch\n"
                     return LLMReply(
                         content=envelope,
@@ -325,7 +382,7 @@ class NoLockSuiteMockLLM:
         self,
         messages: list[dict[str, str]],
         *,
-        max_tokens: int = SINGLE_AGENT_MAX_TOKENS,
+        max_tokens: int | None = None,
         temperature: float = 0.2,
     ) -> LLMReply:
         del max_tokens, temperature
@@ -406,9 +463,13 @@ def _proposals_to_naive_eval_task(
     eval_task = task_from_lock(lock_task, prompt=prompt)
     eval_task.actual_changed_files = sorted({p.file for p in worker.proposals})
     eval_task.out_of_bounds_files = sorted({p.file for p in worker.proposals if not p.allowed})
-    if worker.error:
+    if worker.error and not _worker_output_truncated(worker):
         eval_task.status = "failed"
         eval_task.failure_reason = "AGENT_FAIL"
+    elif _worker_output_truncated(worker):
+        eval_task.status = "failed"
+        eval_task.failure_reason = "TRUNCATED_BY_MAX_TOKENS"
+        eval_task.patch_na_reason = worker.error
     elif eval_task.out_of_bounds_files:
         eval_task.status = "completed_unsafe"
     else:
@@ -420,6 +481,7 @@ def _proposals_to_naive_eval_task(
     eval_task.metrics.cost_usd = worker.cost_usd
     eval_task.metrics.cost_source = worker.cost_source
     eval_task.metrics.model_calls = 1
+    _attach_worker_proposal_fields(eval_task, worker)
     return eval_task
 
 
@@ -444,11 +506,7 @@ def _proposals_to_naive_applied_eval_task(
     eval_task.actual_changed_files = sorted(git_changed_files)
     eval_task.actual_changed_files_kind = "applied_diff"
     eval_task.out_of_bounds_files = sorted(
-        {
-            p
-            for p in git_changed_files
-            if not validate_write(lock, lock_task.id, p)[0]
-        }
+        {p for p in git_changed_files if not validate_write(lock, lock_task.id, p)[0]}
     )
     eval_task.blocked_write_events = [
         BlockedWriteEvent(
@@ -460,9 +518,13 @@ def _proposals_to_naive_applied_eval_task(
         if not p.allowed
     ]
     tc = task_outcome.typecheck
-    if worker.error:
+    if worker.error and not _worker_output_truncated(worker):
         eval_task.status = "failed"
         eval_task.failure_reason = "AGENT_FAIL"
+    elif _worker_output_truncated(worker):
+        eval_task.status = "failed"
+        eval_task.failure_reason = "TRUNCATED_BY_MAX_TOKENS"
+        eval_task.patch_na_reason = worker.error
     elif task_outcome.patch_na:
         eval_task.status = "failed"
         eval_task.failure_reason = "PATCH_NA"
@@ -502,6 +564,7 @@ def _proposals_to_naive_applied_eval_task(
     eval_task.metrics.typecheck_exit_code = tc.exit_code
     eval_task.metrics.typecheck_diagnostic_count = tc.diagnostic_count
     eval_task.metrics.typecheck_wall_seconds = tc.wall_seconds
+    _attach_worker_proposal_fields(eval_task, worker)
     return eval_task
 
 
@@ -521,17 +584,17 @@ def _proposals_to_suite_applied_eval_task(
     eval_task.actual_changed_files = sorted(git_changed_files)
     eval_task.actual_changed_files_kind = "suite_applied_diff"
     eval_task.out_of_bounds_files = sorted(
-        {
-            p
-            for p in git_changed_files
-            if not validate_write(lock, lock_task.id, p)[0]
-        }
+        {p for p in git_changed_files if not validate_write(lock, lock_task.id, p)[0]}
     )
     eval_task.blocked_write_events = []
     tc = task_outcome.typecheck
-    if worker.error:
+    if worker.error and not _worker_output_truncated(worker):
         eval_task.status = "failed"
         eval_task.failure_reason = "AGENT_FAIL"
+    elif _worker_output_truncated(worker):
+        eval_task.status = "failed"
+        eval_task.failure_reason = "TRUNCATED_BY_MAX_TOKENS"
+        eval_task.patch_na_reason = worker.error
     elif task_outcome.patch_na:
         eval_task.status = "failed"
         eval_task.failure_reason = "PATCH_NA"
@@ -568,6 +631,7 @@ def _proposals_to_suite_applied_eval_task(
     eval_task.metrics.typecheck_exit_code = tc.exit_code
     eval_task.metrics.typecheck_diagnostic_count = tc.diagnostic_count
     eval_task.metrics.typecheck_wall_seconds = tc.wall_seconds
+    _attach_worker_proposal_fields(eval_task, worker)
     return eval_task
 
 
@@ -610,9 +674,13 @@ def _proposals_to_planned_eval_task(
         for p in worker.proposals
         if not p.allowed
     ]
-    if worker.error:
+    if worker.error and not _worker_output_truncated(worker):
         eval_task.status = "failed"
         eval_task.failure_reason = "AGENT_FAIL"
+    elif _worker_output_truncated(worker):
+        eval_task.status = "failed"
+        eval_task.failure_reason = "TRUNCATED_BY_MAX_TOKENS"
+        eval_task.patch_na_reason = worker.error
     elif not eval_task.actual_changed_files and eval_task.blocked_write_events:
         eval_task.status = "blocked"
         eval_task.failure_reason = "BLOCKED_BY_SCOPE"
@@ -625,6 +693,7 @@ def _proposals_to_planned_eval_task(
     eval_task.metrics.cost_usd = worker.cost_usd
     eval_task.metrics.cost_source = worker.cost_source
     eval_task.metrics.model_calls = 1
+    _attach_worker_proposal_fields(eval_task, worker)
     return eval_task
 
 
@@ -660,9 +729,13 @@ def _proposals_to_planned_applied_eval_task(
         if not p.allowed
     ]
     tc = task_outcome.typecheck
-    if worker.error:
+    if worker.error and not _worker_output_truncated(worker):
         eval_task.status = "failed"
         eval_task.failure_reason = "AGENT_FAIL"
+    elif _worker_output_truncated(worker):
+        eval_task.status = "failed"
+        eval_task.failure_reason = "TRUNCATED_BY_MAX_TOKENS"
+        eval_task.patch_na_reason = worker.error
     elif task_outcome.patch_na:
         eval_task.status = "failed"
         eval_task.failure_reason = "PATCH_NA"
@@ -699,6 +772,7 @@ def _proposals_to_planned_applied_eval_task(
     eval_task.metrics.typecheck_exit_code = tc.exit_code
     eval_task.metrics.typecheck_diagnostic_count = tc.diagnostic_count
     eval_task.metrics.typecheck_wall_seconds = tc.wall_seconds
+    _attach_worker_proposal_fields(eval_task, worker)
     return eval_task
 
 
@@ -771,6 +845,15 @@ def _apply_writes_git_sync(
         root = checkout.resolve()
         patch_na = False
         patch_na_reason: str | None = None
+        # Opt-in envelope dump for debugging EMPTY_PATCH situations.
+        # Set ACG_DUMP_ENVELOPES=/some/dir to write each proposal's envelope
+        # + apply-outcome to ``<dir>/<task_id>__<seq>.{envelope,outcome.json}``.
+        # Default off; ON adds 2 fast filesystem writes per proposal.
+        _dump_dir_env = os.environ.get("ACG_DUMP_ENVELOPES", "").strip()
+        _dump_dir = Path(_dump_dir_env) if _dump_dir_env else None
+        if _dump_dir is not None:
+            _dump_dir.mkdir(parents=True, exist_ok=True)
+        _dump_seq = 0
         for prop in wr.proposals:
             if require_scope and not prop.allowed:
                 continue
@@ -785,6 +868,23 @@ def _apply_writes_git_sync(
                 if not allowed:
                     continue
             outcome = apply_envelope(prop.envelope, root)
+            if _dump_dir is not None:
+                _dump_seq += 1
+                stem = _dump_dir / f"{_sanitize_applied_branch_task_id(task.id)}__{_dump_seq:02d}"
+                stem.with_suffix(".envelope").write_text(prop.envelope)
+                stem.with_suffix(".outcome.json").write_text(
+                    json.dumps(
+                        {
+                            "file": prop.file,
+                            "envelope_parsed": outcome.envelope_parsed,
+                            "patch_na": outcome.patch_na,
+                            "patch_na_reason": outcome.patch_na_reason,
+                            "changed_files": list(outcome.changed_files),
+                            "errors": list(outcome.errors),
+                        },
+                        indent=2,
+                    )
+                )
             if outcome.patch_na and not patch_na:
                 patch_na = True
                 patch_na_reason = outcome.patch_na_reason
@@ -816,9 +916,7 @@ def _apply_writes_git_sync(
             capture_output=True,
             text=True,
         )
-        names = sorted(
-            {line.strip() for line in diff.stdout.splitlines() if line.strip()}
-        )
+        names = sorted({line.strip() for line in diff.stdout.splitlines() if line.strip()})
         if run_typecheck:
             tc = run_tsc_noemit(checkout)
         else:
@@ -842,8 +940,18 @@ def _apply_writes_git_sync(
             capture_output=True,
             text=True,
         )
-
-
+        if os.environ.get("ACG_APPLIED_BRANCH_CLEANUP", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
+            subprocess.run(
+                ["git", "-C", repo, "branch", "-D", branch],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -876,6 +984,8 @@ async def _run_naive_parallel(
     *,
     prompts_by_task: dict[str, str] | None = None,
     cap_parallelism: int | None = None,
+    eval_dump_dir: Path | None = None,
+    strategy_folder: str = "",
 ) -> tuple[list[EvalTask], float, str]:
     """Fan all lockfile tasks out concurrently with no coordination.
 
@@ -915,6 +1025,7 @@ async def _run_naive_parallel(
         await counting_sub.aclose()
     wall_s = time.perf_counter() - t0
     finished = now_iso()
+    _persist_worker_raw_replies(eval_dump_dir, strategy_folder, worker_results)
 
     by_id = {t.id: t for t in lock.tasks}
     tasks = [
@@ -940,6 +1051,8 @@ async def _run_naive_parallel_blind(
     *,
     prompts_by_task: dict[str, str] | None = None,
     cap_parallelism: int | None = None,
+    eval_dump_dir: Path | None = None,
+    strategy_folder: str = "",
 ) -> tuple[list[EvalTask], float, str]:
     """Per-task workers with NO predictor output in the prompt and no scope guard.
 
@@ -975,6 +1088,7 @@ async def _run_naive_parallel_blind(
         await counting_sub.aclose()
     wall_s = time.perf_counter() - t0
     finished = now_iso()
+    _persist_worker_raw_replies(eval_dump_dir, strategy_folder, worker_results)
 
     by_id = {t.id: t for t in lock.tasks}
     tasks = [
@@ -1002,6 +1116,8 @@ async def _run_naive_parallel_applied(
     *,
     prompts_by_task: dict[str, str] | None = None,
     cap_parallelism: int | None = None,
+    eval_dump_dir: Path | None = None,
+    strategy_folder: str = "",
 ) -> tuple[list[EvalTask], float, str]:
     """Naive workers + real git writes (no scope gate on apply)."""
     checkout = checkout_path.resolve()
@@ -1073,6 +1189,7 @@ async def _run_naive_parallel_applied(
         await counting_sub.aclose()
     wall_s = time.perf_counter() - t0
     finished = now_iso()
+    _persist_worker_raw_replies(eval_dump_dir, strategy_folder, worker_results)
 
     tasks = [
         _proposals_to_naive_applied_eval_task(
@@ -1101,6 +1218,8 @@ async def _run_naive_parallel_blind_applied(
     *,
     prompts_by_task: dict[str, str] | None = None,
     cap_parallelism: int | None = None,
+    eval_dump_dir: Path | None = None,
+    strategy_folder: str = "",
 ) -> tuple[list[EvalTask], float, str]:
     """Naive blind workers (no lockfile hints) + real git writes.
 
@@ -1180,6 +1299,7 @@ async def _run_naive_parallel_blind_applied(
         await counting_sub.aclose()
     wall_s = time.perf_counter() - t0
     finished = now_iso()
+    _persist_worker_raw_replies(eval_dump_dir, strategy_folder, worker_results)
 
     tasks = [
         _proposals_to_naive_applied_eval_task(
@@ -1247,21 +1367,25 @@ def _build_single_agent_prompt(
             "You are a single coding agent handling an entire task suite without "
             "a precomputed file contract. You must implement every task on disk.\n\n"
             "Choose exactly ONE response format:\n\n"
-            "A) OpenAI apply_patch layout: for each task, emit a `Task id: <id>` line "
-            "copied from the list below, followed only by a `*** Begin Patch` … "
-            "`*** End Patch` envelope for that task (no code fences, no JSON).\n\n"
-            "B) Legacy JSON object with key \"tasks\": an array of objects. Each object "
-            "must have \"task_id\" and \"writes\"; every write object must include "
-            "\"file\", \"description\", and a string \"content\" field whose value is "
+            "A) OpenAI apply_patch layout (preferred): for every task, emit a line "
+            "that starts with the exact ASCII bytes ``Task id: `` (capital T, lowercase "
+            "ask, ASCII colon, ASCII space) immediately followed by the task id from the "
+            "suite list, then a single newline, then only a ``*** Begin Patch`` … "
+            "``*** End Patch`` envelope for that task. Do not wrap the reply in markdown "
+            "code fences (no ```), do not bold the ``Task id:`` line, do not emit JSON "
+            "or YAML alongside format A, and do not add headings before ``Task id:``.\n\n"
+            'B) Legacy JSON object with key "tasks": an array of objects. Each object '
+            'must have "task_id" and "writes"; every write object must include '
+            '"file", "description", and a string "content" field whose value is '
             "the complete UTF-8 file body to write.\n\n"
             "Do not mix formats. If you choose JSON, partial file bodies are invalid."
         )
     else:
         system = (
             "You are a single coding agent handling an entire task suite without "
-            "a precomputed file contract. Output ONLY a JSON object with key \"tasks\": an "
-            "array of objects. Each object must have \"task_id\" and \"writes\"; "
-            "\"writes\" is an array of objects with \"file\" and \"description\". "
+            'a precomputed file contract. Output ONLY a JSON object with key "tasks": an '
+            'array of objects. Each object must have "task_id" and "writes"; '
+            '"writes" is an array of objects with "file" and "description". '
             "Do not include prose, code fences, or contract-derived fields."
         )
     task_join = "\n\n".join(task_blocks)
@@ -1300,17 +1424,37 @@ def _pick_task_for_patch_block(lock: AgentLock, block: str) -> str:
     return lock.tasks[0].id
 
 
-def _parse_single_agent_applied_sections(raw: str) -> dict[str, str]:
+def _normalize_single_agent_apply_patch_text(raw: str) -> str:
+    """Strip outer markdown fences so patch markers remain visible to regex."""
     text = (raw or "").strip()
-    if not text or "Task id:" not in text:
+    changed = True
+    while changed:
+        changed = False
+        if text.startswith("```"):
+            text = re.sub(r"^```(?:[\w-]+)?\s*", "", text, flags=re.IGNORECASE)
+            text = re.sub(r"\s*```\s*$", "", text)
+            text = text.strip()
+            changed = True
+    return text
+
+
+# Task id headers copied into the prompt use ``Task id: <id>``; models often
+# add markdown headings or bold. Keep the id capture permissive.
+_TASK_ID_HEADER_RE = re.compile(r"(?m)^\s*(?:#{1,6}\s*)?\*{0,2}\s*Task\s+id\s*:\s*\*{0,2}\s*(\S+)")
+
+
+def _parse_single_agent_applied_sections(raw: str) -> dict[str, str]:
+    text = _normalize_single_agent_apply_patch_text(raw)
+    if not text or "task id" not in text.lower():
         return {}
     sections: dict[str, str] = {}
-    pattern = re.compile(r"(?m)^Task id:\s*([^\s]+)\s*$")
-    matches = list(pattern.finditer(text))
+    matches = list(_TASK_ID_HEADER_RE.finditer(text))
     if not matches:
         return {}
     for i, m in enumerate(matches):
-        tid = m.group(1)
+        tid = m.group(1).strip().strip("*_:`\"'").rstrip(":.,;")
+        if not tid:
+            continue
         start = m.end()
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
         chunk = text[start:end].strip()
@@ -1320,10 +1464,11 @@ def _parse_single_agent_applied_sections(raw: str) -> dict[str, str]:
 
 
 def _parse_single_agent_applied_mega(raw: str, lock: AgentLock) -> dict[str, str]:
+    text = _normalize_single_agent_apply_patch_text(raw)
     chunks_by_task: dict[str, list[str]] = {t.id: [] for t in lock.tasks}
     if not lock.tasks:
         return {}
-    for block in re.findall(r"\*\*\* Begin Patch[\s\S]*?\*\*\* End Patch", raw or ""):
+    for block in re.findall(r"\*\*\* Begin Patch[\s\S]*?\*\*\* End Patch", text):
         b = block.strip()
         if not b:
             continue
@@ -1337,6 +1482,93 @@ def _parse_single_agent_applied_envelopes(raw: str, lock: AgentLock) -> dict[str
     if by_section:
         return by_section
     return _parse_single_agent_applied_mega(raw, lock)
+
+
+_SINGLE_AGENT_PATCH_PATH_HEADER_RE = re.compile(
+    r"(?m)^(?:\*\*\* (?:Update|Add|Delete) File: |\+\+\+ b/)(.+?)\s*$"
+)
+
+
+def _writes_from_single_agent_patch_blob(blob: str) -> list[dict[str, str]]:
+    """Extract touched paths from ``*** Update File:`` / unified-diff ``+++ b/`` headers.
+
+    Match group paths have trailing whitespace stripped; duplicates per blob are skipped
+    in first-seen order (both headers may name the same file).
+    """
+    seen: set[str] = set()
+    out: list[dict[str, str]] = []
+    for m in _SINGLE_AGENT_PATCH_PATH_HEADER_RE.finditer(blob or ""):
+        path = m.group(1).rstrip()
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        out.append({"file": path, "description": ""})
+    return out
+
+
+_SINGLE_AGENT_RAW_FILE_CAP = 2_000_000
+
+
+def _persist_single_agent_raw_reply_files(
+    out_dir: Path, lock: AgentLock, raw_text: str
+) -> dict[str, str]:
+    """Write ``single_agent_raw/<task_id>.txt`` and ``suite_reply.txt`` under ``out_dir``.
+
+    Returns task_id → path relative to ``out_dir`` for :attr:`TaskArtifacts.log_path`.
+    """
+    rd = out_dir / "single_agent_raw"
+    rd.mkdir(parents=True, exist_ok=True)
+    body = raw_text or ""
+    (rd / "suite_reply.txt").write_text(body[:_SINGLE_AGENT_RAW_FILE_CAP], encoding="utf-8")
+    rel: dict[str, str] = {}
+    sections = _parse_single_agent_applied_sections(body) if body else {}
+    for t in lock.tasks:
+        chunk = (sections.get(t.id) or "").strip()
+        per_task = chunk if chunk else body
+        (rd / f"{t.id}.txt").write_text(per_task[:_SINGLE_AGENT_RAW_FILE_CAP], encoding="utf-8")
+        rel[t.id] = f"single_agent_raw/{t.id}.txt"
+    return rel
+
+
+_WORKER_RAW_FILE_CAP = _SINGLE_AGENT_RAW_FILE_CAP
+
+
+def _strategy_worker_raw_folder(strategy: str) -> str:
+    """Subdir under ``eval_dump_dir`` for per-task worker raw replies.
+
+    Names match the multi-strategy spot-check layout (``naive_parallel_raw``,
+    ``acg_planned_raw``, …), not ``eval_run_*.json`` short names.
+    """
+    return {
+        NAIVE_STRATEGY: "naive_parallel_raw",
+        NAIVE_PARALLEL_BLIND_STRATEGY: "naive_parallel_blind_raw",
+        ACG_PLANNED_STRATEGY: "acg_planned_raw",
+        ACG_PLANNED_FULL_CONTEXT_STRATEGY: "acg_full_context_raw",
+        ACG_PLANNED_REPLAN_STRATEGY: "acg_replan_raw",
+        ACG_PLANNED_APPLIED_STRATEGY: "acg_planned_applied_raw",
+    }.get(strategy, f"{strategy}_raw")
+
+
+def _persist_worker_raw_replies(
+    eval_dump_dir: Path | None,
+    strategy_folder: str,
+    worker_results: list[WorkerResult],
+) -> dict[str, str]:
+    """Write ``<eval_dump_dir>/<strategy_folder>/<task_id>.txt`` per worker result.
+
+    No-op when ``eval_dump_dir`` is None or ``strategy_folder`` is empty.
+    Returns task_id → path relative to ``eval_dump_dir``.
+    """
+    if eval_dump_dir is None or not strategy_folder:
+        return {}
+    rd = eval_dump_dir / strategy_folder
+    rd.mkdir(parents=True, exist_ok=True)
+    rel: dict[str, str] = {}
+    for wr in worker_results:
+        body = (wr.raw_content or "")[:_WORKER_RAW_FILE_CAP]
+        (rd / f"{wr.task_id}.txt").write_text(body, encoding="utf-8")
+        rel[wr.task_id] = f"{strategy_folder}/{wr.task_id}.txt"
+    return rel
 
 
 def _proposals_for_task_envelope_blob(blob: str) -> list[Proposal]:
@@ -1461,26 +1693,52 @@ async def _run_single_agent(
     sub_factory: Callable[[], RuntimeLLMProtocol],
     *,
     prompts_by_task: dict[str, str] | None = None,
+    eval_dump_dir: Path | None = None,
 ) -> tuple[list[EvalTask], float, str]:
-    """Run one suite-level agent with no lockfile write contract in prompt."""
+    """Run one suite-level agent with no lockfile write contract in prompt.
+
+    When ``ACG_SINGLE_AGENT_APPLY_PATCH=1`` is set, the agent is asked to
+    emit OpenAI ``apply_patch`` envelopes (one per task) instead of the
+    legacy JSON ``{file, description}`` summary. This makes its output
+    apples-to-apples with ``naive_parallel`` / ``acg_planned`` for
+    token-economy comparisons — those strategies always emit code-bearing
+    envelopes, and the legacy JSON path here is "list paths only" which is
+    a fundamentally cheaper deliverable.
+    """
     llm = sub_factory()
+    apply_patch_mode = os.environ.get("ACG_SINGLE_AGENT_APPLY_PATCH", "0") == "1"
     messages = _build_single_agent_prompt(
         lock,
         repo_graph,
         prompts_by_task=prompts_by_task,
+        apply_patch_suites=apply_patch_mode,
     )
     started = now_iso()
     t0 = time.perf_counter()
     reply: LLMReply | None = None
     error: str | None = None
     try:
-        reply = await llm.complete(messages, max_tokens=SINGLE_AGENT_MAX_TOKENS)
+        reply = await complete_llm_with_heartbeat(
+            llm,
+            task_id="single_agent",
+            messages=messages,
+            max_tokens=SINGLE_AGENT_MAX_TOKENS,
+            temperature=0.2,
+        )
     except Exception as exc:  # pragma: no cover - exercised by live backends.
         error = str(exc)
     finally:
         await llm.aclose()
     wall_s = time.perf_counter() - t0
     finished = now_iso()
+
+    if reply is not None and not error and (reply.finish_reason or "").lower() == "length":
+        max_desc = (
+            str(SINGLE_AGENT_MAX_TOKENS)
+            if SINGLE_AGENT_MAX_TOKENS is not None
+            else "provider-native"
+        )
+        error = f"finish_reason=length; output truncated at max_tokens={max_desc}"
 
     prompt_tokens: int | None = None
     prompt_method = "estimated_chars_div_4"
@@ -1489,11 +1747,31 @@ async def _run_single_agent(
         prompt_method = "provider_usage_prompt_tokens"
     elif reply is not None:
         prompt_tokens = estimate_prompt_tokens(messages)
-    parsed = (
-        _parse_single_agent_task_writes(reply.content, {task.id for task in lock.tasks})
-        if reply is not None
-        else {}
-    )
+    if reply is not None and not error and apply_patch_mode:
+        # apply_patch envelopes: derive ``writes`` lists from the file
+        # headers in each task's envelope so downstream eval_run fields
+        # (proposal_write_count, actual_changed_files) stay populated the
+        # same way as the JSON path. If the model ignored format A, fall back
+        # to the legacy JSON parser so mixed-provider replies still score.
+        envelopes = _parse_single_agent_applied_envelopes(reply.content, lock)
+        parsed = {
+            task_id: _writes_from_single_agent_patch_blob(env)
+            for task_id, env in envelopes.items()
+        }
+        if not any(parsed.get(t.id) for t in lock.tasks):
+            parsed = _parse_single_agent_task_writes(
+                reply.content, {task.id for task in lock.tasks}
+            )
+    elif reply is not None and not error:
+        parsed = _parse_single_agent_task_writes(reply.content, {task.id for task in lock.tasks})
+    else:
+        parsed = {}
+
+    raw_log_paths: dict[str, str] = {}
+    if eval_dump_dir is not None and reply is not None:
+        raw_log_paths = _persist_single_agent_raw_reply_files(
+            eval_dump_dir, lock, reply.content or ""
+        )
 
     tasks: list[EvalTask] = []
     for index, lock_task in enumerate(lock.tasks):
@@ -1505,8 +1783,23 @@ async def _run_single_agent(
         eval_task.actual_changed_files = sorted(
             {write["file"] for write in parsed.get(lock_task.id, [])}
         )
-        eval_task.status = "failed" if error else "completed"
-        eval_task.failure_reason = "AGENT_FAIL" if error else None
+        writes = parsed.get(lock_task.id, [])
+        apply_patch_miss = bool(apply_patch_mode and not error and reply is not None and not writes)
+        if error:
+            eval_task.status = "failed"
+            eval_task.failure_reason = (
+                "TRUNCATED_BY_MAX_TOKENS"
+                if error.startswith("finish_reason=length")
+                else "AGENT_FAIL"
+            )
+        elif apply_patch_miss:
+            eval_task.status = "failed"
+            eval_task.failure_reason = UNPARSEABLE_APPLY_PATCH_ENVELOPE
+        else:
+            eval_task.status = "completed"
+            eval_task.failure_reason = None
+        if error and error.startswith("finish_reason=length"):
+            eval_task.patch_na_reason = error
         eval_task.timestamps.started_at = started
         eval_task.timestamps.finished_at = finished
         eval_task.metrics.wall_time_seconds = round(wall_s if index == 0 else 0.0, 4)
@@ -1516,6 +1809,29 @@ async def _run_single_agent(
             eval_task.metrics.tokens_completion = reply.completion_tokens or None
             eval_task.metrics.cost_usd = reply.cost_usd
             eval_task.metrics.cost_source = reply.cost_source
+            raw_body = reply.content or ""
+            if raw_body:
+                eval_task.artifacts.raw_reply = raw_body[:8192]
+        if raw_log_paths.get(lock_task.id):
+            eval_task.artifacts.log_path = raw_log_paths[lock_task.id]
+        eval_task.proposal_write_count = len(writes)
+        if error:
+            eval_task.proposal_status = (
+                PROPOSAL_TRUNCATED
+                if error.startswith("finish_reason=length")
+                else PROPOSAL_TRANSPORT_ERROR
+            )
+        elif writes:
+            eval_task.proposal_status = PROPOSAL_OK
+        elif apply_patch_miss:
+            eval_task.proposal_status = PROPOSAL_UNPARSEABLE
+        elif reply is not None:
+            eval_task.proposal_status = classify_zero_proposal_reply(
+                raw_content=reply.content,
+                finish_reason=reply.finish_reason or "",
+            )
+        else:
+            eval_task.proposal_status = PROPOSAL_TRANSPORT_ERROR
         tasks.append(eval_task)
     annotate_overlaps(tasks)
     return tasks, wall_s, prompt_method
@@ -1528,6 +1844,8 @@ async def _run_single_agent_applied(
     checkout_path: Path,
     *,
     prompts_by_task: dict[str, str] | None = None,
+    eval_dump_dir: Path | None = None,
+    strategy_folder: str = "",
 ) -> tuple[list[EvalTask], float, str]:
     """Suite-level agent whose reply is split per task and applied as git branches."""
     checkout = checkout_path.resolve()
@@ -1565,9 +1883,14 @@ async def _run_single_agent_applied(
     t0 = time.perf_counter()
     reply: LLMReply | None = None
     error: str | None = None
+    merged_max = _merged_single_agent_max_tokens()
     try:
-        reply = await llm.complete(
-            messages, max_tokens=max(SINGLE_AGENT_APPLIED_MAX_TOKENS, SINGLE_AGENT_MAX_TOKENS)
+        reply = await complete_llm_with_heartbeat(
+            llm,
+            task_id="single_agent_applied",
+            messages=messages,
+            max_tokens=merged_max,
+            temperature=0.2,
         )
     except Exception as exc:  # pragma: no cover - exercised by live backends.
         error = str(exc)
@@ -1575,6 +1898,10 @@ async def _run_single_agent_applied(
         await llm.aclose()
     wall_s = time.perf_counter() - t0
     finished = now_iso()
+
+    if reply is not None and not error and (reply.finish_reason or "").lower() == "length":
+        max_desc = str(merged_max) if merged_max is not None else "provider-native"
+        error = f"finish_reason=length; output truncated at max_tokens={max_desc}"
 
     prompt_tokens: int | None = None
     prompt_method = "estimated_chars_div_4"
@@ -1586,9 +1913,7 @@ async def _run_single_agent_applied(
 
     if reply is not None and not error:
         envelopes_by_task = _parse_single_agent_applied_envelopes(reply.content, lock)
-        parsed_writes = _parse_single_agent_task_writes(
-            reply.content, {t.id for t in lock.tasks}
-        )
+        parsed_writes = _parse_single_agent_task_writes(reply.content, {t.id for t in lock.tasks})
     else:
         envelopes_by_task = {}
         parsed_writes = {}
@@ -1626,7 +1951,14 @@ async def _run_single_agent_applied(
             prompt_tokens=reply.prompt_tokens if reply is not None else None,
             cost_usd=reply.cost_usd if reply is not None else None,
             cost_source=reply.cost_source if reply is not None else None,
+            proposal_status=_suite_worker_proposal_status(reply, error=error, proposals=proposals),
         )
+
+    _persist_worker_raw_replies(
+        eval_dump_dir,
+        strategy_folder,
+        [workers_by_task[t.id] for t in lock.tasks if t.id in workers_by_task],
+    )
 
     outcome_by_task: dict[str, TaskApplyOutcome] = {}
     git_lock = asyncio.Lock()
@@ -1689,6 +2021,8 @@ async def _run_acg_planned(
     cap_parallelism: int | None = None,
     scope_repo_graph: bool = True,
     auto_replan: bool = False,
+    eval_dump_dir: Path | None = None,
+    strategy_folder: str = "",
 ) -> tuple[list[EvalTask], float, str]:
     """Walk ``execution_plan.groups`` with optional per-task scoped repo graphs.
 
@@ -1752,6 +2086,7 @@ async def _run_acg_planned(
         await counting_sub.aclose()
     wall_s = time.perf_counter() - t0
     finished = now_iso()
+    _persist_worker_raw_replies(eval_dump_dir, strategy_folder, worker_results)
 
     tasks: list[EvalTask] = []
     for wr in worker_results:
@@ -1781,6 +2116,8 @@ async def _run_acg_planned_applied(
     cap_parallelism: int | None = None,
     scope_repo_graph: bool = True,
     auto_replan: bool = False,
+    eval_dump_dir: Path | None = None,
+    strategy_folder: str = "",
 ) -> tuple[list[EvalTask], float, str]:
     """Planned workers + git-backed writes for proposals that carry apply_patch envelopes."""
     del lockfile_path
@@ -1858,6 +2195,11 @@ async def _run_acg_planned_applied(
                         counting_sub,
                         group.id,
                         config=runtime_config,
+                        # Inline predicted_writes file contents so the agent
+                        # emits Update File hunks whose context lines match
+                        # disk. Without this, every applied-diff run reports
+                        # EMPTY_PATCH regardless of model.
+                        repo_root=checkout,
                     )
                 )
             results = await _gather_capped(coros, cap_parallelism)
@@ -1868,6 +2210,7 @@ async def _run_acg_planned_applied(
         await counting_sub.aclose()
     wall_s = time.perf_counter() - t0
     finished = now_iso()
+    _persist_worker_raw_replies(eval_dump_dir, strategy_folder, worker_results)
 
     tasks: list[EvalTask] = []
     for wr in worker_results:
@@ -1928,6 +2271,7 @@ def _local_factory() -> tuple[Callable[[], RuntimeLLMProtocol], EvalModel]:
             cfg.sub_model,
             cfg.sub_api_key,
             timeout=cfg.request_timeout_s,
+            extra_params=cfg.extra_params,
         )
 
     return sub_factory, EvalModel(
@@ -1955,6 +2299,7 @@ def run_strategy(
     suite_name: str | None = None,
     repo: EvalRepo | None = None,
     applied_diff_live: bool = False,
+    eval_dump_dir: Path | None = None,
 ) -> EvalRun:
     """Execute one (strategy, backend) pair and return the populated :class:`EvalRun`.
 
@@ -1971,6 +2316,15 @@ def run_strategy(
             "devin-manual / devin-api."
         )
 
+    resolved_parallel_cap = cap_parallelism
+    if resolved_parallel_cap is None:
+        raw_w = os.environ.get("ACG_WORKER_CONCURRENCY", "0")
+        try:
+            wc = int(str(raw_w).strip() or "0")
+        except ValueError:
+            wc = 0
+        resolved_parallel_cap = wc if wc > 0 else None
+
     eval_repo = repo or repo_from_path(
         Path(lock.repo.root) if lock.repo and lock.repo.root else None,
         repo_url=lock.repo.git_url if lock.repo else None,
@@ -1985,18 +2339,18 @@ def run_strategy(
             NAIVE_PARALLEL_BLIND_STRATEGY,
             ACG_PLANNED_STRATEGY,
             ACG_PLANNED_REPLAN_STRATEGY,
+            ACG_PLANNED_FULL_CONTEXT_STRATEGY,
         )
     )
     run_planned_git_applied = strategy == ACG_PLANNED_APPLIED_STRATEGY or (
         applied_diff_live
-        and strategy in (ACG_PLANNED_STRATEGY, ACG_PLANNED_REPLAN_STRATEGY)
-    )
-    if applied_diff_live and strategy == ACG_PLANNED_FULL_CONTEXT_STRATEGY:
-        raise ValueError(
-            "--applied-diff-live is not supported for acg_planned_full_context "
-            "(use single_agent, naive_parallel, naive_parallel_blind, acg_planned, "
-            "acg_planned_replan, or acg_planned_applied)"
+        and strategy
+        in (
+            ACG_PLANNED_STRATEGY,
+            ACG_PLANNED_REPLAN_STRATEGY,
+            ACG_PLANNED_FULL_CONTEXT_STRATEGY,
         )
+    )
 
     if backend == "mock":
         if strategy == SINGLE_AGENT_STRATEGY:
@@ -2009,6 +2363,15 @@ def run_strategy(
     orch_overhead: int | None
     checkout = Path(eval_repo.local_path).resolve()
 
+    if eval_dump_dir is None:
+        worker_raw_folder = ""
+    elif strategy == SINGLE_AGENT_STRATEGY and use_applied:
+        worker_raw_folder = "single_agent_applied_raw"
+    elif strategy == SINGLE_AGENT_STRATEGY:
+        worker_raw_folder = ""
+    else:
+        worker_raw_folder = _strategy_worker_raw_folder(strategy)
+
     if strategy == SINGLE_AGENT_STRATEGY:
         if applied_diff_live:
             tasks, wall_s, prompt_token_method = asyncio.run(
@@ -2018,6 +2381,8 @@ def run_strategy(
                     sub_factory,
                     checkout,
                     prompts_by_task=prompts_by_task,
+                    eval_dump_dir=eval_dump_dir,
+                    strategy_folder=worker_raw_folder,
                 )
             )
             orch_overhead = None
@@ -2030,6 +2395,7 @@ def run_strategy(
                     repo_graph,
                     sub_factory,
                     prompts_by_task=prompts_by_task,
+                    eval_dump_dir=eval_dump_dir,
                 )
             )
             orch_overhead = None
@@ -2044,7 +2410,9 @@ def run_strategy(
                     sub_factory,
                     checkout,
                     prompts_by_task=prompts_by_task,
-                    cap_parallelism=cap_parallelism,
+                    cap_parallelism=resolved_parallel_cap,
+                    eval_dump_dir=eval_dump_dir,
+                    strategy_folder=worker_raw_folder,
                 )
             )
             orch_overhead = None
@@ -2057,7 +2425,9 @@ def run_strategy(
                     repo_graph,
                     sub_factory,
                     prompts_by_task=prompts_by_task,
-                    cap_parallelism=cap_parallelism,
+                    cap_parallelism=resolved_parallel_cap,
+                    eval_dump_dir=eval_dump_dir,
+                    strategy_folder=worker_raw_folder,
                 )
             )
             orch_overhead = None
@@ -2072,7 +2442,9 @@ def run_strategy(
                     sub_factory,
                     checkout,
                     prompts_by_task=prompts_by_task,
-                    cap_parallelism=cap_parallelism,
+                    cap_parallelism=resolved_parallel_cap,
+                    eval_dump_dir=eval_dump_dir,
+                    strategy_folder=worker_raw_folder,
                 )
             )
             orch_overhead = None
@@ -2085,7 +2457,9 @@ def run_strategy(
                     repo_graph,
                     sub_factory,
                     prompts_by_task=prompts_by_task,
-                    cap_parallelism=cap_parallelism,
+                    cap_parallelism=resolved_parallel_cap,
+                    eval_dump_dir=eval_dump_dir,
+                    strategy_folder=worker_raw_folder,
                 )
             )
             orch_overhead = None
@@ -2100,9 +2474,11 @@ def run_strategy(
                 checkout_path=checkout,
                 lockfile_path=lockfile_path,
                 prompts_by_task=prompts_by_task,
-                cap_parallelism=cap_parallelism,
-                scope_repo_graph=True,
+                cap_parallelism=resolved_parallel_cap,
+                scope_repo_graph=strategy != ACG_PLANNED_FULL_CONTEXT_STRATEGY,
                 auto_replan=(strategy == ACG_PLANNED_REPLAN_STRATEGY),
+                eval_dump_dir=eval_dump_dir,
+                strategy_folder=worker_raw_folder,
             )
         )
         orch_overhead = None
@@ -2116,15 +2492,26 @@ def run_strategy(
                 sub_factory,
                 lockfile_path=lockfile_path,
                 prompts_by_task=prompts_by_task,
-                cap_parallelism=cap_parallelism,
+                cap_parallelism=resolved_parallel_cap,
                 scope_repo_graph=(strategy in {ACG_PLANNED_STRATEGY, ACG_PLANNED_REPLAN_STRATEGY}),
                 auto_replan=(strategy == ACG_PLANNED_REPLAN_STRATEGY),
+                eval_dump_dir=eval_dump_dir,
+                strategy_folder=worker_raw_folder,
             )
         )
         orch_overhead = None
         execution_mode = "propose_validate"
         evidence_kind = "proposed_write_set"
 
+    # Compile-step accounting (planner tokens, wall time, cost) is charged
+    # only to strategies that ACTUALLY consume the lockfile — i.e. the
+    # acg_planned* family. ``naive_parallel`` and ``single_agent`` operate
+    # blind (no predicted_writes, no allowed_paths), so charging them the
+    # compile cost would inflate their headline numbers and *understate*
+    # the relative ACG savings. The eval still records the compile cost
+    # on the lockfile itself; this filter just controls which strategy
+    # rows carry it in their summary_metrics.
+    _strategy_uses_lock = strategy.startswith("acg_planned")
     summary = compute_summary_metrics(
         tasks,
         wall_time_seconds=wall_s,
@@ -2132,12 +2519,32 @@ def run_strategy(
         tokens_orchestrator_overhead=orch_overhead,
         tokens_planner_total=(
             lock.generator.tokens_planner_total
-            if lock.generator is not None and strategy != SINGLE_AGENT_STRATEGY
+            if lock.generator is not None and _strategy_uses_lock
+            else None
+        ),
+        tokens_planner_completion_total=(
+            lock.generator.tokens_planner_completion_total
+            if lock.generator is not None and _strategy_uses_lock
+            else None
+        ),
+        tokens_planner_method=(
+            lock.generator.tokens_planner_method
+            if lock.generator is not None and _strategy_uses_lock
             else None
         ),
         tokens_scope_review_total=(
             lock.generator.tokens_scope_review_total
-            if lock.generator is not None and strategy != SINGLE_AGENT_STRATEGY
+            if lock.generator is not None and _strategy_uses_lock
+            else None
+        ),
+        compile_wall_seconds=(
+            lock.generator.compile_wall_seconds
+            if lock.generator is not None and _strategy_uses_lock
+            else None
+        ),
+        compile_cost_usd=(
+            lock.generator.compile_cost_usd
+            if lock.generator is not None and _strategy_uses_lock
             else None
         ),
         tokens_prompt_method=prompt_token_method,

@@ -1,0 +1,62 @@
+*** Begin Patch
+--- a/starlette/templating.py
++++ b/starlette/templating.py
+@@ -1,5 +1,5 @@
+ import typing
+-from jinja2 import Environment, FileSystemLoader, TemplateNotFound
++from jinja2 import Environment, FileSystemLoader, TemplateNotFound, select_autoescape
+ from starlette.requests import Request
+ from starlette.responses import HTMLResponse
+ from starlette.types import Receive, Scope, Send
+@@ -15,7 +15,7 @@ class Jinja2Templates:
+     def __init__(self, directory, *, env=None, **env_options):
+         if env is None:
+             env = Environment(
+-                loader=FileSystemLoader(directory), autoescape=True, **env_options
++                loader=FileSystemLoader(directory), autoescape=select_autoescape(), **env_options
+             )
+         self.env = env
+         self.env.globals.setdefault("url_for", self.url_for)
+--- /dev/null
++++ b/tests/test_templating_autoescape.py
+@@ -0,0 +1,38 @@
++import pytest
++from starlette.templating import Jinja2Templates
++from starlette.testclient import TestClient
++from starlette.applications import Starlette
++from starlette.responses import HTMLResponse
++from starlette.routing import Route
++
++
++def test_autoescape_html():
++    templates = Jinja2Templates(directory="tests/templates")
++    app = Starlette(
++        routes=[
++            Route("/", endpoint=lambda r: templates.TemplateResponse("test.html", {"request": r, "name": "<b>bold</b>"}))
++        ]
++    )
++    client = TestClient(app)
++    response = client.get("/")
++    assert response.status_code == 200
++    assert "&lt;b&gt;bold&lt;/b&gt;" in response.text
++
++
++def test_no_autoescape_txt():
++    templates = Jinja2Templates(directory="tests/templates")
++    app = Starlette(
++        routes=[
++            Route("/", endpoint=lambda r: templates.TemplateResponse("test.txt", {"request": r, "name": "<b>bold</b>"}))
++        ]
++    )
++    client = TestClient(app)
++    response = client.get("/")
++    assert response.status_code == 200
++    assert "<b>bold</b>" in response.text
++
++
++def test_custom_env_preserved():
++    from jinja2 import Environment, FileSystemLoader
++    custom_env = Environment(loader=FileSystemLoader("tests/templates"), autoescape=False)
++    templates = Jinja2Templates(directory="tests/templates", env=custom_env)
++    assert templates.env.autoescape is False
+*** End Patch

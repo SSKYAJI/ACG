@@ -1,0 +1,174 @@
+*** Begin Patch
+*** Update File: starlette/middleware/sessions.py
+@@
+ import json
++from collections.abc import MutableMapping
+ from datetime import datetime, timezone
+ from typing import Optional
+@@
+ from starlette.responses import Response
+ from starlette.types import ASGIApp, Receive, Scope, Send
++
++
++class SessionDict(MutableMapping):
++    """A dict subclass that tracks whether it has been modified."""
++
++    def __init__(self, *args, **kwargs):
++        self._modified = False
++        self._data = dict(*args, **kwargs)
++
++    def __getitem__(self, key):
++        return self._data[key]
++
++    def __setitem__(self, key, value):
++        self._data[key] = value
++        self._modified = True
++
++    def __delitem__(self, key):
++        del self._data[key]
++        self._modified = True
++
++    def __iter__(self):
++        return iter(self._data)
++
++    def __len__(self):
++        return len(self._data)
++
++    def __repr__(self):
++        return repr(self._data)
++
++    def copy(self):
++        return SessionDict(self._data)
++
++    def clear(self):
++        self._data.clear()
++        self._modified = True
++
++    def update(self, *args, **kwargs):
++        if args:
++            other = dict(args[0])
++        else:
++            other = {}
++        other.update(kwargs)
++        if other:
++            self._data.update(other)
++            self._modified = True
++
++    def pop(self, key, *args):
++        self._modified = True
++        return self._data.pop(key, *args)
++
++    def popitem(self):
++        self._modified = True
++        return self._data.popitem()
++
++    def setdefault(self, key, default=None):
++        if key not in self._data:
++            self._modified = True
++        return self._data.setdefault(key, default)
++
+ 
+ class SessionMiddleware:
+     def __init__(
+@@
+     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+         if scope["type"] != "http":  # pragma: no cover
+             await self.app(scope, receive, send)
+             return
+ 
+         # Load session data from cookie
+         session_data = self._load_session_data(scope)
+-        scope["session"] = session_data
++        scope["session"] = SessionDict(session_data)
+ 
+         async def send_wrapper(message: Message) -> None:
+             if message["type"] == "http.response.start":
+                 # Check if session was modified
+-                if scope["session"]:
+-                    # If session data exists, set cookie
+-                    self._set_session_cookie(scope, message)
+-                else:
+-                    # If session data is empty, clear cookie
+-                    self._clear_session_cookie(scope, message)
++                session = scope["session"]
++                if session._modified:
++                    if session:
++                        self._set_session_cookie(scope, message)
++                    else:
++                        self._clear_session_cookie(scope, message)
++                # else: session not modified, do not set cookie
+             await self.app(scope, receive, send)
+ 
+         await send_wrapper(message)
+@@
+     def _load_session_data(self, scope: Scope) -> dict:
+         if self.session_cookie in cookies:
+             try:
+                 data = self.signer.unsign(cookies[self.session_cookie], max_age=self.max_age)
+                 return json.loads(data)
+             except (BadSignature, JSONDecodeError):
+                 return {}
+         return {}
+*** Update File: tests/middleware/test_session.py
+@@
+ from starlette.middleware.sessions import SessionMiddleware
+ from starlette.responses import JSONResponse, PlainTextResponse
+ from starlette.testclient import TestClient
++
++
++def test_session_not_modified_no_cookie():
++    app = SessionMiddleware(PlainTextResponse("OK"), secret_key="test")
++    client = TestClient(app)
++    response = client.get("/")
++    assert "set-cookie" not in response.headers
++
++
++def test_session_modified_sets_cookie():
++    app = SessionMiddleware(PlainTextResponse("OK"), secret_key="test")
++    client = TestClient(app)
++    # First request to set session
++    response = client.get("/", cookies={"session": "test"})
++    # Actually, we need a request that modifies session. Use a custom endpoint.
++    # We'll use a test app that modifies session.
++    async def app_with_modify(scope, receive, send):
++        session = scope["session"]
++        session["key"] = "value"
++        response = PlainTextResponse("OK")
++        await response(scope, receive, send)
++    app = SessionMiddleware(app_with_modify, secret_key="test")
++    client = TestClient(app)
++    response = client.get("/")
++    assert "set-cookie" in response.headers
++
++
++def test_session_cleared_sets_delete_cookie():
++    async def app_with_clear(scope, receive, send):
++        session = scope["session"]
++        session.clear()
++        response = PlainTextResponse("OK")
++        await response(scope, receive, send)
++    app = SessionMiddleware(app_with_clear, secret_key="test")
++    client = TestClient(app)
++    # First set a session cookie
++    client.cookies.set("session", "test")
++    response = client.get("/")
++    assert "set-cookie" in response.headers
++    assert "Max-Age=0" in response.headers["set-cookie"]
++
++
++def test_concurrent_read_only():
++    async def app_read_only(scope, receive, send):
++        session = scope["session"]
++        # Just read, no modification
++        _ = session.get("key", None)
++        response = PlainTextResponse("OK")
++        await response(scope, receive, send)
++    app = SessionMiddleware(app_read_only, secret_key="test")
++    client = TestClient(app)
++    # Simulate two requests with same session cookie
++    client.cookies.set("session", "test")
++    response1 = client.get("/")
++    response2 = client.get("/")
++    assert "set-cookie" not in response1.headers
++    assert "set-cookie" not in response2.headers
+*** End Patch

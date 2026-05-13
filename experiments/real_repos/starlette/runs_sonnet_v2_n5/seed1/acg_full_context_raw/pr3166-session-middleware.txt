@@ -1,0 +1,432 @@
+Looking at this task, I need to:
+
+1. Modify `SessionMiddleware` to distinguish between session reads and mutations
+2. Avoid sending `Set-Cookie` for unchanged/read-only sessions
+3. Preserve cookie clearing behavior (when session is explicitly cleared)
+4. Add regression tests for concurrent/read-only session flows
+
+Let me implement these changes:
+
+*** Begin Patch
+*** Update File: starlette/middleware/sessions.py
+@@
+-import json
+-import typing
+-from base64 import b64decode, b64encode
+-
+-import itsdangerous
+-from itsdangerous.exc import BadSignature
+-
+-from starlette.datastructures import MutableHeaders, Secret
+-from starlette.requests import HTTPConnection
+-from starlette.types import ASGIApp, Message, Receive, Scope, Send
+-
+-
+-class SessionMiddleware:
+-    def __init__(
+-        self,
+-        app: ASGIApp,
+-        secret_key: typing.Union[str, Secret],
+-        session_cookie: str = "session",
+-        max_age: typing.Optional[int] = 14 * 24 * 60 * 60,  # 14 days, in seconds
+-        path: str = "/",
+-        same_site: typing.Literal["lax", "strict", "none"] = "lax",
+-        https_only: bool = False,
+-        domain: typing.Optional[str] = None,
+-    ) -> None:
+-        self.app = app
+-        self.signer = itsdangerous.TimestampSigner(str(secret_key))
+-        self.session_cookie = session_cookie
+-        self.max_age = max_age
+-        self.path = path
+-        self.security_flags = "httponly; samesite=" + same_site
+-        if https_only:  # Secure flag can be used with HTTPS only
+-            self.security_flags += "; secure"
+-        if domain is not None:
+-            self.security_flags += f"; domain={domain}"
+-
+-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+-        if scope["type"] not in ("http", "websocket"):  # pragma: no cover
+-            await self.app(scope, receive, send)
+-            return
+-
+-        connection = HTTPConnection(scope)
+-        initial_session_was_empty = True
+-
+-        if self.session_cookie in connection.cookies:
+-            data = connection.cookies[self.session_cookie].encode("utf-8")
+-            try:
+-                data = self.signer.unsign(data, max_age=self.max_age)
+-                scope["session"] = json.loads(b64decode(data))
+-                initial_session_was_empty = False
+-            except BadSignature:
+-                scope["session"] = {}
+-        else:
+-            scope["session"] = {}
+-
+-        async def send_wrapper(message: Message) -> None:
+-            if message["type"] == "http.response.start":
+-                if scope["session"]:
+-                    # We have session data to persist.
+-                    data = b64encode(json.dumps(scope["session"]).encode("utf-8"))
+-                    data = self.signer.sign(data)
+-                    headers = MutableHeaders(scope=message)
+-                    header_value = "{session_cookie}={data}; path={path}; {max_age}{security_flags}".format(  # noqa: E501
+-                        session_cookie=self.session_cookie,
+-                        data=data.decode("utf-8"),
+-                        path=self.path,
+-                        max_age=f"Max-Age={self.max_age}; " if self.max_age else "",
+-                        security_flags=self.security_flags,
+-                    )
+-                    headers.append("Set-Cookie", header_value)
+-                elif not initial_session_was_empty:
+-                    # The session has been cleared.
+-                    headers = MutableHeaders(scope=message)
+-                    header_value = "{session_cookie}={data}; path={path}; {expires}{security_flags}".format(  # noqa: E501
+-                        session_cookie=self.session_cookie,
+-                        data="null",
+-                        path=self.path,
+-                        expires="expires=Thu, 01 Jan 1970 00:00:00 GMT; ",
+-                        security_flags=self.security_flags,
+-                    )
+-                    headers.append("Set-Cookie", header_value)
+-            await send(message)
+-
+-        await self.app(scope, receive, send_wrapper)
++ import json
++ import typing
++ from base64 import b64decode, b64encode
++ 
++ import itsdangerous
++ from itsdangerous.exc import BadSignature
++ 
++ from starlette.datastructures import MutableHeaders, Secret
++ from starlette.requests import HTTPConnection
++ from starlette.types import ASGIApp, Message, Receive, Scope, Send
++ 
++ 
++ class _SessionDict(dict):  # type: ignore[type-arg]
++     """A dict subclass that tracks whether it has been mutated."""
++ 
++     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
++         super().__init__(*args, **kwargs)
++         self._modified = False
++ 
++     @property
++     def modified(self) -> bool:
++         return self._modified
++ 
++     def _mark_modified(self) -> None:
++         self._modified = True
++ 
++     def __setitem__(self, key: typing.Any, value: typing.Any) -> None:
++         self._mark_modified()
++         super().__setitem__(key, value)
++ 
++     def __delitem__(self, key: typing.Any) -> None:
++         self._mark_modified()
++         super().__delitem__(key)
++ 
++     def clear(self) -> None:
++         self._mark_modified()
++         super().clear()
++ 
++     def pop(self, *args: typing.Any) -> typing.Any:
++         self._mark_modified()
++         return super().pop(*args)
++ 
++     def popitem(self) -> typing.Tuple[typing.Any, typing.Any]:
++         self._mark_modified()
++         return super().popitem()
++ 
++     def setdefault(self, key: typing.Any, default: typing.Any = None) -> typing.Any:
++         if key not in self:
++             self._mark_modified()
++         return super().setdefault(key, default)
++ 
++     def update(self, *args: typing.Any, **kwargs: typing.Any) -> None:
++         self._mark_modified()
++         super().update(*args, **kwargs)
++ 
++ 
++ class SessionMiddleware:
++     def __init__(
++         self,
++         app: ASGIApp,
++         secret_key: typing.Union[str, Secret],
++         session_cookie: str = "session",
++         max_age: typing.Optional[int] = 14 * 24 * 60 * 60,  # 14 days, in seconds
++         path: str = "/",
++         same_site: typing.Literal["lax", "strict", "none"] = "lax",
++         https_only: bool = False,
++         domain: typing.Optional[str] = None,
++     ) -> None:
++         self.app = app
++         self.signer = itsdangerous.TimestampSigner(str(secret_key))
++         self.session_cookie = session_cookie
++         self.max_age = max_age
++         self.path = path
++         self.security_flags = "httponly; samesite=" + same_site
++         if https_only:  # Secure flag can be used with HTTPS only
++             self.security_flags += "; secure"
++         if domain is not None:
++             self.security_flags += f"; domain={domain}"
++ 
++     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
++         if scope["type"] not in ("http", "websocket"):  # pragma: no cover
++             await self.app(scope, receive, send)
++             return
++ 
++         connection = HTTPConnection(scope)
++         initial_session_was_empty = True
++ 
++         if self.session_cookie in connection.cookies:
++             data = connection.cookies[self.session_cookie].encode("utf-8")
++             try:
++                 data = self.signer.unsign(data, max_age=self.max_age)
++                 scope["session"] = _SessionDict(json.loads(b64decode(data)))
++                 initial_session_was_empty = False
++             except BadSignature:
++                 scope["session"] = _SessionDict()
++         else:
++             scope["session"] = _SessionDict()
++ 
++         async def send_wrapper(message: Message) -> None:
++             if message["type"] == "http.response.start":
++                 session: _SessionDict = scope["session"]
++                 if session:
++                     # We have session data to persist — but only set the cookie
++                     # if the session was actually modified (or is a new session).
++                     if session.modified or initial_session_was_empty:
++                         data = b64encode(json.dumps(dict(session)).encode("utf-8"))
++                         data = self.signer.sign(data)
++                         headers = MutableHeaders(scope=message)
++                         header_value = "{session_cookie}={data}; path={path}; {max_age}{security_flags}".format(  # noqa: E501
++                             session_cookie=self.session_cookie,
++                             data=data.decode("utf-8"),
++                             path=self.path,
++                             max_age=f"Max-Age={self.max_age}; " if self.max_age else "",
++                             security_flags=self.security_flags,
++                         )
++                         headers.append("Set-Cookie", header_value)
++                 elif not initial_session_was_empty:
++                     # The session has been cleared.
++                     headers = MutableHeaders(scope=message)
++                     header_value = "{session_cookie}={data}; path={path}; {expires}{security_flags}".format(  # noqa: E501
++                         session_cookie=self.session_cookie,
++                         data="null",
++                         path=self.path,
++                         expires="expires=Thu, 01 Jan 1970 00:00:00 GMT; ",
++                         security_flags=self.security_flags,
++                     )
++                     headers.append("Set-Cookie", header_value)
++             await send(message)
++ 
++         await self.app(scope, receive, send_wrapper)
+*** Update File: tests/middleware/test_session.py
+@@
+-import pytest
+-
+-from starlette.applications import Starlette
+-from starlette.middleware import Middleware
+-from starlette.middleware.sessions import SessionMiddleware
+-from starlette.requests import Request
+-from starlette.responses import JSONResponse
+-from starlette.routing import Route
+-from starlette.testclient import TestClient
++import asyncio
++import pytest
++
++from starlette.applications import Starlette
++from starlette.middleware import Middleware
++from starlette.middleware.sessions import SessionMiddleware, _SessionDict
++from starlette.requests import Request
++from starlette.responses import JSONResponse
++from starlette.routing import Route
++from starlette.testclient import TestClient
+@@
+ def test_session(test_client_factory: typing.Callable[..., TestClient]) -> None:
+@@
++def test_session_no_set_cookie_on_read_only(
++    test_client_factory: typing.Callable[..., TestClient],
++) -> None:
++    """Reading an existing session without modifying it should not send Set-Cookie."""
++
++    def view_session(request: Request) -> JSONResponse:
++        # Only read, never write
++        return JSONResponse({"session": request.session.get("user", None)})
++
++    def update_session(request: Request) -> JSONResponse:
++        request.session["user"] = "alice"
++        return JSONResponse({"session": request.session["user"]})
++
++    app = Starlette(
++        routes=[
++            Route("/view", endpoint=view_session),
++            Route("/update", endpoint=update_session),
++        ],
++        middleware=[Middleware(SessionMiddleware, secret_key="example")],
++    )
++    client = test_client_factory(app)
++
++    # First, set a session value
++    response = client.get("/update")
++    assert response.status_code == 200
++    assert "set-cookie" in response.headers
++
++    # Now read the session without modifying it — should NOT send Set-Cookie
++    response = client.get("/view")
++    assert response.status_code == 200
++    assert response.json() == {"session": "alice"}
++    assert "set-cookie" not in response.headers
++
++
++def test_session_set_cookie_on_mutation(
++    test_client_factory: typing.Callable[..., TestClient],
++) -> None:
++    """Mutating an existing session should send Set-Cookie."""
++
++    def mutate_session(request: Request) -> JSONResponse:
++        request.session["counter"] = request.session.get("counter", 0) + 1
++        return JSONResponse({"counter": request.session["counter"]})
++
++    app = Starlette(
++        routes=[Route("/mutate", endpoint=mutate_session)],
++        middleware=[Middleware(SessionMiddleware, secret_key="example")],
++    )
++    client = test_client_factory(app)
++
++    response = client.get("/mutate")
++    assert response.status_code == 200
++    assert "set-cookie" in response.headers
++    assert response.json() == {"counter": 1}
++
++    response = client.get("/mutate")
++    assert response.status_code == 200
++    assert "set-cookie" in response.headers
++    assert response.json() == {"counter": 2}
++
++
++def test_session_clear_sends_cookie(
++    test_client_factory: typing.Callable[..., TestClient],
++) -> None:
++    """Clearing a non-empty session should still send a clearing Set-Cookie."""
++
++    def set_session(request: Request) -> JSONResponse:
++        request.session["user"] = "bob"
++        return JSONResponse({"ok": True})
++
++    def clear_session(request: Request) -> JSONResponse:
++        request.session.clear()
++        return JSONResponse({"ok": True})
++
++    app = Starlette(
++        routes=[
++            Route("/set", endpoint=set_session),
++            Route("/clear", endpoint=clear_session),
++        ],
++        middleware=[Middleware(SessionMiddleware, secret_key="example")],
++    )
++    client = test_client_factory(app)
++
++    # Set the session
++    response = client.get("/set")
++    assert "set-cookie" in response.headers
++
++    # Clear the session — should send an expiring Set-Cookie
++    response = client.get("/clear")
++    assert response.status_code == 200
++    assert "set-cookie" in response.headers
++    cookie_header = response.headers["set-cookie"]
++    assert "expires=Thu, 01 Jan 1970 00:00:00 GMT" in cookie_header
++
++
++def test_session_dict_tracks_modifications() -> None:
++    """Unit test for _SessionDict mutation tracking."""
++    s = _SessionDict({"a": 1})
++    assert not s.modified
++
++    # __setitem__
++    s["b"] = 2
++    assert s.modified
++
++    s2 = _SessionDict({"x": 10})
++    assert not s2.modified
++    del s2["x"]
++    assert s2.modified
++
++    s3 = _SessionDict({"x": 10, "y": 20})
++    assert not s3.modified
++    s3.pop("x")
++    assert s3.modified
++
++    s4 = _SessionDict({"x": 10})
++    assert not s4.modified
++    s4.clear()
++    assert s4.modified
++
++    s5 = _SessionDict({"x": 10, "y": 20})
++    assert not s5.modified
++    s5.popitem()
++    assert s5.modified
++
++    s6 = _SessionDict({"x": 10})
++    assert not s6.modified
++    s6.setdefault("x", 99)  # key exists, no modification
++    assert not s6.modified
++    s6.setdefault("z", 99)  # new key, modification
++    assert s6.modified
++
++    s7 = _SessionDict()
++    assert not s7.modified
++    s7.update({"a": 1})
++    assert s7.modified
++
++
++def test_session_concurrent_read_only(
++    test_client_factory: typing.Callable[..., TestClient],
++) -> None:
++    """Concurrent read-only requests should not send Set-Cookie headers."""
++    import threading
++
++    results: typing.List[bool] = []
++    lock = threading.Lock()
++
++    def read_session(request: Request) -> JSONResponse:
++        # Read-only access
++        value = request.session.get("data", "none")
++        return JSONResponse({"value": value})
++
++    def write_session(request: Request) -> JSONResponse:
++        request.session["data"] = "hello"
++        return JSONResponse({"ok": True})
++
++    app = Starlette(
++        routes=[
++            Route("/read", endpoint=read_session),
++            Route("/write", endpoint=write_session),
++        ],
++        middleware=[Middleware(SessionMiddleware, secret_key="example")],
++    )
++    client = test_client_factory(app)
++
++    # Establish session
++    client.get("/write")
++
++    # Concurrent read-only requests
++    def do_read() -> None:
++        response = client.get("/read")
++        with lock:
++            results.append("set-cookie" not in response.headers)
++
++    threads = [threading.Thread(target=do_read) for _ in range(5)]
++    for t in threads:
++        t.start()
++    for t in threads:
++        t.join()
++
++    assert all(results), "Read-only requests should not set cookies"
++    assert len(results) == 5
++
++
+*** End Patch

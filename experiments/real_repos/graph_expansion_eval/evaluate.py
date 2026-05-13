@@ -14,13 +14,13 @@ from __future__ import annotations
 
 import argparse
 import csv
-from contextlib import contextmanager, nullcontext
 import json
 import math
 import os
 import re
-import subprocess
 import statistics
+import subprocess
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any

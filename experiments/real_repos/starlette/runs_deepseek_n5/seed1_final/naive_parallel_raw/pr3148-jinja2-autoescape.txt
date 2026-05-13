@@ -1,0 +1,50 @@
+*** Begin Patch
+*** Update File: starlette/templating.py
+@@
+-from jinja2 import Environment, FileSystemLoader
++from jinja2 import Environment, FileSystemLoader, select_autoescape
+@@
+ class Jinja2Templates:
+     def __init__(self, directory, *, env=None, **env_options):
+         if env is None:
+-            env = Environment(loader=FileSystemLoader(directory), **env_options)
++            env = Environment(
++                loader=FileSystemLoader(directory),
++                autoescape=select_autoescape(),
++                **env_options,
++            )
+         self.env = env
+*** Update File: tests/test_templates.py
+@@
++import tempfile
++from pathlib import Path
++from jinja2 import Environment, FileSystemLoader
++from starlette.templating import Jinja2Templates
++
++
++def test_jinja2_autoescape_default(tmp_path: Path) -> None:
++    """Verify that Jinja2Templates escapes HTML by default."""
++    template_dir = tmp_path / "templates"
++    template_dir.mkdir()
++    template_file = template_dir / "hello.html"
++    template_file.write_text("<html><body>{{ name }}</body></html>")
++
++    templates = Jinja2Templates(directory=str(template_dir))
++    rendered = templates.TemplateResponse("hello.html", {"request": {}, "name": "<script>alert('xss')</script>"})
++    body = rendered.body.decode()
++    assert "&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;" in body
++
++
++def test_jinja2_autoescape_disabled(tmp_path: Path) -> None:
++    """Verify that a caller-supplied environment with autoescape=False does not escape."""
++    template_dir = tmp_path / "templates"
++    template_dir.mkdir()
++    template_file = template_dir / "hello.html"
++    template_file.write_text("<html><body>{{ name }}</body></html>")
++
++    env = Environment(loader=FileSystemLoader(str(template_dir)), autoescape=False)
++    templates = Jinja2Templates(directory=str(template_dir), env=env)
++    rendered = templates.TemplateResponse("hello.html", {"request": {}, "name": "<script>alert('xss')</script>"})
++    body = rendered.body.decode()
++    assert "<script>alert('xss')</script>" in body
+*** End Patch

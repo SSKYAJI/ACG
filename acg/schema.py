@@ -129,13 +129,31 @@ class Repo(_StrictModel):
 
 
 class Generator(_StrictModel):
-    """Generator metadata for provenance."""
+    """Generator metadata for provenance.
+
+    ``tokens_planner_total`` is the headline planner-prompt token count
+    consumed during compile. When the LLM provider returns a ``usage`` block
+    (OpenAI / OpenRouter), this value is the sum of
+    ``usage.prompt_tokens`` across every planner call and
+    ``tokens_planner_method`` is ``"provider_usage"``. When the provider
+    omits usage (self-hosted vLLM), the compiler falls back to a
+    ``chars // 4`` estimate and ``tokens_planner_method = "estimate_chars_div_4"``.
+
+    ``compile_wall_seconds`` is wall-clock time spent inside
+    :func:`acg.compiler.compile_lockfile`. ``compile_cost_usd`` is the
+    sum of provider-reported per-call costs across the same span (``None``
+    when no provider returned a cost).
+    """
 
     tool: str
     version: str
     model: str | None = None
     tokens_planner_total: int | None = None
     tokens_scope_review_total: int | None = None
+    tokens_planner_completion_total: int | None = None
+    tokens_planner_method: str | None = None
+    compile_wall_seconds: float | None = None
+    compile_cost_usd: float | None = None
 
 
 class AgentLock(_StrictModel):

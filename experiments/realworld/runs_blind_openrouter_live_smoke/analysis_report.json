@@ -1,0 +1,214 @@
+{
+  "overall": {
+    "f1": 0.4364,
+    "precision": 0.2791,
+    "recall": 1.0,
+    "total_blocks": 6,
+    "total_oob": 0,
+    "total_posthoc_oob": 0,
+    "total_proposal_oob": 0
+  },
+  "runs": [
+    {
+      "backend": "local",
+      "blocked_invalid_write_count": 6,
+      "cost_method": "sum_provider_reported_task_costs",
+      "cost_source": "body.usage.cost",
+      "cost_usd_total": 0.00030475,
+      "evidence_kind": "proposed_write_set",
+      "execution_mode": "propose_validate",
+      "out_of_bounds_write_count": 0,
+      "overlapping_write_pairs": 2,
+      "source_path": "experiments/realworld/runs_blind_openrouter_live_smoke/eval_run_acg_planned_replan.json",
+      "strategy": "acg_planned_replan",
+      "suite_name": "realworld-nestjs-blind-live-smoke",
+      "tasks_completed": 6,
+      "tasks_total": 6,
+      "tested_tasks_completed": 0,
+      "tests_ran_count": 0,
+      "tokens_all_in": 20305,
+      "tokens_orchestrator_overhead": null,
+      "tokens_prompt_method": "provider_usage_prompt_tokens",
+      "tokens_prompt_total": 1839
+    }
+  ],
+  "tasks": {
+    "add-article-bookmarks": {
+      "actual_files_seen": [
+        "src/article/article.service.ts",
+        "src/user/user.entity.ts"
+      ],
+      "allowed_glob_count": 5,
+      "blocked_events_total": 2,
+      "f1": 0.5714,
+      "false_negatives": 0,
+      "false_positives": 3,
+      "out_of_bounds_files": [],
+      "precision": 0.4,
+      "predicted_files": [
+        "src/article/article.service.ts",
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/user/user.entity.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 1,
+      "suggestions": [
+        "predictor over-predicts (precision=0.40); consider removing ['src/profile/profile.controller.ts', 'src/profile/profile.interface.ts', 'src/profile/profile.module.ts'] from predicted_writes seeds"
+      ],
+      "task_id": "add-article-bookmarks",
+      "true_positives": 2
+    },
+    "add-article-search": {
+      "actual_files_seen": [],
+      "allowed_glob_count": 4,
+      "blocked_events_total": 4,
+      "f1": 0.0,
+      "false_negatives": 0,
+      "false_positives": 4,
+      "out_of_bounds_files": [],
+      "precision": 0.0,
+      "predicted_files": [
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/user/user.module.ts"
+      ],
+      "recall": 0.0,
+      "runs_seen": 1,
+      "suggestions": [
+        "predictor over-predicts (precision=0.00); consider removing ['src/profile/profile.controller.ts', 'src/profile/profile.interface.ts', 'src/profile/profile.module.ts'] from predicted_writes seeds"
+      ],
+      "task_id": "add-article-search",
+      "true_positives": 0
+    },
+    "add-health-check": {
+      "actual_files_seen": [
+        "src/app.controller.ts"
+      ],
+      "allowed_glob_count": 7,
+      "blocked_events_total": 0,
+      "f1": 0.25,
+      "false_negatives": 0,
+      "false_positives": 6,
+      "out_of_bounds_files": [],
+      "precision": 0.1429,
+      "predicted_files": [
+        "src/app.controller.ts",
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/user/user.controller.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.service.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 1,
+      "suggestions": [
+        "predictor over-predicts (precision=0.14); consider removing ['src/article/article.controller.ts', 'src/article/article.entity.ts', 'src/article/article.interface.ts'] from predicted_writes seeds",
+        "allowed_paths declares 7 globs but agent touched only 1 files; consider tightening scope"
+      ],
+      "task_id": "add-health-check",
+      "true_positives": 1
+    },
+    "add-rate-limiting": {
+      "actual_files_seen": [
+        "package.json",
+        "src/main.ts"
+      ],
+      "allowed_glob_count": 9,
+      "blocked_events_total": 0,
+      "f1": 0.3636,
+      "false_negatives": 0,
+      "false_positives": 7,
+      "out_of_bounds_files": [],
+      "precision": 0.2222,
+      "predicted_files": [
+        "package.json",
+        "src/app.controller.ts",
+        "src/article/article.module.ts",
+        "src/main.ts",
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.module.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 1,
+      "suggestions": [
+        "predictor over-predicts (precision=0.22); consider removing ['src/app.controller.ts', 'src/article/article.module.ts', 'src/profile/profile.controller.ts'] from predicted_writes seeds",
+        "allowed_paths declares 9 globs but agent touched only 2 files; consider tightening scope"
+      ],
+      "task_id": "add-rate-limiting",
+      "true_positives": 2
+    },
+    "add-user-roles": {
+      "actual_files_seen": [
+        "src/app.controller.ts",
+        "src/user/auth.middleware.ts",
+        "src/user/dto/index.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts"
+      ],
+      "allowed_glob_count": 9,
+      "blocked_events_total": 0,
+      "f1": 0.7143,
+      "false_negatives": 0,
+      "false_positives": 4,
+      "out_of_bounds_files": [],
+      "precision": 0.5556,
+      "predicted_files": [
+        "src/app.controller.ts",
+        "src/article/article.module.ts",
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/user/auth.middleware.ts",
+        "src/user/dto/index.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 1,
+      "suggestions": [
+        "predictor over-predicts (precision=0.56); consider removing ['src/article/article.module.ts', 'src/profile/profile.controller.ts', 'src/profile/profile.interface.ts'] from predicted_writes seeds"
+      ],
+      "task_id": "add-user-roles",
+      "true_positives": 5
+    },
+    "extend-tag-crud": {
+      "actual_files_seen": [
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "allowed_glob_count": 9,
+      "blocked_events_total": 0,
+      "f1": 0.3636,
+      "false_negatives": 0,
+      "false_positives": 7,
+      "out_of_bounds_files": [],
+      "precision": 0.2222,
+      "predicted_files": [
+        "src/app.controller.ts",
+        "src/article/article.module.ts",
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.service.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.module.ts"
+      ],
+      "recall": 1.0,
+      "runs_seen": 1,
+      "suggestions": [
+        "predictor over-predicts (precision=0.22); consider removing ['src/app.controller.ts', 'src/article/article.module.ts', 'src/profile/profile.controller.ts'] from predicted_writes seeds",
+        "allowed_paths declares 9 globs but agent touched only 2 files; consider tightening scope"
+      ],
+      "task_id": "extend-tag-crud",
+      "true_positives": 2
+    }
+  }
+}

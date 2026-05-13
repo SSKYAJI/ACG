@@ -1,0 +1,122 @@
+*** Begin Patch
+*** Add File: tests/test_templating.py
+import os
+import sys
+
+import pytest
+
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.routing import Route
+from starlette.templating import Jinja2Templates
+from starlette.testclient import TestClient
+
+try:
+    import jinja2
+except ImportError:
+    jinja2 = None
+
+
+@pytest.fixture
+def template_dir(tmp_path):
+    return tmp_path
+
+
+@pytest.mark.skipif(jinja2 is None, reason="jinja2 not installed")
+def test_templates_require_directory_or_env():
+    with pytest.raises(AssertionError):
+        Jinja2Templates()
+
+
+@pytest.mark.skipif(jinja2 is None, reason="jinja2 not installed")
+def test_templates_with_directory(template_dir):
+    (template_dir / "index.html").write_text("<html>Hello {{ name }}</html>")
+
+    templates = Jinja2Templates(directory=str(template_dir))
+
+    def homepage(request):
+        return templates.TemplateResponse("index.html", {"request": request, "name": "World"})
+
+    app = Starlette(routes=[Route("/", homepage)])
+    client = TestClient(app)
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "Hello World" in response.text
+
+
+@pytest.mark.skipif(jinja2 is None, reason="jinja2 not installed")
+def test_templates_autoescape_enabled(template_dir):
+    """Test that HTML templates have autoescape enabled by default."""
+    (template_dir / "index.html").write_text("<html>{{ name }}</html>")
+
+    templates = Jinja2Templates(directory=str(template_dir))
+
+    def homepage(request):
+        return templates.TemplateResponse(
+            "index.html", {"request": request, "name": "<script>alert('xss')</script>"}
+        )
+
+    app = Starlette(routes=[Route("/", homepage)])
+    client = TestClient(app)
+    response = client.get("/")
+    assert response.status_code == 200
+    # The script tag should be escaped
+    assert "<script>" not in response.text
+    assert "&lt;script&gt;" in response.text
+
+
+@pytest.mark.skipif(jinja2 is None, reason="jinja2 not installed")
+def test_templates_autoescape_not_enabled_for_txt(template_dir):
+    """Test that non-HTML templates do not have autoescape enabled."""
+    (template_dir / "index.txt").write_text("Hello {{ name }}")
+
+    templates = Jinja2Templates(directory=str(template_dir))
+
+    def homepage(request):
+        return templates.TemplateResponse(
+            "index.txt", {"request": request, "name": "<b>World</b>"}
+        )
+
+    app = Starlette(routes=[Route("/", homepage)])
+    client = TestClient(app)
+    response = client.get("/")
+    assert response.status_code == 200
+    # Plain text templates should NOT escape
+    assert "<b>World</b>" in response.text
+
+
+@pytest.mark.skipif(jinja2 is None, reason="jinja2 not installed")
+def test_templates_with_custom_env(template_dir):
+    """Test that a caller-supplied environment is preserved as-is."""
+    (template_dir / "index.html").write_text("<html>{{ name }}</html>")
+
+    # Create env WITHOUT autoescape
+    loader = jinja2.FileSystemLoader(str(template_dir))
+    env = jinja2.Environment(loader=loader, autoescape=False)
+
+    templates = Jinja2Templates(env=env)
+
+    def homepage(request):
+        return templates.TemplateResponse(
+            "index.html",
+            {"request": request, "name": "<b>raw</b>"},
+        )
+
+    app = Starlette(routes=[Route("/", homepage)])
+    client = TestClient(app)
+    response = client.get("/")
+    assert response.status_code == 200
+    # Custom env has autoescape=False, so raw HTML should pass through
+    assert "<b>raw</b>" in response.text
+
+
+@pytest.mark.skipif(jinja2 is None, reason="jinja2 not installed")
+def test_templates_context_missing_request(template_dir):
+    (template_dir / "index.html").write_text("<html>Hello</html>")
+    templates = Jinja2Templates(directory=str(template_dir))
+
+    scope = {"type": "http", "method": "GET", "path": "/"}
+
+    with pytest.raises(ValueError, match='context must include a "request" key'):
+        templates.TemplateResponse("index.html", {})
+*** End Patch

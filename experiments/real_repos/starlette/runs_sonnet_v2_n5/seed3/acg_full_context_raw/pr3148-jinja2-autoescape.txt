@@ -1,0 +1,244 @@
+Looking at the task, I need to:
+
+1. Modify `starlette/templating.py` to use Jinja2's `select_autoescape` when creating an environment from a template directory
+2. Add tests for escaping behavior in `tests/test_templates.py`
+
+Let me analyze what changes are needed:
+
+- When `Jinja2Templates` creates its own environment (from a directory), it should use `select_autoescape()` to enable autoescaping for HTML/XML files
+- When a caller supplies an existing environment, it should be preserved as-is
+- Add tests to verify the escaping behavior
+
+*** Begin Patch
+*** Update File: starlette/templating.py
+@@
+ import typing
+ 
+ from starlette.background import BackgroundTask
+ from starlette.requests import Request
+ from starlette.responses import HTMLResponse
+ from starlette.types import Receive, Scope, Send
+ 
+ try:
+     import jinja2
++    from jinja2 import select_autoescape
+ 
+     if typing.TYPE_CHECKING:  # pragma: nocover
+         from jinja2 import Environment
+@@
+     def _create_env(
+         self, directory: str, **env_options: typing.Any
+     ) -> "Environment":
+-        loader = jinja2.FileSystemLoader(directory)
+-        env_options.setdefault("loader", loader)
+-        env_options.setdefault("autoescape", True)
+-        return jinja2.Environment(**env_options)
++        @jinja2.pass_context
++        def url_for(context: dict, name: str, **path_params: typing.Any) -> str:
++            request = context["request"]
++            return request.url_for(name, **path_params)
++
++        loader = jinja2.FileSystemLoader(directory)
++        env_options.setdefault("loader", loader)
++        env_options.setdefault("autoescape", select_autoescape())
++        env = jinja2.Environment(**env_options)
++        env.globals["url_for"] = url_for
++        return env
+@@
+     def __init__(
+         self,
+         directory: str = None,
+         packages: typing.List[typing.Union[str, typing.Tuple[str, str]]] = None,
+         env: "Environment" = None,
+         **env_options: typing.Any,
+     ) -> None:
+         assert jinja2 is not None, "jinja2 must be installed to use Jinja2Templates"
+         assert (
+             directory or packages or env
+         ), "either 'directory', 'packages' or 'env' argument must be passed"
+         if env is not None:
+             self.env = env
+         else:
+             self.env = self._create_env(directory, packages=packages, **env_options)
+@@
+-    def _create_env(
+-        self, directory: str, **env_options: typing.Any
+-    ) -> "Environment":
+-        loader = jinja2.FileSystemLoader(directory)
+-        env_options.setdefault("loader", loader)
+-        env_options.setdefault("autoescape", True)
+-        return jinja2.Environment(**env_options)
+*** Update File: tests/test_templates.py
+@@
+ import os
+ 
+ import pytest
+ 
+ from starlette.applications import Starlette
+ from starlette.requests import Request
+ from starlette.responses import HTMLResponse
+ from starlette.routing import Route
+ from starlette.templating import Jinja2Templates
+ from starlette.testclient import TestClient
+@@
++def test_templates_autoescape_enabled(tmpdir, test_client_factory):
++    path = os.path.join(tmpdir, "template.html")
++    with open(path, "w") as file:
++        file.write("<html>{{ dangerous }}</html>")
++
++    async def homepage(request):
++        return templates.TemplateResponse(
++            "template.html",
++            {"request": request, "dangerous": "<script>alert('xss')</script>"},
++        )
++
++    templates = Jinja2Templates(directory=str(tmpdir))
++    app = Starlette(routes=[Route("/", endpoint=homepage)])
++    client = test_client_factory(app)
++    response = client.get("/")
++    assert response.text == "<html>&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;</html>"
++
++
++def test_templates_autoescape_disabled_for_txt(tmpdir, test_client_factory):
++    path = os.path.join(tmpdir, "template.txt")
++    with open(path, "w") as file:
++        file.write("{{ dangerous }}")
++
++    async def homepage(request):
++        return templates.TemplateResponse(
++            "template.txt",
++            {"request": request, "dangerous": "<script>alert('xss')</script>"},
++        )
++
++    templates = Jinja2Templates(directory=str(tmpdir))
++    app = Starlette(routes=[Route("/", endpoint=homepage)])
++    client = test_client_factory(app)
++    response = client.get("/")
++    assert response.text == "<script>alert('xss')</script>"
++
++
++def test_templates_with_custom_env_preserves_autoescape(tmpdir, test_client_factory):
++    import jinja2
++
++    path = os.path.join(tmpdir, "template.html")
++    with open(path, "w") as file:
++        file.write("<html>{{ dangerous }}</html>")
++
++    async def homepage(request):
++        return templates.TemplateResponse(
++            "template.html",
++            {"request": request, "dangerous": "<script>alert('xss')</script>"},
++        )
++
++    # Custom env with autoescape disabled
++    loader = jinja2.FileSystemLoader(str(tmpdir))
++    env = jinja2.Environment(loader=loader, autoescape=False)
++    templates = Jinja2Templates(env=env)
++    app = Starlette(routes=[Route("/", endpoint=homepage)])
++    client = test_client_factory(app)
++    response = client.get("/")
++    # Custom env is preserved, so no escaping
++    assert response.text == "<html><script>alert('xss')</script></html>"
++
+*** End Patch
+
+Wait, I need to look more carefully at the existing `_create_env` method to understand the full structure. Let me reconsider the patch since I may be duplicating or incorrectly modifying the method.
+
+*** Begin Patch
+*** Update File: starlette/templating.py
+@@
+ try:
+     import jinja2
+ 
+     if typing.TYPE_CHECKING:  # pragma: nocover
+         from jinja2 import Environment
+@@
+ try:
+     import jinja2
++    from jinja2 import select_autoescape
+ 
+     if typing.TYPE_CHECKING:  # pragma: nocover
+         from jinja2 import Environment
+@@
+     def _create_env(
+         self, directory: str, **env_options: typing.Any
+     ) -> "Environment":
+         loader = jinja2.FileSystemLoader(directory)
+         env_options.setdefault("loader", loader)
+-        env_options.setdefault("autoescape", True)
++        env_options.setdefault("autoescape", select_autoescape())
+         return jinja2.Environment(**env_options)
+*** Update File: tests/test_templates.py
+@@
+ import os
+ 
+ import pytest
+ 
+ from starlette.applications import Starlette
+ from starlette.requests import Request
+ from starlette.responses import HTMLResponse
+ from starlette.routing import Route
+ from starlette.templating import Jinja2Templates
+ from starlette.testclient import TestClient
+@@
++def test_templates_autoescape_enabled(tmpdir, test_client_factory):
++    path = os.path.join(tmpdir, "template.html")
++    with open(path, "w") as file:
++        file.write("<html>{{ dangerous }}</html>")
++
++    async def homepage(request):
++        return templates.TemplateResponse(
++            "template.html",
++            {"request": request, "dangerous": "<script>alert('xss')</script>"},
++        )
++
++    templates = Jinja2Templates(directory=str(tmpdir))
++    app = Starlette(routes=[Route("/", endpoint=homepage)])
++    client = test_client_factory(app)
++    response = client.get("/")
++    assert response.text == "<html>&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;</html>"
++
++
++def test_templates_autoescape_disabled_for_txt(tmpdir, test_client_factory):
++    path = os.path.join(tmpdir, "template.txt")
++    with open(path, "w") as file:
++        file.write("{{ dangerous }}")
++
++    async def homepage(request):
++        return templates.TemplateResponse(
++            "template.txt",
++            {"request": request, "dangerous": "<script>alert('xss')</script>"},
++        )
++
++    templates = Jinja2Templates(directory=str(tmpdir))
++    app = Starlette(routes=[Route("/", endpoint=homepage)])
++    client = test_client_factory(app)
++    response = client.get("/")
++    assert response.text == "<script>alert('xss')</script>"
++
++
++def test_templates_with_custom_env_preserves_autoescape(tmpdir, test_client_factory):
++    import jinja2
++
++    path = os.path.join(tmpdir, "template.html")
++    with open(path, "w") as file:
++        file.write("<html>{{ dangerous }}</html>")
++
++    async def homepage(request):
++        return templates.TemplateResponse(
++            "template.html",
++            {"request": request, "dangerous": "<script>alert('xss')</script>"},
++        )
++
++    # Custom env with autoescape disabled
++    loader = jinja2.FileSystemLoader(str(tmpdir))
++    env = jinja2.Environment(loader=loader, autoescape=False)
++    templates = Jinja2Templates(env=env)
++    app = Starlette(routes=[Route("/", endpoint=homepage)])
++    client = test_client_factory(app)
++    response = client.get("/")
++    # Custom env is preserved, so no escaping
++    assert response.text == "<html><script>alert('xss')</script></html>"
++
+
+*** End Patch

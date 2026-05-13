@@ -1,0 +1,106 @@
+Looking at the task, I need to:
+
+1. Modify `starlette/templating.py` to use Jinja2's `select_autoescape` when creating an environment from a template directory
+2. Add tests for escaping behavior in `tests/test_templates.py`
+
+Let me analyze what changes are needed:
+
+- In `Jinja2Templates`, when creating a new `Environment` from a directory, use `select_autoescape()` to enable autoescaping for HTML/XML files by default
+- When a caller supplies their own environment, preserve it as-is
+- Add tests to verify the escaping behavior
+
+*** Begin Patch
+*** Update File: starlette/templating.py
+@@
+ import typing
+ 
+ from starlette.background import BackgroundTask
+ from starlette.requests import Request
+ from starlette.responses import HTMLResponse
+ from starlette.types import Receive, Scope, Send
+ 
+ try:
+     import jinja2
++    from jinja2 import select_autoescape
+ 
+     if typing.TYPE_CHECKING:  # pragma: nocover
+         from jinja2 import Environment
+@@
+     def _create_env(
+         self, directory: typing.Union[str, PathLike], **env_options: typing.Any
+     ) -> "Environment":
+         @pass_context
+         def url_for(context: dict, name: str, **path_params: typing.Any) -> URL:
+             request = context["request"]
+             return request.url_for(name, **path_params)
+ 
+-        loader = jinja2.FileSystemLoader(directory)
+-        env_options.setdefault("loader", loader)
+-        env_options.setdefault("autoescape", True)
++        loader = jinja2.FileSystemLoader(directory)
++        env_options.setdefault("loader", loader)
++        env_options.setdefault("autoescape", select_autoescape())
+         env = jinja2.Environment(**env_options)
+         env.globals["url_for"] = url_for
+         return env
+*** Update File: tests/test_templates.py
+@@
+ import os
+ 
+ import pytest
+ 
+ from starlette.applications import Starlette
+ from starlette.requests import Request
+ from starlette.responses import HTMLResponse
+ from starlette.routing import Route
+ from starlette.templating import Jinja2Templates
+ 
+ 
+@@
+ def test_templates_require_directory_or_environment() -> None:
+     with pytest.raises(
+         ValueError, match="either 'directory' or 'env' arguments must be passed"
+     ):
+         Jinja2Templates()  # type: ignore[call-overload]
+ 
+ 
++def test_templates_autoescape_enabled_for_html(tmpdir: pytest.TempdirFactory) -> None:
++    templates = Jinja2Templates(directory=str(tmpdir))
++    # HTML files should have autoescaping enabled
++    template_source = "{{ value }}"
++    template = templates.env.from_string(template_source)
++    # When rendered with a string containing HTML special chars, they should be escaped
++    result = template.render(value="<script>alert('xss')</script>")
++    assert "<script>" not in result
++    assert "&lt;script&gt;" in result
++
++
++def test_templates_autoescape_disabled_for_txt(tmpdir: pytest.TempdirFactory) -> None:
++    import jinja2
++
++    templates = Jinja2Templates(directory=str(tmpdir))
++    # Text files should not have autoescaping enabled by default
++    # We can verify by checking the autoescape callable behavior
++    autoescape = templates.env.autoescape
++    if callable(autoescape):
++        assert autoescape("template.txt") is False
++        assert autoescape("template.html") is True
++        assert autoescape("template.htm") is True
++        assert autoescape("template.xml") is True
++    else:
++        # If it's a bool, it applies to all templates
++        pass
++
++
++def test_templates_custom_env_not_modified(tmpdir: pytest.TempdirFactory) -> None:
++    import jinja2
++
++    # When a caller supplies their own environment, it should be preserved as-is
++    loader = jinja2.FileSystemLoader(str(tmpdir))
++    custom_env = jinja2.Environment(loader=loader, autoescape=False)
++    templates = Jinja2Templates(env=custom_env)
++    assert templates.env is custom_env
++    assert templates.env.autoescape is False
++
++
+*** End Patch

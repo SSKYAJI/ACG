@@ -1,0 +1,285 @@
+{
+  "backend": "local",
+  "created_at": "2026-05-12T17:35:55Z",
+  "evidence_kind": "naive_parallel_blind_proposed_write_set",
+  "execution_mode": "propose_validate_blind",
+  "lockfile": "experiments/real_repos/starlette/agent_lock_combined.json",
+  "model": {
+    "model": "claude-sonnet-4-6",
+    "provider": "openai-compatible",
+    "url": "https://api.anthropic.com/v1"
+  },
+  "repo": {
+    "commit": "2b73aecd8377e0c189943a5f30d3dbab134f6104",
+    "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/starlette/checkout",
+    "url": "https://github.com/encode/starlette.git"
+  },
+  "run_id": "greenhouse-local-naive_parallel_blind-20260512-173555",
+  "strategy": "naive_parallel_blind",
+  "suite_name": "starlette-kimi-k26-applied-seed2",
+  "summary_metrics": {
+    "acus_consumed_total": null,
+    "applied_changed_files_total": 0,
+    "blocked_invalid_write_count": 0,
+    "compile_cost_usd": null,
+    "compile_wall_seconds": null,
+    "cost_method": null,
+    "cost_per_completed_task": null,
+    "cost_source": null,
+    "cost_usd_total": null,
+    "first_run_pass_rate": 0.0,
+    "human_interventions": 0,
+    "integration_burden": {
+      "blocked_events_total": 0,
+      "changed_file_mentions_total": 3,
+      "changed_lines_added": null,
+      "changed_lines_deleted": null,
+      "changed_lines_total": null,
+      "diff_stats_kind": null,
+      "duplicate_file_touches": 0,
+      "out_of_bounds_files_total": 1,
+      "overlapping_files": [],
+      "overlapping_task_pairs": 0,
+      "review_file_mentions_total": 3,
+      "review_unique_files_total": 3,
+      "unique_changed_files": 3
+    },
+    "merge_conflicts": 0,
+    "model_silence_count": 1,
+    "oob_files_per_task_mean": 0.3333,
+    "out_of_bounds_write_count": 1,
+    "overlapping_write_pairs": 0,
+    "patch_na_count": 0,
+    "proposal_completion_rate": 0.6667,
+    "proposal_status_counts": {
+      "declined": 0,
+      "ok": 2,
+      "transport_error": 0,
+      "truncated": 1,
+      "unparseable": 0
+    },
+    "replan_rescued_count": 0,
+    "successful_parallel_speedup": null,
+    "task_completion_rate": 0.3333,
+    "tasks_completed": 1,
+    "tasks_completed_per_hour": 37.4512,
+    "tasks_total": 3,
+    "tested_completion_rate": 0.0,
+    "tested_tasks_completed": 0,
+    "tests_ran_count": 0,
+    "tokens_all_in": 842,
+    "tokens_completion_method": "provider_usage_completion_tokens",
+    "tokens_completion_total": 12995,
+    "tokens_orchestrator_overhead": null,
+    "tokens_planner_completion_total": null,
+    "tokens_planner_method": null,
+    "tokens_planner_total": null,
+    "tokens_prompt_method": "provider_usage_prompt_tokens",
+    "tokens_prompt_total": 842,
+    "tokens_scope_review_total": null,
+    "tokens_total_per_task_mean": 4612.3333,
+    "tokens_worker_prompt_total": 842,
+    "total_cost_usd_with_compile": null,
+    "total_wall_seconds_with_compile": 96.1251,
+    "typecheck_fail_count": 0,
+    "typecheck_pass_count": 0,
+    "typecheck_skipped_count": 0,
+    "wall_time_seconds": 96.1251
+  },
+  "tasks": [
+    {
+      "actual_changed_files": [
+        "starlette/templating.py",
+        "tests/test_templating.py"
+      ],
+      "actual_changed_files_kind": "naive_parallel_blind_proposed_write_set",
+      "allowed_write_globs": [
+        "starlette/templating.py",
+        "tests/test_templates.py"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": null,
+        "cost_usd": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "patch_applies": null,
+        "tokens_completion": 2536,
+        "tokens_prompt": 283,
+        "typecheck_diagnostic_count": null,
+        "typecheck_exit_code": null,
+        "typecheck_ran": false,
+        "typecheck_wall_seconds": null,
+        "wall_time_seconds": 24.8599
+      },
+      "out_of_bounds_files": [
+        "tests/test_templating.py"
+      ],
+      "overlaps_with": [],
+      "patch_na_reason": null,
+      "predicted_write_files": [
+        "starlette/templating.py",
+        "tests/test_templates.py"
+      ],
+      "prompt": "Make Jinja2Templates use Jinja2's select_autoescape default when creating an environment from a template directory, while preserving caller-supplied environments and adding tests for escaping behavior.",
+      "proposal_status": "ok",
+      "proposal_write_count": 2,
+      "session_id": null,
+      "status": "completed_unsafe",
+      "task_id": "pr3148-jinja2-autoescape",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-12T17:35:55Z",
+        "started_at": "2026-05-12T17:34:19Z"
+      }
+    },
+    {
+      "actual_changed_files": [],
+      "actual_changed_files_kind": "naive_parallel_blind_proposed_write_set",
+      "allowed_write_globs": [
+        "starlette/middleware/sessions.py",
+        "tests/middleware/**"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": "TRUNCATED_BY_MAX_TOKENS",
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": null,
+        "cost_usd": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "patch_applies": null,
+        "tokens_completion": 8192,
+        "tokens_prompt": 277,
+        "typecheck_diagnostic_count": null,
+        "typecheck_exit_code": null,
+        "typecheck_ran": false,
+        "typecheck_wall_seconds": null,
+        "wall_time_seconds": 96.1177
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "patch_na_reason": "finish_reason=length; output truncated at max_tokens=8192",
+      "predicted_write_files": [
+        "starlette/middleware/sessions.py",
+        "tests/middleware/test_session.py"
+      ],
+      "prompt": "Change SessionMiddleware so it can distinguish session access from mutation, avoid sending Set-Cookie for unchanged sessions, preserve cookie clearing behavior, and add regression coverage for concurrent/read-only session flows.",
+      "proposal_status": "truncated",
+      "proposal_write_count": 0,
+      "session_id": null,
+      "status": "failed",
+      "task_id": "pr3166-session-middleware",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-12T17:35:55Z",
+        "started_at": "2026-05-12T17:34:19Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "starlette/middleware/cors.py"
+      ],
+      "actual_changed_files_kind": "naive_parallel_blind_proposed_write_set",
+      "allowed_write_globs": [
+        "starlette/middleware/cors.py",
+        "tests/middleware/**"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": null,
+        "cost_usd": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "patch_applies": null,
+        "tokens_completion": 2267,
+        "tokens_prompt": 282,
+        "typecheck_diagnostic_count": null,
+        "typecheck_exit_code": null,
+        "typecheck_ran": false,
+        "typecheck_wall_seconds": null,
+        "wall_time_seconds": 22.5613
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "patch_na_reason": null,
+      "predicted_write_files": [
+        "tests/middleware/test_cors.py",
+        "starlette/middleware/cors.py"
+      ],
+      "prompt": "Update CORSMiddleware so simple responses with allow_origins=['*'] and allow_credentials=True echo the explicit request Origin instead of '*', matching preflight behavior and credentialed CORS requirements.",
+      "proposal_status": "ok",
+      "proposal_write_count": 1,
+      "session_id": null,
+      "status": "completed",
+      "task_id": "pr3137-cors-credentials-origin",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-12T17:35:55Z",
+        "started_at": "2026-05-12T17:34:19Z"
+      }
+    }
+  ],
+  "version": "0.1"
+}

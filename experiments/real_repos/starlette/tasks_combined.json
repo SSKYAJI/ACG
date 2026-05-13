@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr3148-jinja2-autoescape",
+      "prompt": "Make Jinja2Templates use Jinja2's select_autoescape default when creating an environment from a template directory, while preserving caller-supplied environments and adding tests for escaping behavior.",
+      "hints": {
+        "touches": ["jinja2", "template", "autoescape", "tests"]
+      }
+    },
+    {
+      "id": "pr3166-session-middleware",
+      "prompt": "Change SessionMiddleware so it can distinguish session access from mutation, avoid sending Set-Cookie for unchanged sessions, preserve cookie clearing behavior, and add regression coverage for concurrent/read-only session flows.",
+      "hints": {
+        "touches": ["session", "middleware", "cookie", "request"]
+      }
+    },
+    {
+      "id": "pr3137-cors-credentials-origin",
+      "prompt": "Update CORSMiddleware so simple responses with allow_origins=['*'] and allow_credentials=True echo the explicit request Origin instead of '*', matching preflight behavior and credentialed CORS requirements.",
+      "hints": {
+        "touches": ["cors", "middleware", "origin", "credentials"]
+      }
+    }
+  ]
+}

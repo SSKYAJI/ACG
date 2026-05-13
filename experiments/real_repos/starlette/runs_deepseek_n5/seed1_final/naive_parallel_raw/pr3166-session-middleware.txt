@@ -1,0 +1,97 @@
+*** Begin Patch
+*** Update File: starlette/middleware/sessions.py
+@@
+     async def __call__(self, scope, receive, send):
+         if scope["type"] != "http":
+             await self.app(scope, receive, send)
+             return
+ 
+-        session = scope.get("session", {})
+-        if session:
+-            # parse cookie
+-            ...
+-        else:
+-            session = {}
+-        scope["session"] = session
++        raw_session = scope.get("session", {})
++        if raw_session:
++            # parse cookie
++            ...
++        else:
++            raw_session = {}
++        original_session = dict(raw_session)
++        scope["session"] = raw_session
+         # ... then after response, set cookie if needed
++        # After response, compare session to original
++        current_session = scope.get("session", {})
++        if current_session != original_session:
++            # session was modified, set cookie as before
++            ...
++        else:
++            # session unchanged, do not set Set-Cookie
++            pass
+@@
+*** Update File: tests/middleware/test_session.py
+@@
++def test_session_read_only_does_not_set_cookie(test_client_factory):
++    app = Starlette()
++    app.add_middleware(SessionMiddleware, secret_key="test")
++
++    @app.route("/")
++    async def homepage(request):
++        # read session without modifying
++        session = request.session
++        return JSONResponse({"session": dict(session)})
++
++    client = test_client_factory(app)
++    response = client.get("/", cookies={"session": "..."})  # valid signed cookie
++    assert "set-cookie" not in response.headers
++
++def test_session_mutation_sets_cookie(test_client_factory):
++    app = Starlette()
++    app.add_middleware(SessionMiddleware, secret_key="test")
++
++    @app.route("/")
++    async def homepage(request):
++        request.session["key"] = "value"
++        return JSONResponse({"ok": True})
++
++    client = test_client_factory(app)
++    response = client.get("/")
++    assert "set-cookie" in response.headers
++
++def test_session_cleared_sets_delete_cookie(test_client_factory):
++    app = Starlette()
++    app.add_middleware(SessionMiddleware, secret_key="test")
++
++    @app.route("/")
++    async def homepage(request):
++        request.session.clear()
++        return JSONResponse({"ok": True})
++
++    client = test_client_factory(app)
++    # start with a valid session
++    response = client.get("/", cookies={"session": "..."})
++    assert "set-cookie" in response.headers
++    # cookie should have max-age=0 or expires in past
++    set_cookie = response.headers["set-cookie"]
++    assert "max-age=0" in set_cookie or "expires=Thu, 01 Jan 1970" in set_cookie
++
++def test_concurrent_read_only_requests_no_set_cookie(test_client_factory):
++    app = Starlette()
++    app.add_middleware(SessionMiddleware, secret_key="test")
++
++    @app.route("/")
++    async def homepage(request):
++        # read only
++        _ = request.session.get("nonexistent", None)
++        return JSONResponse({"ok": True})
++
++    client = test_client_factory(app)
++    # simulate two concurrent requests with same session cookie
++    cookie = {"session": "..."}  # valid signed cookie
++    response1 = client.get("/", cookies=cookie)
++    response2 = client.get("/", cookies=cookie)
++    assert "set-cookie" not in response1.headers
++    assert "set-cookie" not in response2.headers
+*** End Patch

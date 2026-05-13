@@ -1,0 +1,133 @@
+*** Begin Patch
+*** Update File: starlette/middleware/sessions.py
+@@
+ class SessionDict(dict):
++    def __init__(self, data: dict, secret: str):
++        super().__init__(data)
++        self._secret = secret
++        self._modified = False
++        self._accessed = False
++    def __getitem__(self, key):
++        self._accessed = True
++        return super().__getitem__(key)
++    def __setitem__(self, key, value):
++        self._modified = True
++        return super().__setitem__(key, value)
++    def __delitem__(self, key):
++        self._modified = True
++        return super().__delitem__(key)
++    def pop(self, key, *args):
++        self._modified = True
++        return super().pop(key, *args)
++    def update(self, *args, **kwargs):
++        self._modified = True
++        return super().update(*args, **kwargs)
++    def clear(self):
++        self._modified = True
++        super().clear()
+@@
+ from starlette.requests import HTTPConnection, Request
+ from starlette.types import ASGIApp, Receive, Scope, Send
+ from starlette.datastructures import MutableHeaders, URL, Secret
+@@
+ class SessionMiddleware:
+     def __init__(self, app: ASGIApp, secret_key: str | Secret, ...):
+         ...
+     async def __call__(self, scope, receive, send) -> None:
+         ...  # existing code
+     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+-        # existing code that loads and saves session...
++        # existing code to load session (if cookie present)
++        ...
++        response = await call_next(request)
++        if request.session is not MISSING:
++            session = request.session
++            if not session._modified:
++                return response
++            data = self.sign(session)
+            # rest unchanged: set cookie if data, else expire
++            ...
++        return response
+@@
+-    async def dispatch(self, request, call_next):
+-        # existing code
+-        ...
+-        response = await call_next(request)
+-        if request.session is not MISSING:
+-            session = request.session
+-            data = self.sign(session)
+-            ...
+-        return response
++    async def dispatch(self, request, call_next):
++        # existing code to load session from cookie
++        ...
++        response = await call_next(request)
++        if request.session is not MISSING:
++            session = request.session
++            if not session._modified:
++                return response
++            data = self.sign(session)
++            ...
++        return response
+*** Update File: tests/middleware/test_session.py
+@@
+ from starlette.applications import Starlette
+ from starlette.middleware import Middleware
+ from starlette.middleware.sessions import SessionMiddleware
+ from starlette.responses import Response
+ from starlette.testclient import TestClient
++def test_session_not_modified_does_not_set_cookie():
++    app = Starlette()
++    @app.route("/")
++    async def homepage(request):
++        # access session but do not modify
++        session = request.session
++        _ = session.get("key", None)  # read only
++        return Response("OK")
++    client = TestClient(app, cookies={"session": "..."})  # valid signed session
++    response = client.get("/")
++    assert "set-cookie" not in response.headers
++def test_session_modified_sets_cookie():
++    app = Starlette()
++    @app.route("/")
++    async def homepage(request):
++        request.session["key"] = "value"
++        return Response("OK")
++    client = TestClient(app)
++    response = client.get("/")
++    assert "set-cookie" in response.headers
++def test_session_cleared_sends_expire_cookie():
++    app = Starlette()
++    @app.route("/")
++    async def homepage(request):
++        request.session.clear()
++        return Response("OK")
++    client = TestClient(app, cookies={"session": "..."})  # existing non-empty session
++    response = client.get("/")
++    # expect Set-Cookie with empty value and max_age=0
++    set_cookie = response.headers.get("set-cookie", "")
++    assert "=;" in set_cookie or "=;" in set_cookie
++    assert "Max-Age=0" in set_cookie
++def test_concurrent_read_only_request_does_not_modify_session():
++    # Simulate two requests: first writes, second reads (uses same session cookie)
++    app = Starlette()
++    counter = 0
++    @app.route("/write")
++    async def write(request):
++        nonlocal counter
++        counter += 1
++        request.session["counter"] = counter
++        return Response("written")
++    @app.route("/read")
++    async def read(request):
++        _ = request.session.get("counter", None)  # read only
++        return Response("read")
++    client = TestClient(app)
++    # First request: write, get cookie
++    resp1 = client.get("/write")
++    assert "set-cookie" in resp1.headers
++    cookie = resp1.headers["set-cookie"]
++    # Second request: read, should not send Set-Cookie
++    resp2 = client.get("/read", cookies={"session": cookie.split(";")[0].split("=",1)[1]})
++    assert "set-cookie" not in resp2.headers, "Read-only request should not send Set-Cookie"
+*** End Patch

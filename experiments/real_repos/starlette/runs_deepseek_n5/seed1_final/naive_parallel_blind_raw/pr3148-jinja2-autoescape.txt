@@ -1,0 +1,46 @@
+*** Begin Patch
+*** Update File: starlette/templating.py
+@@
+-from jinja2 import Environment, FileSystemLoader
++from jinja2 import Environment, FileSystemLoader, select_autoescape
+@@
+     def __init__(self, directory, env=None):
+         if env is None:
+-            env = Environment(loader=FileSystemLoader(directory))
++            env = Environment(loader=FileSystemLoader(directory), autoescape=select_autoescape())
+         self.env = env
+*** Add File: tests/test_templating.py
++import pytest
++from starlette.templating import Jinja2Templates
++from jinja2 import Environment, FileSystemLoader
++
++
++def test_default_autoescape_html():
++    templates = Jinja2Templates(directory="tests/templates")
++    template = templates.get_template("test.html")
++    rendered = template.render(name="<b>bold</b>")
++    assert "&lt;b&gt;bold&lt;/b&gt;" in rendered
++
++
++def test_default_autoescape_txt():
++    templates = Jinja2Templates(directory="tests/templates")
++    template = templates.get_template("test.txt")
++    rendered = template.render(name="<b>bold</b>")
++    assert "<b>bold</b>" in rendered
++
++
++def test_custom_environment_preserved():
++    custom_env = Environment(loader=FileSystemLoader("tests/templates"), autoescape=False)
++    templates = Jinja2Templates(directory="tests/templates", env=custom_env)
++    template = templates.get_template("test.html")
++    rendered = template.render(name="<b>bold</b>")
++    assert "<b>bold</b>" in rendered
++
++
++def test_custom_environment_with_autoescape():
++    custom_env = Environment(loader=FileSystemLoader("tests/templates"), autoescape=True)
++    templates = Jinja2Templates(directory="tests/templates", env=custom_env)
++    template = templates.get_template("test.txt")
++    rendered = template.render(name="<b>bold</b>")
++    assert "&lt;b&gt;bold&lt;/b&gt;" in rendered
+*** End Patch

@@ -1,0 +1,55 @@
+[worker single_agent] still waiting at 
+30s...
+[worker single_agent] still waiting at 
+60s...
+[worker single_agent] still waiting at 
+90s...
+[single_agent/local] wrote experiments/real_repos/starlette/runs_kimi_n5_applied/seed1/eval_run_single_agent.json — completed=3/3, evidence=suite_proposed_write_set, overlaps=0, oob=0, blocked=0, wall=108.349s
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ proposed 1 writes (21.80s, 2237 tokens)
+   ALLOWED pr3137-cors-credentials-origin → 
+starlette/middleware/cors.py
+[worker pr3148-jinja2-autoescape] still 
+waiting at 30s...
+[worker pr3166-session-middleware] still 
+waiting at 30s...
+ proposed 3 writes (30.21s, 2758 tokens)
+   ALLOWED pr3148-jinja2-autoescape → 
+starlette/templating.py
+   BLOCKED pr3148-jinja2-autoescape → 
+tests/test_templating.py: path 
+'tests/test_templating.py' is outside task 
+'pr3148-jinja2-autoescape''s allowed_paths 
+(starlette/templating.py, 
+tests/test_templates.py)
+   BLOCKED pr3148-jinja2-autoescape → 
+starlette/background.py: path 
+'starlette/background.py' is outside task 
+'pr3148-jinja2-autoescape''s allowed_paths 
+(starlette/templating.py, 
+tests/test_templates.py)
+[worker pr3166-session-middleware] still 
+waiting at 60s...
+ proposed 3 writes (69.27s, 7763 tokens)
+   BLOCKED pr3166-session-middleware → 
+session/session.go: path 
+'session/session.go' is outside task 
+'pr3166-session-middleware''s allowed_paths 
+(starlette/middleware/sessions.py, 
+tests/middleware/**)
+   BLOCKED pr3166-session-middleware → 
+session/session_test.go: path 
+'session/session_test.go' is outside task 
+'pr3166-session-middleware''s allowed_paths 
+(starlette/middleware/sessions.py, 
+tests/middleware/**)
+   BLOCKED pr3166-session-middleware → 
+session/go.mod: path 'session/go.mod' is 
+outside task 'pr3166-session-middleware''s 
+allowed_paths 
+(starlette/middleware/sessions.py, 
+tests/middleware/**)
+[naive_parallel_blind/local] wrote experiments/real_repos/starlette/runs_kimi_n5_applied/seed1/eval_run_naive_parallel_blind.json — completed=1/3, evidence=naive_parallel_blind_proposed_write_set, overlaps=0, oob=5, blocked=0, wall=69.277s
+[combined] wrote experiments/real_repos/starlette/runs_kimi_n5_applied/seed1/eval_run_combined.json

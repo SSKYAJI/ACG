@@ -1,0 +1,420 @@
+{
+  "backend": "local",
+  "created_at": "2026-05-11T22:58:29Z",
+  "evidence_kind": "proposed_write_set",
+  "execution_mode": "propose_validate",
+  "lockfile": "experiments/realworld/runs_blind_openrouter_live_4way/agent_lock_blind_live.json",
+  "model": {
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "provider": "openai-compatible",
+    "url": "https://openrouter.ai/api/v1"
+  },
+  "repo": {
+    "commit": "c1c2cc4e448b279ff083272df1ac50d20c3304fa",
+    "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/realworld/checkout",
+    "url": "https://github.com/lujakob/nestjs-realworld-example-app.git"
+  },
+  "run_id": "greenhouse-local-acg_planned-20260511-225829",
+  "strategy": "acg_planned",
+  "suite_name": "realworld-nestjs-blind-live-4way",
+  "summary_metrics": {
+    "acus_consumed_total": null,
+    "blocked_invalid_write_count": 2,
+    "cost_method": "sum_provider_reported_task_costs",
+    "cost_source": "body.usage.cost",
+    "cost_usd_total": 0.00020392,
+    "first_run_pass_rate": 0.0,
+    "human_interventions": 0,
+    "integration_burden": {
+      "blocked_events_total": 2,
+      "changed_file_mentions_total": 9,
+      "changed_lines_added": null,
+      "changed_lines_deleted": null,
+      "changed_lines_total": null,
+      "diff_stats_kind": null,
+      "duplicate_file_touches": 1,
+      "out_of_bounds_files_total": 0,
+      "overlapping_files": [
+        "src/user/user.entity.ts"
+      ],
+      "overlapping_task_pairs": 1,
+      "review_file_mentions_total": 11,
+      "review_unique_files_total": 10,
+      "unique_changed_files": 8
+    },
+    "merge_conflicts": 0,
+    "out_of_bounds_write_count": 0,
+    "overlapping_write_pairs": 1,
+    "proposal_completion_rate": 0.8333,
+    "successful_parallel_speedup": null,
+    "task_completion_rate": 0.8333,
+    "tasks_completed": 5,
+    "tasks_completed_per_hour": 2285.3207,
+    "tasks_total": 6,
+    "tested_completion_rate": 0.0,
+    "tested_tasks_completed": 0,
+    "tests_ran_count": 0,
+    "tokens_all_in": 11485,
+    "tokens_completion_method": "provider_usage_completion_tokens",
+    "tokens_completion_total": 399,
+    "tokens_orchestrator_overhead": null,
+    "tokens_planner_total": null,
+    "tokens_prompt_method": "provider_usage_prompt_tokens",
+    "tokens_prompt_total": 1339,
+    "tokens_scope_review_total": 10146,
+    "tokens_worker_prompt_total": 1339,
+    "wall_time_seconds": 7.8764
+  },
+  "tasks": [
+    {
+      "actual_changed_files": [
+        "src/user/user.entity.ts"
+      ],
+      "actual_changed_files_kind": "proposed_write_set",
+      "allowed_write_globs": [
+        "src/user/user.entity.ts"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": "body.usage.cost",
+        "cost_usd": 2.667e-05,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 38,
+        "tokens_prompt": 229,
+        "wall_time_seconds": 2.8617
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [
+        "add-user-roles"
+      ],
+      "predicted_write_files": [
+        "src/user/user.entity.ts"
+      ],
+      "prompt": "Add a bookmarking feature so users can save articles for later, separate from the existing favorites system. Users should be able to bookmark and unbookmark articles via the API. Store the bookmark relationship in the database.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "add-article-bookmarks",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-11T22:58:29Z",
+        "started_at": "2026-05-11T22:58:21Z"
+      }
+    },
+    {
+      "actual_changed_files": [],
+      "actual_changed_files_kind": "proposed_write_set",
+      "allowed_write_globs": [
+        "src/user/user.module.ts"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [
+        {
+          "description": "Add search endpoint to article controller with query parameters for keywords and pagination",
+          "file": "src/article/article.controller.ts",
+          "reason": "path 'src/article/article.controller.ts' is candidate_context only for task 'add-article-search'; replan or approval is required before write"
+        },
+        {
+          "description": "Implement full-text search functionality in article service usingtypeorm",
+          "file": "src/article/article.service.ts",
+          "reason": "path 'src/article/article.service.ts' is candidate_context only for task 'add-article-search'; replan or approval is required before write"
+        }
+      ],
+      "failure_reason": "BLOCKED_BY_SCOPE",
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": "body.usage.cost",
+        "cost_usd": 3.51e-05,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 74,
+        "tokens_prompt": 216,
+        "wall_time_seconds": 1.5635
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "predicted_write_files": [
+        "src/user/user.module.ts"
+      ],
+      "prompt": "Add full-text search to the articles API. Users should be able to search articles by keywords matching against the title and body fields. Return paginated results.",
+      "session_id": null,
+      "status": "blocked",
+      "task_id": "add-article-search",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-11T22:58:29Z",
+        "started_at": "2026-05-11T22:58:21Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "src/app.controller.ts"
+      ],
+      "actual_changed_files_kind": "proposed_write_set",
+      "allowed_write_globs": [
+        "src/app.controller.ts"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": "body.usage.cost",
+        "cost_usd": 2.187e-05,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 32,
+        "tokens_prompt": 189,
+        "wall_time_seconds": 1.2721
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "predicted_write_files": [
+        "src/app.controller.ts"
+      ],
+      "prompt": "Add a health check endpoint that verifies the application and its database connection are operational. Return a standard health status response.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "add-health-check",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-11T22:58:29Z",
+        "started_at": "2026-05-11T22:58:21Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "src/main.ts"
+      ],
+      "actual_changed_files_kind": "proposed_write_set",
+      "allowed_write_globs": [
+        "src/main.ts"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": "body.usage.cost",
+        "cost_usd": 2.641e-05,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 47,
+        "tokens_prompt": 196,
+        "wall_time_seconds": 1.8336
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "predicted_write_files": [
+        "src/main.ts"
+      ],
+      "prompt": "Add global API rate limiting to the application. Use a NestJS-compatible throttling library. Configure a default of 100 requests per 60 seconds. Apply it globally so all endpoints are protected.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "add-rate-limiting",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-11T22:58:29Z",
+        "started_at": "2026-05-11T22:58:21Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "actual_changed_files_kind": "proposed_write_set",
+      "allowed_write_globs": [
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": "body.usage.cost",
+        "cost_usd": 3.528e-05,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 76,
+        "tokens_prompt": 200,
+        "wall_time_seconds": 2.9157
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "predicted_write_files": [
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.service.ts"
+      ],
+      "prompt": "Extend the tag system with write operations. Currently tags can only be read. Add the ability to create new tags and delete existing ones via the API.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "extend-tag-crud",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-11T22:58:29Z",
+        "started_at": "2026-05-11T22:58:21Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "src/user/dto/index.ts",
+        "src/user/user.controller.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.module.ts"
+      ],
+      "actual_changed_files_kind": "proposed_write_set",
+      "allowed_write_globs": [
+        "src/user/dto/**",
+        "src/user/user.controller.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.module.ts"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": "body.usage.cost",
+        "cost_usd": 5.859e-05,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "tokens_completion": 132,
+        "tokens_prompt": 309,
+        "wall_time_seconds": 4.9372
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [
+        "add-article-bookmarks"
+      ],
+      "predicted_write_files": [
+        "src/user/dto/index.ts",
+        "src/user/user.controller.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.module.ts"
+      ],
+      "prompt": "Add role-based access control to the application. Users should have a role field (user or admin). Create a guard that checks the current user's role against a required role. Register it so endpoints can be decorated with a role requirement.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "add-user-roles",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": "2026-05-11T22:58:29Z",
+        "started_at": "2026-05-11T22:58:21Z"
+      }
+    }
+  ],
+  "version": "0.1"
+}

@@ -158,7 +158,10 @@ def cmd_compile(
     if not repo_graph:
         _err_console.print("[red]graph scan did not produce a readable context graph[/]")
         raise typer.Exit(code=EXIT_USER_ERROR)
-    llm = LLMClient.from_env()
+    # Compile prefers ACG_COMPILE_MODEL/URL/API_KEY so callers can pin a
+    # fast/cheap structured-output model (e.g. qwen3-coder-30b) without
+    # changing the runtime ACG_LLM_* model used by the orchestrator/workers.
+    llm = LLMClient.from_env_for_compile()
     lock = compile_lockfile(repo, tasks_input, repo_graph, llm)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(lock.model_dump_json(indent=2) + "\n")
@@ -520,13 +523,23 @@ def cmd_run(
         MockRuntimeLLM(role="orchestrator")
         if use_mock
         else RuntimeLLM(
-            cfg.orch_url, cfg.orch_model, cfg.orch_api_key, timeout=cfg.request_timeout_s
+            cfg.orch_url,
+            cfg.orch_model,
+            cfg.orch_api_key,
+            timeout=cfg.request_timeout_s,
+            extra_params=cfg.extra_params,
         )
     )
     sub_llm = (
         MockRuntimeLLM(role="worker")
         if use_mock
-        else RuntimeLLM(cfg.sub_url, cfg.sub_model, cfg.sub_api_key, timeout=cfg.request_timeout_s)
+        else RuntimeLLM(
+            cfg.sub_url,
+            cfg.sub_model,
+            cfg.sub_api_key,
+            timeout=cfg.request_timeout_s,
+            extra_params=cfg.extra_params,
+        )
     )
     perf = (
         PerfRecorder(config=cfg.perf_public(), lockfile=str(lock)) if cfg.perf_trace_path else None

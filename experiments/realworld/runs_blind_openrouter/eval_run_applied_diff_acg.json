@@ -1,0 +1,123 @@
+{
+  "backend": "applied-diff",
+  "created_at": "2026-05-11T21:36:41Z",
+  "evidence_kind": "applied_diff",
+  "execution_mode": "applied_diff",
+  "lockfile": "experiments/realworld/agent_lock_blind.json",
+  "model": {
+    "model": "git-diff-sidecar",
+    "provider": "manual",
+    "url": null
+  },
+  "repo": {
+    "commit": "e942ce16042f890a04842d36858fd9727a0b1407",
+    "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/realworld/checkout",
+    "url": "https://github.com/lujakob/nestjs-realworld-example-app.git"
+  },
+  "run_id": "greenhouse-applied-diff-acg_planned-20260511-213641",
+  "strategy": "acg_planned",
+  "suite_name": "realworld-eval",
+  "summary_metrics": {
+    "acus_consumed_total": null,
+    "blocked_invalid_write_count": 0,
+    "cost_method": null,
+    "cost_source": null,
+    "cost_usd_total": null,
+    "first_run_pass_rate": 0.0,
+    "human_interventions": 0,
+    "integration_burden": {
+      "blocked_events_total": 0,
+      "changed_file_mentions_total": 1,
+      "changed_lines_added": 3,
+      "changed_lines_deleted": 1,
+      "changed_lines_total": 4,
+      "diff_stats_kind": "sidecar_numstat",
+      "duplicate_file_touches": 0,
+      "out_of_bounds_files_total": 0,
+      "overlapping_files": [],
+      "overlapping_task_pairs": 0,
+      "review_file_mentions_total": 1,
+      "review_unique_files_total": 1,
+      "unique_changed_files": 1
+    },
+    "merge_conflicts": 0,
+    "out_of_bounds_write_count": 0,
+    "overlapping_write_pairs": 0,
+    "proposal_completion_rate": 1.0,
+    "successful_parallel_speedup": null,
+    "task_completion_rate": 1.0,
+    "tasks_completed": 1,
+    "tasks_completed_per_hour": 30.0,
+    "tasks_total": 1,
+    "tested_completion_rate": 0.0,
+    "tested_tasks_completed": 0,
+    "tests_ran_count": 0,
+    "tokens_all_in": null,
+    "tokens_completion_method": null,
+    "tokens_completion_total": null,
+    "tokens_orchestrator_overhead": null,
+    "tokens_planner_total": null,
+    "tokens_prompt_method": null,
+    "tokens_prompt_total": null,
+    "tokens_scope_review_total": null,
+    "tokens_worker_prompt_total": null,
+    "wall_time_seconds": 120.0
+  },
+  "tasks": [
+    {
+      "actual_changed_files": [
+        "src/main.ts"
+      ],
+      "actual_changed_files_kind": "applied_diff",
+      "allowed_write_globs": [
+        "src/main.ts"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": "acg-applied-diff-smoke",
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": 3,
+        "changed_lines_deleted": 1,
+        "changed_lines_kind": "sidecar_numstat",
+        "cost_source": null,
+        "cost_usd": null,
+        "human_interventions": 0,
+        "model_calls": null,
+        "tokens_completion": null,
+        "tokens_prompt": null,
+        "wall_time_seconds": 120.0
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "predicted_write_files": [
+        "src/main.ts"
+      ],
+      "prompt": "Add global API rate limiting to the application. Use a NestJS-compatible throttling library. Configure a default of 100 requests per 60 seconds. Apply it globally so all endpoints are protected.",
+      "session_id": null,
+      "status": "completed",
+      "task_id": "add-rate-limiting",
+      "test": {
+        "command": "npm test -- --runInBand",
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": false,
+        "ran": false
+      },
+      "timestamps": {
+        "finished_at": null,
+        "started_at": null
+      }
+    }
+  ],
+  "version": "0.1"
+}

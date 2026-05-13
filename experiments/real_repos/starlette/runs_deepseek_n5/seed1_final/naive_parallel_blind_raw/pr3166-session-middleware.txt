@@ -1,0 +1,472 @@
+*** Begin Patch
+*** Update File: starlette/middleware/sessions.py
+@@
+- import json
+- import typing
+- from datetime import timedelta
+- from itsdangerous import URLSafeTimedSerializer, BadSignature
+- from starlette.datastructures import MutableHeaders
+- from starlette.requests import HTTPConnection
+- from starlette.responses import Response
+- from starlette.types import ASGIApp, Receive, Scope, Send
+- 
+- 
+- class SessionMiddleware:
+-     def __init__(
+-         self,
+-         app: ASGIApp,
+-         secret_key: str,
+-         session_cookie: str = "session",
+-         max_age: int = 14 * 24 * 60 * 60,  # 14 days, in seconds
+-         same_site: str = "lax",
+-         https_only: bool = False,
+-         domain: str = None,
+-     ) -> None:
+-         self.app = app
+-         self.serializer = URLSafeTimedSerializer(
+-             secret_key=secret_key,
+-             salt="cookie-session",
+-             serializer=json,
+-             signer_kwargs={"key_derivation": "hmac"},
+-         )
+-         self.session_cookie = session_cookie
+-         self.max_age = max_age
+-         self.same_site = same_site
+-         self.https_only = https_only
+-         self.domain = domain
+- 
+-     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+-         if scope["type"] not in ("http", "websocket"):
+-             await self.app(scope, receive, send)
+-             return
+- 
+-         connection = HTTPConnection(scope)
+-         initial_session_was_empty = True
+- 
+-         if self.session_cookie in connection.cookies:
+-             try:
+-                 data = self.serializer.loads(
+-                     connection.cookies[self.session_cookie],
+-                     max_age=self.max_age,
+-                 )
+-                 session = Session(data)
+-                 initial_session_was_empty = False
+-             except BadSignature:
+-                 session = Session()
+-         else:
+-             session = Session()
+- 
+-         scope["session"] = session
+- 
+-         async def send_wrapper(message: dict) -> None:
+-             if message["type"] == "http.response.start":
+-                 if session.modified:
+-                     headers = MutableHeaders(raw=message["headers"])
+-                     if session:
+-                         cookie_value = self.serializer.dumps(dict(session))
+-                         headers.append(
+-                             "set-cookie",
+-                             f"{self.session_cookie}={cookie_value}; "
+-                             f"Max-Age={self.max_age}; "
+-                             f"Path=/; "
+-                             f"SameSite={self.same_site}; "
+-                             f"{'Secure; ' if self.https_only else ''}"
+-                             f"{f'Domain={self.domain}; ' if self.domain else ''}"
+-                             f"HttpOnly",
+-                         )
+-                     elif not initial_session_was_empty:
+-                         # Session was cleared, expire cookie
+-                         headers.append(
+-                             "set-cookie",
+-                             f"{self.session_cookie}=; "
+-                             f"Max-Age=0; "
+-                             f"Path=/; "
+-                             f"SameSite={self.same_site}; "
+-                             f"{'Secure; ' if self.https_only else ''}"
+-                             f"{f'Domain={self.domain}; ' if self.domain else ''}"
+-                             f"HttpOnly",
+-                         )
+-             await send(message)
+- 
+-         await self.app(scope, receive, send_wrapper)
+- 
+- 
+- class Session(dict):
+-     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+-         super().__init__(*args, **kwargs)
+-         self.modified = False
+- 
+-     def __setitem__(self, key: typing.Any, value: typing.Any) -> None:
+-         super().__setitem__(key, value)
+-         self.modified = True
+- 
+-     def __delitem__(self, key: typing.Any) -> None:
+-         super().__delitem__(key)
+-         self.modified = True
+- 
+-     def clear(self) -> None:
+-         super().clear()
+-         self.modified = True
+- 
+-     def update(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+-         super().update(*args, **kwargs)
+-         self.modified = True
+- 
+-     def pop(self, key: typing.Any, *args: typing.Any) -> typing.Any:
+-         result = super().pop(key, *args)
+-         self.modified = True
+-         return result
+- 
+-     def popitem(self) -> typing.Tuple[typing.Any, typing.Any]:
+-         result = super().popitem()
+-         self.modified = True
+-         return result
+- 
+-     def setdefault(self, key: typing.Any, default: typing.Any = None) -> typing.Any:
+-         if key not in self:
+-             self.modified = True
+-         return super().setdefault(key, default)
++ import json
++ import typing
++ from datetime import timedelta
++ from itsdangerous import URLSafeTimedSerializer, BadSignature
++ from starlette.datastructures import MutableHeaders
++ from starlette.requests import HTTPConnection
++ from starlette.responses import Response
++ from starlette.types import ASGIApp, Receive, Scope, Send
++ 
++ 
++ class SessionMiddleware:
++     def __init__(
++         self,
++         app: ASGIApp,
++         secret_key: str,
++         session_cookie: str = "session",
++         max_age: int = 14 * 24 * 60 * 60,  # 14 days, in seconds
++         same_site: str = "lax",
++         https_only: bool = False,
++         domain: str = None,
++     ) -> None:
++         self.app = app
++         self.serializer = URLSafeTimedSerializer(
++             secret_key=secret_key,
++             salt="cookie-session",
++             serializer=json,
++             signer_kwargs={"key_derivation": "hmac"},
++         )
++         self.session_cookie = session_cookie
++         self.max_age = max_age
++         self.same_site = same_site
++         self.https_only = https_only
++         self.domain = domain
++ 
++     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
++         if scope["type"] not in ("http", "websocket"):
++             await self.app(scope, receive, send)
++             return
++ 
++         connection = HTTPConnection(scope)
++         initial_session_was_empty = True
++ 
++         if self.session_cookie in connection.cookies:
++             try:
++                 data = self.serializer.loads(
++                     connection.cookies[self.session_cookie],
++                     max_age=self.max_age,
++                 )
++                 session = Session(data)
++                 initial_session_was_empty = False
++             except BadSignature:
++                 session = Session()
++         else:
++             session = Session()
++ 
++         scope["session"] = session
++ 
++         async def send_wrapper(message: dict) -> None:
++             if message["type"] == "http.response.start":
++                 if session.modified:
++                     headers = MutableHeaders(raw=message["headers"])
++                     if session:
++                         cookie_value = self.serializer.dumps(dict(session))
++                         headers.append(
++                             "set-cookie",
++                             f"{self.session_cookie}={cookie_value}; "
++                             f"Max-Age={self.max_age}; "
++                             f"Path=/; "
++                             f"SameSite={self.same_site}; "
++                             f"{'Secure; ' if self.https_only else ''}"
++                             f"{f'Domain={self.domain}; ' if self.domain else ''}"
++                             f"HttpOnly",
++                         )
++                     elif not initial_session_was_empty:
++                         # Session was cleared, expire cookie
++                         headers.append(
++                             "set-cookie",
++                             f"{self.session_cookie}=; "
++                             f"Max-Age=0; "
++                             f"Path=/; "
++                             f"SameSite={self.same_site}; "
++                             f"{'Secure; ' if self.https_only else ''}"
++                             f"{f'Domain={self.domain}; ' if self.domain else ''}"
++                             f"HttpOnly",
++                         )
++             await send(message)
++ 
++         await self.app(scope, receive, send_wrapper)
++ 
++ 
++ class Session(dict):
++     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
++         super().__init__(*args, **kwargs)
++         self.modified = False
++ 
++     def __setitem__(self, key: typing.Any, value: typing.Any) -> None:
++         super().__setitem__(key, value)
++         self.modified = True
++ 
++     def __delitem__(self, key: typing.Any) -> None:
++         super().__delitem__(key)
++         self.modified = True
++ 
++     def clear(self) -> None:
++         super().clear()
++         self.modified = True
++ 
++     def update(self, *args: typing.Any, **kwargs: typing.Any) -> None:
++         super().update(*args, **kwargs)
++         self.modified = True
++ 
++     def pop(self, key: typing.Any, *args: typing.Any) -> typing.Any:
++         result = super().pop(key, *args)
++         self.modified = True
++         return result
++ 
++     def popitem(self) -> typing.Tuple[typing.Any, typing.Any]:
++         result = super().popitem()
++         self.modified = True
++         return result
++ 
++     def setdefault(self, key: typing.Any, default: typing.Any = None) -> typing.Any:
++         if key not in self:
++             self.modified = True
++         return super().setdefault(key, default)
+*** Add File: tests/test_session_middleware.py
++ import pytest
++ from starlette.applications import Starlette
++ from starlette.middleware import Middleware
++ from starlette.middleware.sessions import SessionMiddleware
++ from starlette.requests import Request
++ from starlette.responses import JSONResponse
++ from starlette.testclient import TestClient
++ 
++ 
++ def test_session_not_modified_no_cookie():
++     app = Starlette()
++     app.add_middleware(SessionMiddleware, secret_key="test-secret")
++ 
++     @app.route("/")
++     async def index(request: Request):
++         # Access session but do not modify it
++         session = request.session
++         return JSONResponse({"session": dict(session)})
++ 
++     client = TestClient(app)
++     response = client.get("/")
++     assert response.status_code == 200
++     # No Set-Cookie header because session was not modified
++     assert "set-cookie" not in response.headers
++ 
++ 
++ def test_session_modified_sets_cookie():
++     app = Starlette()
++     app.add_middleware(SessionMiddleware, secret_key="test-secret")
++ 
++     @app.route("/")
++     async def index(request: Request):
++         request.session["key"] = "value"
++         return JSONResponse({"ok": True})
++ 
++     client = TestClient(app)
++     response = client.get("/")
++     assert response.status_code == 200
++     assert "set-cookie" in response.headers
++     assert "session=" in response.headers["set-cookie"]
++ 
++ 
++ def test_session_cleared_sets_expired_cookie():
++     app = Starlette()
++     app.add_middleware(SessionMiddleware, secret_key="test-secret")
++ 
++     @app.route("/set")
++     async def set_session(request: Request):
++         request.session["key"] = "value"
++         return JSONResponse({"ok": True})
++ 
++     @app.route("/clear")
++     async def clear_session(request: Request):
++         request.session.clear()
++         return JSONResponse({"ok": True})
++ 
++     client = TestClient(app)
++     # First set a session
++     response = client.get("/set")
++     cookie = response.headers["set-cookie"]
++     # Then clear it
++     response = client.get("/clear", cookies={"session": cookie.split(";")[0].split("=")[1]})
++     assert response.status_code == 200
++     set_cookie = response.headers["set-cookie"]
++     assert "Max-Age=0" in set_cookie
++ 
++ 
++ def test_concurrent_read_only_requests():
++     app = Starlette()
++     app.add_middleware(SessionMiddleware, secret_key="test-secret")
++ 
++     @app.route("/")
++     async def index(request: Request):
++         # Read-only access
++         session = request.session
++         return JSONResponse({"session": dict(session)})
++ 
++     client = TestClient(app)
++     # Simulate concurrent requests (sequential in test, but same session cookie)
++     # First request sets a session
++     response1 = client.get("/")
++     # No cookie should be set because session was not modified
++     assert "set-cookie" not in response1.headers
++     # Second request with same session (no cookie)
++     response2 = client.get("/")
++     assert "set-cookie" not in response2.headers
++ 
++ 
++ def test_session_modified_only_once():
++     app = Starlette()
++     app.add_middleware(SessionMiddleware, secret_key="test-secret")
++ 
++     @app.route("/")
++     async def index(request: Request):
++         request.session["key"] = "value"
++         return JSONResponse({"ok": True})
++ 
++     client = TestClient(app)
++     response = client.get("/")
++     assert response.status_code == 200
++     assert "set-cookie" in response.headers
++     # Second request with the same session cookie should not set cookie again if not modified
++     cookie = response.headers["set-cookie"]
++     response2 = client.get("/", cookies={"session": cookie.split(";")[0].split("=")[1]})
++     assert "set-cookie" not in response2.headers
++ 
++ 
++ def test_session_modified_again_sets_cookie():
++     app = Starlette()
++     app.add_middleware(SessionMiddleware, secret_key="test-secret")
++ 
++     @app.route("/")
++     async def index(request: Request):
++         request.session["key"] = "value"
++         return JSONResponse({"ok": True})
++ 
++     client = TestClient(app)
++     response = client.get("/")
++     cookie = response.headers["set-cookie"]
++     # Second request modifies again
++     @app.route("/modify")
++     async def modify(request: Request):
++         request.session["another"] = "value2"
++         return JSONResponse({"ok": True})
++     response2 = client.get("/modify", cookies={"session": cookie.split(";")[0].split("=")[1]})
++     assert "set-cookie" in response2.headers
++ 
++ 
++ def test_session_delete_key_sets_cookie():
++     app = Starlette()
++     app.add_middleware(SessionMiddleware, secret_key="test-secret")
++ 
++     @app.route("/set")
++     async def set_session(request: Request):
++         request.session["key"] = "value"
++         return JSONResponse({"ok": True})
++ 
++     @app.route("/del")
++     async def del_session(request: Request):
++         del request.session["key"]
++         return JSONResponse({"ok": True})
++ 
++     client = TestClient(app)
++     response = client.get("/set")
++     cookie = response.headers["set-cookie"]
++     response2 = client.get("/del", cookies={"session": cookie.split(";")[0].split("=")[1]})
++     assert "set-cookie" in response2.headers
++ 
++ 
++ def test_session_pop_sets_cookie():
++     app = Starlette()
++     app.add_middleware(SessionMiddleware, secret_key="test-secret")
++ 
++     @app.route("/set")
++     async def set_session(request: Request):
++         request.session["key"] = "value"
++         return JSONResponse({"ok": True})
++ 
++     @app.route("/pop")
++     async def pop_session(request: Request):
++         request.session.pop("key", None)
++         return JSONResponse({"ok": True})
++ 
++     client = TestClient(app)
++     response = client.get("/set")
++     cookie = response.headers["set-cookie"]
++     response2 = client.get("/pop", cookies={"session": cookie.split(";")[0].split("=")[1]})
++     assert "set-cookie" in response2.headers
++ 
++ 
++ def test_session_update_sets_cookie():
++     app = Starlette()
++     app.add_middleware(SessionMiddleware, secret_key="test-secret")
++ 
++     @app.route("/")
++     async def index(request: Request):
++         request.session.update({"a": 1, "b": 2})
++         return JSONResponse({"ok": True})
++ 
++     client = TestClient(app)
++     response = client.get("/")
++     assert "set-cookie" in response.headers
++ 
++ 
++ def test_session_setdefault_new_key_sets_cookie():
++     app = Starlette()
++     app.add_middleware(SessionMiddleware, secret_key="test-secret")
++ 
++     @app.route("/")
++     async def index(request: Request):
++         request.session.setdefault("new_key", "default")
++         return JSONResponse({"ok": True})
++ 
++     client = TestClient(app)
++     response = client.get("/")
++     assert "set-cookie" in response.headers
++ 
++ 
++ def test_session_setdefault_existing_key_no_cookie():
++     app = Starlette()
++     app.add_middleware(SessionMiddleware, secret_key="test-secret")
++ 
++     @app.route("/set")
++     async def set_session(request: Request):
++         request.session["existing"] = "value"
++         return JSONResponse({"ok": True})
++ 
++     @app.route("/check")
++     async def check_session(request: Request):
++         request.session.setdefault("existing", "other")
++         return JSONResponse({"ok": True})
++ 
++     client = TestClient(app)
++     response = client.get("/set")
++     cookie = response.headers["set-cookie"]
++     response2 = client.get("/check", cookies={"session": cookie.split(";")[0].split("=")[1]})
++     assert "set-cookie" not in response2.headers
+*** End Patch

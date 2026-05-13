@@ -1,0 +1,63 @@
+*** Begin Patch
+--- a/starlette/templating.py
++++ b/starlette/templating.py
+@@ -1,5 +1,6 @@
+ from __future__ import annotations
+ 
++from jinja2 import select_autoescape
+ from pathlib import Path
+ from typing import Any, Callable, Dict, Optional, Union
+ 
+@@ -22,7 +23,7 @@ class Jinja2Templates:
+         if env is None:
+             loader = self._create_loader(directory)
+             env = Environment(
+-                loader=loader, autoescape=True
++                loader=loader, autoescape=select_autoescape()
+             )
+         self.env = env
+         self.env.add_extension("jinja2.ext.i18n")
+--- a/tests/test_templating.py
++++ b/tests/test_templating.py
+@@ -1,5 +1,6 @@
+ import os
+ import tempfile
++from unittest.mock import patch
+ 
+ import pytest
+ from starlette.templating import Jinja2Templates
+@@ -56,3 +57,34 @@ def test_custom_environment():
+     templates = Jinja2Templates(directory=dir, env=env)
+     response = templates.TemplateResponse("index.html", {"request": {}})
+     assert response.body == b"<html>Hello</html>"
++
++
++def test_autoescape_default():
++    with tempfile.TemporaryDirectory() as dir:
++        path = os.path.join(dir, "index.html")
++        with open(path, "w") as f:
++            f.write("{{ content }}")
++        templates = Jinja2Templates(directory=dir)
++        response = templates.TemplateResponse(
++            "index.html", {"request": {}, "content": "<script>alert('xss')</script>"}
++        )
++        assert b"&lt;script&gt;" in response.body
++
++
++def test_autoescape_disabled_when_env_provided():
++    from jinja2 import Environment, FileSystemLoader, select_autoescape
++
++    with tempfile.TemporaryDirectory() as dir:
++        path = os.path.join(dir, "index.html")
++        with open(path, "w") as f:
++            f.write("{{ content }}")
++        env = Environment(
++            loader=FileSystemLoader(dir),
++            autoescape=False
++        )
++        templates = Jinja2Templates(directory=dir, env=env)
++        response = templates.TemplateResponse(
++            "index.html", {"request": {}, "content": "<script>alert('xss')</script>"}
++        )
++        assert b"<script>" in response.body
+*** End Patch

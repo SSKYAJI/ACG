@@ -546,6 +546,17 @@ def _walk_code_files(repo_root: Path) -> list[Path]:
     return sorted(out)
 
 
+def benchmark_source_paths(repo_root: Path) -> list[Path]:
+    """Source files for benchmark baselines: ``.py``/``.js``/``.ts``/``.tsx``/``.java`` only.
+
+    Reuses :func:`_walk_code_files` directory exclusions (``node_modules``, ``.venv``,
+    ``.git``, ``dist``, ``build``, ``__pycache__``, etc.).
+    """
+
+    allowed = {".py", ".js", ".ts", ".tsx", ".java"}
+    return [path for path in _walk_code_files(repo_root) if path.suffix in allowed]
+
+
 def _normalize_files(value: Any) -> list[dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     if not isinstance(value, list):

@@ -1,0 +1,113 @@
+*** Begin Patch
+*** Update File: starlette/templating.py
+@@
+-from jinja2 import Environment, FileSystemLoader
++from jinja2 import Environment, FileSystemLoader, select_autoescape
+@@
+-            self.env = Environment(loader=FileSystemLoader(directory), autoescape=True, **env_options)
++            autoescape = env_options.pop('autoescape', select_autoescape())
++            self.env = Environment(loader=FileSystemLoader(directory), autoescape=autoescape, **env_options)
+*** Update File: tests/test_templates.py
+@@
++import pytest
++from jinja2 import Environment, FileSystemLoader, select_autoescape
++from starlette.templating import Jinja2Templates
++from starlette.testclient import TestClient
++from starlette.applications import Starlette
++from starlette.routing import Route
++from starlette.responses import HTMLResponse
++from starlette.requests import Request
++import html
++
++
++def test_autoescape_html(tmp_path):
++    d = tmp_path / "templates"
++    d.mkdir()
++    (d / "hello.html").write_text("Hello, {{ name }}!")
++    (d / "hello.txt").write_text("Hello, {{ name }}!")
++
++    templates = Jinja2Templates(directory=d)
++
++    app = Starlette(routes=[
++        Route("/html", endpoint=lambda r: templates.TemplateResponse("hello.html", {"request": r, "name": "<test>"})),
++        Route("/txt", endpoint=lambda r: templates.TemplateResponse("hello.txt", {"request": r, "name": "<test>"})),
++    ])
++
++    client = TestClient(app)
++    response_html = client.get("/html")
++    assert "&lt;test&gt;" in response_html.text
++    response_txt = client.get("/txt")
++    assert "<test>" in response_txt.text
++
++
++def test_autoescape_disabled_with_custom_environment(tmp_path):
++    d = tmp_path / "templates"
++    d.mkdir()
++    (d / "hello.html").write_text("Hello, {{ name }}!")
++
++    env = Environment(loader=FileSystemLoader(d), autoescape=False)
++    templates = Jinja2Templates(env=env)
++
++    app = Starlette(routes=[
++        Route("/", endpoint=lambda r: templates.TemplateResponse("hello.html", {"request": r, "name": "<test>"})),
++    ])
++
++    client = TestClient(app)
++    response = client.get("/")
++    assert "<test>" in response.text
++
++
++def test_autoescape_enabled_with_custom_environment(tmp_path):
++    d = tmp_path / "templates"
++    d.mkdir()
++    (d / "hello.html").write_text("Hello, {{ name }}!")
++
++    env = Environment(loader=FileSystemLoader(d), autoescape=True)
++    templates = Jinja2Templates(env=env)
++
++    app = Starlette(routes=[
++        Route("/", endpoint=lambda r: templates.TemplateResponse("hello.html", {"request": r, "name": "<test>"})),
++    ])
++
++    client = TestClient(app)
++    response = client.get("/")
++    assert "&lt;test&gt;" in response.text
++
++
++def test_autoescape_passed_as_env_option(tmp_path):
++    d = tmp_path / "templates"
++    d.mkdir()
++    (d / "hello.html").write_text("Hello, {{ name }}!")
++
++    # autoescape=False passed as an env_option should override select_autoescape
++    templates = Jinja2Templates(directory=d, autoescape=False)
++
++    app = Starlette(routes=[
++        Route("/", endpoint=lambda r: templates.TemplateResponse("hello.html", {"request": r, "name": "<test>"})),
++    ])
++
++    client = TestClient(app)
++    response = client.get("/")
++    assert "<test>" in response.text
++
++
++def test_autoescape_default_uses_select_autoescape(tmp_path):
++    d = tmp_path / "templates"
++    d.mkdir()
++    (d / "hello.html").write_text("Hello, {{ name }}!")
++    (d / "hello.jinja").write_text("Hello, {{ name }}!")
++
++    templates = Jinja2Templates(directory=d)
++
++    app = Starlette(routes=[
++        Route("/html", endpoint=lambda r: templates.TemplateResponse("hello.html", {"request": r, "name": "<test>"})),
++        Route("/jinja", endpoint=lambda r: templates.TemplateResponse("hello.jinja", {"request": r, "name": "<test>"})),
++    ])
++
++    client = TestClient(app)
++    response_html = client.get("/html")
++    assert "&lt;test&gt;" in response_html.text
++    response_jinja = client.get("/jinja")
++    # .jinja is not in the default enabled extensions, so autoescape should be off
++    assert "<test>" in response_jinja.text
+*** End Patch

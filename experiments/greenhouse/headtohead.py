@@ -101,6 +101,27 @@ STRATEGY_GROUPS = {
         ACG_PLANNED_FULL_CONTEXT_STRATEGY,
         ACG_PLANNED_STRATEGY,
     ],
+    # Like ``comparison`` but adds ``naive_parallel_blind`` — the truly
+    # context-free baseline (no predicted_writes, no candidate_context_paths
+    # in the worker prompt). This is the "what a normal harness gives an
+    # agent" reference point reviewers will ask about. Order: blind →
+    # lockfile-aware naive → ACG full-context → ACG scoped → single-agent.
+    "comparison_full": [
+        NAIVE_PARALLEL_BLIND_STRATEGY,
+        NAIVE_STRATEGY,
+        ACG_PLANNED_FULL_CONTEXT_STRATEGY,
+        ACG_PLANNED_STRATEGY,
+        SINGLE_AGENT_STRATEGY,
+    ],
+    # Top-up group for "comparison" runs that completed before
+    # naive_parallel_blind / apply_patch single_agent were available. Re-runs
+    # only the two missing strategies; combine with ``merge_combined.py`` to
+    # rebuild the per-seed ``eval_run_combined.json`` against all five files.
+    "top_up": [
+        SINGLE_AGENT_STRATEGY,
+        NAIVE_PARALLEL_BLIND_STRATEGY,
+    ],
+    "fix_check": [SINGLE_AGENT_STRATEGY, ACG_PLANNED_FULL_CONTEXT_STRATEGY],
 }
 VALID_STRATEGIES = (
     SINGLE_AGENT_STRATEGY,
@@ -257,10 +278,26 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         "--applied-diff-live",
         action="store_true",
         help=(
-            "For acg_planned / acg_planned_replan with mock or local backends, "
-            "materialize allowed worker ``content`` proposals as git commits on "
-            "per-task branches and set evidence_kind=applied_diff."
+            "For mock/local backends, materialize allowed worker apply_patch output "
+            "as git commits on per-task branches, run tsc --noEmit, and set "
+            "evidence_kind=applied_diff. With --backend mock, the same path is "
+            "enabled automatically when --repo points at an existing checkout "
+            "(so CI without --repo stays fast proposal-only)."
         ),
+    )
+    parser.add_argument(
+        "--worker-concurrency",
+        type=int,
+        default=None,
+        help=(
+            "Cap concurrent worker LLM calls for local/mock strategies (overrides "
+            "ACG_WORKER_CONCURRENCY). Omit to use env; 0 or negative means uncapped."
+        ),
+    )
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help="Run a single task with one concrete strategy (sanity check wiring).",
     )
     return parser.parse_args(argv)
 
@@ -340,6 +377,8 @@ def _run_one(
     repo: EvalRepo | None,
     devin_api_kwargs: dict | None = None,
     applied_diff_live: bool = False,
+    cap_parallelism: int | None = None,
+    eval_dump_dir: Path | None = None,
 ) -> EvalRun:
     devin_api_kwargs = devin_api_kwargs or {}
     if backend in ("mock", "local"):
@@ -354,6 +393,8 @@ def _run_one(
             suite_name=suite_name,
             repo=repo,
             applied_diff_live=applied_diff_live,
+            cap_parallelism=cap_parallelism,
+            eval_dump_dir=eval_dump_dir,
         )
     if strategy == ACG_PLANNED_FULL_CONTEXT_STRATEGY:
         raise SystemExit(
@@ -417,6 +458,8 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_USER_ERROR
 
     lock = _load_lockfile(args.lock)
+    if args.smoke:
+        lock = lock.model_copy(update={"tasks": lock.tasks[:1]})
     prompts = _load_prompts(args.tasks)
     repo_graph = _load_repo_graph(args.repo)
     suite_name = suite_name_from_lock(lock, args.suite_name)
@@ -436,32 +479,47 @@ def main(argv: list[str] | None = None) -> int:
         # instead of falling back to Greenhouse defaults.
         repo_for_run = None
     strategies = _selected_strategies(args.strategy)
+    if args.smoke:
+        if args.strategy in STRATEGY_GROUPS or len(strategies) != 1:
+            print(
+                "error: --smoke requires exactly one concrete strategy "
+                "(e.g. --strategy naive_parallel; not both, ablation, or groups)",
+                file=sys.stderr,
+            )
+            return EXIT_USER_ERROR
     outputs = _resolve_outputs(args, strategies)
 
+    implicit_mock_apply = args.backend == "mock" and args.repo is not None and args.repo.exists()
+    effective_applied_diff_live = args.applied_diff_live or implicit_mock_apply
+
+    allowed_applied_strategies = {
+        SINGLE_AGENT_STRATEGY,
+        NAIVE_STRATEGY,
+        NAIVE_PARALLEL_BLIND_STRATEGY,
+        ACG_PLANNED_STRATEGY,
+        ACG_PLANNED_REPLAN_STRATEGY,
+        ACG_PLANNED_APPLIED_STRATEGY,
+        ACG_PLANNED_FULL_CONTEXT_STRATEGY,
+    }
     if args.applied_diff_live:
-        if len(strategies) > 1:
+        bad = [s for s in strategies if s not in allowed_applied_strategies]
+        if bad:
             print(
-                "error: --applied-diff-live requires a single concrete strategy "
-                "(not a group like both or ablation)",
+                "error: --applied-diff-live is not valid for strategies "
+                f"{bad!r}; allowed: {sorted(allowed_applied_strategies)}",
                 file=sys.stderr,
             )
             return EXIT_USER_ERROR
-        allowed_applied = {
-            SINGLE_AGENT_STRATEGY,
-            NAIVE_STRATEGY,
-            NAIVE_PARALLEL_BLIND_STRATEGY,
-            ACG_PLANNED_STRATEGY,
-            ACG_PLANNED_REPLAN_STRATEGY,
-            ACG_PLANNED_APPLIED_STRATEGY,
-        }
-        if strategies[0] not in allowed_applied:
-            print(
-                "error: --applied-diff-live is only valid with "
-                "single_agent, naive_parallel, naive_parallel_blind, acg_planned, "
-                "acg_planned_replan, or acg_planned_applied",
-                file=sys.stderr,
-            )
-            return EXIT_USER_ERROR
+
+    worker_cap: int | None = None
+    if args.worker_concurrency is not None:
+        worker_cap = args.worker_concurrency if args.worker_concurrency > 0 else None
+
+    eval_dump_dir: Path | None = None
+    if args.out_dir is not None:
+        eval_dump_dir = args.out_dir
+    elif len(strategies) == 1 and args.out is not None:
+        eval_dump_dir = args.out.parent
 
     written: list[Path] = []
     for strategy in strategies:
@@ -478,7 +536,8 @@ def main(argv: list[str] | None = None) -> int:
                 devin_results=args.devin_results,
                 suite_name=suite_name,
                 repo=repo_for_run,
-                applied_diff_live=args.applied_diff_live,
+                applied_diff_live=effective_applied_diff_live,
+                cap_parallelism=worker_cap,
                 devin_api_kwargs={
                     "repo_url": args.repo_url,
                     "base_branch": args.base_branch,
@@ -487,6 +546,7 @@ def main(argv: list[str] | None = None) -> int:
                     "max_wait_s": args.max_wait_s,
                     "max_acu_limit": args.max_acu_limit,
                 },
+                eval_dump_dir=eval_dump_dir,
             )
         except DevinAPINotConfigured as exc:
             print(f"error: {exc}", file=sys.stderr)

@@ -420,6 +420,27 @@ def test_lockfile_echo_mock_emits_predicted_writes_for_known_task() -> None:
     assert any("JdbcAccountRepository" in f for f in files)
 
 
+def test_naive_parallel_persists_raw_replies(tmp_path: Path) -> None:
+    """Worker raw replies land under ``<eval_dump_dir>/naive_parallel_raw/``."""
+    lock = _build_lock(serialized=False)
+    lock_path = tmp_path / "agent_lock.json"
+    lock_path.write_text(lock.model_dump_json(indent=2))
+    dump = tmp_path / "eval_dump"
+    dump.mkdir()
+    run_strategy(
+        strategy="naive_parallel",
+        backend="mock",
+        lock=lock,
+        repo_graph={},
+        lockfile_path=str(lock_path),
+        eval_dump_dir=dump,
+    )
+    for t in lock.tasks:
+        p = dump / "naive_parallel_raw" / f"{t.id}.txt"
+        assert p.is_file(), f"missing {p}"
+        assert p.read_text(encoding="utf-8")
+
+
 def test_naive_strategy_does_not_inherit_acg_auto_replan_env(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -496,6 +517,95 @@ def test_naive_parallel_blind_dispatch_uses_blind_prompt(
     )
     assert captured
     assert all(h is False for h in captured)
+
+
+def test_applied_truncation_marks_failed_truncated_by_max_tokens() -> None:
+    lock = _build_lock(serialized=False)
+    lock_task = lock.tasks[0]
+    worker = WorkerResult(
+        task_id=lock_task.id,
+        group_id=0,
+        url="stub",
+        model="stub",
+        wall_s=1.0,
+        completion_tokens=100,
+        finish_reason="length",
+        raw_content="",
+        proposals=[],
+        allowed_count=0,
+        blocked_count=0,
+        error="finish_reason=length; output truncated at max_tokens=provider-native",
+    )
+    outcome = TaskApplyOutcome(changed_files=[], patch_na=False)
+    eval_task = _proposals_to_planned_applied_eval_task(
+        worker,
+        lock_task,
+        started_at="t0",
+        finished_at="t1",
+        prompt=None,
+        task_outcome=outcome,
+    )
+    assert eval_task.status == "failed"
+    assert eval_task.failure_reason == "TRUNCATED_BY_MAX_TOKENS"
+    assert eval_task.patch_na_reason == worker.error
+
+
+def test_run_strategy_uncapped_when_acg_worker_concurrency_unset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("ACG_WORKER_CONCURRENCY", raising=False)
+    captured: list[int | None] = []
+    from experiments.greenhouse import strategies as strategies_mod
+
+    real = strategies_mod._gather_capped
+
+    async def spy(coros, cap):  # type: ignore[no-untyped-def]
+        captured.append(cap)
+        return await real(coros, cap)
+
+    monkeypatch.setattr(strategies_mod, "_gather_capped", spy)
+
+    lock = _build_lock(serialized=False)
+    lock_path = tmp_path / "agent_lock.json"
+    lock_path.write_text(lock.model_dump_json(indent=2))
+    run_strategy(
+        strategy="naive_parallel",
+        backend="mock",
+        lock=lock,
+        repo_graph={},
+        lockfile_path=str(lock_path),
+        cap_parallelism=None,
+    )
+    assert captured == [None]
+
+
+def test_run_strategy_honors_acg_worker_concurrency_when_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ACG_WORKER_CONCURRENCY", "2")
+    captured: list[int | None] = []
+    from experiments.greenhouse import strategies as strategies_mod
+
+    real = strategies_mod._gather_capped
+
+    async def spy(coros, cap):  # type: ignore[no-untyped-def]
+        captured.append(cap)
+        return await real(coros, cap)
+
+    monkeypatch.setattr(strategies_mod, "_gather_capped", spy)
+
+    lock = _build_lock(serialized=False)
+    lock_path = tmp_path / "agent_lock.json"
+    lock_path.write_text(lock.model_dump_json(indent=2))
+    run_strategy(
+        strategy="naive_parallel",
+        backend="mock",
+        lock=lock,
+        repo_graph={},
+        lockfile_path=str(lock_path),
+        cap_parallelism=None,
+    )
+    assert captured == [2]
 
 
 def test_naive_parallel_dispatch_keeps_lockfile_hints(
@@ -1293,6 +1403,30 @@ def test_cli_realworld_like_run_does_not_emit_greenhouse_metadata(tmp_path: Path
     lock.repo.commit = None
     repo_path = Path(lock.repo.root)
     repo_path.mkdir(parents=True)
+    subprocess.run(
+        ["git", "-C", str(repo_path), "init", "-b", "main"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_path),
+            "-c",
+            "user.name=ACG Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "init",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     lock_path = tmp_path / "agent_lock.json"
     lock_path.write_text(lock.model_dump_json(indent=2))
     out = tmp_path / "eval_run.json"
@@ -1794,12 +1928,7 @@ def test_naive_applied_writes_oob_files(tmp_path: Path) -> None:
         async def complete(self, messages, *, max_tokens=700, temperature=0.2):
             del max_tokens, temperature
             return LLMReply(
-                content=(
-                    "*** Begin Patch\n"
-                    "*** Add File: evil/out.ts\n"
-                    "+bad\n"
-                    "*** End Patch\n"
-                ),
+                content=("*** Begin Patch\n*** Add File: evil/out.ts\n+bad\n*** End Patch\n"),
                 reasoning="",
                 completion_tokens=4,
                 finish_reason="stop",
@@ -2044,9 +2173,7 @@ def test_naive_parallel_blind_applied_uses_blind_prompt(
                 {
                     "id": "task_blind",
                     "prompt": "blind",
-                    "predicted_writes": [
-                        {"path": "app/x.ts", "confidence": 0.9, "reason": "r"}
-                    ],
+                    "predicted_writes": [{"path": "app/x.ts", "confidence": 0.9, "reason": "r"}],
                     "allowed_paths": ["app/**"],
                     "depends_on": [],
                     "parallel_group": 1,
@@ -2054,9 +2181,7 @@ def test_naive_parallel_blind_applied_uses_blind_prompt(
                 }
             ],
             "execution_plan": {
-                "groups": [
-                    {"id": 1, "tasks": ["task_blind"], "type": "parallel", "waits_for": []}
-                ]
+                "groups": [{"id": 1, "tasks": ["task_blind"], "type": "parallel", "waits_for": []}]
             },
             "conflicts_detected": [],
         }
@@ -2104,8 +2229,11 @@ def test_naive_parallel_blind_applied_uses_blind_prompt(
 
         async def complete(self, *_a, **_k):
             return LLMReply(
-                content="", reasoning="", completion_tokens=0,
-                finish_reason="stop", wall_s=0.0,
+                content="",
+                reasoning="",
+                completion_tokens=0,
+                finish_reason="stop",
+                wall_s=0.0,
             )
 
         async def aclose(self) -> None:

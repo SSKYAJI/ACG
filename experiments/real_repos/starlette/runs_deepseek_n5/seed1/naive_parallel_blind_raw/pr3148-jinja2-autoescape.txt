@@ -1,0 +1,48 @@
+*** Begin Patch
+*** Update File: starlette/templating.py
+@@
+-from jinja2 import Environment, FileSystemLoader
++from jinja2 import Environment, FileSystemLoader, select_autoescape
+@@
+         if env is None:
+-            env = Environment(loader=FileSystemLoader(directory), autoescape=True)
++            env = Environment(loader=FileSystemLoader(directory), autoescape=select_autoescape())
+*** Update File: tests/test_templating.py
+@@
++def test_autoescape_select():
++    from starlette.templating import Jinja2Templates
++    import tempfile, os
++    with tempfile.TemporaryDirectory() as tmpdir:
++        # Create a .html template with unsafe content
++        html_path = os.path.join(tmpdir, "test.html")
++        with open(html_path, "w") as f:
++            f.write("<html>{{ content }}</html>")
++        # Create a .txt template with unsafe content
++        txt_path = os.path.join(tmpdir, "test.txt")
++        with open(txt_path, "w") as f:
++            f.write("{{ content }}")
++        templates = Jinja2Templates(directory=tmpdir)
++        # Test HTML autoescaping
++        response = templates.TemplateResponse("test.html", {"request": {}, "content": "<script>"})
++        body = response.body.decode()
++        assert "&lt;script&gt;" in body
++        # Test TXT no autoescaping
++        response = templates.TemplateResponse("test.txt", {"request": {}, "content": "<script>"})
++        body = response.body.decode()
++        assert "<script>" in body
++
++def test_custom_env_preserved():
++    from starlette.templating import Jinja2Templates
++    from jinja2 import Environment, FileSystemLoader
++    import tempfile, os
++    with tempfile.TemporaryDirectory() as tmpdir:
++        # Create a template
++        html_path = os.path.join(tmpdir, "test.html")
++        with open(html_path, "w") as f:
++            f.write("{{ content }}")
++        custom_env = Environment(loader=FileSystemLoader(tmpdir), autoescape=False)
++        templates = Jinja2Templates(directory=tmpdir, env=custom_env)
++        response = templates.TemplateResponse("test.html", {"request": {}, "content": "<script>"})
++        body = response.body.decode()
++        assert "<script>" in body  # no escaping because custom env has autoescape=False
+*** End Patch

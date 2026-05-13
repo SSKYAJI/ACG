@@ -1,4 +1,4 @@
-.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse eval-greenhouse-mock eval-greenhouse-local eval-greenhouse-applied-diff eval-greenhouse-devin-manual eval-greenhouse-devin-api eval-greenhouse-tight-mock eval-greenhouse-report mcp-serve cascade-hook-test setup-realworld compile-realworld compile-realworld-blind setup-python-fastapi compile-python-fastapi eval-python-fastapi-mock analyze-python-fastapi-mock eval-realworld-local eval-realworld-blind-local eval-realworld-blind-openrouter-ablation eval-realworld-tight-openrouter eval-realworld-mock analyze-realworld analyze-realworld-blind analyze-realworld-blind-openrouter
+.PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse eval-greenhouse-mock eval-greenhouse-local eval-greenhouse-applied-diff eval-greenhouse-devin-manual eval-greenhouse-devin-api eval-greenhouse-tight-mock eval-greenhouse-report mcp-serve cascade-hook-test setup-realworld compile-realworld compile-realworld-blind setup-python-fastapi compile-python-fastapi eval-python-fastapi-mock analyze-python-fastapi-mock eval-realworld-local eval-realworld-blind-local eval-realworld-blind-openrouter-ablation eval-realworld-tight-openrouter eval-realworld-applied-kimi eval-realworld-mock analyze-realworld analyze-realworld-blind analyze-realworld-blind-openrouter
 
 # Override these on the command line if your ASUS hostname / port differ:
 #   make compile-gemma GEMMA_HOST=100.x.y.z GEMMA_PORT=8080
@@ -278,6 +278,30 @@ eval-realworld-blind-openrouter-ablation:
 	  --backend local --strategy ablation \
 	  --out-dir experiments/realworld/runs_blind_openrouter \
 	  --suite-name realworld-nestjs-blind-openrouter-v2
+
+# Live Kimi (or other ACG_LLM_* from .env): five applied-diff-live strategies
+# on the blind NestJS lockfile. Resets checkout between strategies; writes
+# timestamped run dir + analyze-runs report.
+eval-realworld-applied-kimi: compile-realworld-blind
+	set -a && . ./.env && set +a && \
+	RUN_DIR=experiments/realworld/runs_applied_kimi_$$(date +%Y%m%d_%H%M%S) && \
+	mkdir -p $$RUN_DIR && \
+	for strat in single_agent naive_parallel naive_parallel_blind acg_planned acg_planned_replan; do \
+	  git -C experiments/realworld/checkout reset --hard HEAD && \
+	  git -C experiments/realworld/checkout clean -fd && \
+	  ./.venv/bin/python -m experiments.greenhouse.headtohead \
+	    --lock experiments/realworld/agent_lock_blind.json \
+	    --tasks experiments/realworld/tasks_blind.json \
+	    --repo experiments/realworld/checkout \
+	    --backend local --strategy $$strat \
+	    --applied-diff-live \
+	    --out $$RUN_DIR/eval_run_$${strat}_applied.json \
+	    --suite-name realworld-nestjs-blind-applied-kimi || exit $$?; \
+	done && \
+	./.venv/bin/acg analyze-runs $$RUN_DIR/*.json \
+	  --out $$RUN_DIR/analysis_report.md \
+	  --json-out $$RUN_DIR/analysis_report.json && \
+	echo "eval-realworld-applied-kimi wrote $$RUN_DIR"
 
 eval-realworld-tight-openrouter:
 	set -a && . ./.env && set +a && \

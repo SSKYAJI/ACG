@@ -183,6 +183,7 @@ def test_compile_initializes_repo_graph_before_compiling(
     monkeypatch.setattr(cli, "scan_context_graph", fake_scan_context_graph)
     monkeypatch.setattr(cli, "compile_lockfile", fake_compile_lockfile)
     monkeypatch.setattr(cli.LLMClient, "from_env", lambda: TestLLM())
+    monkeypatch.setattr(cli.LLMClient, "from_env_for_compile", lambda: TestLLM())
 
     result = runner.invoke(
         app,

@@ -133,6 +133,8 @@ class RunSummary:
     cost_per_completed_task: float | None
     oob_files_per_task_mean: float | None
     replan_rescued_count: int
+    proposal_status_counts: dict[str, int] | None = None
+    model_silence_count: int | None = None
 
 
 @dataclass
@@ -268,11 +270,7 @@ def _honest_metrics_from_task_dicts(
 
     n = len(tasks)
     typecheck_skipped_count = (
-        sum(
-            1
-            for task in tasks
-            if not bool(_task_metrics_dict(task).get("typecheck_ran", False))
-        )
+        sum(1 for task in tasks if not bool(_task_metrics_dict(task).get("typecheck_ran", False)))
         if applied_like
         else 0
     )
@@ -331,9 +329,7 @@ def _merge_summary_int(
     return int(val) if val is not None else default
 
 
-def _merge_summary_float(
-    sm: dict[str, Any], derived: dict[str, Any], key: str
-) -> float | None:
+def _merge_summary_float(sm: dict[str, Any], derived: dict[str, Any], key: str) -> float | None:
     if key in sm and sm[key] is not None:
         return float(sm[key])
     val = derived.get(key)
@@ -402,6 +398,11 @@ def analyze_paths(paths: Iterable[Path]) -> AnalysisReport:
                 summary_metrics, derived, "replan_rescued_count", 0
             )
 
+            psc_raw = summary_metrics.get("proposal_status_counts")
+            proposal_status_counts = psc_raw if isinstance(psc_raw, dict) else None
+            msc_raw = summary_metrics.get("model_silence_count")
+            model_silence_count = int(msc_raw) if msc_raw is not None else None
+
             report.runs.append(
                 RunSummary(
                     source_path=run.get("_source_path", str(run_path)),
@@ -438,6 +439,8 @@ def analyze_paths(paths: Iterable[Path]) -> AnalysisReport:
                     cost_per_completed_task=cost_per_completed_task,
                     oob_files_per_task_mean=oob_files_per_task_mean,
                     replan_rescued_count=replan_rescued_count,
+                    proposal_status_counts=proposal_status_counts,
+                    model_silence_count=model_silence_count,
                 )
             )
 
@@ -597,6 +600,21 @@ def _any_acg_planned_replan_runs(report: AnalysisReport) -> bool:
     )
 
 
+def _any_proposal_diagnostics(report: AnalysisReport) -> bool:
+    for r in report.runs:
+        if r.model_silence_count is not None:
+            return True
+        if r.proposal_status_counts:
+            return True
+    return False
+
+
+def _fmt_proposal_status_cell(r: RunSummary) -> str:
+    c = r.proposal_status_counts or {}
+    parts = [f"{k}={v}" for k, v in sorted(c.items()) if v]
+    return ", ".join(parts) if parts else "—"
+
+
 def format_markdown(report: AnalysisReport) -> str:
     """Render the full analysis report as Markdown."""
     lines: list[str] = []
@@ -711,6 +729,33 @@ def format_markdown(report: AnalysisReport) -> str:
             )
         )
         lines.append("")
+        if _any_proposal_diagnostics(report):
+            lines.append("### Proposal diagnostics")
+            lines.append("")
+            lines.append(
+                "``model_silence_count`` counts tasks whose worker emitted zero file "
+                "proposals (``proposal_write_count == 0`` in eval artifacts). "
+                "``proposal_status_counts`` buckets each task by the runtime classifier "
+                "(``ok`` / ``truncated`` / ``unparseable`` / ``declined`` / "
+                "``transport_error``)."
+            )
+            lines.append("")
+            prop_rows = [
+                [
+                    r.strategy,
+                    _reporting_mode(r.evidence_kind, r.execution_mode),
+                    "—" if r.model_silence_count is None else str(r.model_silence_count),
+                    _fmt_proposal_status_cell(r),
+                ]
+                for r in report.runs
+            ]
+            lines.append(
+                _md_table(
+                    prop_rows,
+                    ["strategy", "mode", "model_silence_count", "proposal_status_counts"],
+                )
+            )
+            lines.append("")
         if _any_acg_planned_replan_runs(report):
             lines.append("### Replan rescue")
             lines.append("")
@@ -724,11 +769,11 @@ def format_markdown(report: AnalysisReport) -> str:
                     ]
                     for e in report.replan_rescues
                 ]
-                lines.append(
-                    _md_table(rr_rows, ["file", "strategy", "task_id", "rescued_files"])
-                )
+                lines.append(_md_table(rr_rows, ["file", "strategy", "task_id", "rescued_files"]))
             else:
-                lines.append("_No replan-rescue events (empty `approved_replan_files`) on these runs._")
+                lines.append(
+                    "_No replan-rescue events (empty `approved_replan_files`) on these runs._"
+                )
             lines.append("")
         lines.append("### Run file details")
         lines.append("")

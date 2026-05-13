@@ -1,0 +1,514 @@
+{
+  "bootstrap_resamples": 1000,
+  "bootstrap_seed": 20260512,
+  "metrics": [
+    "task_completion_rate",
+    "typecheck_pass_count",
+    "tests_ran_count",
+    "first_run_pass_rate",
+    "tokens_prompt_total",
+    "cost_usd_total",
+    "wall_time_seconds"
+  ],
+  "n": 5,
+  "seeds": [
+    {
+      "metrics": {
+        "acg_planned": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 1.0,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 1194.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 68.1673
+        },
+        "acg_planned_full_context": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 1.0,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 1194.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 83.3888
+        },
+        "naive_parallel": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.6667,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 1194.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 69.7021
+        },
+        "naive_parallel_blind": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.3333,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 842.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 69.2771
+        },
+        "single_agent": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 1.0,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 400.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 108.3494
+        }
+      },
+      "path": "experiments/real_repos/starlette/runs_kimi_n5_applied/seed1/eval_run_combined.json",
+      "seed": 1
+    },
+    {
+      "metrics": {
+        "acg_planned": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.6667,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 1194.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 79.864
+        },
+        "acg_planned_full_context": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 1.0,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 1194.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 95.046
+        },
+        "naive_parallel": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 1.0,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 1194.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 67.5557
+        },
+        "naive_parallel_blind": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.3333,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 842.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 96.1251
+        },
+        "single_agent": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 1.0,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 400.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 131.7614
+        }
+      },
+      "path": "experiments/real_repos/starlette/runs_kimi_n5_applied/seed2/eval_run_combined.json",
+      "seed": 2
+    },
+    {
+      "metrics": {
+        "acg_planned": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.6667,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 1194.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 82.614
+        },
+        "acg_planned_full_context": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 1.0,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 1194.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 67.5315
+        },
+        "naive_parallel": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 1.0,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 1194.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 56.0741
+        },
+        "naive_parallel_blind": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.3333,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 842.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 74.3475
+        },
+        "single_agent": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 1.0,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 400.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 107.2694
+        }
+      },
+      "path": "experiments/real_repos/starlette/runs_kimi_n5_applied/seed3/eval_run_combined.json",
+      "seed": 3
+    },
+    {
+      "metrics": {
+        "acg_planned": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.6667,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 1194.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 82.2341
+        },
+        "acg_planned_full_context": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 1.0,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 1194.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 65.6749
+        },
+        "naive_parallel": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 1.0,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 1194.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 53.101
+        },
+        "naive_parallel_blind": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.3333,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 842.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 75.4901
+        },
+        "single_agent": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 1.0,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 400.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 127.5918
+        }
+      },
+      "path": "experiments/real_repos/starlette/runs_kimi_n5_applied/seed4/eval_run_combined.json",
+      "seed": 4
+    },
+    {
+      "metrics": {
+        "acg_planned": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 1.0,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 1194.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 63.3596
+        },
+        "acg_planned_full_context": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 1.0,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 1194.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 66.3629
+        },
+        "naive_parallel": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 1.0,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 1194.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 75.0784
+        },
+        "naive_parallel_blind": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.3333,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 842.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 90.8741
+        },
+        "single_agent": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 1.0,
+          "tests_ran_count": 0.0,
+          "tokens_prompt_total": 400.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 194.6014
+        }
+      },
+      "path": "experiments/real_repos/starlette/runs_kimi_n5_applied/seed5/eval_run_combined.json",
+      "seed": 5
+    }
+  ],
+  "strategies": {
+    "acg_planned": {
+      "cost_usd_total": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "first_run_pass_rate": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "task_completion_rate": {
+        "ci95": {
+          "high": 0.93334,
+          "low": 0.6667
+        },
+        "mean": 0.80002,
+        "stdev": 0.1825559284164719,
+        "variance_treatment": "stochastic"
+      },
+      "tests_ran_count": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tokens_prompt_total": {
+        "ci95": null,
+        "mean": 1194.0,
+        "stdev": 0.0,
+        "variance_treatment": "deterministic"
+      },
+      "typecheck_pass_count": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "wall_time_seconds": {
+        "ci95": {
+          "high": 81.91204,
+          "low": 68.09604
+        },
+        "mean": 75.2478,
+        "stdev": 8.885963257576526,
+        "variance_treatment": "stochastic"
+      }
+    },
+    "acg_planned_full_context": {
+      "cost_usd_total": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "first_run_pass_rate": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "task_completion_rate": {
+        "ci95": null,
+        "mean": 1.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tests_ran_count": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tokens_prompt_total": {
+        "ci95": null,
+        "mean": 1194.0,
+        "stdev": 0.0,
+        "variance_treatment": "deterministic"
+      },
+      "typecheck_pass_count": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "wall_time_seconds": {
+        "ci95": {
+          "high": 86.84378,
+          "low": 66.32141999999999
+        },
+        "mean": 75.60082,
+        "stdev": 13.112442914537327,
+        "variance_treatment": "stochastic"
+      }
+    },
+    "naive_parallel": {
+      "cost_usd_total": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "first_run_pass_rate": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "task_completion_rate": {
+        "ci95": {
+          "high": 1.0,
+          "low": 0.80002
+        },
+        "mean": 0.93334,
+        "stdev": 0.14905629138013599,
+        "variance_treatment": "stochastic"
+      },
+      "tests_ran_count": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tokens_prompt_total": {
+        "ci95": null,
+        "mean": 1194.0,
+        "stdev": 0.0,
+        "variance_treatment": "deterministic"
+      },
+      "typecheck_pass_count": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "wall_time_seconds": {
+        "ci95": {
+          "high": 71.42334,
+          "low": 57.00510799999999
+        },
+        "mean": 64.30226,
+        "stdev": 9.341295142163105,
+        "variance_treatment": "stochastic"
+      }
+    },
+    "naive_parallel_blind": {
+      "cost_usd_total": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "first_run_pass_rate": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "task_completion_rate": {
+        "ci95": null,
+        "mean": 0.3333,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tests_ran_count": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tokens_prompt_total": {
+        "ci95": null,
+        "mean": 842.0,
+        "stdev": 0.0,
+        "variance_treatment": "deterministic"
+      },
+      "typecheck_pass_count": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "wall_time_seconds": {
+        "ci95": {
+          "high": 90.71938,
+          "low": 72.54786
+        },
+        "mean": 81.22278,
+        "stdev": 11.598054630497307,
+        "variance_treatment": "stochastic"
+      }
+    },
+    "single_agent": {
+      "cost_usd_total": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "first_run_pass_rate": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "task_completion_rate": {
+        "ci95": null,
+        "mean": 1.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tests_ran_count": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tokens_prompt_total": {
+        "ci95": null,
+        "mean": 400.0,
+        "stdev": 0.0,
+        "variance_treatment": "deterministic"
+      },
+      "typecheck_pass_count": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "wall_time_seconds": {
+        "ci95": {
+          "high": 164.78300000000002,
+          "low": 111.76588000000001
+        },
+        "mean": 133.91468,
+        "stdev": 35.67578975428575,
+        "variance_treatment": "stochastic"
+      }
+    }
+  }
+}

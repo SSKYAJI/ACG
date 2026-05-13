@@ -1,0 +1,1255 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-11T22:20:23.550447Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "tokens_planner_total": null,
+    "tokens_scope_review_total": 18466
+  },
+  "repo": {
+    "root": "experiments/realworld/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "add-rate-limiting",
+      "prompt": "Add global API rate limiting to the application. Use a NestJS-compatible throttling library. Configure a default of 100 requests per 60 seconds. Apply it globally so all endpoints are protected.",
+      "predicted_writes": [
+        {
+          "path": "src/main.ts",
+          "confidence": 0.9,
+          "reason": "Task requires applying rate limiting globally, which is typically configured in the main application file. Signals: bm25, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "package.json",
+          "confidence": 0.8,
+          "reason": "Adding a NestJS-compatible throttling library implies modifying dependencies in package.json. Signals: llm, package. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/app.controller.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/app.module.ts suggests coordinated edits to sibling src/app.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.module.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/article/article.controller.ts suggests coordinated edits to sibling src/article/article.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.controller.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.interface.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.interface.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.module.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.entity.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/user/user.controller.ts suggests coordinated edits to sibling src/user/user.entity.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.module.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/user/user.controller.ts suggests coordinated edits to sibling src/user/user.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        }
+      ],
+      "allowed_paths": [
+        "package.json",
+        "src/app.controller.ts",
+        "src/article/article.module.ts",
+        "src/main.ts",
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.module.ts"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "src/main.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "Task requires applying rate limiting globally, which is typically configured in the main application file. Signals: bm25, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "package.json",
+          "tier": "must_write",
+          "score": 0.8,
+          "signals": [
+            "llm",
+            "package",
+            "scope_review"
+          ],
+          "reason": "Adding a NestJS-compatible throttling library implies modifying dependencies in package.json. Signals: llm, package. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/app.controller.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/app.module.ts suggests coordinated edits to sibling src/app.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.module.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/article/article.controller.ts suggests coordinated edits to sibling src/article/article.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.controller.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.interface.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.interface.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.module.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.entity.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/user/user.controller.ts suggests coordinated edits to sibling src/user/user.entity.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.module.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/user/user.controller.ts suggests coordinated edits to sibling src/user/user.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 3,
+      "rationale": null
+    },
+    {
+      "id": "add-user-roles",
+      "prompt": "Add role-based access control to the application. Users should have a role field (user or admin). Create a guard that checks the current user's role against a required role. Register it so endpoints can be decorated with a role requirement.",
+      "predicted_writes": [
+        {
+          "path": "src/user/dto/index.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #7, top symbol matches: CreateUserDto, LoginUserDto, UpdateUserDto.; BM25 lexical match over path, identifiers, imports, docstrings (score 6.55). Signals: bm25, hint, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.entity.ts",
+          "confidence": 0.9,
+          "reason": "Task requires adding role field to user, and user.entity.ts defines the user model. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.interface.ts",
+          "confidence": 0.9,
+          "reason": "User interface needs to be updated to include role field for role-based access control. Signals: graph, hint, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/auth.middleware.ts",
+          "confidence": 0.8,
+          "reason": "Authentication middleware needs to verify and check user roles for access control. Signals: auth_role, hint, llm, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/app.controller.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/app.module.ts suggests coordinated edits to sibling src/app.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.module.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/article/article.controller.ts suggests coordinated edits to sibling src/article/article.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.controller.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.interface.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.interface.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.module.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        }
+      ],
+      "allowed_paths": [
+        "src/app.controller.ts",
+        "src/article/article.module.ts",
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/user/auth.middleware.ts",
+        "src/user/dto/**",
+        "src/user/user.entity.ts",
+        "src/user/user.interface.ts"
+      ],
+      "candidate_context_paths": [
+        "src/user/user.module.ts",
+        "src/user/user.service.ts",
+        "src/shared/pipes/validation.pipe.ts",
+        "src/user/dto/create-user.dto.ts",
+        "src/user/dto/update-user.dto.ts",
+        "src/user/user.controller.ts"
+      ],
+      "file_scopes": [
+        {
+          "path": "src/user/dto/index.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "hint",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "personalized PageRank rank #7, top symbol matches: CreateUserDto, LoginUserDto, UpdateUserDto.; BM25 lexical match over path, identifiers, imports, docstrings (score 6.55). Signals: bm25, hint, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.entity.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "Task requires adding role field to user, and user.entity.ts defines the user model. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.interface.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "graph",
+            "hint",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "User interface needs to be updated to include role field for role-based access control. Signals: graph, hint, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/auth.middleware.ts",
+          "tier": "must_write",
+          "score": 0.8,
+          "signals": [
+            "auth_role",
+            "hint",
+            "llm",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "Authentication middleware needs to verify and check user roles for access control. Signals: auth_role, hint, llm, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/app.controller.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/app.module.ts suggests coordinated edits to sibling src/app.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.module.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/article/article.controller.ts suggests coordinated edits to sibling src/article/article.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.controller.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.interface.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.interface.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.module.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.module.ts",
+          "tier": "candidate_context",
+          "score": 0.8,
+          "signals": [
+            "graph",
+            "hint",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "Module file may require updates to register new role guards or services. Candidate context only; requires replan before write. Signals: graph, hint, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.service.ts",
+          "tier": "candidate_context",
+          "score": 0.8,
+          "signals": [
+            "hint",
+            "llm",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "User service likely needs modification to handle role-based logic during user operations. Candidate context only; requires replan before write. Signals: hint, llm, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/shared/pipes/validation.pipe.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/dto/create-user.dto.ts",
+          "tier": "candidate_context",
+          "score": 0.7,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "DTOs might need role field for creating users with roles. Candidate context only; requires replan before write. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/dto/update-user.dto.ts",
+          "tier": "candidate_context",
+          "score": 0.7,
+          "signals": [
+            "hint",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "DTOs might need role field for updating user roles. Candidate context only; requires replan before write. Signals: hint, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.controller.ts",
+          "tier": "candidate_context",
+          "score": 0.7,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "Controller may need updates to support role-based access in user-related endpoints. Candidate context only; requires replan before write. Signals: bm25, hint, llm, pagerank. Scope review kept this file at its existing tier."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 4,
+      "rationale": null
+    },
+    {
+      "id": "add-article-bookmarks",
+      "prompt": "Add a bookmarking feature so users can save articles for later, separate from the existing favorites system. Users should be able to bookmark and unbookmark articles via the API. Store the bookmark relationship in the database.",
+      "predicted_writes": [
+        {
+          "path": "src/user/user.entity.ts",
+          "confidence": 0.9,
+          "reason": "Bookmarking feature requires user-entity modifications to track which users have bookmarked which articles. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/profile/profile.controller.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.interface.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.interface.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.module.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        }
+      ],
+      "allowed_paths": [
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/user/user.entity.ts"
+      ],
+      "candidate_context_paths": [
+        "src/article/article.entity.ts",
+        "src/article/article.controller.ts",
+        "src/article/article.service.ts",
+        "src/user/user.service.ts"
+      ],
+      "file_scopes": [
+        {
+          "path": "src/user/user.entity.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "Bookmarking feature requires user-entity modifications to track which users have bookmarked which articles. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/profile/profile.controller.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.interface.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.interface.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.module.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.entity.ts",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "Task involves storing bookmark relationships, requiring modification of the article entity to support bookmarking. Candidate context only; requires replan before write. Signals: bm25, hint, llm, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/article/article.controller.ts",
+          "tier": "candidate_context",
+          "score": 0.8,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "The article controller handles API requests and will need new endpoints for bookmarking articles. Candidate context only; requires replan before write. Signals: bm25, hint, llm, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/article/article.service.ts",
+          "tier": "candidate_context",
+          "score": 0.8,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "The article service handles article-related logic and will need to implement bookmarking functionality. Candidate context only; requires replan before write. Signals: bm25, hint, llm, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/user/user.service.ts",
+          "tier": "candidate_context",
+          "score": 0.7,
+          "signals": [
+            "hint",
+            "llm",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "User service may need modifications to handle bookmark-related logic and user-bookmark associations. Candidate context only; requires replan before write. Signals: hint, llm, pagerank. Scope review requested a drop, but protected evidence kept it."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    },
+    {
+      "id": "extend-tag-crud",
+      "prompt": "Extend the tag system with write operations. Currently tags can only be read. Add the ability to create new tags and delete existing ones via the API.",
+      "predicted_writes": [
+        {
+          "path": "src/tag/tag.controller.ts",
+          "confidence": 0.9,
+          "reason": "Task requires adding create and delete operations, and controller handles API endpoints. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/tag/tag.service.ts",
+          "confidence": 0.9,
+          "reason": "Service implements business logic for tag operations, including create and delete. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/app.controller.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/app.module.ts suggests coordinated edits to sibling src/app.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.module.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/article/article.controller.ts suggests coordinated edits to sibling src/article/article.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.controller.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.interface.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.interface.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.module.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.entity.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/user/user.controller.ts suggests coordinated edits to sibling src/user/user.entity.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.module.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/user/user.controller.ts suggests coordinated edits to sibling src/user/user.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        }
+      ],
+      "allowed_paths": [
+        "src/app.controller.ts",
+        "src/article/article.module.ts",
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.service.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.module.ts"
+      ],
+      "candidate_context_paths": [
+        "src/tag/tag.entity.ts"
+      ],
+      "file_scopes": [
+        {
+          "path": "src/tag/tag.controller.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "Task requires adding create and delete operations, and controller handles API endpoints. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/tag/tag.service.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "Service implements business logic for tag operations, including create and delete. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/app.controller.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/app.module.ts suggests coordinated edits to sibling src/app.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.module.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/article/article.controller.ts suggests coordinated edits to sibling src/article/article.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.controller.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.interface.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.interface.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.module.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.entity.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/user/user.controller.ts suggests coordinated edits to sibling src/user/user.entity.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.module.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/user/user.controller.ts suggests coordinated edits to sibling src/user/user.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/tag/tag.entity.ts",
+          "tier": "candidate_context",
+          "score": 0.7,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "Entity defines the structure of tags and may need updates for new operations. Candidate context only; requires replan before write. Signals: bm25, hint, llm. Scope review kept this file at its existing tier."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 5,
+      "rationale": null
+    },
+    {
+      "id": "add-article-search",
+      "prompt": "Add full-text search to the articles API. Users should be able to search articles by keywords matching against the title and body fields. Return paginated results.",
+      "predicted_writes": [
+        {
+          "path": "src/profile/profile.controller.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.interface.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.interface.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.module.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.module.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/user/user.controller.ts suggests coordinated edits to sibling src/user/user.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        }
+      ],
+      "allowed_paths": [
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/user/user.module.ts"
+      ],
+      "candidate_context_paths": [
+        "src/article/article.controller.ts",
+        "src/article/article.service.ts",
+        "src/tag/tag.controller.ts",
+        "src/tag/tag.service.ts",
+        "src/article/article.entity.ts",
+        "src/article/dto/index.ts"
+      ],
+      "file_scopes": [
+        {
+          "path": "src/profile/profile.controller.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.interface.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.interface.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/profile/profile.module.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/profile/profile.service.ts suggests coordinated edits to sibling src/profile/profile.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.module.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/user/user.controller.ts suggests coordinated edits to sibling src/user/user.module.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.controller.ts",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "Task requires adding search functionality to articles API, and controller handles API endpoints. Candidate context only; requires replan before write. Signals: bm25, hint, llm, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/article/article.service.ts",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "Service layer implements business logic for articles including potential search functionality. Candidate context only; requires replan before write. Signals: bm25, hint, llm, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/tag/tag.controller.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/tag/tag.service.ts",
+          "tier": "candidate_context",
+          "score": 0.72,
+          "signals": [
+            "planner",
+            "scope_review"
+          ],
+          "reason": "LLM seed expansion: planner path from repository manifest; not in indexer seed pool. Candidate context only; requires replan before write. Signals: planner. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.entity.ts",
+          "tier": "candidate_context",
+          "score": 0.7,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "Entity defines the structure of articles, which may need modifications to support search indexing. Candidate context only; requires replan before write. Signals: bm25, hint, llm, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/article/dto/index.ts",
+          "tier": "candidate_context",
+          "score": 0.7,
+          "signals": [
+            "graph",
+            "hint",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "DTOs may need updates to support search parameters or paginated results in API requests. Candidate context only; requires replan before write. Signals: graph, hint, llm. Scope review requested a drop, but protected evidence kept it."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 2,
+      "rationale": null
+    },
+    {
+      "id": "add-health-check",
+      "prompt": "Add a health check endpoint that verifies the application and its database connection are operational. Return a standard health status response.",
+      "predicted_writes": [
+        {
+          "path": "src/app.controller.ts",
+          "confidence": 0.85,
+          "reason": "Health check endpoint is typically registered in the root controller, and app.controller.ts is the natural place for global routes. Signals: cluster, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/article/article.controller.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/article/article.service.ts suggests coordinated edits to sibling src/article/article.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.entity.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/article/article.service.ts suggests coordinated edits to sibling src/article/article.entity.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.interface.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/article/article.service.ts suggests coordinated edits to sibling src/article/article.interface.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.controller.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/user/user.entity.ts suggests coordinated edits to sibling src/user/user.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.interface.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/user/user.entity.ts suggests coordinated edits to sibling src/user/user.interface.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.service.ts",
+          "confidence": 0.65,
+          "reason": "Implied cluster seed: src/user/user.entity.ts suggests coordinated edits to sibling src/user/user.service.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        }
+      ],
+      "allowed_paths": [
+        "src/app.controller.ts",
+        "src/article/article.controller.ts",
+        "src/article/article.entity.ts",
+        "src/article/article.interface.ts",
+        "src/user/user.controller.ts",
+        "src/user/user.interface.ts",
+        "src/user/user.service.ts"
+      ],
+      "candidate_context_paths": [
+        "src/app.module.ts"
+      ],
+      "file_scopes": [
+        {
+          "path": "src/app.controller.ts",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "cluster",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "Health check endpoint is typically registered in the root controller, and app.controller.ts is the natural place for global routes. Signals: cluster, llm. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "src/article/article.controller.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/article/article.service.ts suggests coordinated edits to sibling src/article/article.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.entity.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/article/article.service.ts suggests coordinated edits to sibling src/article/article.entity.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/article/article.interface.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/article/article.service.ts suggests coordinated edits to sibling src/article/article.interface.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.controller.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/user/user.entity.ts suggests coordinated edits to sibling src/user/user.controller.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.interface.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/user/user.entity.ts suggests coordinated edits to sibling src/user/user.interface.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/user/user.service.ts",
+          "tier": "must_write",
+          "score": 0.65,
+          "signals": [
+            "cluster",
+            "scope_review"
+          ],
+          "reason": "Implied cluster seed: src/user/user.entity.ts suggests coordinated edits to sibling src/user/user.service.ts in the same module. Signals: cluster. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "src/app.module.ts",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "llm",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "Adding a new endpoint may require importing or configuring the controller in the root module. Candidate context only; requires replan before write. Signals: bm25, llm, pagerank. Scope review kept this file at its existing tier."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "add-article-bookmarks",
+          "add-health-check"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      },
+      {
+        "id": 2,
+        "tasks": [
+          "add-article-search"
+        ],
+        "type": "serial",
+        "waits_for": [
+          1
+        ]
+      },
+      {
+        "id": 3,
+        "tasks": [
+          "add-rate-limiting"
+        ],
+        "type": "serial",
+        "waits_for": [
+          2
+        ]
+      },
+      {
+        "id": 4,
+        "tasks": [
+          "add-user-roles"
+        ],
+        "type": "serial",
+        "waits_for": [
+          3
+        ]
+      },
+      {
+        "id": 5,
+        "tasks": [
+          "extend-tag-crud"
+        ],
+        "type": "serial",
+        "waits_for": [
+          4
+        ]
+      }
+    ]
+  },
+  "conflicts_detected": [
+    {
+      "files": [
+        "src/app.controller.ts",
+        "src/article/article.module.ts",
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/user/user.entity.ts"
+      ],
+      "between_tasks": [
+        "add-rate-limiting",
+        "add-user-roles"
+      ],
+      "resolution": "Serialize add-user-roles after add-rate-limiting; both modify src/app.controller.ts, src/article/article.module.ts, src/profile/profile.controller.ts, src/profile/profile.interface.ts, src/profile/profile.module.ts, src/user/user.entity.ts"
+    },
+    {
+      "files": [
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/user/user.entity.ts"
+      ],
+      "between_tasks": [
+        "add-article-bookmarks",
+        "add-rate-limiting"
+      ],
+      "resolution": "Serialize add-rate-limiting after add-article-bookmarks; both modify src/profile/profile.controller.ts, src/profile/profile.interface.ts, src/profile/profile.module.ts, src/user/user.entity.ts"
+    },
+    {
+      "files": [
+        "src/app.controller.ts",
+        "src/article/article.module.ts",
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/user/user.entity.ts",
+        "src/user/user.module.ts"
+      ],
+      "between_tasks": [
+        "add-rate-limiting",
+        "extend-tag-crud"
+      ],
+      "resolution": "Serialize extend-tag-crud after add-rate-limiting; both modify src/app.controller.ts, src/article/article.module.ts, src/profile/profile.controller.ts, src/profile/profile.interface.ts, src/profile/profile.module.ts, src/user/user.entity.ts, src/user/user.module.ts"
+    },
+    {
+      "files": [
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/user/user.module.ts"
+      ],
+      "between_tasks": [
+        "add-article-search",
+        "add-rate-limiting"
+      ],
+      "resolution": "Serialize add-rate-limiting after add-article-search; both modify src/profile/profile.controller.ts, src/profile/profile.interface.ts, src/profile/profile.module.ts, src/user/user.module.ts"
+    },
+    {
+      "files": [
+        "src/app.controller.ts"
+      ],
+      "between_tasks": [
+        "add-health-check",
+        "add-rate-limiting"
+      ],
+      "resolution": "Serialize add-rate-limiting after add-health-check; both modify src/app.controller.ts"
+    },
+    {
+      "files": [
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/user/user.entity.ts"
+      ],
+      "between_tasks": [
+        "add-article-bookmarks",
+        "add-user-roles"
+      ],
+      "resolution": "Serialize add-user-roles after add-article-bookmarks; both modify src/profile/profile.controller.ts, src/profile/profile.interface.ts, src/profile/profile.module.ts, src/user/user.entity.ts"
+    },
+    {
+      "files": [
+        "src/app.controller.ts",
+        "src/article/article.module.ts",
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/user/user.entity.ts"
+      ],
+      "between_tasks": [
+        "add-user-roles",
+        "extend-tag-crud"
+      ],
+      "resolution": "Serialize extend-tag-crud after add-user-roles; both modify src/app.controller.ts, src/article/article.module.ts, src/profile/profile.controller.ts, src/profile/profile.interface.ts, src/profile/profile.module.ts, src/user/user.entity.ts"
+    },
+    {
+      "files": [
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts"
+      ],
+      "between_tasks": [
+        "add-article-search",
+        "add-user-roles"
+      ],
+      "resolution": "Serialize add-user-roles after add-article-search; both modify src/profile/profile.controller.ts, src/profile/profile.interface.ts, src/profile/profile.module.ts"
+    },
+    {
+      "files": [
+        "src/app.controller.ts",
+        "src/user/user.interface.ts"
+      ],
+      "between_tasks": [
+        "add-health-check",
+        "add-user-roles"
+      ],
+      "resolution": "Serialize add-user-roles after add-health-check; both modify src/app.controller.ts, src/user/user.interface.ts"
+    },
+    {
+      "files": [
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/user/user.entity.ts"
+      ],
+      "between_tasks": [
+        "add-article-bookmarks",
+        "extend-tag-crud"
+      ],
+      "resolution": "Serialize extend-tag-crud after add-article-bookmarks; both modify src/profile/profile.controller.ts, src/profile/profile.interface.ts, src/profile/profile.module.ts, src/user/user.entity.ts"
+    },
+    {
+      "files": [
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts"
+      ],
+      "between_tasks": [
+        "add-article-bookmarks",
+        "add-article-search"
+      ],
+      "resolution": "Serialize add-article-search after add-article-bookmarks; both modify src/profile/profile.controller.ts, src/profile/profile.interface.ts, src/profile/profile.module.ts"
+    },
+    {
+      "files": [
+        "src/profile/profile.controller.ts",
+        "src/profile/profile.interface.ts",
+        "src/profile/profile.module.ts",
+        "src/user/user.module.ts"
+      ],
+      "between_tasks": [
+        "add-article-search",
+        "extend-tag-crud"
+      ],
+      "resolution": "Serialize extend-tag-crud after add-article-search; both modify src/profile/profile.controller.ts, src/profile/profile.interface.ts, src/profile/profile.module.ts, src/user/user.module.ts"
+    },
+    {
+      "files": [
+        "src/app.controller.ts"
+      ],
+      "between_tasks": [
+        "add-health-check",
+        "extend-tag-crud"
+      ],
+      "resolution": "Serialize extend-tag-crud after add-health-check; both modify src/app.controller.ts"
+    }
+  ]
+}

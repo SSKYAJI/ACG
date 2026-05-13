@@ -1,0 +1,1102 @@
+Looking at this task, I need to implement a SessionMiddleware that can distinguish between session reads and writes, avoid unnecessary Set-Cookie headers for unchanged sessions, preserve cookie clearing behavior, and add regression tests.
+
+Let me create a complete implementation from scratch since no existing files are provided.
+
+*** Begin Patch
+*** Add File: session/session.go
++ package session
++
++ import (
++ 	"context"
++ 	"crypto/hmac"
++ 	"crypto/rand"
++ 	"crypto/sha256"
++ 	"encoding/base64"
++ 	"encoding/json"
++ 	"fmt"
++ 	"net/http"
++ 	"strings"
++ 	"sync"
++ 	"time"
++ )
++
++ // contextKey is an unexported type for context keys in this package.
++ type contextKey int
++
++ const sessionContextKey contextKey = 0
++
++ // Options holds configuration for the session middleware.
++ type Options struct {
++ 	// CookieName is the name of the session cookie.
++ 	CookieName string
++ 	// MaxAge is the maximum age of the session cookie in seconds.
++ 	// 0 means session cookie (deleted when browser closes).
++ 	MaxAge int
++ 	// Path is the cookie path.
++ 	Path string
++ 	// Domain is the cookie domain.
++ 	Domain string
++ 	// Secure sets the Secure flag on the cookie.
++ 	Secure bool
++ 	// HttpOnly sets the HttpOnly flag on the cookie.
++ 	HttpOnly bool
++ 	// SameSite sets the SameSite attribute on the cookie.
++ 	SameSite http.SameSite
++ 	// Secret is used to sign the session cookie value.
++ 	Secret []byte
++ }
++
++ // DefaultOptions returns a set of sensible defaults.
++ func DefaultOptions() Options {
++ 	return Options{
++ 		CookieName: "session",
++ 		MaxAge:     86400,
++ 		Path:       "/",
++ 		HttpOnly:   true,
++ 		SameSite:   http.SameSiteLaxMode,
++ 	}
++ }
++
++ // Session holds the session data and tracks whether it has been mutated.
++ type Session struct {
++ 	mu       sync.RWMutex
++ 	data     map[string]interface{}
++ 	id       string
++ 	isNew    bool
++ 	mutated  bool
++ 	cleared  bool
++ }
++
++ // newSession creates a new empty session with a fresh ID.
++ func newSession() (*Session, error) {
++ 	id, err := generateID()
++ 	if err != nil {
++ 		return nil, err
++ 	}
++ 	return &Session{
++ 		data:  make(map[string]interface{}),
++ 		id:    id,
++ 		isNew: true,
++ 	}, nil
++ }
++
++ // loadSession creates a session from existing data (loaded from cookie).
++ func loadSession(id string, data map[string]interface{}) *Session {
++ 	return &Session{
++ 		data:  data,
++ 		id:    id,
++ 		isNew: false,
++ 	}
++ }
++
++ // generateID creates a cryptographically random session ID.
++ func generateID() (string, error) {
++ 	b := make([]byte, 32)
++ 	if _, err := rand.Read(b); err != nil {
++ 		return "", fmt.Errorf("session: failed to generate ID: %w", err)
++ 	}
++ 	return base64.RawURLEncoding.EncodeToString(b), nil
++ }
++
++ // ID returns the session ID.
++ func (s *Session) ID() string {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	return s.id
++ }
++
++ // IsNew returns true if the session was newly created (not loaded from cookie).
++ func (s *Session) IsNew() bool {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	return s.isNew
++ }
++
++ // IsMutated returns true if any Set/Delete/Clear operation was called.
++ func (s *Session) IsMutated() bool {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	return s.mutated
++ }
++
++ // IsCleared returns true if Clear() was called on this session.
++ func (s *Session) IsCleared() bool {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	return s.cleared
++ }
++
++ // Get retrieves a value from the session. This is a read-only operation
++ // and does NOT mark the session as mutated.
++ func (s *Session) Get(key string) (interface{}, bool) {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	v, ok := s.data[key]
++ 	return v, ok
++ }
++
++ // GetString retrieves a string value from the session.
++ func (s *Session) GetString(key string) (string, bool) {
++ 	v, ok := s.Get(key)
++ 	if !ok {
++ 		return "", false
++ 	}
++ 	str, ok := v.(string)
++ 	return str, ok
++ }
++
++ // Set stores a value in the session and marks it as mutated.
++ func (s *Session) Set(key string, value interface{}) {
++ 	s.mu.Lock()
++ 	defer s.mu.Unlock()
++ 	s.data[key] = value
++ 	s.mutated = true
++ }
++
++ // Delete removes a key from the session and marks it as mutated.
++ func (s *Session) Delete(key string) {
++ 	s.mu.Lock()
++ 	defer s.mu.Unlock()
++ 	delete(s.data, key)
++ 	s.mutated = true
++ }
++
++ // Clear removes all data from the session and marks it for cookie deletion.
++ // After Clear(), the middleware will send a Set-Cookie header that expires
++ // the cookie immediately.
++ func (s *Session) Clear() {
++ 	s.mu.Lock()
++ 	defer s.mu.Unlock()
++ 	s.data = make(map[string]interface{})
++ 	s.mutated = true
++ 	s.cleared = true
++ }
++
++ // Keys returns all keys currently stored in the session.
++ func (s *Session) Keys() []string {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	keys := make([]string, 0, len(s.data))
++ 	for k := range s.data {
++ 		keys = append(keys, k)
++ 	}
++ 	return keys
++ }
++
++ // snapshot returns a copy of the session data (used for serialization).
++ func (s *Session) snapshot() map[string]interface{} {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	cp := make(map[string]interface{}, len(s.data))
++ 	for k, v := range s.data {
++ 		cp[k] = v
++ 	}
++ 	return cp
++ }
++
++ // cookiePayload is the structure serialized into the cookie value.
++ type cookiePayload struct {
++ 	ID   string                 `json:"id"`
++ 	Data map[string]interface{} `json:"data"`
++ }
++
++ // encode serializes and signs the session into a cookie value string.
++ func encode(s *Session, secret []byte) (string, error) {
++ 	payload := cookiePayload{
++ 		ID:   s.ID(),
++ 		Data: s.snapshot(),
++ 	}
++ 	raw, err := json.Marshal(payload)
++ 	if err != nil {
++ 		return "", fmt.Errorf("session: encode marshal: %w", err)
++ 	}
++ 	encoded := base64.RawURLEncoding.EncodeToString(raw)
++ 	sig := sign(encoded, secret)
++ 	return encoded + "." + sig, nil
++ }
++
++ // decode verifies the signature and deserializes the cookie value.
++ func decode(value string, secret []byte) (*cookiePayload, error) {
++ 	parts := strings.SplitN(value, ".", 2)
++ 	if len(parts) != 2 {
++ 		return nil, fmt.Errorf("session: decode: invalid format")
++ 	}
++ 	encoded, sig := parts[0], parts[1]
++ 	expected := sign(encoded, secret)
++ 	if !hmac.Equal([]byte(sig), []byte(expected)) {
++ 		return nil, fmt.Errorf("session: decode: invalid signature")
++ 	}
++ 	raw, err := base64.RawURLEncoding.DecodeString(encoded)
++ 	if err != nil {
++ 		return nil, fmt.Errorf("session: decode: base64: %w", err)
++ 	}
++ 	var payload cookiePayload
++ 	if err := json.Unmarshal(raw, &payload); err != nil {
++ 		return nil, fmt.Errorf("session: decode: unmarshal: %w", err)
++ 	}
++ 	return &payload, nil
++ }
++
++ // sign computes an HMAC-SHA256 signature for the given data.
++ func sign(data string, secret []byte) string {
++ 	mac := hmac.New(sha256.New, secret)
++ 	mac.Write([]byte(data))
++ 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
++ }
++
++ // Middleware is the HTTP session middleware.
++ type Middleware struct {
++ 	opts Options
++ }
++
++ // New creates a new session Middleware with the given options.
++ func New(opts Options) *Middleware {
++ 	if opts.CookieName == "" {
++ 		opts.CookieName = "session"
++ 	}
++ 	if opts.Path == "" {
++ 		opts.Path = "/"
++ 	}
++ 	if len(opts.Secret) == 0 {
++ 		// Generate a random secret if none provided (not suitable for multi-instance).
++ 		secret := make([]byte, 32)
++ 		rand.Read(secret) //nolint:errcheck
++ 		opts.Secret = secret
++ 	}
++ 	return &Middleware{opts: opts}
++ }
++
++ // Handler wraps the given http.Handler with session management.
++ func (m *Middleware) Handler(next http.Handler) http.Handler {
++ 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		sess, err := m.loadOrCreate(r)
++ 		if err != nil {
++ 			// Could not load session; create a fresh one.
++ 			sess, _ = newSession()
++ 		}
++
++ 		// Inject session into context.
++ 		ctx := context.WithValue(r.Context(), sessionContextKey, sess)
++ 		r = r.WithContext(ctx)
++
++ 		// Use a response writer wrapper to defer cookie writing until
++ 		// the handler has finished (so we know the final session state).
++ 		rw := &responseWriter{ResponseWriter: w, code: http.StatusOK}
++ 		next.ServeHTTP(rw, r)
++
++ 		// After handler: decide whether to set/clear the cookie.
++ 		m.saveCookie(rw, sess)
++
++ 		// Flush the buffered response.
++ 		rw.flush()
++ 	})
++ }
++
++ // loadOrCreate loads a session from the request cookie, or creates a new one.
++ func (m *Middleware) loadOrCreate(r *http.Request) (*Session, error) {
++ 	cookie, err := r.Cookie(m.opts.CookieName)
++ 	if err != nil {
++ 		// No cookie present; create new session.
++ 		return newSession()
++ 	}
++ 	payload, err := decode(cookie.Value, m.opts.Secret)
++ 	if err != nil {
++ 		// Invalid/tampered cookie; create new session.
++ 		return newSession()
++ 	}
++ 	return loadSession(payload.ID, payload.Data), nil
++ }
++
++ // saveCookie writes the Set-Cookie header if necessary.
++ //
++ // Rules:
++ //  1. If the session was cleared → send an expiring cookie to delete it.
++ //  2. If the session was mutated (but not cleared) → send updated cookie.
++ //  3. If the session is new and was never mutated → do NOT send a cookie
++ //     (avoid creating empty sessions for every request).
++ //  4. If the session is not new and was not mutated → do NOT send a cookie
++ //     (avoid refreshing unchanged sessions).
++ func (m *Middleware) saveCookie(w http.ResponseWriter, s *Session) {
++ 	if s.IsCleared() {
++ 		// Delete the cookie by setting MaxAge=-1 and an expired time.
++ 		http.SetCookie(w, &http.Cookie{
++ 			Name:     m.opts.CookieName,
++ 			Value:    "",
++ 			Path:     m.opts.Path,
++ 			Domain:   m.opts.Domain,
++ 			MaxAge:   -1,
++ 			Expires:  time.Unix(0, 0),
++ 			HttpOnly: m.opts.HttpOnly,
++ 			Secure:   m.opts.Secure,
++ 			SameSite: m.opts.SameSite,
++ 		})
++ 		return
++ 	}
++
++ 	if !s.IsMutated() {
++ 		// No changes; skip Set-Cookie entirely.
++ 		return
++ 	}
++
++ 	// Session was mutated; encode and send.
++ 	value, err := encode(s, m.opts.Secret)
++ 	if err != nil {
++ 		// Encoding failed; don't send a broken cookie.
++ 		return
++ 	}
++
++ 	cookie := &http.Cookie{
++ 		Name:     m.opts.CookieName,
++ 		Value:    value,
++ 		Path:     m.opts.Path,
++ 		Domain:   m.opts.Domain,
++ 		MaxAge:   m.opts.MaxAge,
++ 		HttpOnly: m.opts.HttpOnly,
++ 		Secure:   m.opts.Secure,
++ 		SameSite: m.opts.SameSite,
++ 	}
++ 	if m.opts.MaxAge > 0 {
++ 		cookie.Expires = time.Now().Add(time.Duration(m.opts.MaxAge) * time.Second)
++ 	}
++ 	http.SetCookie(w, cookie)
++ }
++
++ // FromContext retrieves the Session from the context.
++ // Returns nil if no session is present.
++ func FromContext(ctx context.Context) *Session {
++ 	s, _ := ctx.Value(sessionContextKey).(*Session)
++ 	return s
++ }
++
++ // responseWriter buffers the status code and headers so we can inject
++ // the Set-Cookie header before the response is actually written.
++ type responseWriter struct {
++ 	http.ResponseWriter
++ 	code        int
++ 	wroteHeader bool
++ 	body        []byte
++ }
++
++ func (rw *responseWriter) WriteHeader(code int) {
++ 	if !rw.wroteHeader {
++ 		rw.code = code
++ 		rw.wroteHeader = true
++ 	}
++ }
++
++ func (rw *responseWriter) Write(b []byte) (int, error) {
++ 	rw.body = append(rw.body, b...)
++ 	return len(b), nil
++ }
++
++ // flush sends the buffered response to the underlying ResponseWriter.
++ func (rw *responseWriter) flush() {
++ 	rw.ResponseWriter.WriteHeader(rw.code)
++ 	if len(rw.body) > 0 {
++ 		rw.ResponseWriter.Write(rw.body) //nolint:errcheck
++ 	}
++ }
+*** Add File: session/session_test.go
++ package session_test
++
++ import (
++ 	"net/http"
++ 	"net/http/httptest"
++ 	"strings"
++ 	"sync"
++ 	"testing"
++
++ 	"github.com/example/pr3166/session"
++ )
++
++ // testSecret is a fixed secret used across tests for reproducibility.
++ var testSecret = []byte("test-secret-key-32-bytes-padding!")
++
++ // defaultOpts returns Options suitable for testing.
++ func defaultOpts() session.Options {
++ 	return session.Options{
++ 		CookieName: "sess",
++ 		MaxAge:     3600,
++ 		Path:       "/",
++ 		HttpOnly:   true,
++ 		Secret:     testSecret,
++ 	}
++ }
++
++ // newMiddleware creates a Middleware with test defaults.
++ func newMiddleware() *session.Middleware {
++ 	return session.New(defaultOpts())
++ }
++
++ // --------------------------------------------------------------------------
++ // Helper: extract Set-Cookie header value for the session cookie.
++ // --------------------------------------------------------------------------
++
++ func getSetCookie(resp *http.Response, name string) *http.Cookie {
++ 	for _, c := range resp.Cookies() {
++ 		if c.Name == name {
++ 			return c
++ 		}
++ 	}
++ 	return nil
++ }
++
++ // --------------------------------------------------------------------------
++ // 1. Read-only session: no Set-Cookie should be emitted.
++ // --------------------------------------------------------------------------
++
++ func TestReadOnlySession_NoSetCookie(t *testing.T) {
++ 	m := newMiddleware()
++
++ 	handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		sess := session.FromContext(r.Context())
++ 		if sess == nil {
++ 			t.Fatal("expected session in context")
++ 		}
++ 		// Only read; do not mutate.
++ 		_, _ = sess.Get("nonexistent")
++ 		w.WriteHeader(http.StatusOK)
++ 	}))
++
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	rec := httptest.NewRecorder()
++ 	handler.ServeHTTP(rec, req)
++
++ 	resp := rec.Result()
++ 	if c := getSetCookie(resp, "sess"); c != nil {
++ 		t.Errorf("expected no Set-Cookie for read-only session, got: %v", c)
++ 	}
++ }
++
++ // --------------------------------------------------------------------------
++ // 2. Mutated session: Set-Cookie must be emitted.
++ // --------------------------------------------------------------------------
++
++ func TestMutatedSession_SetCookieEmitted(t *testing.T) {
++ 	m := newMiddleware()
++
++ 	handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		sess := session.FromContext(r.Context())
++ 		sess.Set("user", "alice")
++ 		w.WriteHeader(http.StatusOK)
++ 	}))
++
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	rec := httptest.NewRecorder()
++ 	handler.ServeHTTP(rec, req)
++
++ 	resp := rec.Result()
++ 	c := getSetCookie(resp, "sess")
++ 	if c == nil {
++ 		t.Fatal("expected Set-Cookie for mutated session, got none")
++ 	}
++ 	if c.Value == "" {
++ 		t.Error("expected non-empty cookie value")
++ 	}
++ }
++
++ // --------------------------------------------------------------------------
++ // 3. Cleared session: Set-Cookie must expire the cookie.
++ // --------------------------------------------------------------------------
++
++ func TestClearedSession_CookieExpired(t *testing.T) {
++ 	m := newMiddleware()
++
++ 	// First request: set a value so a cookie is issued.
++ 	var cookieValue string
++ 	{
++ 		handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			sess := session.FromContext(r.Context())
++ 			sess.Set("user", "bob")
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		rec := httptest.NewRecorder()
++ 		handler.ServeHTTP(rec, req)
++ 		c := getSetCookie(rec.Result(), "sess")
++ 		if c == nil {
++ 			t.Fatal("setup: expected Set-Cookie")
++ 		}
++ 		cookieValue = c.Value
++ 	}
++
++ 	// Second request: clear the session.
++ 	{
++ 		handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			sess := session.FromContext(r.Context())
++ 			sess.Clear()
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		req.AddCookie(&http.Cookie{Name: "sess", Value: cookieValue})
++ 		rec := httptest.NewRecorder()
++ 		handler.ServeHTTP(rec, req)
++
++ 		resp := rec.Result()
++ 		c := getSetCookie(resp, "sess")
++ 		if c == nil {
++ 			t.Fatal("expected Set-Cookie to clear session, got none")
++ 		}
++ 		if c.MaxAge != -1 {
++ 			t.Errorf("expected MaxAge=-1 for cleared cookie, got %d", c.MaxAge)
++ 		}
++ 		if c.Value != "" {
++ 			t.Errorf("expected empty cookie value for cleared session, got %q", c.Value)
++ 		}
++ 	}
++ }
++
++ // --------------------------------------------------------------------------
++ // 4. Unchanged existing session: no Set-Cookie on subsequent read-only request.
++ // --------------------------------------------------------------------------
++
++ func TestExistingSession_ReadOnly_NoSetCookie(t *testing.T) {
++ 	m := newMiddleware()
++
++ 	// First: create a session with data.
++ 	var cookieValue string
++ 	{
++ 		handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			sess := session.FromContext(r.Context())
++ 			sess.Set("role", "admin")
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		rec := httptest.NewRecorder()
++ 		handler.ServeHTTP(rec, req)
++ 		c := getSetCookie(rec.Result(), "sess")
++ 		if c == nil {
++ 			t.Fatal("setup: expected Set-Cookie")
++ 		}
++ 		cookieValue = c.Value
++ 	}
++
++ 	// Second: read-only request with existing cookie.
++ 	{
++ 		handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			sess := session.FromContext(r.Context())
++ 			role, ok := sess.GetString("role")
++ 			if !ok || role != "admin" {
++ 				t.Errorf("expected role=admin, got %q ok=%v", role, ok)
++ 			}
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		req.AddCookie(&http.Cookie{Name: "sess", Value: cookieValue})
++ 		rec := httptest.NewRecorder()
++ 		handler.ServeHTTP(rec, req)
++
++ 		resp := rec.Result()
++ 		if c := getSetCookie(resp, "sess"); c != nil {
++ 			t.Errorf("expected no Set-Cookie for read-only existing session, got: %v", c)
++ 		}
++ 	}
++ }
++
++ // --------------------------------------------------------------------------
++ // 5. Session data persists across requests.
++ // --------------------------------------------------------------------------
++
++ func TestSessionDataPersistsAcrossRequests(t *testing.T) {
++ 	m := newMiddleware()
++
++ 	// Request 1: set a value.
++ 	var cookieValue string
++ 	{
++ 		handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			sess := session.FromContext(r.Context())
++ 			sess.Set("counter", float64(1)) // JSON numbers decode as float64
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		rec := httptest.NewRecorder()
++ 		handler.ServeHTTP(rec, req)
++ 		c := getSetCookie(rec.Result(), "sess")
++ 		if c == nil {
++ 			t.Fatal("expected Set-Cookie")
++ 		}
++ 		cookieValue = c.Value
++ 	}
++
++ 	// Request 2: read the value back.
++ 	{
++ 		handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			sess := session.FromContext(r.Context())
++ 			v, ok := sess.Get("counter")
++ 			if !ok {
++ 				t.Error("expected counter key to exist")
++ 			}
++ 			if v.(float64) != 1 {
++ 				t.Errorf("expected counter=1, got %v", v)
++ 			}
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		req.AddCookie(&http.Cookie{Name: "sess", Value: cookieValue})
++ 		rec := httptest.NewRecorder()
++ 		handler.ServeHTTP(rec, req)
++ 	}
++ }
++
++ // --------------------------------------------------------------------------
++ // 6. Tampered cookie: middleware creates a new session.
++ // --------------------------------------------------------------------------
++
++ func TestTamperedCookie_NewSession(t *testing.T) {
++ 	m := newMiddleware()
++
++ 	handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		sess := session.FromContext(r.Context())
++ 		if !sess.IsNew() {
++ 			t.Error("expected new session for tampered cookie")
++ 		}
++ 		w.WriteHeader(http.StatusOK)
++ 	}))
++
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	req.AddCookie(&http.Cookie{Name: "sess", Value: "tampered.invalidsig"})
++ 	rec := httptest.NewRecorder()
++ 	handler.ServeHTTP(rec, req)
++ }
++
++ // --------------------------------------------------------------------------
++ // 7. Delete key marks session as mutated.
++ // --------------------------------------------------------------------------
++
++ func TestDeleteKey_MarksSessionMutated(t *testing.T) {
++ 	m := newMiddleware()
++
++ 	// Setup: create session with a key.
++ 	var cookieValue string
++ 	{
++ 		handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			sess := session.FromContext(r.Context())
++ 			sess.Set("temp", "value")
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		rec := httptest.NewRecorder()
++ 		handler.ServeHTTP(rec, req)
++ 		c := getSetCookie(rec.Result(), "sess")
++ 		if c == nil {
++ 			t.Fatal("setup: expected Set-Cookie")
++ 		}
++ 		cookieValue = c.Value
++ 	}
++
++ 	// Delete the key.
++ 	{
++ 		handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			sess := session.FromContext(r.Context())
++ 			sess.Delete("temp")
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		req.AddCookie(&http.Cookie{Name: "sess", Value: cookieValue})
++ 		rec := httptest.NewRecorder()
++ 		handler.ServeHTTP(rec, req)
++
++ 		resp := rec.Result()
++ 		c := getSetCookie(resp, "sess")
++ 		if c == nil {
++ 			t.Fatal("expected Set-Cookie after Delete, got none")
++ 		}
++ 	}
++ }
++
++ // --------------------------------------------------------------------------
++ // 8. Concurrent read-only access: no data races.
++ // --------------------------------------------------------------------------
++
++ func TestConcurrentReadOnly_NoRace(t *testing.T) {
++ 	m := newMiddleware()
++
++ 	// Setup: create a session with data.
++ 	var cookieValue string
++ 	{
++ 		handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			sess := session.FromContext(r.Context())
++ 			sess.Set("shared", "data")
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		rec := httptest.NewRecorder()
++ 		handler.ServeHTTP(rec, req)
++ 		c := getSetCookie(rec.Result(), "sess")
++ 		if c == nil {
++ 			t.Fatal("setup: expected Set-Cookie")
++ 		}
++ 		cookieValue = c.Value
++ 	}
++
++ 	// Concurrently issue many read-only requests with the same cookie.
++ 	const goroutines = 50
++ 	var wg sync.WaitGroup
++ 	wg.Add(goroutines)
++
++ 	handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		sess := session.FromContext(r.Context())
++ 		v, ok := sess.GetString("shared")
++ 		if !ok || v != "data" {
++ 			t.Errorf("expected shared=data, got %q ok=%v", v, ok)
++ 		}
++ 		// No mutation.
++ 		w.WriteHeader(http.StatusOK)
++ 	}))
++
++ 	for i := 0; i < goroutines; i++ {
++ 		go func() {
++ 			defer wg.Done()
++ 			req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 			req.AddCookie(&http.Cookie{Name: "sess", Value: cookieValue})
++ 			rec := httptest.NewRecorder()
++ 			handler.ServeHTTP(rec, req)
++
++ 			resp := rec.Result()
++ 			if c := getSetCookie(resp, "sess"); c != nil {
++ 				t.Errorf("expected no Set-Cookie for concurrent read-only, got: %v", c)
++ 			}
++ 		}()
++ 	}
++ 	wg.Wait()
++ }
++
++ // --------------------------------------------------------------------------
++ // 9. Concurrent mixed read/write: no data races, writers get Set-Cookie.
++ // --------------------------------------------------------------------------
++
++ func TestConcurrentMixedReadWrite_NoRace(t *testing.T) {
++ 	m := newMiddleware()
++
++ 	const goroutines = 40
++ 	var wg sync.WaitGroup
++ 	wg.Add(goroutines)
++
++ 	for i := 0; i < goroutines; i++ {
++ 		i := i
++ 		go func() {
++ 			defer wg.Done()
++
++ 			if i%2 == 0 {
++ 				// Writer
++ 				handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 					sess := session.FromContext(r.Context())
++ 					sess.Set("key", i)
++ 					w.WriteHeader(http.StatusOK)
++ 				}))
++ 				req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 				rec := httptest.NewRecorder()
++ 				handler.ServeHTTP(rec, req)
++ 				resp := rec.Result()
++ 				if c := getSetCookie(resp, "sess"); c == nil {
++ 					t.Errorf("goroutine %d: expected Set-Cookie for writer", i)
++ 				}
++ 			} else {
++ 				// Reader (no existing cookie → new session, no mutation → no Set-Cookie)
++ 				handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 					sess := session.FromContext(r.Context())
++ 					_, _ = sess.Get("key")
++ 					w.WriteHeader(http.StatusOK)
++ 				}))
++ 				req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 				rec := httptest.NewRecorder()
++ 				handler.ServeHTTP(rec, req)
++ 				resp := rec.Result()
++ 				if c := getSetCookie(resp, "sess"); c != nil {
++ 					t.Errorf("goroutine %d: expected no Set-Cookie for reader, got: %v", i, c)
++ 				}
++ 			}
++ 		}()
++ 	}
++ 	wg.Wait()
++ }
++
++ // --------------------------------------------------------------------------
++ // 10. Clear on new (never-persisted) session: cookie deletion header sent.
++ // --------------------------------------------------------------------------
++
++ func TestClearNewSession_CookieDeletionSent(t *testing.T) {
++ 	m := newMiddleware()
++
++ 	handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		sess := session.FromContext(r.Context())
++ 		// Clear a brand-new session (edge case: logout on unauthenticated request).
++ 		sess.Clear()
++ 		w.WriteHeader(http.StatusOK)
++ 	}))
++
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	rec := httptest.NewRecorder()
++ 	handler.ServeHTTP(rec, req)
++
++ 	resp := rec.Result()
++ 	c := getSetCookie(resp, "sess")
++ 	if c == nil {
++ 		t.Fatal("expected Set-Cookie to clear session even for new session")
++ 	}
++ 	if c.MaxAge != -1 {
++ 		t.Errorf("expected MaxAge=-1, got %d", c.MaxAge)
++ 	}
++ }
++
++ // --------------------------------------------------------------------------
++ // 11. Session.IsNew() reflects whether session came from cookie.
++ // --------------------------------------------------------------------------
++
++ func TestIsNew_ReflectsCookiePresence(t *testing.T) {
++ 	m := newMiddleware()
++
++ 	// No cookie → IsNew() == true.
++ 	{
++ 		handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			sess := session.FromContext(r.Context())
++ 			if !sess.IsNew() {
++ 				t.Error("expected IsNew()=true for request without cookie")
++ 			}
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		rec := httptest.NewRecorder()
++ 		handler.ServeHTTP(rec, req)
++ 	}
++
++ 	// With valid cookie → IsNew() == false.
++ 	var cookieValue string
++ 	{
++ 		handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			sess := session.FromContext(r.Context())
++ 			sess.Set("x", 1)
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		rec := httptest.NewRecorder()
++ 		handler.ServeHTTP(rec, req)
++ 		c := getSetCookie(rec.Result(), "sess")
++ 		if c == nil {
++ 			t.Fatal("setup: expected Set-Cookie")
++ 		}
++ 		cookieValue = c.Value
++ 	}
++ 	{
++ 		handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			sess := session.FromContext(r.Context())
++ 			if sess.IsNew() {
++ 				t.Error("expected IsNew()=false for request with valid cookie")
++ 			}
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		req.AddCookie(&http.Cookie{Name: "sess", Value: cookieValue})
++ 		rec := httptest.NewRecorder()
++ 		handler.ServeHTTP(rec, req)
++ 	}
++ }
++
++ // --------------------------------------------------------------------------
++ // 12. Response status code is preserved through the middleware.
++ // --------------------------------------------------------------------------
++
++ func TestResponseStatusPreserved(t *testing.T) {
++ 	m := newMiddleware()
++
++ 	for _, code := range []int{200, 201, 302, 400, 404, 500} {
++ 		code := code
++ 		t.Run(http.StatusText(code), func(t *testing.T) {
++ 			handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 				w.WriteHeader(code)
++ 			}))
++ 			req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 			rec := httptest.NewRecorder()
++ 			handler.ServeHTTP(rec, req)
++ 			if rec.Code != code {
++ 				t.Errorf("expected status %d, got %d", code, rec.Code)
++ 			}
++ 		})
++ 	}
++ }
++
++ // --------------------------------------------------------------------------
++ // 13. Response body is preserved through the middleware.
++ // --------------------------------------------------------------------------
++
++ func TestResponseBodyPreserved(t *testing.T) {
++ 	m := newMiddleware()
++
++ 	const body = "hello, world"
++ 	handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		w.WriteHeader(http.StatusOK)
++ 		w.Write([]byte(body)) //nolint:errcheck
++ 	}))
++
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	rec := httptest.NewRecorder()
++ 	handler.ServeHTTP(rec, req)
++
++ 	if got := rec.Body.String(); got != body {
++ 		t.Errorf("expected body %q, got %q", body, got)
++ 	}
++ }
++
++ // --------------------------------------------------------------------------
++ // 14. Keys() returns correct keys.
++ // --------------------------------------------------------------------------
++
++ func TestSessionKeys(t *testing.T) {
++ 	m := newMiddleware()
++
++ 	handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		sess := session.FromContext(r.Context())
++ 		sess.Set("a", 1)
++ 		sess.Set("b", 2)
++ 		sess.Set("c", 3)
++ 		keys := sess.Keys()
++ 		if len(keys) != 3 {
++ 			t.Errorf("expected 3 keys, got %d: %v", len(keys), keys)
++ 		}
++ 		w.WriteHeader(http.StatusOK)
++ 	}))
++
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	rec := httptest.NewRecorder()
++ 	handler.ServeHTTP(rec, req)
++ }
++
++ // --------------------------------------------------------------------------
++ // 15. FromContext returns nil when no session is in context.
++ // --------------------------------------------------------------------------
++
++ func TestFromContext_NilWhenAbsent(t *testing.T) {
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	sess := session.FromContext(req.Context())
++ 	if sess != nil {
++ 		t.Errorf("expected nil session from bare context, got %v", sess)
++ 	}
++ }
++
++ // --------------------------------------------------------------------------
++ // 16. Regression: Clear after Set in same request sends expiring cookie.
++ // --------------------------------------------------------------------------
++
++ func TestClearAfterSet_SameRequest_SendsExpiringCookie(t *testing.T) {
++ 	m := newMiddleware()
++
++ 	handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		sess := session.FromContext(r.Context())
++ 		sess.Set("user", "charlie")
++ 		sess.Clear() // Overrides the Set.
++ 		w.WriteHeader(http.StatusOK)
++ 	}))
++
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	rec := httptest.NewRecorder()
++ 	handler.ServeHTTP(rec, req)
++
++ 	resp := rec.Result()
++ 	c := getSetCookie(resp, "sess")
++ 	if c == nil {
++ 		t.Fatal("expected Set-Cookie after Clear(), got none")
++ 	}
++ 	if c.MaxAge != -1 {
++ 		t.Errorf("expected MaxAge=-1 (expiring), got %d", c.MaxAge)
++ 	}
++ }
++
++ // --------------------------------------------------------------------------
++ // 17. Regression: multiple Set calls in same request → single Set-Cookie.
++ // --------------------------------------------------------------------------
++
++ func TestMultipleSets_SingleSetCookie(t *testing.T) {
++ 	m := newMiddleware()
++
++ 	handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		sess := session.FromContext(r.Context())
++ 		sess.Set("a", 1)
++ 		sess.Set("b", 2)
++ 		sess.Set("c", 3)
++ 		w.WriteHeader(http.StatusOK)
++ 	}))
++
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	rec := httptest.NewRecorder()
++ 	handler.ServeHTTP(rec, req)
++
++ 	resp := rec.Result()
++ 	var count int
++ 	for _, c := range resp.Cookies() {
++ 		if c.Name == "sess" {
++ 			count++
++ 		}
++ 	}
++ 	if count != 1 {
++ 		t.Errorf("expected exactly 1 Set-Cookie header, got %d", count)
++ 	}
++ }
++
++ // --------------------------------------------------------------------------
++ // 18. Regression: concurrent writes to different sessions don't interfere.
++ // --------------------------------------------------------------------------
++
++ func TestConcurrentDistinctSessions_NoInterference(t *testing.T) {
++ 	m := newMiddleware()
++
++ 	const goroutines = 30
++ 	var wg sync.WaitGroup
++ 	wg.Add(goroutines)
++
++ 	results := make([]string, goroutines)
++
++ 	for i := 0; i < goroutines; i++ {
++ 		i := i
++ 		go func() {
++ 			defer wg.Done()
++ 			username := strings.Repeat("x", i+1) // unique per goroutine
++
++ 			handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 				sess := session.FromContext(r.Context())
++ 				sess.Set("user", username)
++ 				w.WriteHeader(http.StatusOK)
++ 			}))
++ 			req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 			rec := httptest.NewRecorder()
++ 			handler.ServeHTTP(rec, req)
++
++ 			c := getSetCookie(rec.Result(), "sess")
++ 			if c == nil {
++ 				t.Errorf("goroutine %d: expected Set-Cookie", i)
++ 				return
++ 			}
++ 			results[i] = c.Value
++ 		}()
++ 	}
++ 	wg.Wait()
++
++ 	// Verify each cookie decodes to the correct username.
++ 	for i, cookieValue := range results {
++ 		if cookieValue == "" {
++ 			continue // already reported above
++ 		}
++ 		// Use a second request to verify the stored value.
++ 		cv := cookieValue
++ 		expected := strings.Repeat("x", i+1)
++ 		handler := m.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			sess := session.FromContext(r.Context())
++ 			user, ok := sess.GetString("user")
++ 			if !ok {
++ 				t.Errorf("goroutine %d: user key missing", i)
++ 			} else if user != expected {
++ 				t.Errorf("goroutine %d: expected user=%q, got %q", i, expected, user)
++ 			}
++ 			w.WriteHeader(http.StatusOK)
++ 		}))
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		req.AddCookie(&http.Cookie{Name: "sess", Value: cv})
++ 		rec := httptest.NewRecorder()
++ 		handler.ServeHTTP(rec, req)
++ 	}
++ }
+*** Add File: go.mod
++ module github.com/example/pr3166
++
++ go 1.21
+
+*** End Patch

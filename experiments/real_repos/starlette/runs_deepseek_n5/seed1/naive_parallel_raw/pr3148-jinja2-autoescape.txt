@@ -1,0 +1,67 @@
+*** Begin Patch
+*** Update File: starlette/templating.py
+@@
+-from jinja2 import Environment, FileSystemLoader
++from jinja2 import Environment, FileSystemLoader, select_autoescape
+@@
+     def __init__(self, directory, env=None, **env_options):
+         if env is not None:
+             self.env = env
+         else:
++            env_options.setdefault("autoescape", select_autoescape())
+             self.env = Environment(loader=FileSystemLoader(directory), **env_options)
+*** Update File: tests/test_templates.py
+@@
++import pytest
++from starlette.templating import Jinja2Templates
++from starlette.testclient import TestClient
++from starlette.applications import Starlette
++from starlette.responses import HTMLResponse
++from starlette.routing import Route
++import tempfile
++import os
++
++
++def test_autoescape_default():
++    with tempfile.TemporaryDirectory() as tmpdir:
++        template_path = os.path.join(tmpdir, "template.html")
++        with open(template_path, "w") as f:
++            f.write("<html><body>{{ content }}</body></html>")
++        templates = Jinja2Templates(directory=tmpdir)
++        app = Starlette(
++            routes=[
++                Route(
++                    "/",
++                    endpoint=lambda request: templates.TemplateResponse(
++                        "template.html", {"request": request, "content": "<script>alert('xss')</script>"}
++                    ),
++                )
++            ]
++        )
++        client = TestClient(app)
++        response = client.get("/")
++        assert "&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;" in response.text
++
++
++def test_autoescape_disabled_with_custom_env():
++    from jinja2 import Environment, FileSystemLoader
++    with tempfile.TemporaryDirectory() as tmpdir:
++        template_path = os.path.join(tmpdir, "template.html")
++        with open(template_path, "w") as f:
++            f.write("<html><body>{{ content }}</body></html>")
++        env = Environment(loader=FileSystemLoader(tmpdir), autoescape=False)
++        templates = Jinja2Templates(directory=tmpdir, env=env)
++        app = Starlette(
++            routes=[
++                Route(
++                    "/",
++                    endpoint=lambda request: templates.TemplateResponse(
++                        "template.html", {"request": request, "content": "<script>alert('xss')</script>"}
++                    ),
++                )
++            ]
++        )
++        client = TestClient(app)
++        response = client.get("/")
++        assert "<script>alert('xss')</script>" in response.text
+*** End Patch

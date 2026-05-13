@@ -1,0 +1,103 @@
+*** Begin Patch
+--- a/starlette/middleware/sessions.py
++++ b/starlette/middleware/sessions.py
+@@ -1,5 +1,6 @@
+ import json
+ from base64 import b64decode, b64encode
++from copy import deepcopy
+ from typing import Any, Dict, MutableMapping, Optional, Union
+ 
+ from starlette.datastructures import MutableHeaders, Secret
+@@ -37,6 +38,7 @@ class SessionMiddleware:
+         self.serializer = serializer or JsonSerializer()
+         self.same_site = same_site
+         self.https_only = https_only
++        self._session_accessed = False
+ 
+     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+         if scope["type"] != "http":
+@@ -48,6 +50,7 @@ class SessionMiddleware:
+         async def send_wrapper(message: Message) -> None:
+             if message["type"] == "http.response.start":
+                 if scope["session"]:
++                    original_session = deepcopy(scope["session"])
+                     # We have a session to set.
+                     data = self.serializer.encode(scope["session"])
+                     cookie = self._create_cookie(data)
+@@ -56,6 +59,8 @@ class SessionMiddleware:
+                     headers = MutableHeaders(raw=message["headers"])
+                     headers.append("set-cookie", cookie)
+                 elif "session" in scope:
++                    # Session was cleared (set to empty dict)
++                    # We need to send a delete cookie
+                     # We have a session to clear.
+                     headers = MutableHeaders(raw=message["headers"])
+                     headers["set-cookie"] = "session=; Max-Age=0; path=/; SameSite=lax; httponly"
+@@ -63,6 +68,7 @@ class SessionMiddleware:
+ 
+         await self.app(scope, receive, send_wrapper)
+ 
++
+     def _create_cookie(self, data: str) -> str:
+         cookie = f"session={data}; path=/; SameSite={self.same_site}"
+         if self.https_only:
+--- a/tests/test_session_middleware.py
++++ b/tests/test_session_middleware.py
+@@ -1,5 +1,6 @@
+ import json
+ from base64 import b64decode
++from unittest.mock import Mock
+ 
+ import pytest
+ from starlette.applications import Starlette
+@@ -100,3 +101,47 @@ def test_session_clear():
+     assert response.headers.get("set-cookie") is not None
+     # Ensure the cookie is cleared (Max-Age=0)
+     assert "Max-Age=0" in response.headers["set-cookie"]
++
++
++def test_read_only_session_no_set_cookie():
++    app = Starlette()
++    app.add_middleware(SessionMiddleware, secret_key="test")
++
++    @app.route("/read")
++    async def read(request):
++        # Access session but do not modify
++        _ = request.session.get("key", None)
++        return PlainTextResponse("ok")
++
++    client = TestClient(app)
++    response = client.get("/read")
++    assert "set-cookie" not in response.headers
++
++
++def test_concurrent_read_only():
++    app = Starlette()
++    app.add_middleware(SessionMiddleware, secret_key="test")
++
++    @app.route("/read")
++    async def read(request):
++        _ = request.session.get("key", None)
++        return PlainTextResponse("ok")
++
++    client = TestClient(app)
++    # Simulate two concurrent requests (sequential for simplicity)
++    response1 = client.get("/read")
++    response2 = client.get("/read")
++    assert "set-cookie" not in response1.headers
++    assert "set-cookie" not in response2.headers
++
++
++def test_session_mutation_sets_cookie():
++    app = Starlette()
++    app.add_middleware(SessionMiddleware, secret_key="test")
++
++    @app.route("/set")
++    async def set_session(request):
++        request.session["key"] = "value"
++        return PlainTextResponse("ok")
++
++    client = TestClient(app)
++    response = client.get("/set")
++    assert "set-cookie" in response.headers
+*** End Patch

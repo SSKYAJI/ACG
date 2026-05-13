@@ -1,5 +1,9 @@
 # Fastify Ground-Truth Investigation
 
+Aggregate scores in `runs_kimi_v2/ground_truth_score.json` (for example **acg_planned** macro recall **0.278**) mix two different failure modes: human-touched files the lockfile never put in scope (a **predictor** / compile contract limitation) and files the agent could have proposed but did not (an **agent** recall issue within `allowed_paths`). Treating the headline recall as “how good was the agent?” therefore understates agent capability whenever the contract excludes part of the human diff. The per-PR sections below separate **predictor misses** (ground truth outside `allowed_write_globs`), **agent misses within scope** (ground truth inside the globs but absent from proposals), and **agent overshoot** (proposals not in the human diff). For **acg_planned** on these three Fastify PRs, once you restrict to ground-truth files that actually intersect the task’s allowed scope, the ACG agent achieved **1.00** recall within scope on **2/3** PRs (`pr-6692`, `pr-6694`); on `pr-6653` no human-changed file appears under the compiled globs, so “recall within scope” is undefined rather than a model miss.
+
+To regenerate the same breakdown for any eval artifact, run `scripts/analysis/predictor_vs_agent.py` (see `experiments/real_repos/PREDICTOR_VS_AGENT_BREAKDOWN.md`).
+
 ### pr-6653: feat: add request.mediaType
 
 **Task prompt** (from manifest): Add a readonly request.mediaType property that exposes the parsed request Content-Type media type, cache the parsed ContentType on the request, and update validation and request handling to reuse the parsed value.
