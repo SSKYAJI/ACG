@@ -1,4 +1,4 @@
-"""Perf tracing tests for the GX10 baseline-vs-optimized demo."""
+"""Perf tracing tests for the baseline-vs-optimized demo."""
 
 from __future__ import annotations
 

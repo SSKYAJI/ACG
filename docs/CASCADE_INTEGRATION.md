@@ -68,11 +68,9 @@ context; allowing" and Cascade behaves as if the hook were absent.
 
 ## Demo upgrade
 
-The hackathon demo's "show enforcement" segment used to invoke the
-validator via a Python wrapper. With this hook installed, the upgraded
-recording shows Cascade itself blocking the out-of-bounds write
-inline — see the segment notes in
-[`docs/plans/cascade-hook-stretch-308cc2.md`](plans/cascade-hook-stretch-308cc2.md).
+The original demo's "show enforcement" segment used to invoke the
+validator via a Python wrapper. With this hook installed, Cascade
+itself blocks the out-of-bounds write inline.
 
 ## Cascade hook messages
 

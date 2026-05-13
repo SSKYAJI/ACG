@@ -1,4 +1,4 @@
-"""Perf trace sampling for GX10 baseline-vs-optimized runtime demos."""
+"""Perf trace sampling for baseline-vs-optimized runtime demos."""
 
 from __future__ import annotations
 

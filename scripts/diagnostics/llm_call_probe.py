@@ -1,6 +1,6 @@
 import asyncio, aiohttp, time, json, os
 
-URL = os.environ.get("LLM_URL", "http://gx10-f2c9:8080/v1/chat/completions")
+URL = os.environ.get("LLM_URL", "http://localhost:8080/v1/chat/completions")
 HEADERS = {"Content-Type": "application/json"}
 
 async def call_agent(name, messages, max_tokens=512, dump=False):

@@ -3,12 +3,12 @@
 The runtime wires three things together:
 
 1. A single **orchestrator** call (typically against a thinking-enabled
-   ``llama-server`` on port 8081) that reasons about the lockfile's soundness
+   LLM server on port 8081) that reasons about the lockfile's soundness
    and emits a JSON dispatch decision.
-2. A **per-group sub-agent fan-out** (typically against a no-think
-   ``llama-server`` on port 8080 with ``--parallel 4``). Each worker proposes
-   a list of write paths as JSON. Workers are *not* told their
-   ``allowed_paths`` — the validator below catches violations.
+2. A **per-group sub-agent fan-out** (typically against a non-thinking
+   LLM server on port 8080). Each worker proposes a list of write paths
+   as JSON. Workers are *not* told their ``allowed_paths`` — the
+   validator below catches violations.
 3. A **mid-flight enforcement** pass via :func:`acg.enforce.validate_write`.
    Every proposal lands in the run trace tagged ``allowed`` or with a
    non-empty ``reason``.
@@ -20,10 +20,10 @@ visualizer's live-replay mode.
 Environment variables (read by :meth:`RuntimeConfig.from_env`):
 
 ============================  ==================================================
-``ACG_ORCH_URL``              Orchestrator base URL (defaults to GX10:8081)
+``ACG_ORCH_URL``              Orchestrator base URL (defaults to localhost:8081)
 ``ACG_ORCH_MODEL``            Orchestrator model id
 ``ACG_ORCH_API_KEY``          Orchestrator bearer token
-``ACG_LLM_URL``               Sub-agent base URL (defaults to GX10:8080)
+``ACG_LLM_URL``               Sub-agent base URL (defaults to localhost:8080)
 ``ACG_LLM_MODEL``             Sub-agent model id
 ``ACG_LLM_API_KEY``           Sub-agent bearer token
 ``ACG_MOCK_LLM``              ``1`` ⇒ short-circuit to :class:`MockRuntimeLLM`
@@ -33,7 +33,7 @@ Environment variables (read by :meth:`RuntimeConfig.from_env`):
                               is unset (default ``4096``).
 ``ACG_ORCH_MAX_TOKENS``       Optional orchestrator ``max_tokens`` (same rules).
 ``ACG_REQUEST_TIMEOUT_S``     HTTP timeout for runtime LLM calls (default ``900``).
-``ACG_PERF_TRACE``            Optional path for a GX10 perf trace JSON
+``ACG_PERF_TRACE``            Optional path for a perf trace JSON
 ``ACG_LLM_EXTRA_PARAMS_JSON`` Optional JSON object merged into worker/orchestrator
                               ``/chat/completions`` requests (provider-specific keys).
 ============================  ==================================================
@@ -72,8 +72,8 @@ from .schema import AgentLock, Group, Task
 # Tunable constants. No magic numbers in module bodies.
 # ---------------------------------------------------------------------------
 
-DEFAULT_ORCH_URL = "http://gx10-f2c9:8081/v1"
-DEFAULT_SUB_URL = "http://gx10-f2c9:8080/v1"
+DEFAULT_ORCH_URL = "http://localhost:8081/v1"
+DEFAULT_SUB_URL = "http://localhost:8080/v1"
 DEFAULT_MODEL = "gemma"
 DEFAULT_TIMEOUT_S = 900.0
 TEMPERATURE = 0.2

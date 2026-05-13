@@ -1,7 +1,7 @@
 """Provider-agnostic LLM client over an OpenAI-compatible HTTP API.
 
 The client reads configuration from environment variables so the same code path
-works with Groq (dev), vLLM on ASUS GX10 (demo), and OpenAI (compat smoke):
+works with Groq (dev), vLLM (local), and OpenAI (compat smoke):
 
 ==========================  =======================================================
 Environment variable        Purpose

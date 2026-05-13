@@ -54,5 +54,14 @@ experiments/microservice/runs_nest/
 # auth headers; never commit them.
 scripts/diagnostics/devin_probe_output*.json
 
+# Papers (personal / academic — not part of the project)
+papers/
+
+# Root-level PDFs and transient agent handoff / prompt files
+/*.pdf
+HANDOFF*.md
+CODEX_*.md
+PAPER_NUMBERS*.md
+
 # OS
 .DS_Store

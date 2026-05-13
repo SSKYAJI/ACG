@@ -1,175 +1,227 @@
 {
   "version": "1.0",
-  "generated_at": "2026-04-25T21:29:32.650647+00:00",
+  "generated_at": "2026-05-13T14:21:00.433043+00:00",
   "lockfile": "demo-app/agent_lock.json",
   "config": {
-    "orch_url": "http://gx10-f2c9:8081/v1",
-    "orch_model": "gemma",
-    "sub_url": "http://gx10-f2c9:8080/v1",
-    "sub_model": "gemma"
+    "orch_url": "mock://orchestrator",
+    "orch_model": "mock-runtime",
+    "sub_url": "mock://worker",
+    "sub_model": "mock-runtime",
+    "auto_replan": false,
+    "worker_max_tokens": 4096
   },
   "orchestrator": {
-    "url": "http://gx10-f2c9:8081/v1",
-    "model": "gemma",
-    "wall_s": 39.84924199999659,
-    "completion_tokens": 2048,
-    "finish_reason": "length",
-    "content": "",
-    "reasoning_content": "*   `oauth` vs `billing`: `.env.example`, `prisma/schema.prisma`. Resolution: `billing` after `oauth`.\n    *   `oauth` vs `tests`: `.env.example`. Resolution: `tests` after `oauth`.\n    *   `settings` vs `billing`: `src/app/dashboard/page.tsx`, `src/components/Sidebar.tsx`. Resolution: `billing` after `settings`.\n    *   `tests` vs `billing`: `.env.example`, `src/server/db.ts`. Resolution: `billing` after `tests`.\n\n    *   Group 1: `oauth`, `settings` (Parallel)\n    *   Group 2: `billing` (Serial, waits for 1)\n    *   Group 3: `tests` (Serial, waits for 2)\n\n    *   `oauth` and `settings` are in Group 1. Do they conflict?\n        *   `oauth` writes: `src/server/auth/config.ts`, `prisma/schema.prisma`, `src/server/auth/index.ts`, `src/app/api/auth/[...nextauth]/route.ts`, `.env.example`, `.env.local`.\n        *   `settings` writes: `src/app/settings/page.tsx`, `src/app/dashboard/page.tsx`, `src/components/Sidebar.tsx`.\n        *   No overlap. Group 1 is safe.\n    *   Group 2 (`billing`) waits for Group 1 (`oauth`, `settings`).\n        *   `billing` vs `oauth`: `billing` is after `oauth`. (Matches resolution)\n        *   `billing` vs `settings`: `billing` is after `settings`. (Matches resolution)\n    *   Group 3 (`tests`) waits for Group 2 (`billing`).\n        *   `tests` vs `oauth`: `tests` is after `oauth` (via Group 2). (Matches resolution)\n        *   `tests` vs `billing`: `tests` is after `billing`. (Matches resolution)\n\n    *   Wait, let's re-check the `tests` vs `billing` conflict.\n        *   Conflict: `tests` and `billing` both modify `.env.example` and `src/server/db.ts`.\n        *   Resolution: \"Serialize billing after tests\".\n        *   Plan: Group 2 is `billing`, Group 3 is `tests`. Group 3 waits for Group 2.\n        *   This means `billing` runs *before* `tests`.\n        *   The resolution says \"Serialize billing after tests\".\n        *   The plan executes `billing` then `tests`.\n        *   This is the *opposite* of the resolution for the `tests`/`billing` conflict.\n\n    *   Let's re-verify:\n        *   Conflict: `tests` vs `billing`.\n        *   Resolution: \"Serialize billing after tests\".\n        *   Plan:\n            *   Group 1: `oauth`, `settings`\n            *   Group 2: `billing` (waits for 1)\n            *   Group 3: `tests` (waits for 2)\n        *   Execution order: `oauth` & `settings` -> `billing` -> `tests`.\n        *   Is `billing` after `tests`? No. `tests` is after `billing`.\n\n    *   Wait, let's look at the other conflicts.\n        *   `oauth` vs `billing`: Resolution \"Serialize billing after oauth\". Plan: `oauth` (G1) -> `billing` (G2). Correct.\n        *   `oauth` vs `tests`: Resolution \"Serialize tests after oauth\". Plan: `oauth` (G1) -> `tests` (G3). Correct.\n        *   `settings` vs `billing`: Resolution \"Serialize billing after settings\". Plan: `settings` (G1) -> `billing` (G2). Correct.\n        *   `tests` vs `billing`: Resolution \"Serialize billing after tests\". Plan: `billing` (G2) -> `tests` (G3). **Incorrect**.\n\n    *   The plan executes `billing` then `tests`.\n    *   The conflict resolution for `tests` and `billing` requires `billing` to be *after* `tests`.\n\n    *   If `tests` must be before `billing`:\n        *   `oauth` and `settings` can run first.\n        *   `tests` can run after `oauth` (as per `oauth`/`tests` resolution).\n        *   `billing` can run after `tests` (as per `tests`/`billing` resolution) and after `settings` (as per `settings`/`billing` resolution).\n\n    *   Proposed correct order:\n        1. `oauth`, `settings`\n        2. `tests`\n        3. `billing`\n\n    *   Let's check the current plan again.\n        *   G1: `oauth`, `settings`\n        *   G2: `billing`\n        *   G3: `tests`\n        *   Order: `oauth`, `settings`, `billing`, `tests`.\n        *   Conflict `tests` vs `billing`: Resolution says `billing` after `tests`. Plan says `tests` after `billing`.\n\n    *   Wait, let me re-read the `tests` vs `billing` conflict.\n        *   `between_tasks`: `[\"tests\", \"billing\"]`\n        *   `files`: `[\".env.example\", \"src/server/db.ts\"]`\n        *   `resolution`: \"Serialize billing after tests; both modify .env.example, src/server/db.ts\"\n\n    *   Plan:\n        *   G1: `oauth`, `settings`\n        *   G2: `billing`\n        *   G3: `tests`\n        *   Order: `oauth`, `settings`, `billing`, `tests`.\n\n    *   The plan violates the `tests`/`billing` resolution.\n\n    *   `oauth` vs `billing`: `billing` after `oauth`. (Plan: `oauth` -> `billing`. OK)\n    *   `oauth` vs `tests`: `tests` after `oauth`. (Plan: `oauth` -> `tests`. OK)\n    *   `settings` vs `billing`: `billing` after `settings`. (Plan: `settings` -> `billing`. OK)\n    *   `tests` vs `billing`: `billing` after `tests`. (Plan: `billing` -> `tests`. **FAIL**)\n\n    *   The plan is not approved.\n\n    *   `billing` and `tests` conflict on `.env.example` and `src/server/db.ts`.\n    *   The resolution says `billing` should be after `tests`.\n    *   The plan puts `billing` in Group 2 and `tests` in Group 3 (waiting for Group 2), meaning `billing` runs before `tests`.\n\n    *   `approved`: false\n    *   `concerns`: [\"The execution plan violates the resolution for the 'tests' and 'billing' conflict; 'billing' should be serialized after 'tests', but the plan executes 'billing' before 'tests'.\"]\n    *   `dispatch_order`: [1, 2, 3] (though it's not approved, I should provide the order it *would* have used or just the order requested). The prompt asks for the dispatch order of the plan.\n\n    *   Wait, if I change the order to:\n        *   G1: `oauth`, `settings`\n        *   G2: `tests`\n        *   G3: `billing`\n    *   Does this satisfy everything?\n        *   `oauth` vs `billing`: `billing` (G3) after `oauth` (G1). OK.\n        *   `oauth` vs `tests`: `tests` (G2) after `oauth` (G1). OK.\n        *   `settings` vs `billing`: `billing` (G3) after `settings` (G1). OK.\n        *   `tests` vs `billing`: `billing` (G3) after `tests` (G2). OK.\n\n    *   Yes, that would work. But the task is to analyze the *provided* plan.\n\n    *   `billing` writes `src/server/db.ts`.\n    *   `tests` writes `src/server/db.ts`.\n    *   If `billing` runs first, it writes `src/server/db.ts`. Then `tests` runs and writes `src/server/db.ts`.\n    *   If `tests` runs first, it writes `src/server/db.ts`. Then `billing` runs and writes `src/server/db.ts`.\n    *   The resolution specifically says \"Serialize billing after tests\". This implies the changes from `billing` are the ones that should be final or that `tests` needs the state created by `billing`? No, usually it's the other way around. If `tests` is writing to `src/server/db.ts`, it might be creating test mocks or something. If",
-    "parsed": null
+    "url": "mock://orchestrator",
+    "model": "mock-runtime",
+    "wall_s": 0.01,
+    "completion_tokens": 128,
+    "finish_reason": "stop",
+    "content": "{\n  \"approved\": true,\n  \"concerns\": [\n    \"tests task lacks a concrete file path; worker may need extra hand-holding\",\n    \"billing touches two hot files (Prisma + Sidebar); merge order matters\"\n  ],\n  \"dispatch_order\": [\n    1,\n    2,\n    3\n  ]\n}",
+    "reasoning_content": "Looking at the lockfile, four tasks are declared: oauth, billing, settings, tests. Two real conflicts exist on prisma/schema.prisma (oauth \u2194 billing) and src/components/Sidebar.tsx (settings \u2194 billing). The solver has already serialised billing after both oauth and settings, so group 1 (oauth, settings) can run in parallel safely. Group 2 (billing) consumes the merged Prisma schema. Group 3 (tests) runs last because Playwright e2e specs depend on the new routes existing. Plan looks sound.",
+    "parsed": {
+      "approved": true,
+      "concerns": [
+        "tests task lacks a concrete file path; worker may need extra hand-holding",
+        "billing touches two hot files (Prisma + Sidebar); merge order matters"
+      ],
+      "dispatch_order": [
+        1,
+        2,
+        3
+      ]
+    }
   },
   "workers": [
     {
       "task_id": "oauth",
       "group_id": 1,
-      "url": "http://gx10-f2c9:8080/v1",
-      "model": "gemma",
-      "wall_s": 4.0461652080120984,
-      "completion_tokens": 181,
+      "url": "mock://worker",
+      "model": "mock-runtime",
+      "wall_s": 0.005,
+      "completion_tokens": 64,
       "finish_reason": "stop",
-      "raw_content": "```json\n{\n  \"writes\": [\n    {\n      \"file\": \"prisma/schema.prisma\",\n      \"description\": \"Add Account and Session models to support NextAuth with Google OAuth.\"\n    },\n    {\n      \"file\": \"src/server/auth/config.ts\",\n      \"description\": \"Configure Google provider in NextAuth configuration.\"\n    },\n    {\n      \"file\": \"src/app/api/auth/[...nextauth]/route.ts\",\n      \"description\": \"Implement the NextAuth route handler using the configured auth options.\"\n    },\n    {\n      \"file\": \".env.example\",\n      \"description\": \"Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to environment variable examples.\"\n    }\n  ]\n}\n```",
+      "raw_content": "{\"writes\": [{\"file\": \"src/server/auth/config.ts\", \"description\": \"Add Google OAuth provider\"}, {\"file\": \"prisma/schema.prisma\", \"description\": \"Add Account/Session/User auth tables\"}, {\"file\": \"src/app/api/auth/[...nextauth]/route.ts\", \"description\": \"Wire NextAuth route handler\"}, {\"file\": \"src/utils/random.ts\", \"description\": \"Helper for state token generation\"}]}",
       "proposals": [
         {
-          "file": "prisma/schema.prisma",
-          "description": "Add Account and Session models to support NextAuth with Google OAuth.",
+          "file": "src/server/auth/config.ts",
+          "description": "Add Google OAuth provider",
           "allowed": true,
-          "reason": null
+          "reason": null,
+          "scope_status": "allowed",
+          "content": null,
+          "envelope": null
         },
         {
-          "file": "src/server/auth/config.ts",
-          "description": "Configure Google provider in NextAuth configuration.",
+          "file": "prisma/schema.prisma",
+          "description": "Add Account/Session/User auth tables",
           "allowed": true,
-          "reason": null
+          "reason": null,
+          "scope_status": "allowed",
+          "content": null,
+          "envelope": null
         },
         {
           "file": "src/app/api/auth/[...nextauth]/route.ts",
-          "description": "Implement the NextAuth route handler using the configured auth options.",
+          "description": "Wire NextAuth route handler",
           "allowed": true,
-          "reason": null
+          "reason": null,
+          "scope_status": "allowed",
+          "content": null,
+          "envelope": null
         },
         {
-          "file": ".env.example",
-          "description": "Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to environment variable examples.",
-          "allowed": true,
-          "reason": null
+          "file": "src/utils/random.ts",
+          "description": "Helper for state token generation",
+          "allowed": false,
+          "reason": "path 'src/utils/random.ts' is outside task 'oauth''s allowed_paths (.env.example, .env.local, prisma/schema.prisma, src/app/api/auth/[...nextauth]/**, src/server/auth/**)",
+          "scope_status": "blocked",
+          "content": null,
+          "envelope": null
         }
       ],
-      "allowed_count": 4,
-      "blocked_count": 0,
-      "error": null
+      "allowed_count": 3,
+      "blocked_count": 1,
+      "needs_replan_count": 0,
+      "replan_approved_count": 0,
+      "error": null,
+      "prompt_tokens": null,
+      "cost_usd": null,
+      "cost_source": null,
+      "proposal_status": "ok"
     },
     {
       "task_id": "settings",
       "group_id": 1,
-      "url": "http://gx10-f2c9:8080/v1",
-      "model": "gemma",
-      "wall_s": 2.3460053330054507,
-      "completion_tokens": 98,
+      "url": "mock://worker",
+      "model": "mock-runtime",
+      "wall_s": 0.005,
+      "completion_tokens": 64,
       "finish_reason": "stop",
-      "raw_content": "```json\n{\n  \"writes\": [\n    {\n      \"file\": \"src/app/settings/page.tsx\",\n      \"description\": \"Redesign the user settings page layout and reorganize its sections.\"\n    },\n    {\n      \"file\": \"src/components/Sidebar.tsx\",\n      \"description\": \"Update the styling for the settings entry in the sidebar.\"\n    }\n  ]\n}\n```",
+      "raw_content": "{\"writes\": [{\"file\": \"src/app/settings/page.tsx\", \"description\": \"Redesign settings page\"}, {\"file\": \"src/components/Sidebar.tsx\", \"description\": \"Update Settings entry styling\"}]}",
       "proposals": [
         {
           "file": "src/app/settings/page.tsx",
-          "description": "Redesign the user settings page layout and reorganize its sections.",
+          "description": "Redesign settings page",
           "allowed": true,
-          "reason": null
+          "reason": null,
+          "scope_status": "allowed",
+          "content": null,
+          "envelope": null
         },
         {
           "file": "src/components/Sidebar.tsx",
-          "description": "Update the styling for the settings entry in the sidebar.",
+          "description": "Update Settings entry styling",
           "allowed": true,
-          "reason": null
+          "reason": null,
+          "scope_status": "allowed",
+          "content": null,
+          "envelope": null
         }
       ],
       "allowed_count": 2,
       "blocked_count": 0,
-      "error": null
+      "needs_replan_count": 0,
+      "replan_approved_count": 0,
+      "error": null,
+      "prompt_tokens": null,
+      "cost_usd": null,
+      "cost_source": null,
+      "proposal_status": "ok"
     },
     {
       "task_id": "billing",
       "group_id": 2,
-      "url": "http://gx10-f2c9:8080/v1",
-      "model": "gemma",
-      "wall_s": 4.797900000005029,
-      "completion_tokens": 252,
+      "url": "mock://worker",
+      "model": "mock-runtime",
+      "wall_s": 0.005,
+      "completion_tokens": 64,
       "finish_reason": "stop",
-      "raw_content": "```json\n{\n  \"writes\": [\n    {\n      \"file\": \"prisma/schema.prisma\",\n      \"description\": \"Add Subscription and Plan models to the database schema.\"\n    },\n    {\n      \"file\": \"src/components/Sidebar.tsx\",\n      \"description\": \"Add a billing link to the sidebar navigation.\"\n    },\n    {\n      \"file\": \"src/app/dashboard/billing/page.tsx\",\n      \"description\": \"Create the billing dashboard page with subscription status and Stripe integration.\"\n    },\n    {\n      \"file\": \"src/app/api/billing/checkout/route.ts\",\n      \"description\": \"Create an API route to handle Stripe checkout sessions.\"\n    },\n    {\n      \"file\": \"src/app/api/billing/webhook/route.ts\",\n      \"description\": \"Create a Stripe webhook handler to sync subscription status with the database.\"\n    },\n    {\n      \"file\": \".env.example\",\n      \"description\": \"Add Stripe API key placeholders to the environment variables template.\"\n    }\n  ]\n}\n```",
+      "raw_content": "{\"writes\": [{\"file\": \"src/components/Sidebar.tsx\", \"description\": \"Add Billing nav entry\"}, {\"file\": \"prisma/schema.prisma\", \"description\": \"Add Subscription model\"}, {\"file\": \"src/app/dashboard/billing/page.tsx\", \"description\": \"Billing dashboard route\"}]}",
       "proposals": [
         {
-          "file": "prisma/schema.prisma",
-          "description": "Add Subscription and Plan models to the database schema.",
+          "file": "src/components/Sidebar.tsx",
+          "description": "Add Billing nav entry",
           "allowed": true,
-          "reason": null
+          "reason": null,
+          "scope_status": "allowed",
+          "content": null,
+          "envelope": null
         },
         {
-          "file": "src/components/Sidebar.tsx",
-          "description": "Add a billing link to the sidebar navigation.",
+          "file": "prisma/schema.prisma",
+          "description": "Add Subscription model",
           "allowed": true,
-          "reason": null
+          "reason": null,
+          "scope_status": "allowed",
+          "content": null,
+          "envelope": null
         },
         {
           "file": "src/app/dashboard/billing/page.tsx",
-          "description": "Create the billing dashboard page with subscription status and Stripe integration.",
+          "description": "Billing dashboard route",
           "allowed": true,
-          "reason": null
-        },
-        {
-          "file": "src/app/api/billing/checkout/route.ts",
-          "description": "Create an API route to handle Stripe checkout sessions.",
-          "allowed": true,
-          "reason": null
-        },
-        {
-          "file": "src/app/api/billing/webhook/route.ts",
-          "description": "Create a Stripe webhook handler to sync subscription status with the database.",
-          "allowed": true,
-          "reason": null
-        },
-        {
-          "file": ".env.example",
-          "description": "Add Stripe API key placeholders to the environment variables template.",
-          "allowed": true,
-          "reason": null
+          "reason": null,
+          "scope_status": "allowed",
+          "content": null,
+          "envelope": null
         }
       ],
-      "allowed_count": 6,
+      "allowed_count": 3,
       "blocked_count": 0,
-      "error": null
+      "needs_replan_count": 0,
+      "replan_approved_count": 0,
+      "error": null,
+      "prompt_tokens": null,
+      "cost_usd": null,
+      "cost_source": null,
+      "proposal_status": "ok"
     },
     {
       "task_id": "tests",
       "group_id": 3,
-      "url": "http://gx10-f2c9:8080/v1",
-      "model": "gemma",
-      "wall_s": 2.1016876669891644,
-      "completion_tokens": 108,
+      "url": "mock://worker",
+      "model": "mock-runtime",
+      "wall_s": 0.005,
+      "completion_tokens": 64,
       "finish_reason": "stop",
-      "raw_content": "```json\n{\n  \"writes\": [\n    {\n      \"file\": \"playwright.config.ts\",\n      \"description\": \"Configure Playwright for end-to-end testing.\"\n    },\n    {\n      \"file\": \"tests/e2e/checkout.spec.ts\",\n      \"description\": \"Write end-to-end tests for the checkout flow, including adding items to cart and completing payment.\"\n    }\n  ]\n}\n```",
+      "raw_content": "{\"writes\": [{\"file\": \"tests/e2e/checkout.spec.ts\", \"description\": \"Playwright spec for checkout flow\"}, {\"file\": \"tests/e2e/auth.spec.ts\", \"description\": \"Playwright spec for OAuth login\"}]}",
       "proposals": [
         {
-          "file": "playwright.config.ts",
-          "description": "Configure Playwright for end-to-end testing.",
+          "file": "tests/e2e/checkout.spec.ts",
+          "description": "Playwright spec for checkout flow",
           "allowed": true,
-          "reason": null
+          "reason": null,
+          "scope_status": "allowed",
+          "content": null,
+          "envelope": null
         },
         {
-          "file": "tests/e2e/checkout.spec.ts",
-          "description": "Write end-to-end tests for the checkout flow, including adding items to cart and completing payment.",
+          "file": "tests/e2e/auth.spec.ts",
+          "description": "Playwright spec for OAuth login",
           "allowed": true,
-          "reason": null
+          "reason": null,
+          "scope_status": "allowed",
+          "content": null,
+          "envelope": null
         }
       ],
       "allowed_count": 2,
       "blocked_count": 0,
-      "error": null
+      "needs_replan_count": 0,
+      "replan_approved_count": 0,
+      "error": null,
+      "prompt_tokens": null,
+      "cost_usd": null,
+      "cost_source": null,
+      "proposal_status": "ok"
     }
   ],
   "groups_executed": [
     {
       "id": 1,
       "type": "parallel",
-      "started_at": "2026-04-25T21:29:21.699697+00:00",
-      "wall_s": 4.047748958982993,
+      "started_at": "2026-05-13T14:21:00.429147+00:00",
+      "wall_s": 0.0018284579273313284,
       "worker_ids": [
         "oauth",
         "settings"
@@ -178,8 +230,8 @@
     {
       "id": 2,
       "type": "serial",
-      "started_at": "2026-04-25T21:29:25.747728+00:00",
-      "wall_s": 4.799469707999378,
+      "started_at": "2026-05-13T14:21:00.431202+00:00",
+      "wall_s": 0.0006826671306043863,
       "worker_ids": [
         "billing"
       ]
@@ -187,14 +239,14 @@
     {
       "id": 3,
       "type": "serial",
-      "started_at": "2026-04-25T21:29:30.547480+00:00",
-      "wall_s": 2.10278595899581,
+      "started_at": "2026-05-13T14:21:00.432058+00:00",
+      "wall_s": 0.0007487088441848755,
       "worker_ids": [
         "tests"
       ]
     }
   ],
-  "started_at": "2026-04-25T21:28:41.847937+00:00",
-  "finished_at": "2026-04-25T21:29:32.650418+00:00",
-  "total_wall_s": 50.802227458014386
+  "started_at": "2026-05-13T14:21:00.426818+00:00",
+  "finished_at": "2026-05-13T14:21:00.432901+00:00",
+  "total_wall_s": 0.005959542002528906
 }

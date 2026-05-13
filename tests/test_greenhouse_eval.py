@@ -9,7 +9,7 @@ Covers the four phases the megaplan calls out:
 5. CLI smoke: ``--backend mock --strategy both`` writes both artifacts.
 
 All tests use the deterministic ``mock`` backend so they pass on CI
-without GX10 / Devin access.
+without a live LLM server / Devin access.
 """
 
 from __future__ import annotations

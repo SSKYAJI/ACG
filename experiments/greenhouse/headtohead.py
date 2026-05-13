@@ -16,7 +16,7 @@ python -m experiments.greenhouse.headtohead \
   --backend mock --strategy both \
   --out-dir experiments/greenhouse/runs
 
-# Live local LLM (GX10) for one strategy
+# Live local LLM for one strategy
 python -m experiments.greenhouse.headtohead \
   --lock experiments/greenhouse/agent_lock.json \
   --tasks experiments/greenhouse/tasks.json \

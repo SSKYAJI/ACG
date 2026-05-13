@@ -10,7 +10,7 @@ Three pieces of public evidence shaped this design:
 2. **OpenCode Issue #4278 (Nov 2025)** is real OpenCode users asking for a per-file lock subsystem so multiple agents stop overwriting each other's changes. The issue closed "completed" without an implementation. We supply the missing primitive.
 3. **Walden Yan's interview (jxnl.co, Sep 11 2025)** acknowledges the implicit-decision problem in agentic systems: each action carries a decision, and conflicting decisions corrupt downstream work. ACG makes the write-set decision explicit, reviewable, and committable.
 
-(See `docs/CITATIONS.md` for the verbatim quotes once Prajit verifies them.)
+(See [CITATIONS.md](CITATIONS.md) for bibliography / URLs and the policy on verbatim excerpts.)
 
 ## How Devin Manage Devins would consume ACG
 
@@ -40,13 +40,13 @@ The coordinator reads the lockfile and:
 ## MCP tool surface (shipped)
 
 ```python
-analyze_repo(path: str) -> dict
-predict_writes(task: dict, repo_graph: dict) -> list[dict]
-compile_lockfile(repo: str, tasks: dict) -> dict
+analyze_repo(path: str, language: str = "auto") -> dict
+predict_writes(task: dict, repo_path: str, repo_graph: dict | None = None) -> list[dict]
+compile_lockfile(repo_path: str, tasks: dict, language: str = "auto") -> dict
 validate_writes(lockfile: dict, task_id: str, attempted_path: str) -> dict
 ```
 
-These mirror the four CLI commands one-to-one. The FastMCP stdio wrapper ships in [`acg/mcp/`](../acg/mcp/) — install with `pip install -e '.[mcp]'` and run `acg mcp`. See [`docs/MCP_SERVER.md`](MCP_SERVER.md) for tool schemas and a Devin worked example. An Agentverse submission via `uagents-adapter` MCPServerAdapter is a thin shim on top of the same surface.
+These wrap the compile / predict / enforce stack; **`analyze_repo`** is the graph refresh primitive (writes `<repo>/.acg/context_graph.json`, same artifact as **`acg init-graph`**). The FastMCP stdio server lives in **`acg/mcp/server.py`** (`run_stdio`); **`acg/mcp/__init__.py`** re-exports it for packaging. Install with `pip install -e '.[mcp]'` and run **`acg mcp`**. See [`docs/MCP_SERVER.md`](MCP_SERVER.md) for tool schemas and a Devin worked example. An Agentverse submission via `uagents-adapter` MCPServerAdapter is a thin shim on top of the same surface.
 
 ## What we explicitly did **not** build (v1)
 
