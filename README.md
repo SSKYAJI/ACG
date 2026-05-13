@@ -142,6 +142,7 @@ acg mcp              [--transport stdio]    # MCP server (requires .[mcp] extra)
 ## Integrations
 
 - **Cognition (Devin)** — ACG provides pre-flight static contracts that a coordinator agent can consume prior to fanning out child workers. See [`docs/COGNITION_INTEGRATION.md`](docs/COGNITION_INTEGRATION.md).
+- **Claude Code Integration** — ACG integrates with Claude Code project hooks via `.claude/settings.json` and `scripts/claude_precheck_write.py`, validating `Write` and `Edit` tool calls before they land. See [`docs/CLAUDE_CODE_INTEGRATION.md`](docs/CLAUDE_CODE_INTEGRATION.md).
 - **Cascade Integration** — ACG integrates seamlessly via Windsurf Cascade `pre_write_code` and `post_write_code` hook scripts (`.windsurf/hooks.json`). The pre-hook validates file edits inline, blocking out-of-bounds modifications instantly with clear user interface feedback. See [`docs/CASCADE_INTEGRATION.md`](docs/CASCADE_INTEGRATION.md).
 - **Model Context Protocol (MCP)** — Core ACG primitives are fully exposed as standard MCP tools. Compatible with leading agent frameworks. See [`docs/MCP_SERVER.md`](docs/MCP_SERVER.md).
 

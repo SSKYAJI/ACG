@@ -2,7 +2,7 @@
 # scripts/precheck_write.sh
 # Cascade pre_write_code hook — defers to ACG's write validator.
 #
-# Cascade's hook contract (verified 2026-04-25 from
+# Cascade's hook contract (verified 2026-05-13 from
 # https://docs.windsurf.com/windsurf/cascade/hooks):
 #   - Hook input is a JSON object on stdin with
 #     tool_info.file_path pointing at the write target.
@@ -77,11 +77,11 @@ if [[ -z "${WRITE_PATH}" || -z "${TASK_ID}" || ! -f "${LOCK}" ]]; then
   exit 0
 fi
 
-# Resolve the acg binary: prefer PATH, fall back to the repo venv.
-if command -v acg >/dev/null 2>&1; then
-  ACG_BIN="acg"
-elif [[ -x "./.venv/bin/acg" ]]; then
+# Resolve the acg binary: prefer the repo venv, then fall back to PATH.
+if [[ -x "./.venv/bin/acg" ]]; then
   ACG_BIN="./.venv/bin/acg"
+elif command -v acg >/dev/null 2>&1; then
+  ACG_BIN="acg"
 else
   echo "[acg-hook] could not find 'acg' on PATH or in ./.venv/bin/; allowing" >&2
   exit 0

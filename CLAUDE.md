@@ -94,6 +94,17 @@ The greenhouse harness is reused by other experiments (`python -m experiments.gr
 
 `.windsurf/hooks.json` wires `scripts/precheck_write.sh` (pre_write_code) and `postcheck_write.sh` (post_write_code). The pre-hook reads `tool_info.file_path` from stdin JSON, normalises to repo-relative, and invokes `acg validate-write` with `ACG_LOCK` + `ACG_CURRENT_TASK` env vars. Exit code 2 = block. Soft-fails (allows) when env is unset so it never accidentally blocks non-ACG sessions.
 
+### Claude Code integration
+
+`.claude/settings.json` wires `scripts/claude_precheck_write.py` to Claude Code's `PreToolUse` event for `Write|Edit`. Claude passes attempted file paths in `tool_input.file_path`; the hook normalises paths under the current workspace, allows internal/editor metadata paths, and invokes `acg validate-write` with `ACG_LOCK` + `ACG_CURRENT_TASK` env vars. For `PreToolUse`, the hook uses the documented JSON response format with `hookSpecificOutput.permissionDecision` instead of the deprecated top-level `decision` field. Soft-fails (allows) when env is unset, the lockfile is missing, or the `acg` binary is unavailable.
+
+Hook source-of-truth files:
+- `docs/HOOKS_VERIFICATION.md`
+- `docs/CLAUDE_CODE_INTEGRATION.md`
+- `docs/CASCADE_INTEGRATION.md`
+- `.claude/settings.json`
+- `.windsurf/hooks.json`
+
 ### MCP
 
 `acg mcp --transport stdio` exposes `analyze_repo`, `predict_writes`, `compile_lockfile`, `validate_writes` over FastMCP. Requires the `mcp` extra: `pip install -e '.[mcp]'`. See `docs/MCP_SERVER.md`.

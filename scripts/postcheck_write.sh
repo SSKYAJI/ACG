@@ -3,7 +3,7 @@
 # Cascade post_write_code hook — emits a receipt confirming that the
 # write was processed through ACG's Cascade hook integration.
 #
-# Cascade's hook contract (verified 2026-04-26 from
+# Cascade's hook contract (verified 2026-05-13 from
 # https://docs.windsurf.com/windsurf/cascade/hooks):
 #   - Hook input is a JSON object on stdin with
 #     tool_info.file_path pointing at the written file and

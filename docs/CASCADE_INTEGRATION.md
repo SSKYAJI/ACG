@@ -1,9 +1,10 @@
 # Cascade Integration
 
-ACG includes a `pre_write_code` hook script for Windsurf/Cascade. When
-registered in `.windsurf/hooks.json`, a Cascade-driven edit outside the
-current task's `allowed_paths` exits with a BLOCKED message authored by
-ACG's validator before the write lands.
+ACG includes Windsurf/Cascade hook scripts for both `pre_write_code` and
+`post_write_code`. When registered in `.windsurf/hooks.json`, a
+Cascade-driven edit outside the current task's `allowed_paths` exits with
+a BLOCKED message authored by ACG's validator before the write lands, and
+successful writes emit a short receipt after the write completes.
 
 The hook contract is documented at
 [docs.windsurf.com/windsurf/cascade/hooks](https://docs.windsurf.com/windsurf/cascade/hooks):
@@ -29,8 +30,8 @@ path as `$1` for direct invocation and testing.
 ## Setup
 
 1. Open the repo in Windsurf.
-2. Register `scripts/precheck_write.sh` in `.windsurf/hooks.json` according
-   to the Windsurf hook contract.
+2. Register both `scripts/precheck_write.sh` and `scripts/postcheck_write.sh`
+   in `.windsurf/hooks.json` according to the Windsurf hook contract.
 3. Set the per-task env var before invoking Cascade:
 
 ```bash
