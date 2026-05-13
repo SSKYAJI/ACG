@@ -386,10 +386,10 @@ input:focus-visible,
 }
 
 .hero {
-  min-height: calc(100vh - 5rem);
+  min-height: calc(88vh - 5rem);
   display: flex;
   align-items: center;
-  padding-block: clamp(4rem, 10vw, 8rem);
+  padding-block: clamp(3rem, 8vw, 5.5rem);
 }
 
 .hero-center {
@@ -397,7 +397,7 @@ input:focus-visible,
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: var(--space-8);
+  gap: var(--space-6);
   max-width: 1000px;
   margin-inline: auto;
 }
@@ -414,13 +414,36 @@ input:focus-visible,
 }
 
 .hero-install {
-  margin-top: var(--space-6);
+  margin-top: var(--space-4);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-3);
   width: 100%;
   max-width: 560px;
+}
+
+.hero-scroll-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: var(--space-4);
+  color: rgb(105 107 117);
+  opacity: 0.9;
+}
+
+.hero-scroll-text {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hero-scroll-line {
+  display: inline-block;
+  width: 56px;
+  height: 1px;
+  background: rgb(26 26 26 / 0.22);
 }
 
 .install-label {
@@ -543,7 +566,8 @@ input:focus-visible,
 }
 
 .demo-section {
-  padding-block: clamp(3rem, 6vw, 5rem);
+  padding-block: clamp(4rem, 8vw, 7rem);
+  min-height: 100vh;
   border-top: 1px solid var(--border);
   background: rgb(238 238 240);
   color: var(--text);
@@ -553,16 +577,24 @@ input:focus-visible,
   color: var(--text);
 }
 
+.demo-title {
+  font-size: clamp(2.4rem, 5vw, 4.25rem);
+  line-height: 1.04;
+}
+
 .demo-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--space-8);
   align-items: center;
+  width: 100%;
+  min-height: calc(100vh - clamp(8rem, 14vw, 12rem));
+  padding-inline: clamp(1rem, 3vw, 2.5rem);
 }
 
 @media (min-width: 820px) {
   .demo-grid {
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr);
+    grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.78fr);
     gap: var(--space-10);
   }
 }
@@ -584,6 +616,9 @@ input:focus-visible,
   padding: var(--space-3);
   background: var(--bg-elevated);
   border-color: var(--border-dashed);
+  width: 100%;
+  max-width: min(78vw, 1120px);
+  justify-self: stretch;
 }
 
 .demo-video-wrap .video-ratio {
