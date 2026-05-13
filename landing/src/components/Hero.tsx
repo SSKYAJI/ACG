@@ -15,7 +15,7 @@ export function Hero() {
         </p>
 
         <div className="hero-install">
-          <p className="install-label">Bootstrap a repo-local graph</p>
+          <p className="install-label">Try it in your repo</p>
           <CommandBlock command="npx acg init" />
         </div>
       </div>
