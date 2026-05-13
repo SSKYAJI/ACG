@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from acg.apply_patch_adapter import apply_envelope
+from acg.correctness import CorrectnessOutcome
 from acg.enforce import validate_write
 from acg.runtime import (
     LLMReply,
@@ -564,6 +565,21 @@ def _proposals_to_naive_applied_eval_task(
     eval_task.metrics.typecheck_exit_code = tc.exit_code
     eval_task.metrics.typecheck_diagnostic_count = tc.diagnostic_count
     eval_task.metrics.typecheck_wall_seconds = tc.wall_seconds
+    tests = task_outcome.tests_outcome
+    if tests is not None:
+        eval_task.tests_ran = tests.ran
+        eval_task.tests_exit_code = tests.exit_code
+        eval_task.tests_passed_count = tests.passed_count
+        eval_task.tests_failed_count = tests.failed_count
+        eval_task.tests_total_count = tests.total_count
+        eval_task.tests_skip_reason = tests.skip_reason
+        eval_task.tests_collection_error = tests.collection_error
+        eval_task.fail_to_pass_passed = tests.fail_to_pass_passed
+        eval_task.fail_to_pass_total = tests.fail_to_pass_total
+        eval_task.pass_to_pass_passed = tests.pass_to_pass_passed
+        eval_task.pass_to_pass_total = tests.pass_to_pass_total
+        eval_task.overlay_applied = tests.overlay_applied
+        eval_task.overlay_skip_reason = tests.overlay_skip_reason
     _attach_worker_proposal_fields(eval_task, worker)
     return eval_task
 
@@ -631,6 +647,21 @@ def _proposals_to_suite_applied_eval_task(
     eval_task.metrics.typecheck_exit_code = tc.exit_code
     eval_task.metrics.typecheck_diagnostic_count = tc.diagnostic_count
     eval_task.metrics.typecheck_wall_seconds = tc.wall_seconds
+    tests = task_outcome.tests_outcome
+    if tests is not None:
+        eval_task.tests_ran = tests.ran
+        eval_task.tests_exit_code = tests.exit_code
+        eval_task.tests_passed_count = tests.passed_count
+        eval_task.tests_failed_count = tests.failed_count
+        eval_task.tests_total_count = tests.total_count
+        eval_task.tests_skip_reason = tests.skip_reason
+        eval_task.tests_collection_error = tests.collection_error
+        eval_task.fail_to_pass_passed = tests.fail_to_pass_passed
+        eval_task.fail_to_pass_total = tests.fail_to_pass_total
+        eval_task.pass_to_pass_passed = tests.pass_to_pass_passed
+        eval_task.pass_to_pass_total = tests.pass_to_pass_total
+        eval_task.overlay_applied = tests.overlay_applied
+        eval_task.overlay_skip_reason = tests.overlay_skip_reason
     _attach_worker_proposal_fields(eval_task, worker)
     return eval_task
 
@@ -772,12 +803,40 @@ def _proposals_to_planned_applied_eval_task(
     eval_task.metrics.typecheck_exit_code = tc.exit_code
     eval_task.metrics.typecheck_diagnostic_count = tc.diagnostic_count
     eval_task.metrics.typecheck_wall_seconds = tc.wall_seconds
+    tests = task_outcome.tests_outcome
+    if tests is not None:
+        eval_task.tests_ran = tests.ran
+        eval_task.tests_exit_code = tests.exit_code
+        eval_task.tests_passed_count = tests.passed_count
+        eval_task.tests_failed_count = tests.failed_count
+        eval_task.tests_total_count = tests.total_count
+        eval_task.tests_skip_reason = tests.skip_reason
+        eval_task.tests_collection_error = tests.collection_error
+        eval_task.fail_to_pass_passed = tests.fail_to_pass_passed
+        eval_task.fail_to_pass_total = tests.fail_to_pass_total
+        eval_task.pass_to_pass_passed = tests.pass_to_pass_passed
+        eval_task.pass_to_pass_total = tests.pass_to_pass_total
+        eval_task.overlay_applied = tests.overlay_applied
+        eval_task.overlay_skip_reason = tests.overlay_skip_reason
     _attach_worker_proposal_fields(eval_task, worker)
     return eval_task
 
 
 def _sanitize_applied_branch_task_id(task_id: str) -> str:
     return "".join(c if c.isalnum() or c in "-_" else "-" for c in task_id)
+
+
+def _resolve_repo_short_name(checkout: Path | str) -> str | None:
+    """Infer the manifest.json short_name from the checkout path.
+
+    E.g. .../experiments/real_repos/starlette/checkout -> 'starlette'.
+    """
+    parts = Path(checkout).resolve().parts
+    if "real_repos" in parts:
+        i = parts.index("real_repos")
+        if i + 1 < len(parts):
+            return parts[i + 1]
+    return None
 
 
 def _git_identity_args() -> list[str]:
@@ -814,6 +873,7 @@ class TaskApplyOutcome:
             skip_reason="NOT_RUN",
         )
     )
+    tests_outcome: CorrectnessOutcome | None = None
 
 
 def _apply_writes_git_sync(
@@ -927,11 +987,57 @@ def _apply_writes_git_sync(
                 wall_seconds=None,
                 skip_reason="DISABLED",
             )
+        # SWE-Bench-style test overlay: reset test files to canonical merge_commit_sha
+        # state so FTP scoring uses canonical test names regardless of what the agent wrote.
+        # This fires AFTER the agent's commit and BEFORE test execution.
+        # Source files (non-test) are left as the agent wrote them.
+        overlay_info: dict = {}
+        try:
+            from acg.correctness import overlay_canonical_tests
+
+            repo_short_for_overlay = _resolve_repo_short_name(checkout)
+            if repo_short_for_overlay and task is not None:
+                overlay_info = overlay_canonical_tests(Path(checkout), repo_short_for_overlay, task.id)
+                if overlay_info.get("overlay_applied"):
+                    subprocess.run(
+                        [
+                            "git",
+                            "-C",
+                            repo,
+                            *_git_identity_args(),
+                            "commit",
+                            "-m",
+                            f"acg(test-overlay): {task.id}",
+                            "--allow-empty",
+                        ],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+        except Exception as exc:
+            overlay_info = {"overlay_applied": False, "skip_reason": f"exception:{type(exc).__name__}"}
+
+        # PR-scoped test gate (Python-and-similar repos via manifest.test_command)
+        tests_outcome = None
+        try:
+            from acg.correctness import run_pr_tests
+
+            repo_short = _resolve_repo_short_name(checkout)
+            if repo_short and task is not None:
+                tests_outcome = run_pr_tests(Path(checkout), repo_short, task.id)
+        except Exception as exc:
+            tests_outcome = CorrectnessOutcome(
+                ran=False, skip_reason=f"exception:{type(exc).__name__}"
+            )
+        if tests_outcome is not None:
+            tests_outcome.overlay_applied = bool(overlay_info.get("overlay_applied"))
+            tests_outcome.overlay_skip_reason = overlay_info.get("skip_reason") or ""
         return TaskApplyOutcome(
             changed_files=names,
             patch_na=patch_na,
             patch_na_reason=patch_na_reason,
             typecheck=tc,
+            tests_outcome=tests_outcome,
         )
     finally:
         subprocess.run(
@@ -1755,8 +1861,7 @@ async def _run_single_agent(
         # to the legacy JSON parser so mixed-provider replies still score.
         envelopes = _parse_single_agent_applied_envelopes(reply.content, lock)
         parsed = {
-            task_id: _writes_from_single_agent_patch_blob(env)
-            for task_id, env in envelopes.items()
+            task_id: _writes_from_single_agent_patch_blob(env) for task_id, env in envelopes.items()
         }
         if not any(parsed.get(t.id) for t in lock.tasks):
             parsed = _parse_single_agent_task_writes(

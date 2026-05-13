@@ -1,0 +1,240 @@
+*** Begin Patch
+*** Update File: starlette/middleware/sessions.py
+@@
+ from __future__ import annotations
+ 
+ import json
+ from base64 import b64decode, b64encode
+-from typing import Literal
++from typing import Any, Iterator, Literal, MutableMapping
+ 
+ import itsdangerous
+ from itsdangerous.exc import BadSignature
+@@
+     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+         if scope["type"] not in ("http", "websocket"):  # pragma: no cover
+             await self.app(scope, receive, send)
+             return
+ 
+         connection = HTTPConnection(scope)
+         initial_session_was_empty = True
++        initial_session_data: dict[str, Any] = {}
+ 
+         if self.session_cookie in connection.cookies:
+             data = connection.cookies[self.session_cookie].encode("utf-8")
+             try:
+                 data = self.signer.unsign(data, max_age=self.max_age)
+-                scope["session"] = json.loads(b64decode(data))
++                initial_session_data = json.loads(b64decode(data))
++                scope["session"] = _TrackingDict(initial_session_data)
+                 initial_session_was_empty = False
+             except BadSignature:
+                 scope["session"] = {}
+         else:
+             scope["session"] = {}
+ 
+         async def send_wrapper(message: Message) -> None:
+             if message["type"] == "http.response.start":
+-                if scope["session"]:
++                session = scope["session"]
++                # Detect whether the session was mutated
++                if isinstance(session, _TrackingDict):
++                    session_was_modified = session.modified
++                    session_data = dict(session)
++                else:
++                    session_was_modified = True
++                    session_data = session
++
++                if session_data and (session_was_modified or not initial_session_was_empty):
+                     # We have session data to persist.
+-                    data = b64encode(json.dumps(scope["session"]).encode("utf-8"))
++                    if not session_was_modified and not initial_session_was_empty:
++                        # Read-only access to an existing session — skip Set-Cookie
++                        pass
++                    else:
++                        data = b64encode(json.dumps(session_data).encode("utf-8"))
++                        data = self.signer.sign(data)
++                        headers = MutableHeaders(scope=message)
++                        header_value = "{session_cookie}={data}; path={path}; {max_age}{security_flags}".format(
++                            session_cookie=self.session_cookie,
++                            data=data.decode("utf-8"),
++                            path=self.path,
++                            max_age=f"Max-Age={self.max_age}; " if self.max_age else "",
++                            security_flags=self.security_flags,
++                        )
++                        headers.append("Set-Cookie", header_value)
++                elif not session_data and session_was_modified and not initial_session_was_empty:
++                    # The session has been explicitly cleared.
++                    headers = MutableHeaders(scope=message)
++                    header_value = "{session_cookie}={data}; path={path}; {expires}{security_flags}".format(
++                        session_cookie=self.session_cookie,
++                        data="null",
++                        path=self.path,
++                        expires="expires=Thu, 01 Jan 1970 00:00:00 GMT; ",
++                        security_flags=self.security_flags,
++                    )
++                    headers.append("Set-Cookie", header_value)
++                elif not session_data and not initial_session_was_empty and not session_was_modified:
++                    # Session was not modified but was non-empty originally — do nothing (read-only).
++                    pass
++                elif not session_data and initial_session_was_empty:
++                    # Nothing to do — no session before, no session now.
++                    pass
++                else:
++                    # Fallback: session has data but was not modified and was empty initially
++                    # (e.g. session populated via scope directly without _TrackingDict)
++                    data = b64encode(json.dumps(session_data).encode("utf-8"))
+                     data = self.signer.sign(data)
+                     headers = MutableHeaders(scope=message)
+                     header_value = "{session_cookie}={data}; path={path}; {max_age}{security_flags}".format(
+@@
+                         security_flags=self.security_flags,
+                     )
+                     headers.append("Set-Cookie", header_value)
+-                elif not initial_session_was_empty:
+-                    # The session has been cleared.
+-                    headers = MutableHeaders(scope=message)
+-                    header_value = "{session_cookie}={data}; path={path}; {expires}{security_flags}".format(
+-                        session_cookie=self.session_cookie,
+-                        data="null",
+-                        path=self.path,
+-                        expires="expires=Thu, 01 Jan 1970 00:00:00 GMT; ",
+-                        security_flags=self.security_flags,
+-                    )
+-                    headers.append("Set-Cookie", header_value)
+             await send(message)
+ 
+         await self.app(scope, receive, send_wrapper)
++
++
++class _TrackingDict(MutableMapping[str, Any]):
++    """A dict-like object that tracks whether it has been mutated."""
++
++    def __init__(self, data: dict[str, Any]) -> None:
++        self._data: dict[str, Any] = dict(data)
++        self.modified: bool = False
++
++    def __getitem__(self, key: str) -> Any:
++        return self._data[key]
++
++    def __setitem__(self, key: str, value: Any) -> None:
++        self._data[key] = value
++        self.modified = True
++
++    def __delitem__(self, key: str) -> None:
++        del self._data[key]
++        self.modified = True
++
++    def __iter__(self) -> Iterator[str]:
++        return iter(self._data)
++
++    def __len__(self) -> int:
++        return len(self._data)
++
++    def __bool__(self) -> bool:
++        return bool(self._data)
++
++    def clear(self) -> None:
++        self._data.clear()
++        self.modified = True
++
++    def update(self, other: Any = (), **kwargs: Any) -> None:  # type: ignore[override]
++        self._data.update(other, **kwargs)
++        self.modified = True
+*** Update File: tests/middleware/test_session.py
+@@
+ import re
++import asyncio
++from unittest.mock import AsyncMock
+ 
+ from starlette.applications import Starlette
+ from starlette.middleware import Middleware
+@@
+     client.cookies.delete("session")
+     response = client.get("/view_session")
+     assert response.json() == {"session": {}}
++
++
++def test_session_no_set_cookie_on_read_only(test_client_factory: TestClientFactory) -> None:
++    """Reading an existing session without modifying it should not send Set-Cookie."""
++    app = Starlette(
++        routes=[
++            Route("/view_session", endpoint=view_session),
++            Route("/update_session", endpoint=update_session, methods=["POST"]),
++        ],
++        middleware=[Middleware(SessionMiddleware, secret_key="example")],
++    )
++    client = test_client_factory(app)
++
++    # First, create a session
++    response = client.post("/update_session", json={"some": "data"})
++    assert response.json() == {"session": {"some": "data"}}
++    assert "set-cookie" in response.headers
++
++    # Now just read the session — should NOT send Set-Cookie
++    response = client.get("/view_session")
++    assert response.json() == {"session": {"some": "data"}}
++    assert "set-cookie" not in response.headers
++
++
++def test_session_no_set_cookie_on_empty_session(test_client_factory: TestClientFactory) -> None:
++    """Accessing an empty session without modifying it should not send Set-Cookie."""
++    app = Starlette(
++        routes=[
++            Route("/view_session", endpoint=view_session),
++        ],
++        middleware=[Middleware(SessionMiddleware, secret_key="example")],
++    )
++    client = test_client_factory(app)
++
++    response = client.get("/view_session")
++    assert response.json() == {"session": {}}
++    assert "set-cookie" not in response.headers
++
++
++def test_session_clear_sends_expiry_cookie(test_client_factory: TestClientFactory) -> None:
++    """Clearing a session should send a Set-Cookie with expiry in the past."""
++    app = Starlette(
++        routes=[
++            Route("/view_session", endpoint=view_session),
++            Route("/update_session", endpoint=update_session, methods=["POST"]),
++            Route("/clear_session", endpoint=clear_session, methods=["POST"]),
++        ],
++        middleware=[Middleware(SessionMiddleware, secret_key="example")],
++    )
++    client = test_client_factory(app)
++
++    # Create a session
++    response = client.post("/update_session", json={"key": "value"})
++    assert response.json() == {"session": {"key": "value"}}
++
++    # Clear the session
++    response = client.post("/clear_session")
++    assert response.json() == {"session": {}}
++    assert "set-cookie" in response.headers
++    assert "expires=Thu, 01 Jan 1970 00:00:00 GMT" in response.headers["set-cookie"]
++
++
++def test_session_concurrent_read_only(test_client_factory: TestClientFactory) -> None:
++    """Concurrent read-only requests should not send Set-Cookie."""
++    app = Starlette(
++        routes=[
++            Route("/view_session", endpoint=view_session),
++            Route("/update_session", endpoint=update_session, methods=["POST"]),
++        ],
++        middleware=[Middleware(SessionMiddleware, secret_key="example")],
++    )
++    client = test_client_factory(app)
++
++    # Establish a session
++    response = client.post("/update_session", json={"concurrent": "test"})
++    assert response.json() == {"session": {"concurrent": "test"}}
++
++    # Multiple concurrent-style reads (sequential in test, but verifying no Set-Cookie)
++    for _ in range(3):
++        response = client.get("/view_session")
++        assert response.json() == {"session": {"concurrent": "test"}}
++        assert "set-cookie" not in response.headers, (
++            "Read-only session access should not produce Set-Cookie"
++        )
+*** End Patch

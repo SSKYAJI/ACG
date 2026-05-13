@@ -1,12 +1,22 @@
 {
   "selected_at": "2026-05-07T05:16:50Z",
   "selection_criteria": {
-    "allowed_licenses": ["MIT", "Apache-2.0", "BSD-3-Clause"],
-    "source_file_count_range": [30, 500],
+    "allowed_licenses": [
+      "MIT",
+      "Apache-2.0",
+      "BSD-3-Clause"
+    ],
+    "source_file_count_range": [
+      30,
+      500
+    ],
     "recent_commit_window_days": 365,
     "required_recent_prs_per_repo": 5,
     "required_task_prs_per_repo": 3,
-    "task_pr_source_file_range": [2, 8],
+    "task_pr_source_file_range": [
+      2,
+      8
+    ],
     "languages_required_min_distinct": 2
   },
   "repos": [
@@ -97,6 +107,29 @@
             "starlette/middleware/sessions.py",
             "starlette/requests.py",
             "tests/middleware/test_session.py"
+          ],
+          "fail_to_pass": [
+            "tests/middleware/test_session.py::test_session_tracks_modification",
+            "tests/middleware/test_session.py::test_set_cookie_only_on_modification[asyncio]",
+            "tests/middleware/test_session.py::test_set_cookie_only_on_modification[trio]",
+            "tests/middleware/test_session.py::test_vary_cookie_on_access[asyncio]",
+            "tests/middleware/test_session.py::test_vary_cookie_on_access[trio]"
+          ],
+          "pass_to_pass": [
+            "tests/middleware/test_session.py::test_domain_cookie[asyncio]",
+            "tests/middleware/test_session.py::test_domain_cookie[trio]",
+            "tests/middleware/test_session.py::test_invalid_session_cookie[asyncio]",
+            "tests/middleware/test_session.py::test_invalid_session_cookie[trio]",
+            "tests/middleware/test_session.py::test_secure_session[asyncio]",
+            "tests/middleware/test_session.py::test_secure_session[trio]",
+            "tests/middleware/test_session.py::test_session[asyncio]",
+            "tests/middleware/test_session.py::test_session[trio]",
+            "tests/middleware/test_session.py::test_session_cookie[asyncio]",
+            "tests/middleware/test_session.py::test_session_cookie[trio]",
+            "tests/middleware/test_session.py::test_session_cookie_subpath[asyncio]",
+            "tests/middleware/test_session.py::test_session_cookie_subpath[trio]",
+            "tests/middleware/test_session.py::test_session_expires[asyncio]",
+            "tests/middleware/test_session.py::test_session_expires[trio]"
           ]
         },
         {
@@ -110,6 +143,24 @@
           "ground_truth_files": [
             "starlette/templating.py",
             "tests/test_templates.py"
+          ],
+          "fail_to_pass": [
+            "tests/test_templates.py::test_templates_autoescape"
+          ],
+          "pass_to_pass": [
+            "tests/test_templates.py::test_calls_context_processors[asyncio]",
+            "tests/test_templates.py::test_calls_context_processors[trio]",
+            "tests/test_templates.py::test_template_with_middleware[asyncio]",
+            "tests/test_templates.py::test_template_with_middleware[trio]",
+            "tests/test_templates.py::test_templates[asyncio]",
+            "tests/test_templates.py::test_templates[trio]",
+            "tests/test_templates.py::test_templates_require_directory_or_environment",
+            "tests/test_templates.py::test_templates_require_directory_or_environment_not_both",
+            "tests/test_templates.py::test_templates_with_directories[asyncio]",
+            "tests/test_templates.py::test_templates_with_directories[trio]",
+            "tests/test_templates.py::test_templates_with_directory",
+            "tests/test_templates.py::test_templates_with_environment[asyncio]",
+            "tests/test_templates.py::test_templates_with_environment[trio]"
           ]
         },
         {
@@ -123,6 +174,42 @@
           "ground_truth_files": [
             "starlette/middleware/cors.py",
             "tests/middleware/test_cors.py"
+          ],
+          "fail_to_pass": [
+            "tests/middleware/test_cors.py::test_cors_allowed_origin_does_not_leak_between_requests[asyncio]",
+            "tests/middleware/test_cors.py::test_cors_allowed_origin_does_not_leak_between_requests[trio]"
+          ],
+          "pass_to_pass": [
+            "tests/middleware/test_cors.py::test_cors_allow_all[asyncio]",
+            "tests/middleware/test_cors.py::test_cors_allow_all[trio]",
+            "tests/middleware/test_cors.py::test_cors_allow_all_except_credentials[asyncio]",
+            "tests/middleware/test_cors.py::test_cors_allow_all_except_credentials[trio]",
+            "tests/middleware/test_cors.py::test_cors_allow_all_methods[asyncio]",
+            "tests/middleware/test_cors.py::test_cors_allow_all_methods[trio]",
+            "tests/middleware/test_cors.py::test_cors_allow_origin_regex[asyncio]",
+            "tests/middleware/test_cors.py::test_cors_allow_origin_regex[trio]",
+            "tests/middleware/test_cors.py::test_cors_allow_origin_regex_fullmatch[asyncio]",
+            "tests/middleware/test_cors.py::test_cors_allow_origin_regex_fullmatch[trio]",
+            "tests/middleware/test_cors.py::test_cors_allow_specific_origin[asyncio]",
+            "tests/middleware/test_cors.py::test_cors_allow_specific_origin[trio]",
+            "tests/middleware/test_cors.py::test_cors_disallowed_preflight[asyncio]",
+            "tests/middleware/test_cors.py::test_cors_disallowed_preflight[trio]",
+            "tests/middleware/test_cors.py::test_cors_preflight_allow_all_methods[asyncio]",
+            "tests/middleware/test_cors.py::test_cors_preflight_allow_all_methods[trio]",
+            "tests/middleware/test_cors.py::test_cors_private_network_access_allowed[asyncio]",
+            "tests/middleware/test_cors.py::test_cors_private_network_access_allowed[trio]",
+            "tests/middleware/test_cors.py::test_cors_private_network_access_disallowed[asyncio]",
+            "tests/middleware/test_cors.py::test_cors_private_network_access_disallowed[trio]",
+            "tests/middleware/test_cors.py::test_cors_vary_header_defaults_to_origin[asyncio]",
+            "tests/middleware/test_cors.py::test_cors_vary_header_defaults_to_origin[trio]",
+            "tests/middleware/test_cors.py::test_cors_vary_header_is_not_set_for_non_credentialed_request[asyncio]",
+            "tests/middleware/test_cors.py::test_cors_vary_header_is_not_set_for_non_credentialed_request[trio]",
+            "tests/middleware/test_cors.py::test_cors_vary_header_is_properly_set_for_credentialed_request[asyncio]",
+            "tests/middleware/test_cors.py::test_cors_vary_header_is_properly_set_for_credentialed_request[trio]",
+            "tests/middleware/test_cors.py::test_cors_vary_header_is_properly_set_when_allow_origins_is_not_wildcard[asyncio]",
+            "tests/middleware/test_cors.py::test_cors_vary_header_is_properly_set_when_allow_origins_is_not_wildcard[trio]",
+            "tests/middleware/test_cors.py::test_preflight_allows_request_origin_if_origins_wildcard_and_credentials_allowed[asyncio]",
+            "tests/middleware/test_cors.py::test_preflight_allows_request_origin_if_origins_wildcard_and_credentials_allowed[trio]"
           ]
         }
       ]

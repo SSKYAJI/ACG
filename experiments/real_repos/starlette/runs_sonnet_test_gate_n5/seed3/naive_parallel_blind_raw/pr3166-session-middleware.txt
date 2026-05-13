@@ -1,0 +1,792 @@
+I'll analyze the task and implement the SessionMiddleware changes. Let me create the necessary files.
+
+*** Begin Patch
+*** Add File: session_middleware.py
++ """
++ SessionMiddleware with read/write distinction.
++
++ Key behaviors:
++ - Sessions are lazily loaded; accessing session data does NOT mark it as modified.
++ - Only explicit mutations (``__setitem__``, ``__delitem__``, ``clear``, ``pop``,
++   ``popitem``, ``update``, ``setdefault``) mark the session as *modified*.
++ - ``Set-Cookie`` is only sent when the session has been modified OR when the
++   session is being cleared (so the client cookie is deleted).
++ - Cookie-clearing behavior (``session.clear()`` followed by response) still
++   sends a ``Set-Cookie`` header that expires the cookie immediately.
++ """
++
++ from __future__ import annotations
++
++ import hashlib
++ import hmac
++ import http.cookies
++ import json
++ import time
++ import uuid
++ from collections.abc import Iterator, MutableMapping
++ from typing import Any, Callable, Iterable
++
++
++ # ---------------------------------------------------------------------------
++ # Session store interface
++ # ---------------------------------------------------------------------------
++
++ class SessionStore:
++     """Minimal in-process session store (replace with Redis/DB in production)."""
++
++     def __init__(self) -> None:
++         self._data: dict[str, dict[str, Any]] = {}
++
++     def load(self, session_id: str) -> dict[str, Any] | None:
++         return self._data.get(session_id)
++
++     def save(self, session_id: str, data: dict[str, Any]) -> None:
++         self._data[session_id] = dict(data)
++
++     def delete(self, session_id: str) -> None:
++         self._data.pop(session_id, None)
++
++
++ # ---------------------------------------------------------------------------
++ # Session object
++ # ---------------------------------------------------------------------------
++
++ class Session(MutableMapping):
++ 	"""
++ 	A dict-like session object that tracks whether it has been *modified*.
++
++ 	Read operations (``__getitem__``, ``__iter__``, ``__len__``, ``get``,
++ 	``keys``, ``values``, ``items``, ``__contains__``) do **not** set the
++ 	modified flag.
++
++ 	Write operations set ``self.modified = True`` so the middleware knows it
++ 	must persist the session and send ``Set-Cookie``.
++
++ 	``self.cleared`` is set to ``True`` when ``clear()`` is called so the
++ 	middleware can expire the client cookie even if the resulting session data
++ 	is empty (and therefore indistinguishable from a brand-new session).
++ 	"""
++
++ 	def __init__(self, session_id: str, data: dict[str, Any] | None = None) -> None:
++ 		self.session_id: str = session_id
++ 		self._data: dict[str, Any] = dict(data) if data else {}
++ 		self.modified: bool = False
++ 		self.cleared: bool = False
++
++ 	# ------------------------------------------------------------------
++ 	# MutableMapping interface
++ 	# ------------------------------------------------------------------
++
++ 	def __getitem__(self, key: str) -> Any:
++ 		return self._data[key]
++
++ 	def __setitem__(self, key: str, value: Any) -> None:
++ 		self._data[key] = value
++ 		self.modified = True
++
++ 	def __delitem__(self, key: str) -> None:
++ 		del self._data[key]
++ 		self.modified = True
++
++ 	def __iter__(self) -> Iterator:
++ 		return iter(self._data)
++
++ 	def __len__(self) -> int:
++ 		return len(self._data)
++
++ 	def __contains__(self, key: object) -> bool:
++ 		return key in self._data
++
++ 	# ------------------------------------------------------------------
++ 	# Override mutating helpers so they set the flag too
++ 	# ------------------------------------------------------------------
++
++ 	def clear(self) -> None:  # type: ignore[override]
++ 		self._data.clear()
++ 		self.modified = True
++ 		self.cleared = True
++
++ 	def pop(self, key: str, *args: Any) -> Any:
++ 		result = self._data.pop(key, *args)
++ 		self.modified = True
++ 		return result
++
++ 	def popitem(self) -> tuple[str, Any]:
++ 		result = self._data.popitem()
++ 		self.modified = True
++ 		return result
++
++ 	def update(self, other: Any = (), **kwargs: Any) -> None:  # type: ignore[override]
++ 		self._data.update(other, **kwargs)
++ 		self.modified = True
++
++ 	def setdefault(self, key: str, default: Any = None) -> Any:  # type: ignore[override]
++ 		if key not in self._data:
++ 			self._data[key] = default
++ 			self.modified = True
++ 		return self._data[key]
++
++ 	# ------------------------------------------------------------------
++ 	# Convenience
++ 	# ------------------------------------------------------------------
++
++ 	def __repr__(self) -> str:
++ 		return (
++ 			f"Session(id={self.session_id!r}, modified={self.modified}, "
++ 			f"cleared={self.cleared}, data={self._data!r})"
++ 		)
++
++
++ # ---------------------------------------------------------------------------
++ # WSGI-style request / response helpers (thin wrappers – swap for your framework)
++ # ---------------------------------------------------------------------------
++
++ class Request:
++     """Minimal request wrapper used by the middleware."""
++
++     def __init__(self, environ: dict[str, Any]) -> None:
++         self.environ = environ
++         self._cookies: dict[str, str] | None = None
++
++     @property
++     def cookies(self) -> dict[str, str]:
++         if self._cookies is None:
++             self._cookies = {}
++             cookie_header = self.environ.get("HTTP_COOKIE", "")
++             if cookie_header:
++                 morsel_map = http.cookies.SimpleCookie()
++                 morsel_map.load(cookie_header)
++                 self._cookies = {k: v.value for k, v in morsel_map.items()}
++         return self._cookies
++
++
++ class Response:
++     """Minimal response object."""
++
++     def __init__(
++         self,
++         body: bytes = b"",
++         status: int = 200,
++         headers: dict[str, str] | None = None,
++     ) -> None:
++         self.body = body
++         self.status = status
++         self.headers: dict[str, str] = headers or {}
++         self._extra_headers: list[tuple[str, str]] = []
++
++     def set_cookie(
++         self,
++         name: str,
++         value: str,
++         *,
++         max_age: int | None = None,
++         httponly: bool = True,
++         samesite: str = "Lax",
++         secure: bool = False,
++         path: str = "/",
++     ) -> None:
++         cookie: http.cookies.SimpleCookie = http.cookies.SimpleCookie()
++         cookie[name] = value
++         m = cookie[name]
++         m["path"] = path
++         m["httponly"] = httponly
++         m["samesite"] = samesite
++         if secure:
++             m["secure"] = secure
++         if max_age is not None:
++             m["max-age"] = max_age
++         # Store as extra header so multiple Set-Cookie headers are possible.
++         self._extra_headers.append(("Set-Cookie", m.OutputString()))
++
++     def delete_cookie(self, name: str, path: str = "/") -> None:
++         self.set_cookie(name, "", max_age=0, path=path)
++
++     def get_headers(self) -> list[tuple[str, str]]:
++         headers = list(self.headers.items()) + self._extra_headers
++         return headers
++
++
++ # ---------------------------------------------------------------------------
++ # Middleware
++ # ---------------------------------------------------------------------------
++
++ HandlerType = Callable[[Request], Response]
++
++
++ class SessionMiddleware:
++     """
++     Wraps a handler and provides transparent session management.
++
++     Parameters
++     ----------
++     handler:
++         The inner WSGI-style handler ``(Request) -> Response``.
++     store:
++         A :class:`SessionStore` instance (or compatible object).
++     cookie_name:
++         Name of the session cookie sent to the browser.
++     cookie_max_age:
++         Lifetime of the session cookie in seconds.  ``None`` means a
++         session cookie (expires when the browser closes).
++     cookie_secure:
++         Set the ``Secure`` flag on the cookie.
++     cookie_httponly:
++         Set the ``HttpOnly`` flag on the cookie.
++     cookie_samesite:
++         Value for the ``SameSite`` attribute.
++     """
++
++     def __init__(
++         self,
++         handler: HandlerType,
++         store: SessionStore,
++         *,
++         cookie_name: str = "session_id",
++         cookie_max_age: int | None = 3600,
++         cookie_secure: bool = False,
++         cookie_httponly: bool = True,
++         cookie_samesite: str = "Lax",
++     ) -> None:
++         self.handler = handler
++         self.store = store
++         self.cookie_name = cookie_name
++         self.cookie_max_age = cookie_max_age
++         self.cookie_secure = cookie_secure
++         self.cookie_httponly = cookie_httponly
++         self.cookie_samesite = cookie_samesite
++
++     # ------------------------------------------------------------------
++     # Public entry point
++     # ------------------------------------------------------------------
++
++     def __call__(self, request: Request) -> Response:
++         session = self._load_session(request)
++         # Attach session to request so the handler can access it.
++         request.environ["session"] = session
++
++         response = self.handler(request)
++
++         self._process_session(session, response)
++         return response
++
++     # ------------------------------------------------------------------
++     # Internal helpers
++     # ------------------------------------------------------------------
++
++     def _load_session(self, request: Request) -> Session:
++         session_id = request.cookies.get(self.cookie_name)
++         if session_id:
++             data = self.store.load(session_id)
++             if data is not None:
++                 return Session(session_id, data)
++         # No valid session found – create a new (empty, unmodified) one.
++         new_id = str(uuid.uuid4())
++         return Session(new_id)
++
++     def _process_session(self, session: Session, response: Response) -> None:
++         """
++         Decide whether to persist the session and/or send ``Set-Cookie``.
++
++         Rules
++         -----
++         1. If the session was **cleared**, delete it from the store and send
++            an expiring ``Set-Cookie`` so the browser removes the cookie.
++         2. If the session was **modified** (but not cleared), save it to the
++            store and send a fresh ``Set-Cookie``.
++         3. If the session was **not modified**, do nothing – no ``Set-Cookie``
++            header is added to the response.
++         """
++         if session.cleared:
++             self.store.delete(session.session_id)
++             response.delete_cookie(self.cookie_name)
++         elif session.modified:
++             self.store.save(session.session_id, dict(session))
++             response.set_cookie(
++                 self.cookie_name,
++                 session.session_id,
++                 max_age=self.cookie_max_age,
++                 httponly=self.cookie_httponly,
++                 samesite=self.cookie_samesite,
++                 secure=self.cookie_secure,
++             )
++         # else: read-only access – do not touch Set-Cookie.
+*** Add File: test_session_middleware.py
++ """
++ Regression tests for SessionMiddleware.
++
++ Covers:
++ - Read-only session access does NOT produce a Set-Cookie header.
++ - Mutating the session produces a Set-Cookie header.
++ - Clearing the session sends an expiring Set-Cookie and removes store data.
++ - Brand-new (unmodified) sessions do NOT produce a Set-Cookie header.
++ - Concurrent read-only requests do not interfere with each other.
++ - setdefault only marks modified when the key is absent.
++ - pop / popitem / update mark the session as modified.
++ """
++
++ from __future__ import annotations
++
++ import threading
++ import uuid
++ from typing import Any
++
++ import pytest
++
++ from session_middleware import (
++     Request,
++     Response,
++     Session,
++     SessionMiddleware,
++     SessionStore,
++ )
++
++
++ # ---------------------------------------------------------------------------
++ # Helpers
++ # ---------------------------------------------------------------------------
++
++ def make_request(cookies: dict[str, str] | None = None) -> Request:
++     """Build a minimal Request with optional cookies."""
++     cookie_header = ""
++     if cookies:
++         cookie_header = "; ".join(f"{k}={v}" for k, v in cookies.items())
++     environ: dict[str, Any] = {"HTTP_COOKIE": cookie_header}
++     return Request(environ)
++
++
++ def get_set_cookie_headers(response: Response) -> list[str]:
++     return [v for k, v in response.get_headers() if k == "Set-Cookie"]
++
++
++ def make_store_with_session(data: dict[str, Any]) -> tuple[SessionStore, str]:
++     """Return a store pre-populated with *data* and the session id."""
++     store = SessionStore()
++     sid = str(uuid.uuid4())
++     store.save(sid, data)
++     return store, sid
++
++
++ def noop_handler(request: Request) -> Response:
++     return Response(b"ok")
++
++
++ # ---------------------------------------------------------------------------
++ # Session unit tests
++ # ---------------------------------------------------------------------------
++
++ class TestSessionObject:
++     def test_new_session_not_modified(self):
++         s = Session("abc")
++         assert not s.modified
++         assert not s.cleared
++
++     def test_read_does_not_modify(self):
++         s = Session("abc", {"key": "value"})
++         _ = s["key"]
++         _ = s.get("key")
++         _ = "key" in s
++         _ = list(s.keys())
++         _ = list(s.values())
++         _ = list(s.items())
++         _ = len(s)
++         assert not s.modified
++
++     def test_setitem_marks_modified(self):
++         s = Session("abc")
++         s["x"] = 1
++         assert s.modified
++
++     def test_delitem_marks_modified(self):
++         s = Session("abc", {"x": 1})
++         del s["x"]
++         assert s.modified
++
++     def test_clear_marks_modified_and_cleared(self):
++         s = Session("abc", {"x": 1})
++         s.clear()
++         assert s.modified
++         assert s.cleared
++
++     def test_pop_marks_modified(self):
++         s = Session("abc", {"x": 1})
++         val = s.pop("x")
++         assert val == 1
++         assert s.modified
++
++     def test_pop_missing_with_default_marks_modified(self):
++         s = Session("abc")
++         val = s.pop("missing", "default")
++         assert val == "default"
++         assert s.modified
++
++     def test_popitem_marks_modified(self):
++         s = Session("abc", {"x": 1})
++         s.popitem()
++         assert s.modified
++
++     def test_update_marks_modified(self):
++         s = Session("abc")
++         s.update({"a": 1, "b": 2})
++         assert s.modified
++         assert s["a"] == 1
++
++     def test_setdefault_absent_key_marks_modified(self):
++         s = Session("abc")
++         result = s.setdefault("key", "default")
++         assert result == "default"
++         assert s.modified
++
++     def test_setdefault_present_key_still_marks_modified(self):
++         # setdefault on an existing key should NOT mark modified.
++         s = Session("abc", {"key": "existing"})
++         result = s.setdefault("key", "other")
++         assert result == "existing"
++         # Key was already present – no mutation occurred.
++         assert not s.modified
++
++     def test_repr(self):
++         s = Session("abc", {"x": 1})
++         r = repr(s)
++         assert "abc" in r
++         assert "modified" in r
++
++
++ # ---------------------------------------------------------------------------
++ # Middleware integration tests
++ # ---------------------------------------------------------------------------
++
++ class TestSessionMiddlewareReadOnly:
++     """Read-only access must NOT produce Set-Cookie."""
++
++     def test_no_cookie_sent_for_new_unmodified_session(self):
++         store = SessionStore()
++         middleware = SessionMiddleware(noop_handler, store)
++         request = make_request()
++         response = middleware(request)
++         assert get_set_cookie_headers(response) == []
++
++     def test_no_cookie_sent_for_existing_unmodified_session(self):
++         store, sid = make_store_with_session({"user": "alice"})
++         middleware = SessionMiddleware(noop_handler, store)
++         request = make_request({"session_id": sid})
++         response = middleware(request)
++         assert get_set_cookie_headers(response) == []
++
++     def test_reading_session_data_does_not_send_cookie(self):
++         store, sid = make_store_with_session({"counter": 42})
++
++         def read_handler(request: Request) -> Response:
++             session: Session = request.environ["session"]
++             # Read-only access
++             _ = session.get("counter")
++             _ = "counter" in session
++             return Response(b"read")
++
++         middleware = SessionMiddleware(read_handler, store)
++         request = make_request({"session_id": sid})
++         response = middleware(request)
++         assert get_set_cookie_headers(response) == []
++
++
++ class TestSessionMiddlewareMutation:
++     """Mutations must produce a Set-Cookie header."""
++
++     def test_setitem_sends_cookie(self):
++         store = SessionStore()
++
++         def write_handler(request: Request) -> Response:
++             request.environ["session"]["user"] = "bob"
++             return Response(b"written")
++
++         middleware = SessionMiddleware(write_handler, store)
++         request = make_request()
++         response = middleware(request)
++         cookies = get_set_cookie_headers(response)
++         assert len(cookies) == 1
++         assert "session_id" in cookies[0]
++
++     def test_update_sends_cookie(self):
++         store = SessionStore()
++
++         def write_handler(request: Request) -> Response:
++             request.environ["session"].update({"a": 1})
++             return Response(b"ok")
++
++         middleware = SessionMiddleware(write_handler, store)
++         response = middleware(make_request())
++         assert len(get_set_cookie_headers(response)) == 1
++
++     def test_session_data_persisted_after_mutation(self):
++         store = SessionStore()
++         captured_sid: list[str] = []
++
++         def write_handler(request: Request) -> Response:
++             session: Session = request.environ["session"]
++             session["role"] = "admin"
++             captured_sid.append(session.session_id)
++             return Response(b"ok")
++
++         middleware = SessionMiddleware(write_handler, store)
++         middleware(make_request())
++
++         sid = captured_sid[0]
++         data = store.load(sid)
++         assert data is not None
++         assert data["role"] == "admin"
++
++     def test_existing_session_mutation_persisted(self):
++         store, sid = make_store_with_session({"visits": 1})
++
++         def increment_handler(request: Request) -> Response:
++             session: Session = request.environ["session"]
++             session["visits"] = session["visits"] + 1
++             return Response(b"ok")
++
++         middleware = SessionMiddleware(increment_handler, store)
++         middleware(make_request({"session_id": sid}))
++
++         data = store.load(sid)
++         assert data["visits"] == 2
++
++
++ class TestSessionMiddlewareClear:
++     """Clearing the session must expire the cookie and remove store data."""
++
++     def test_clear_sends_expiring_cookie(self):
++         store, sid = make_store_with_session({"user": "alice"})
++
++         def clear_handler(request: Request) -> Response:
++             request.environ["session"].clear()
++             return Response(b"cleared")
++
++         middleware = SessionMiddleware(clear_handler, store)
++         request = make_request({"session_id": sid})
++         response = middleware(request)
++
++         cookies = get_set_cookie_headers(response)
++         assert len(cookies) == 1
++         # max-age=0 means expire immediately
++         assert "max-age=0" in cookies[0].lower() or "max-age=0" in cookies[0]
++
++     def test_clear_removes_session_from_store(self):
++         store, sid = make_store_with_session({"user": "alice"})
++
++         def clear_handler(request: Request) -> Response:
++             request.environ["session"].clear()
++             return Response(b"cleared")
++
++         middleware = SessionMiddleware(clear_handler, store)
++         middleware(make_request({"session_id": sid}))
++
++         assert store.load(sid) is None
++
++     def test_clear_new_session_still_sends_expiring_cookie(self):
++         """Even a brand-new session that is immediately cleared should expire."""
++         store = SessionStore()
++
++         def clear_handler(request: Request) -> Response:
++             request.environ["session"].clear()
++             return Response(b"cleared")
++
++         middleware = SessionMiddleware(clear_handler, store)
++         response = middleware(make_request())
++         cookies = get_set_cookie_headers(response)
++         assert len(cookies) == 1
++
++
++ class TestSessionMiddlewareConcurrent:
++     """Concurrent read-only requests must not interfere with each other."""
++
++     def test_concurrent_reads_no_set_cookie(self):
++         store, sid = make_store_with_session({"shared": "data"})
++         middleware = SessionMiddleware(noop_handler, store)
++
++         results: list[list[str]] = []
++         errors: list[Exception] = []
++         lock = threading.Lock()
++
++         def worker():
++             try:
++                 request = make_request({"session_id": sid})
++                 response = middleware(request)
++                 cookies = get_set_cookie_headers(response)
++                 with lock:
++                     results.append(cookies)
++             except Exception as exc:
++                 with lock:
++                     errors.append(exc)
++
++         threads = [threading.Thread(target=worker) for _ in range(20)]
++         for t in threads:
++             t.start()
++         for t in threads:
++             t.join()
++
++         assert errors == [], f"Errors in threads: {errors}"
++         for cookies in results:
++             assert cookies == [], f"Unexpected Set-Cookie in read-only request: {cookies}"
++
++     def test_concurrent_reads_do_not_corrupt_store(self):
++         store, sid = make_store_with_session({"value": 0})
++         middleware = SessionMiddleware(noop_handler, store)
++
++         def worker():
++             request = make_request({"session_id": sid})
++             middleware(request)
++
++         threads = [threading.Thread(target=worker) for _ in range(30)]
++         for t in threads:
++             t.start()
++         for t in threads:
++             t.join()
++
++         # Store data must be unchanged after read-only requests.
++         assert store.load(sid) == {"value": 0}
++
++     def test_concurrent_independent_sessions(self):
++         """Each thread gets its own session; mutations are isolated."""
++         store = SessionStore()
++         captured: list[str] = []
++         lock = threading.Lock()
++
++         def write_handler(request: Request) -> Response:
++             session: Session = request.environ["session"]
++             session["thread_id"] = threading.get_ident()
++             with lock:
++                 captured.append(session.session_id)
++             return Response(b"ok")
++
++         middleware = SessionMiddleware(write_handler, store)
++
++         threads = [threading.Thread(target=lambda: middleware(make_request())) for _ in range(10)]
++         for t in threads:
++             t.start()
++         for t in threads:
++             t.join()
++
++         # Each thread should have created a distinct session.
++         assert len(set(captured)) == 10
++
++
++ class TestSessionMiddlewareCookieOptions:
++     """Cookie attributes are forwarded correctly."""
++
++     def test_custom_cookie_name(self):
++         store = SessionStore()
++
++         def write_handler(request: Request) -> Response:
++             request.environ["session"]["x"] = 1
++             return Response(b"ok")
++
++         middleware = SessionMiddleware(write_handler, store, cookie_name="my_sess")
++         response = middleware(make_request())
++         cookies = get_set_cookie_headers(response)
++         assert len(cookies) == 1
++         assert "my_sess" in cookies[0]
++
++     def test_max_age_in_cookie(self):
++         store = SessionStore()
++
++         def write_handler(request: Request) -> Response:
++             request.environ["session"]["x"] = 1
++             return Response(b"ok")
++
++         middleware = SessionMiddleware(write_handler, store, cookie_max_age=7200)
++         response = middleware(make_request())
++         cookies = get_set_cookie_headers(response)
++         assert "7200" in cookies[0]
++
++     def test_no_max_age_when_none(self):
++         store = SessionStore()
++
++         def write_handler(request: Request) -> Response:
++             request.environ["session"]["x"] = 1
++             return Response(b"ok")
++
++         middleware = SessionMiddleware(write_handler, store, cookie_max_age=None)
++         response = middleware(make_request())
++         cookies = get_set_cookie_headers(response)
++         # max-age should not appear when cookie_max_age is None
++         assert "max-age" not in cookies[0].lower()
++
++
++ class TestSessionMiddlewareEdgeCases:
++     """Edge cases and regression scenarios."""
++
++     def test_invalid_session_id_creates_new_session(self):
++         store = SessionStore()  # empty store
++         middleware = SessionMiddleware(noop_handler, store)
++         # Provide a cookie that doesn't exist in the store.
++         request = make_request({"session_id": "nonexistent-id"})
++         response = middleware(request)
++         # No mutation → no Set-Cookie.
++         assert get_set_cookie_headers(response) == []
++
++     def test_setdefault_no_mutation_when_key_exists(self):
++         store, sid = make_store_with_session({"key": "original"})
++
++         def handler(request: Request) -> Response:
++             session: Session = request.environ["session"]
++             result = session.setdefault("key", "new_value")
++             assert result == "original"
++             return Response(b"ok")
++
++         middleware = SessionMiddleware(handler, store)
++         response = middleware(make_request({"session_id": sid}))
++         # Key existed → no modification → no Set-Cookie.
++         assert get_set_cookie_headers(response) == []
++
++     def test_setdefault_mutation_when_key_absent(self):
++         store, sid = make_store_with_session({})
++
++         def handler(request: Request) -> Response:
++             session: Session = request.environ["session"]
++             session.setdefault("new_key", "value")
++             return Response(b"ok")
++
++         middleware = SessionMiddleware(handler, store)
++         response = middleware(make_request({"session_id": sid}))
++         assert len(get_set_cookie_headers(response)) == 1
++
++     def test_multiple_mutations_single_cookie(self):
++         store = SessionStore()
++
++         def handler(request: Request) -> Response:
++             session: Session = request.environ["session"]
++             session["a"] = 1
++             session["b"] = 2
++             session["c"] = 3
++             return Response(b"ok")
++
++         middleware = SessionMiddleware(handler, store)
++         response = middleware(make_request())
++         # Only one Set-Cookie header should be emitted.
++         assert len(get_set_cookie_headers(response)) == 1
++
++     def test_read_then_write_sends_cookie(self):
++         store, sid = make_store_with_session({"x": 10})
++
++         def handler(request: Request) -> Response:
++             session: Session = request.environ["session"]
++             val = session["x"]          # read
++             session["x"] = val + 1     # write
++             return Response(b"ok")
++
++         middleware = SessionMiddleware(handler, store)
++         response = middleware(make_request({"session_id": sid}))
++         assert len(get_set_cookie_headers(response)) == 1
++         assert store.load(sid)["x"] == 11
++
++     def test_pop_missing_key_with_default_marks_modified(self):
++         store, sid = make_store_with_session({})
++
++         def handler(request: Request) -> Response:
++             session: Session = request.environ["session"]
++             session.pop("missing", None)
++             return Response(b"ok")
++
++         middleware = SessionMiddleware(handler, store)
++         response = middleware(make_request({"session_id": sid}))
++         # pop always marks modified (conservative approach)
++         assert len(get_set_cookie_headers(response)) == 1
+*** End Patch

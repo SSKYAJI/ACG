@@ -1,0 +1,115 @@
+*** Begin Patch
+*** Add File: tests/test_templating.py
+import os
+import sys
+
+import pytest
+
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.routing import Route
+from starlette.templating import Jinja2Templates
+from starlette.testclient import TestClient
+
+try:
+    import jinja2
+except ImportError:
+    jinja2 = None
+
+
+@pytest.fixture
+def tmpdir(tmp_path):
+    return tmp_path
+
+
+@pytest.mark.skipif(jinja2 is None, reason="jinja2 not installed")
+def test_templates(tmpdir, test_client_factory):
+    path = os.path.join(tmpdir, "index.html")
+    with open(path, "w") as f:
+        f.write("<html>Hello, <a href='{{ url_for('homepage') }}'>world</a></html>")
+
+    async def homepage(request):
+        return templates.TemplateResponse("index.html", {"request": request})
+
+    app = Starlette(
+        debug=True,
+        routes=[Route("/", endpoint=homepage)],
+    )
+    templates = Jinja2Templates(directory=str(tmpdir))
+
+    client = test_client_factory(app)
+    response = client.get("/")
+    assert response.text == "<html>Hello, <a href='http://testserver/'>world</a></html>"
+    assert response.template.name == "index.html"
+    assert set(response.context.keys()) == {"request"}
+
+
+@pytest.mark.skipif(jinja2 is None, reason="jinja2 not installed")
+def test_template_with_autoescape_enabled(tmpdir, test_client_factory):
+    """Test that HTML templates are autoescaped by default."""
+    path = os.path.join(tmpdir, "index.html")
+    with open(path, "w") as f:
+        f.write("<html>{{ dangerous }}</html>")
+
+    async def homepage(request):
+        return templates.TemplateResponse(
+            "index.html", {"request": request, "dangerous": "<script>alert('xss')</script>"}
+        )
+
+    app = Starlette(
+        debug=True,
+        routes=[Route("/", endpoint=homepage)],
+    )
+    templates = Jinja2Templates(directory=str(tmpdir))
+
+    client = test_client_factory(app)
+    response = client.get("/")
+    assert "<script>" not in response.text
+    assert "&lt;script&gt;" in response.text
+
+
+@pytest.mark.skipif(jinja2 is None, reason="jinja2 not installed")
+def test_template_no_autoescape_for_txt(tmpdir, test_client_factory):
+    """Test that non-HTML templates are not autoescaped by default."""
+    path = os.path.join(tmpdir, "index.txt")
+    with open(path, "w") as f:
+        f.write("{{ dangerous }}")
+
+    async def homepage(request):
+        return templates.TemplateResponse(
+            "index.txt", {"request": request, "dangerous": "<script>alert('xss')</script>"}
+        )
+
+    app = Starlette(
+        debug=True,
+        routes=[Route("/", endpoint=homepage)],
+    )
+    templates = Jinja2Templates(directory=str(tmpdir))
+
+    client = test_client_factory(app)
+    response = client.get("/")
+    assert "<script>" in response.text
+
+
+@pytest.mark.skipif(jinja2 is None, reason="jinja2 not installed")
+def test_template_autoescape_disabled(tmpdir, test_client_factory):
+    """Test that autoescape can be disabled by the caller."""
+    path = os.path.join(tmpdir, "index.html")
+    with open(path, "w") as f:
+        f.write("<html>{{ dangerous }}</html>")
+
+    async def homepage(request):
+        return templates.TemplateResponse(
+            "index.html", {"request": request, "dangerous": "<b>bold</b>"}
+        )
+
+    app = Starlette(
+        debug=True,
+        routes=[Route("/", endpoint=homepage)],
+    )
+    templates = Jinja2Templates(directory=str(tmpdir), autoescape=False)
+
+    client = test_client_factory(app)
+    response = client.get("/")
+    assert "<b>bold</b>" in response.text
+*** End Patch

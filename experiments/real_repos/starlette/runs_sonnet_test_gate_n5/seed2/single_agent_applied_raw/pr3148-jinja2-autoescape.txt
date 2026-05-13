@@ -1,0 +1,80 @@
+*** Begin Patch
+*** Add File: tests/test_templating_autoescape.py
+import os
+import pytest
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.routing import Route
+from starlette.templating import Jinja2Templates
+from starlette.testclient import TestClient
+
+
+@pytest.fixture
+def tmpdir_with_templates(tmp_path):
+    """Create a temp directory with test templates."""
+    # HTML template that should be autoescaped
+    html_template = tmp_path / "test.html"
+    html_template.write_text("Hello {{ name }}!")
+
+    # Text template that should NOT be autoescaped
+    txt_template = tmp_path / "test.txt"
+    txt_template.write_text("Hello {{ name }}!")
+
+    return tmp_path
+
+
+def test_autoescape_enabled_for_html(tmpdir_with_templates):
+    """HTML templates should have autoescaping enabled by default."""
+    templates = Jinja2Templates(directory=str(tmpdir_with_templates))
+    template = templates.get_template("test.html")
+    result = template.render({"name": "<script>alert('xss')</script>"})
+    assert "<script>" not in result
+    assert "&lt;script&gt;" in result
+
+
+def test_autoescape_disabled_for_txt(tmpdir_with_templates):
+    """Text templates should NOT have autoescaping enabled by default."""
+    templates = Jinja2Templates(directory=str(tmpdir_with_templates))
+    template = templates.get_template("test.txt")
+    result = template.render({"name": "<b>bold</b>"})
+    assert "<b>bold</b>" in result
+
+
+def test_autoescape_can_be_overridden(tmpdir_with_templates):
+    """Caller can override autoescape setting."""
+    templates = Jinja2Templates(
+        directory=str(tmpdir_with_templates), autoescape=False
+    )
+    template = templates.get_template("test.html")
+    result = template.render({"name": "<b>bold</b>"})
+    # With autoescape=False, HTML should not be escaped
+    assert "<b>bold</b>" in result
+
+
+def test_autoescape_uses_select_autoescape_default(tmpdir_with_templates):
+    """Jinja2Templates should use select_autoescape() by default."""
+    import jinja2
+    from jinja2 import select_autoescape
+
+    templates = Jinja2Templates(directory=str(tmpdir_with_templates))
+    # The autoescape setting should be a callable (select_autoescape returns a callable)
+    assert callable(templates.env.autoescape) or isinstance(
+        templates.env.autoescape, bool
+    )
+
+
+def test_template_response_escapes_html(tmpdir_with_templates):
+    """TemplateResponse should escape HTML in context variables."""
+    def homepage(request: Request):
+        return templates.TemplateResponse(
+            "test.html", {"request": request, "name": "<script>xss</script>"}
+        )
+
+    templates = Jinja2Templates(directory=str(tmpdir_with_templates))
+    app = Starlette(routes=[Route("/", homepage)])
+    client = TestClient(app)
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "<script>" not in response.text
+    assert "&lt;script&gt;" in response.text
+*** End Patch

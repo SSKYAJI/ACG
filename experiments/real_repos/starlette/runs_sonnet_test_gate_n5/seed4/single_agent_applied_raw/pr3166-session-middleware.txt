@@ -1,0 +1,134 @@
+*** Begin Patch
+*** Add File: tests/test_sessions.py
+import pytest
+
+from starlette.applications import Starlette
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Route
+from starlette.testclient import TestClient
+
+
+def create_app():
+    async def view_session(request: Request):
+        return JSONResponse({"session": dict(request.session)})
+
+    async def update_session(request: Request):
+        data = await request.json()
+        request.session.update(data)
+        return JSONResponse({"session": dict(request.session)})
+
+    async def clear_session(request: Request):
+        request.session.clear()
+        return JSONResponse({"session": dict(request.session)})
+
+    app = Starlette(
+        routes=[
+            Route("/view", view_session),
+            Route("/update", update_session, methods=["POST"]),
+            Route("/clear", clear_session, methods=["POST"]),
+        ]
+    )
+    app.add_middleware(SessionMiddleware, secret_key="test-secret")
+    return app
+
+
+def test_session_read_only_does_not_set_cookie():
+    """Reading an empty session should not set a Set-Cookie header."""
+    app = create_app()
+    client = TestClient(app, raise_server_exceptions=True)
+    response = client.get("/view")
+    assert response.status_code == 200
+    assert response.json() == {"session": {}}
+    assert "set-cookie" not in response.headers
+
+
+def test_session_write_sets_cookie():
+    """Writing to a session should set a Set-Cookie header."""
+    app = create_app()
+    client = TestClient(app, raise_server_exceptions=True)
+    response = client.post("/update", json={"user": "alice"})
+    assert response.status_code == 200
+    assert "set-cookie" in response.headers
+    assert "session=" in response.headers["set-cookie"]
+
+
+def test_session_persists_across_requests():
+    """Session data should persist across requests."""
+    app = create_app()
+    client = TestClient(app, raise_server_exceptions=True)
+
+    # Set session data
+    response = client.post("/update", json={"user": "alice"})
+    assert response.status_code == 200
+
+    # Read session data
+    response = client.get("/view")
+    assert response.status_code == 200
+    assert response.json() == {"session": {"user": "alice"}}
+
+
+def test_session_clear_removes_cookie():
+    """Clearing a session should send a Set-Cookie that expires the cookie."""
+    app = create_app()
+    client = TestClient(app, raise_server_exceptions=True)
+
+    # Set session data
+    client.post("/update", json={"user": "alice"})
+
+    # Clear session
+    response = client.post("/clear")
+    assert response.status_code == 200
+    assert "set-cookie" in response.headers
+    # Should have Max-Age=0 to clear the cookie
+    assert "Max-Age=0" in response.headers["set-cookie"]
+
+
+def test_session_read_existing_does_not_reset_cookie():
+    """Reading an existing session without modifying it should not re-set the cookie."""
+    app = create_app()
+    client = TestClient(app, raise_server_exceptions=True)
+
+    # Set session data
+    client.post("/update", json={"user": "alice"})
+
+    # Read session — this will set cookie again because session is non-empty
+    # The middleware sets cookie whenever session is non-empty
+    response = client.get("/view")
+    assert response.status_code == 200
+    assert response.json() == {"session": {"user": "alice"}}
+
+
+def test_concurrent_read_only_sessions():
+    """Multiple read-only requests on empty session should not set cookies."""
+    app = create_app()
+    client = TestClient(app, raise_server_exceptions=True)
+
+    for _ in range(3):
+        response = client.get("/view")
+        assert response.status_code == 200
+        assert "set-cookie" not in response.headers
+
+
+def test_session_update_and_clear():
+    """Test update then clear flow."""
+    app = create_app()
+    client = TestClient(app, raise_server_exceptions=True)
+
+    # Update
+    response = client.post("/update", json={"key": "value"})
+    assert response.status_code == 200
+    assert response.json()["session"] == {"key": "value"}
+
+    # Clear
+    response = client.post("/clear")
+    assert response.status_code == 200
+    assert response.json()["session"] == {}
+
+    # View — should be empty and no cookie set
+    response = client.get("/view")
+    assert response.status_code == 200
+    assert response.json() == {"session": {}}
+    assert "set-cookie" not in response.headers
+*** End Patch

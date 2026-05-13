@@ -1,0 +1,842 @@
+Looking at this task, I need to implement a `SessionMiddleware` that:
+1. Distinguishes session access (read) from mutation (write)
+2. Avoids sending `Set-Cookie` for unchanged sessions
+3. Preserves cookie clearing behavior
+4. Adds regression coverage for concurrent/read-only session flows
+
+Let me create a complete implementation.
+
+*** Begin Patch
+*** Add File: session/store.go
++ package session
++
++ import (
++ 	"crypto/rand"
++ 	"encoding/hex"
++ 	"sync"
++ 	"time"
++ )
++
++ // Session holds session data and tracks whether it has been mutated.
++ type Session struct {
++ 	mu      sync.RWMutex
++ 	id      string
++ 	data    map[string]interface{}
++ 	mutated bool
++ 	cleared bool
++ }
++
++ // NewSession creates a new Session with a randomly generated ID.
++ func NewSession() (*Session, error) {
++ 	id, err := generateID()
++ 	if err != nil {
++ 		return nil, err
++ 	}
++ 	return &Session{
++ 		id:   id,
++ 		data: make(map[string]interface{}),
++ 	}, nil
++ }
++
++ // LoadSession creates a Session from an existing ID and data (e.g. loaded from store).
++ func LoadSession(id string, data map[string]interface{}) *Session {
++ 	if data == nil {
++ 		data = make(map[string]interface{})
++ 	}
++ 	return &Session{
++ 		id:   id,
++ 		data: data,
++ 	}
++ }
++
++ // ID returns the session ID.
++ func (s *Session) ID() string {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	return s.id
++ }
++
++ // Get retrieves a value by key (read-only, does not mark session as mutated).
++ func (s *Session) Get(key string) (interface{}, bool) {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	v, ok := s.data[key]
++ 	return v, ok
++ }
++
++ // Set stores a value and marks the session as mutated.
++ func (s *Session) Set(key string, value interface{}) {
++ 	s.mu.Lock()
++ 	defer s.mu.Unlock()
++ 	s.data[key] = value
++ 	s.mutated = true
++ }
++
++ // Delete removes a key and marks the session as mutated.
++ func (s *Session) Delete(key string) {
++ 	s.mu.Lock()
++ 	defer s.mu.Unlock()
++ 	delete(s.data, key)
++ 	s.mutated = true
++ }
++
++ // Clear removes all data and marks the session for clearing (cookie removal).
++ func (s *Session) Clear() {
++ 	s.mu.Lock()
++ 	defer s.mu.Unlock()
++ 	s.data = make(map[string]interface{})
++ 	s.mutated = true
++ 	s.cleared = true
++ }
++
++ // IsMutated reports whether the session data has been modified.
++ func (s *Session) IsMutated() bool {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	return s.mutated
++ }
++
++ // IsCleared reports whether the session has been cleared (cookie should be removed).
++ func (s *Session) IsCleared() bool {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	return s.cleared
++ }
++
++ // Data returns a snapshot of the session data (read-only copy).
++ func (s *Session) Data() map[string]interface{} {
++ 	s.mu.RLock()
++ 	defer s.mu.RUnlock()
++ 	snapshot := make(map[string]interface{}, len(s.data))
++ 	for k, v := range s.data {
++ 		snapshot[k] = v
++ 	}
++ 	return snapshot
++ }
++
++ // Store is the interface for session persistence backends.
++ type Store interface {
++ 	// Load retrieves session data by ID. Returns nil data if not found.
++ 	Load(id string) (map[string]interface{}, error)
++ 	// Save persists session data.
++ 	Save(id string, data map[string]interface{}, ttl time.Duration) error
++ 	// Delete removes a session from the store.
++ 	Delete(id string) error
++ }
++
++ func generateID() (string, error) {
++ 	b := make([]byte, 16)
++ 	if _, err := rand.Read(b); err != nil {
++ 		return "", err
++ 	}
++ 	return hex.EncodeToString(b), nil
++ }
+*** Add File: session/memory_store.go
++ package session
++
++ import (
++ 	"sync"
++ 	"time"
++ )
++
++ type entry struct {
++ 	data    map[string]interface{}
++ 	expires time.Time
++ }
++
++ // MemoryStore is an in-memory session store suitable for testing.
++ type MemoryStore struct {
++ 	mu      sync.RWMutex
++ 	entries map[string]entry
++ }
++
++ // NewMemoryStore creates a new MemoryStore.
++ func NewMemoryStore() *MemoryStore {
++ 	return &MemoryStore{
++ 		entries: make(map[string]entry),
++ 	}
++ }
++
++ // Load retrieves session data by ID.
++ func (m *MemoryStore) Load(id string) (map[string]interface{}, error) {
++ 	m.mu.RLock()
++ 	defer m.mu.RUnlock()
++ 	e, ok := m.entries[id]
++ 	if !ok {
++ 		return nil, nil
++ 	}
++ 	if !e.expires.IsZero() && time.Now().After(e.expires) {
++ 		return nil, nil
++ 	}
++ 	// Return a copy to avoid data races.
++ 	snapshot := make(map[string]interface{}, len(e.data))
++ 	for k, v := range e.data {
++ 		snapshot[k] = v
++ 	}
++ 	return snapshot, nil
++ }
++
++ // Save persists session data with an optional TTL (zero means no expiry).
++ func (m *MemoryStore) Save(id string, data map[string]interface{}, ttl time.Duration) error {
++ 	m.mu.Lock()
++ 	defer m.mu.Unlock()
++ 	snapshot := make(map[string]interface{}, len(data))
++ 	for k, v := range data {
++ 		snapshot[k] = v
++ 	}
++ 	var expires time.Time
++ 	if ttl > 0 {
++ 		expires = time.Now().Add(ttl)
++ 	}
++ 	m.entries[id] = entry{data: snapshot, expires: expires}
++ 	return nil
++ }
++
++ // Delete removes a session from the store.
++ func (m *MemoryStore) Delete(id string) error {
++ 	m.mu.Lock()
++ 	defer m.mu.Unlock()
++ 	delete(m.entries, id)
++ 	return nil
++ }
+*** Add File: session/middleware.go
++ package session
++
++ import (
++ 	"context"
++ 	"net/http"
++ 	"time"
++ )
++
++ type contextKey struct{}
++
++ // Options configures the SessionMiddleware.
++ type Options struct {
++ 	// CookieName is the name of the session cookie. Defaults to "session_id".
++ 	CookieName string
++ 	// TTL is the session lifetime. Zero means session cookie (browser lifetime).
++ 	TTL time.Duration
++ 	// CookiePath defaults to "/".
++ 	CookiePath string
++ 	// CookieSecure sets the Secure flag on the cookie.
++ 	CookieSecure bool
++ 	// CookieHTTPOnly sets the HttpOnly flag on the cookie.
++ 	CookieHTTPOnly bool
++ 	// CookieSameSite sets the SameSite attribute.
++ 	CookieSameSite http.SameSite
++ 	// Store is the session backend. Defaults to a new MemoryStore if nil.
++ 	Store Store
++ }
++
++ func (o *Options) cookieName() string {
++ 	if o.CookieName == "" {
++ 		return "session_id"
++ 	}
++ 	return o.CookieName
++ }
++
++ func (o *Options) cookiePath() string {
++ 	if o.CookiePath == "" {
++ 		return "/"
++ 	}
++ 	return o.CookiePath
++ }
++
++ // Middleware returns an HTTP middleware that manages sessions.
++ //
++ // Behaviour:
++ //   - If the request carries a valid session cookie the session is loaded from
++ //     the store; otherwise a new session is created lazily (the cookie is only
++ //     sent when the session is actually mutated).
++ //   - Set-Cookie is only emitted when the session has been mutated.
++ //   - When Session.Clear() is called the cookie is actively expired (cleared).
++ //   - The Session is stored in the request context and can be retrieved with
++ //     FromContext.
++ func Middleware(opts Options) func(http.Handler) http.Handler {
++ 	if opts.Store == nil {
++ 		opts.Store = NewMemoryStore()
++ 	}
++ 	return func(next http.Handler) http.Handler {
++ 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 			sess, isNew := loadOrCreate(r, opts)
++
++ 			// Inject session into context.
++ 			ctx := context.WithValue(r.Context(), contextKey{}, sess)
++ 			r = r.WithContext(ctx)
++
++ 			next.ServeHTTP(w, r)
++
++ 			// Post-handler: decide whether to persist / clear.
++ 			if sess.IsCleared() {
++ 				// Delete from store and expire the cookie.
++ 				_ = opts.Store.Delete(sess.ID())
++ 				clearCookie(w, opts)
++ 				return
++ 			}
++
++ 			if sess.IsMutated() {
++ 				// Persist to store.
++ 				_ = opts.Store.Save(sess.ID(), sess.Data(), opts.TTL)
++ 				// Only set the cookie when the session is new or mutated.
++ 				if isNew || sess.IsMutated() {
++ 					setCookie(w, sess.ID(), opts)
++ 				}
++ 			}
++ 			// If not mutated: do nothing – no Set-Cookie header is emitted.
++ 		})
++ 	}
++ }
++
++ // FromContext retrieves the Session from the context. Returns nil if not present.
++ func FromContext(ctx context.Context) *Session {
++ 	s, _ := ctx.Value(contextKey{}).(*Session)
++ 	return s
++ }
++
++ // loadOrCreate loads an existing session from the store or creates a new one.
++ // isNew is true when no valid cookie was found.
++ func loadOrCreate(r *http.Request, opts Options) (sess *Session, isNew bool) {
++ 	cookie, err := r.Cookie(opts.cookieName())
++ 	if err == nil && cookie.Value != "" {
++ 		data, loadErr := opts.Store.Load(cookie.Value)
++ 		if loadErr == nil && data != nil {
++ 			return LoadSession(cookie.Value, data), false
++ 		}
++ 	}
++ 	// Create a new session (ID generated eagerly so it is stable).
++ 	sess, _ = NewSession()
++ 	return sess, true
++ }
++
++ func setCookie(w http.ResponseWriter, id string, opts Options) {
++ 	c := &http.Cookie{
++ 		Name:     opts.cookieName(),
++ 		Value:    id,
++ 		Path:     opts.cookiePath(),
++ 		Secure:   opts.CookieSecure,
++ 		HttpOnly: opts.CookieHTTPOnly,
++ 		SameSite: opts.CookieSameSite,
++ 	}
++ 	if opts.TTL > 0 {
++ 		c.MaxAge = int(opts.TTL.Seconds())
++ 	}
++ 	http.SetCookie(w, c)
++ }
++
++ func clearCookie(w http.ResponseWriter, opts Options) {
++ 	http.SetCookie(w, &http.Cookie{
++ 		Name:     opts.cookieName(),
++ 		Value:    "",
++ 		Path:     opts.cookiePath(),
++ 		MaxAge:   -1,
++ 		Secure:   opts.CookieSecure,
++ 		HttpOnly: opts.CookieHTTPOnly,
++ 	})
++ }
+*** Add File: session/middleware_test.go
++ package session_test
++
++ import (
++ 	"net/http"
++ 	"net/http/httptest"
++ 	"strings"
++ 	"sync"
++ 	"testing"
++ 	"time"
++
++ 	"github.com/example/app/session"
++ )
++
++ // helper: build a handler wrapped with SessionMiddleware using a shared MemoryStore.
++ func newStack(store session.Store, handler http.HandlerFunc) http.Handler {
++ 	opts := session.Options{
++ 		Store:          store,
++ 		CookieHTTPOnly: true,
++ 		TTL:            time.Hour,
++ 	}
++ 	return session.Middleware(opts)(handler)
++ }
++
++ // cookieValue extracts the session cookie value from a response.
++ func cookieValue(t *testing.T, resp *http.Response) string {
++ 	t.Helper()
++ 	for _, c := range resp.Cookies() {
++ 		if c.Name == "session_id" {
++ 			return c.Value
++ 		}
++ 	}
++ 	return ""
++ }
++
++ // hasSetCookie reports whether the response contains a Set-Cookie header for session_id.
++ func hasSetCookie(resp *http.Response) bool {
++ 	for _, c := range resp.Cookies() {
++ 		if c.Name == "session_id" {
++ 			return true
++ 		}
++ 	}
++ 	return false
++ }
++
++ // TestReadOnlySession_NoSetCookie verifies that a read-only session does not
++ // emit a Set-Cookie header.
++ func TestReadOnlySession_NoSetCookie(t *testing.T) {
++ 	store := session.NewMemoryStore()
++
++ 	// First request: mutate to establish a session.
++ 	var sessionID string
++ 	writeHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		s := session.FromContext(r.Context())
++ 		s.Set("user", "alice")
++ 	})
++ 	stack := newStack(store, writeHandler)
++
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	rec := httptest.NewRecorder()
++ 	stack.ServeHTTP(rec, req)
++ 	resp := rec.Result()
++
++ 	if !hasSetCookie(resp) {
++ 		t.Fatal("expected Set-Cookie on first mutating request")
++ 	}
++ 	sessionID = cookieValue(t, resp)
++ 	if sessionID == "" {
++ 		t.Fatal("expected non-empty session ID")
++ 	}
++
++ 	// Second request: read-only – must NOT emit Set-Cookie.
++ 	readHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++ 		s := session.FromContext(r.Context())
++ 		v, ok := s.Get("user")
++ 		if !ok || v != "alice" {
++ 			t.Errorf("expected user=alice, got %v (ok=%v)", v, ok)
++ 		}
++ 	})
++ 	stack2 := newStack(store, readHandler)
++
++ 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	req2.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
++ 	rec2 := httptest.NewRecorder()
++ 	stack2.ServeHTTP(rec2, req2)
++ 	resp2 := rec2.Result()
++
++ 	if hasSetCookie(resp2) {
++ 		t.Error("read-only session must not emit Set-Cookie")
++ 	}
++ }
++
++ // TestClearSession_CookieExpired verifies that Clear() causes the cookie to be
++ // expired (MaxAge=-1) and the session to be removed from the store.
++ func TestClearSession_CookieExpired(t *testing.T) {
++ 	store := session.NewMemoryStore()
++
++ 	// Establish session.
++ 	var sessionID string
++ 	{
++ 		stack := newStack(store, func(w http.ResponseWriter, r *http.Request) {
++ 			session.FromContext(r.Context()).Set("k", "v")
++ 		})
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		rec := httptest.NewRecorder()
++ 		stack.ServeHTTP(rec, req)
++ 		sessionID = cookieValue(t, rec.Result())
++ 		if sessionID == "" {
++ 			t.Fatal("expected session ID after mutation")
++ 		}
++ 	}
++
++ 	// Clear session.
++ 	stack := newStack(store, func(w http.ResponseWriter, r *http.Request) {
++ 		session.FromContext(r.Context()).Clear()
++ 	})
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
++ 	rec := httptest.NewRecorder()
++ 	stack.ServeHTTP(rec, req)
++ 	resp := rec.Result()
++
++ 	// Must have a Set-Cookie that expires the cookie.
++ 	found := false
++ 	for _, c := range resp.Cookies() {
++ 		if c.Name == "session_id" {
++ 			found = true
++ 			if c.MaxAge >= 0 {
++ 				t.Errorf("expected MaxAge < 0 to clear cookie, got %d", c.MaxAge)
++ 			}
++ 		}
++ 	}
++ 	if !found {
++ 		t.Error("expected Set-Cookie header to clear session cookie")
++ 	}
++
++ 	// Session must be gone from store.
++ 	data, err := store.Load(sessionID)
++ 	if err != nil {
++ 		t.Fatalf("unexpected store error: %v", err)
++ 	}
++ 	if data != nil {
++ 		t.Error("expected session to be deleted from store after Clear()")
++ 	}
++ }
++
++ // TestNewSession_NoMutation_NoSetCookie verifies that a brand-new session that
++ // is never mutated does not emit a Set-Cookie header.
++ func TestNewSession_NoMutation_NoSetCookie(t *testing.T) {
++ 	store := session.NewMemoryStore()
++ 	stack := newStack(store, func(w http.ResponseWriter, r *http.Request) {
++ 		// Just access the session without mutating.
++ 		_ = session.FromContext(r.Context())
++ 	})
++
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	rec := httptest.NewRecorder()
++ 	stack.ServeHTTP(rec, req)
++
++ 	if hasSetCookie(rec.Result()) {
++ 		t.Error("unmutated new session must not emit Set-Cookie")
++ 	}
++ }
++
++ // TestMutateSession_SetCookieEmitted verifies that mutating a session causes
++ // Set-Cookie to be emitted.
++ func TestMutateSession_SetCookieEmitted(t *testing.T) {
++ 	store := session.NewMemoryStore()
++ 	stack := newStack(store, func(w http.ResponseWriter, r *http.Request) {
++ 		session.FromContext(r.Context()).Set("foo", "bar")
++ 	})
++
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	rec := httptest.NewRecorder()
++ 	stack.ServeHTTP(rec, req)
++
++ 	if !hasSetCookie(rec.Result()) {
++ 		t.Error("mutated session must emit Set-Cookie")
++ 	}
++ }
++
++ // TestDeleteKey_MarksSessionMutated verifies that deleting a key marks the
++ // session as mutated.
++ func TestDeleteKey_MarksSessionMutated(t *testing.T) {
++ 	store := session.NewMemoryStore()
++
++ 	// Establish session with a key.
++ 	var sessionID string
++ 	{
++ 		stack := newStack(store, func(w http.ResponseWriter, r *http.Request) {
++ 			session.FromContext(r.Context()).Set("tmp", "value")
++ 		})
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		rec := httptest.NewRecorder()
++ 		stack.ServeHTTP(rec, req)
++ 		sessionID = cookieValue(t, rec.Result())
++ 	}
++
++ 	// Delete the key – session should be mutated and saved.
++ 	stack := newStack(store, func(w http.ResponseWriter, r *http.Request) {
++ 		session.FromContext(r.Context()).Delete("tmp")
++ 	})
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
++ 	rec := httptest.NewRecorder()
++ 	stack.ServeHTTP(rec, req)
++
++ 	// Verify key is gone from store.
++ 	data, err := store.Load(sessionID)
++ 	if err != nil {
++ 		t.Fatalf("store error: %v", err)
++ 	}
++ 	if _, ok := data["tmp"]; ok {
++ 		t.Error("expected 'tmp' key to be deleted from store")
++ 	}
++ }
++
++ // TestConcurrentReadOnlySessions verifies that many concurrent read-only
++ // requests against the same session do not race and do not emit Set-Cookie.
++ func TestConcurrentReadOnlySessions(t *testing.T) {
++ 	store := session.NewMemoryStore()
++
++ 	// Establish session.
++ 	var sessionID string
++ 	{
++ 		stack := newStack(store, func(w http.ResponseWriter, r *http.Request) {
++ 			session.FromContext(r.Context()).Set("counter", 0)
++ 		})
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		rec := httptest.NewRecorder()
++ 		stack.ServeHTTP(rec, req)
++ 		sessionID = cookieValue(t, rec.Result())
++ 		if sessionID == "" {
++ 			t.Fatal("expected session ID")
++ 		}
++ 	}
++
++ 	stack := newStack(store, func(w http.ResponseWriter, r *http.Request) {
++ 		s := session.FromContext(r.Context())
++ 		v, ok := s.Get("counter")
++ 		if !ok {
++ 			t.Errorf("expected counter key")
++ 		}
++ 		_ = v
++ 	})
++
++ 	const goroutines = 50
++ 	var wg sync.WaitGroup
++ 	wg.Add(goroutines)
++ 	for i := 0; i < goroutines; i++ {
++ 		go func() {
++ 			defer wg.Done()
++ 			req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 			req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
++ 			rec := httptest.NewRecorder()
++ 			stack.ServeHTTP(rec, req)
++ 			if hasSetCookie(rec.Result()) {
++ 				t.Errorf("read-only concurrent session must not emit Set-Cookie")
++ 			}
++ 		}()
++ 	}
++ 	wg.Wait()
++ }
++
++ // TestConcurrentMutatingSessions verifies that concurrent mutating sessions
++ // each get their own independent session and all emit Set-Cookie.
++ func TestConcurrentMutatingSessions(t *testing.T) {
++ 	store := session.NewMemoryStore()
++ 	stack := newStack(store, func(w http.ResponseWriter, r *http.Request) {
++ 		session.FromContext(r.Context()).Set("goroutine", r.Header.Get("X-ID"))
++ 	})
++
++ 	const goroutines = 30
++ 	ids := make([]string, goroutines)
++ 	var wg sync.WaitGroup
++ 	var mu sync.Mutex
++ 	wg.Add(goroutines)
++ 	for i := 0; i < goroutines; i++ {
++ 		i := i
++ 		go func() {
++ 			defer wg.Done()
++ 			req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 			req.Header.Set("X-ID", strings.Repeat("x", i+1))
++ 			rec := httptest.NewRecorder()
++ 			stack.ServeHTTP(rec, req)
++ 			id := cookieValue(t, rec.Result())
++ 			mu.Lock()
++ 			ids[i] = id
++ 			mu.Unlock()
++ 		}()
++ 	}
++ 	wg.Wait()
++
++ 	// All session IDs must be unique.
++ 	seen := make(map[string]bool)
++ 	for _, id := range ids {
++ 		if id == "" {
++ 			t.Error("expected non-empty session ID for mutating request")
++ 			continue
++ 		}
++ 		if seen[id] {
++ 			t.Errorf("duplicate session ID: %s", id)
++ 		}
++ 		seen[id] = true
++ 	}
++ }
++
++ // TestExistingSession_MutationUpdatesStore verifies that mutating an existing
++ // session persists the updated data.
++ func TestExistingSession_MutationUpdatesStore(t *testing.T) {
++ 	store := session.NewMemoryStore()
++
++ 	var sessionID string
++ 	{
++ 		stack := newStack(store, func(w http.ResponseWriter, r *http.Request) {
++ 			session.FromContext(r.Context()).Set("step", 1)
++ 		})
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		rec := httptest.NewRecorder()
++ 		stack.ServeHTTP(rec, req)
++ 		sessionID = cookieValue(t, rec.Result())
++ 	}
++
++ 	// Update step to 2.
++ 	{
++ 		stack := newStack(store, func(w http.ResponseWriter, r *http.Request) {
++ 			session.FromContext(r.Context()).Set("step", 2)
++ 		})
++ 		req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 		req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
++ 		rec := httptest.NewRecorder()
++ 		stack.ServeHTTP(rec, req)
++ 	}
++
++ 	data, err := store.Load(sessionID)
++ 	if err != nil {
++ 		t.Fatalf("store error: %v", err)
++ 	}
++ 	if data["step"] != 2 {
++ 		t.Errorf("expected step=2, got %v", data["step"])
++ 	}
++ }
++
++ // TestFromContext_NilWhenMissing verifies that FromContext returns nil when no
++ // session is in the context.
++ func TestFromContext_NilWhenMissing(t *testing.T) {
++ 	req := httptest.NewRequest(http.MethodGet, "/", nil)
++ 	s := session.FromContext(req.Context())
++ 	if s != nil {
++ 		t.Error("expected nil session from bare context")
++ 	}
++ }
+*** Add File: session/session_test.go
++ package session
++
++ import (
++ 	"testing"
++ )
++
++ // Unit tests for Session methods (white-box, uses internal package).
++
++ func TestSession_GetSet(t *testing.T) {
++ 	s, err := NewSession()
++ 	if err != nil {
++ 		t.Fatalf("NewSession: %v", err)
++ 	}
++
++ 	if s.IsMutated() {
++ 		t.Error("new session should not be mutated")
++ 	}
++
++ 	_, ok := s.Get("missing")
++ 	if ok {
++ 		t.Error("expected missing key to return ok=false")
++ 	}
++ 	if s.IsMutated() {
++ 		t.Error("Get should not mark session as mutated")
++ 	}
++
++ 	s.Set("key", "value")
++ 	if !s.IsMutated() {
++ 		t.Error("Set should mark session as mutated")
++ 	}
++ 	v, ok := s.Get("key")
++ 	if !ok || v != "value" {
++ 		t.Errorf("expected key=value, got %v (ok=%v)", v, ok)
++ 	}
++ }
++
++ func TestSession_Delete(t *testing.T) {
++ 	s, _ := NewSession()
++ 	s.Set("k", "v")
++
++ 	// Reset mutated flag manually for test isolation.
++ 	s.mu.Lock()
++ 	s.mutated = false
++ 	s.mu.Unlock()
++
++ 	s.Delete("k")
++ 	if !s.IsMutated() {
++ 		t.Error("Delete should mark session as mutated")
++ 	}
++ 	_, ok := s.Get("k")
++ 	if ok {
++ 		t.Error("expected key to be deleted")
++ 	}
++ }
++
++ func TestSession_Clear(t *testing.T) {
++ 	s, _ := NewSession()
++ 	s.Set("a", 1)
++ 	s.Set("b", 2)
++
++ 	s.mu.Lock()
++ 	s.mutated = false
++ 	s.mu.Unlock()
++
++ 	s.Clear()
++ 	if !s.IsMutated() {
++ 		t.Error("Clear should mark session as mutated")
++ 	}
++ 	if !s.IsCleared() {
++ 		t.Error("Clear should mark session as cleared")
++ 	}
++ 	if len(s.Data()) != 0 {
++ 		t.Error("Clear should empty session data")
++ 	}
++ }
++
++ func TestSession_DataSnapshot(t *testing.T) {
++ 	s, _ := NewSession()
++ 	s.Set("x", 42)
++
++ 	snap := s.Data()
++ 	snap["x"] = 99 // mutate snapshot
++
++ 	v, _ := s.Get("x")
++ 	if v != 42 {
++ 		t.Error("Data() should return a copy, not a reference")
++ 	}
++ }
++
++ func TestSession_IDStable(t *testing.T) {
++ 	s, _ := NewSession()
++ 	id1 := s.ID()
++ 	id2 := s.ID()
++ 	if id1 != id2 {
++ 		t.Error("ID() should return stable value")
++ 	}
++ 	if id1 == "" {
++ 		t.Error("ID() should not be empty")
++ 	}
++ }
++
++ func TestLoadSession(t *testing.T) {
++ 	data := map[string]interface{}{"foo": "bar"}
++ 	s := LoadSession("abc123", data)
++ 	if s.ID() != "abc123" {
++ 		t.Errorf("expected ID abc123, got %s", s.ID())
++ 	}
++ 	v, ok := s.Get("foo")
++ 	if !ok || v != "bar" {
++ 		t.Errorf("expected foo=bar, got %v", v)
++ 	}
++ 	if s.IsMutated() {
++ 		t.Error("loaded session should not be mutated")
++ 	}
++ }
++
++ func TestMemoryStore_LoadSave(t *testing.T) {
++ 	store := NewMemoryStore()
++
++ 	data, err := store.Load("nonexistent")
++ 	if err != nil || data != nil {
++ 		t.Errorf("expected nil data for missing key, got %v %v", data, err)
++ 	}
++
++ 	err = store.Save("s1", map[string]interface{}{"n": 1}, 0)
++ 	if err != nil {
++ 		t.Fatalf("Save: %v", err)
++ 	}
++
++ 	data, err = store.Load("s1")
++ 	if err != nil {
++ 		t.Fatalf("Load: %v", err)
++ 	}
++ 	if data["n"] != 1 {
++ 		t.Errorf("expected n=1, got %v", data["n"])
++ 	}
++ }
++
++ func TestMemoryStore_Delete(t *testing.T) {
++ 	store := NewMemoryStore()
++ 	_ = store.Save("s2", map[string]interface{}{"x": "y"}, 0)
++ 	_ = store.Delete("s2")
++
++ 	data, err := store.Load("s2")
++ 	if err != nil || data != nil {
++ 		t.Errorf("expected nil after delete, got %v %v", data, err)
++ 	}
++ }
+*** Add File: go.mod
++ module github.com/example/app
++
++ go 1.21
+
+*** End Patch

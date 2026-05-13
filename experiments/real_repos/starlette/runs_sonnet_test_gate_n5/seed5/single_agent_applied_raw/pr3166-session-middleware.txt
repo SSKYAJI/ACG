@@ -1,0 +1,164 @@
+*** Begin Patch
+*** Add File: tests/test_sessions.py
+import pytest
+
+from starlette.applications import Starlette
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Route
+from starlette.testclient import TestClient
+
+
+def create_app() -> Starlette:
+    async def view_session(request: Request) -> JSONResponse:
+        return JSONResponse({"session": dict(request.session)})
+
+    async def update_session(request: Request) -> JSONResponse:
+        data = await request.json()
+        request.session.update(data)
+        return JSONResponse({"session": dict(request.session)})
+
+    async def clear_session(request: Request) -> JSONResponse:
+        request.session.clear()
+        return JSONResponse({"session": dict(request.session)})
+
+    app = Starlette(
+        routes=[
+            Route("/view", view_session),
+            Route("/update", update_session, methods=["POST"]),
+            Route("/clear", clear_session),
+        ]
+    )
+    app.add_middleware(SessionMiddleware, secret_key="test-secret")
+    return app
+
+
+def test_session() -> None:
+    app = create_app()
+    client = TestClient(app)
+
+    response = client.get("/view")
+    assert response.json() == {"session": {}}
+
+    response = client.post("/update", json={"username": "alice"})
+    assert response.json() == {"session": {"username": "alice"}}
+    assert "set-cookie" in response.headers
+
+    response = client.get("/view")
+    assert response.json() == {"session": {"username": "alice"}}
+
+
+def test_session_clear() -> None:
+    app = create_app()
+    client = TestClient(app)
+
+    # Set a session value
+    client.post("/update", json={"username": "alice"})
+
+    # Clear the session
+    response = client.get("/clear")
+    assert response.json() == {"session": {}}
+    # Should send Set-Cookie to clear the cookie
+    assert "set-cookie" in response.headers
+    assert "Max-Age=0" in response.headers["set-cookie"]
+
+
+def test_session_no_cookie_for_empty_unchanged_session() -> None:
+    """Read-only access to an empty session should not set a cookie."""
+    app = create_app()
+    client = TestClient(app)
+
+    response = client.get("/view")
+    assert response.json() == {"session": {}}
+    # No Set-Cookie should be sent for an empty, unmodified session
+    assert "set-cookie" not in response.headers
+
+
+def test_session_no_cookie_for_unchanged_session() -> None:
+    """Read-only access to an existing session should not set a cookie."""
+    app = create_app()
+    client = TestClient(app)
+
+    # First, set a session value
+    client.post("/update", json={"username": "alice"})
+
+    # Now just view it - should not re-set the cookie
+    response = client.get("/view")
+    assert response.json() == {"session": {"username": "alice"}}
+    assert "set-cookie" not in response.headers
+
+
+def test_session_cookie_set_when_modified() -> None:
+    """Modifying a session should set a new cookie."""
+    app = create_app()
+    client = TestClient(app)
+
+    # Set initial session
+    client.post("/update", json={"username": "alice"})
+
+    # Modify the session
+    response = client.post("/update", json={"role": "admin"})
+    assert "set-cookie" in response.headers
+
+
+def test_session_https_only() -> None:
+    async def view_session(request: Request) -> JSONResponse:
+        return JSONResponse({"session": dict(request.session)})
+
+    async def update_session(request: Request) -> JSONResponse:
+        data = await request.json()
+        request.session.update(data)
+        return JSONResponse({"session": dict(request.session)})
+
+    app = Starlette(
+        routes=[
+            Route("/view", view_session),
+            Route("/update", update_session, methods=["POST"]),
+        ]
+    )
+    app.add_middleware(SessionMiddleware, secret_key="test-secret", https_only=True)
+    client = TestClient(app, base_url="https://testserver")
+
+    response = client.post("/update", json={"username": "alice"})
+    assert "secure" in response.headers["set-cookie"]
+
+
+def test_session_domain() -> None:
+    async def update_session(request: Request) -> JSONResponse:
+        data = await request.json()
+        request.session.update(data)
+        return JSONResponse({"session": dict(request.session)})
+
+    app = Starlette(routes=[Route("/update", update_session, methods=["POST"])])
+    app.add_middleware(SessionMiddleware, secret_key="test-secret", domain=".example.com")
+    client = TestClient(app)
+
+    response = client.post("/update", json={"username": "alice"})
+    assert "domain=.example.com" in response.headers["set-cookie"]
+
+
+def test_session_concurrent_requests_read_only() -> None:
+    """Concurrent read-only requests should not set cookies."""
+    app = create_app()
+    client = TestClient(app)
+
+    # Set a session
+    client.post("/update", json={"username": "alice"})
+
+    # Multiple read-only requests should not set cookies
+    for _ in range(3):
+        response = client.get("/view")
+        assert response.json() == {"session": {"username": "alice"}}
+        assert "set-cookie" not in response.headers
+
+
+def test_session_invalid_cookie() -> None:
+    """Invalid session cookie should result in empty session."""
+    app = create_app()
+    client = TestClient(app, cookies={"session": "invalid-cookie-data"})
+
+    response = client.get("/view")
+    assert response.json() == {"session": {}}
+
+*** End Patch

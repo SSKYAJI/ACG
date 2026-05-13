@@ -8,6 +8,7 @@ import json
 import math
 import random
 import sys
+from itertools import combinations
 from pathlib import Path
 from statistics import mean, stdev
 
@@ -74,15 +75,15 @@ def summarize_values(
     variance_treatment: str = "stochastic",
 ) -> dict[str, float | None | str | dict[str, float]]:
     stdev_value = stdev(values) if len(values) > 1 else 0.0
-    summary: dict[str, float | None] = {
+    summary: dict[str, float | None | str | dict[str, float]] = {
         "mean": mean(values),
         "stdev": stdev_value,
+        "variance_treatment": variance_treatment,
     }
-    summary["variance_treatment"] = variance_treatment  # type: ignore[assignment]
     if variance_treatment == "stochastic" and stdev_value > 0:
-        summary["ci95"] = bootstrap_ci(values, rng=rng)  # type: ignore[assignment]
+        summary["ci95"] = bootstrap_ci(values, rng=rng)
     else:
-        summary["ci95"] = None  # type: ignore[assignment]
+        summary["ci95"] = None
     return summary
 
 
@@ -169,6 +170,121 @@ def aggregate(
                 variance_treatment=variance_treatment(metric, values),
             )
     return out
+
+
+def paired_bootstrap_ci(
+    values_a: list[float],
+    values_b: list[float],
+    n_resamples: int = 10000,
+    ci: float = 0.95,
+    rng_seed: int = 0,
+) -> tuple[float, float, float]:
+    """Paired bootstrap CI for mean(values_a - values_b).
+
+    Returns (mean_diff, ci_low, ci_high).
+    values_a and values_b must be the same length and aligned (same seed x task ordering).
+    """
+    if len(values_a) != len(values_b):
+        raise ValueError("values_a and values_b must have the same length")
+    n = len(values_a)
+    diffs = [a - b for a, b in zip(values_a, values_b, strict=True)]
+    mean_diff = mean(diffs)
+    rng = random.Random(rng_seed)
+    boot_means: list[float] = []
+    for _ in range(n_resamples):
+        indices = [rng.randrange(n) for _ in range(n)]
+        boot_means.append(mean([diffs[i] for i in indices]))
+    boot_means.sort()
+    alpha = 1.0 - ci
+    ci_low = percentile(boot_means, alpha / 2)
+    ci_high = percentile(boot_means, 1.0 - alpha / 2)
+    return mean_diff, ci_low, ci_high
+
+
+def _paired_cupp_vectors(
+    seed_runs: list[dict],
+    strategy_a: str,
+    strategy_b: str,
+) -> tuple[list[float], list[float]]:
+    """Extract per-(seed, task) cupp outcome vectors for two strategies.
+
+    Each seed contributes one cupp_rate value (summary metric). Returns
+    aligned lists of length n_seeds.
+    """
+    vec_a: list[float] = []
+    vec_b: list[float] = []
+    for sr in seed_runs:
+        strats = sr["data"].get("strategies", {})
+        val_a = strats.get(strategy_a, {}).get("summary_metrics", {}).get("cupp_rate")
+        val_b = strats.get(strategy_b, {}).get("summary_metrics", {}).get("cupp_rate")
+        if val_a is not None and val_b is not None:
+            vec_a.append(float(val_a))
+            vec_b.append(float(val_b))
+    return vec_a, vec_b
+
+
+def _paired_tokens_per_cupp_vectors(
+    seed_runs: list[dict],
+    strategy_a: str,
+    strategy_b: str,
+) -> tuple[list[float], list[float]]:
+    """Extract per-seed tokens_per_cupp vectors; skips seeds where either is None."""
+    vec_a: list[float] = []
+    vec_b: list[float] = []
+    for sr in seed_runs:
+        strats = sr["data"].get("strategies", {})
+        val_a = strats.get(strategy_a, {}).get("summary_metrics", {}).get("tokens_per_cupp")
+        val_b = strats.get(strategy_b, {}).get("summary_metrics", {}).get("tokens_per_cupp")
+        if val_a is not None and val_b is not None:
+            vec_a.append(float(val_a))
+            vec_b.append(float(val_b))
+    return vec_a, vec_b
+
+
+def render_paired_bootstrap_section(seed_runs: list[dict], strategies: list[str]) -> str:
+    """Render paired bootstrap CI table for cupp_rate and tokens_per_cupp."""
+    pairs = list(combinations(strategies, 2))
+    rng_seed = BOOTSTRAP_SEED
+
+    cupp_lines = [
+        "## Paired bootstrap CI: cupp_rate (A - B)",
+        "",
+        "| strategy A | strategy B | mean diff | 95% CI low | 95% CI high |",
+        "| --- | --- | ---: | ---: | ---: |",
+    ]
+    tokens_lines = [
+        "## Paired bootstrap CI: tokens_per_cupp (A - B)",
+        "",
+        "| strategy A | strategy B | mean diff | 95% CI low | 95% CI high |",
+        "| --- | --- | ---: | ---: | ---: |",
+    ]
+
+    has_cupp = False
+    has_tokens = False
+
+    for strat_a, strat_b in pairs:
+        vec_a, vec_b = _paired_cupp_vectors(seed_runs, strat_a, strat_b)
+        if len(vec_a) >= 2 and any(v != 0.0 for v in vec_a + vec_b):
+            has_cupp = True
+            md, lo, hi = paired_bootstrap_ci(vec_a, vec_b, rng_seed=rng_seed)
+            cupp_lines.append(
+                f"| `{strat_a}` | `{strat_b}` | {md:.6f} | {lo:.6f} | {hi:.6f} |"
+            )
+
+        tp_a, tp_b = _paired_tokens_per_cupp_vectors(seed_runs, strat_a, strat_b)
+        if len(tp_a) >= 2:
+            has_tokens = True
+            md, lo, hi = paired_bootstrap_ci(tp_a, tp_b, rng_seed=rng_seed)
+            tokens_lines.append(
+                f"| `{strat_a}` | `{strat_b}` | {md:.2f} | {lo:.2f} | {hi:.2f} |"
+            )
+
+    sections: list[str] = []
+    if has_cupp:
+        sections.append("\n".join(cupp_lines))
+    if has_tokens:
+        sections.append("\n".join(tokens_lines))
+    return ("\n\n".join(sections) + "\n") if sections else ""
 
 
 def render_markdown(aggregate: dict) -> str:

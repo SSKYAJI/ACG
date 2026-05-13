@@ -1,0 +1,118 @@
+*** Begin Patch
+*** Add File: tests/test_templating.py
+import os
+import sys
+
+import pytest
+
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.routing import Route
+from starlette.templating import Jinja2Templates
+from starlette.testclient import TestClient
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
+
+
+def build_app(templates: Jinja2Templates, template_name: str):
+    def homepage(request: Request):
+        return templates.TemplateResponse(template_name, {"request": request})
+
+    return Starlette(routes=[Route("/", homepage)])
+
+
+# ---------------------------------------------------------------------------
+# Basic rendering
+# ---------------------------------------------------------------------------
+
+
+def test_request_must_be_in_context(tmp_path):
+    (tmp_path / "index.html").write_text("Hello")
+    templates = Jinja2Templates(directory=str(tmp_path))
+    scope = {"type": "http", "method": "GET", "path": "/", "query_string": b"",
+              "headers": []}
+
+    async def receive():
+        pass  # pragma: nocover
+
+    request = Request(scope)
+    with pytest.raises(ValueError):
+        templates.TemplateResponse("index.html", {})
+
+
+def test_template_response(tmp_path):
+    (tmp_path / "index.html").write_text("Hello {{ name }}")
+    templates = Jinja2Templates(directory=str(tmp_path))
+
+    def homepage(request: Request):
+        return templates.TemplateResponse("index.html", {"request": request, "name": "World"})
+
+    app = Starlette(routes=[Route("/", homepage)])
+    client = TestClient(app)
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.text == "Hello World"
+
+
+# ---------------------------------------------------------------------------
+# Autoescape tests
+# ---------------------------------------------------------------------------
+
+
+def test_autoescape_enabled_by_default_for_html(tmp_path):
+    """HTML templates should have autoescaping on by default."""
+    (tmp_path / "index.html").write_text("Hello {{ name }}")
+    templates = Jinja2Templates(directory=str(tmp_path))
+
+    def homepage(request: Request):
+        return templates.TemplateResponse(
+            "index.html", {"request": request, "name": "<script>alert('xss')</script>"}
+        )
+
+    app = Starlette(routes=[Route("/", homepage)])
+    client = TestClient(app)
+    response = client.get("/")
+    assert "<script>" not in response.text
+    assert "&lt;script&gt;" in response.text
+
+
+def test_autoescape_can_be_disabled(tmp_path):
+    """Callers can opt out of autoescaping."""
+    (tmp_path / "index.html").write_text("Hello {{ name }}")
+    templates = Jinja2Templates(directory=str(tmp_path), autoescape=False)
+
+    def homepage(request: Request):
+        return templates.TemplateResponse(
+            "index.html", {"request": request, "name": "<b>bold</b>"}
+        )
+
+    app = Starlette(routes=[Route("/", homepage)])
+    client = TestClient(app)
+    response = client.get("/")
+    assert "<b>bold</b>" in response.text
+
+
+def test_autoescape_not_applied_to_txt(tmp_path):
+    """Plain-text templates should NOT be autoescaped by default."""
+    (tmp_path / "email.txt").write_text("Hello {{ name }}")
+    templates = Jinja2Templates(directory=str(tmp_path))
+
+    def homepage(request: Request):
+        return templates.TemplateResponse(
+            "email.txt", {"request": request, "name": "<b>bold</b>"}
+        )
+
+    app = Starlette(routes=[Route("/", homepage)])
+    client = TestClient(app)
+    response = client.get("/")
+    assert "<b>bold</b>" in response.text
+
+
+def test_directory_required():
+    with pytest.raises((ValueError, TypeError)):
+        Jinja2Templates()
+*** End Patch

@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr3148-jinja2-autoescape",
+      "prompt": "Make Jinja2Templates use Jinja2's select_autoescape default when creating an environment from a template directory, while preserving caller-supplied environments and adding tests for escaping behavior.",
+      "hints": {
+        "touches": [
+          "jinja2",
+          "template",
+          "autoescape",
+          "tests"
+        ]
+      }
+    }
+  ]
+}

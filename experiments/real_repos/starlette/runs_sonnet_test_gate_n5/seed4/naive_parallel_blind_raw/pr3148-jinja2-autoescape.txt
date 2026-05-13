@@ -1,0 +1,624 @@
+I'll analyze the task and create the necessary changes for making Jinja2Templates use Jinja2's `select_autoescape` by default.
+
+Let me create the implementation:
+
+*** Begin Patch
+*** Add File: starlette/templating.py
++ import typing
++ 
++ from starlette.background import BackgroundTask
++ from starlette.requests import Request
++ from starlette.responses import HTMLResponse
++ 
++ try:
++     import jinja2
++ 
++     # Jinja2 >= 2.11.x
++     from jinja2 import select_autoescape
++ except ImportError:  # pragma: nocover
++     jinja2 = None  # type: ignore
++ 
++ 
++ class _TemplateResponse(HTMLResponse):
++     def __init__(
++         self,
++         template: typing.Any,
++         context: dict,
++         status_code: int = 200,
++         headers: dict = None,
++         media_type: str = None,
++         background: BackgroundTask = None,
++     ):
++         self.template = template
++         self.context = context
++         content = template.render(context)
++         super().__init__(content, status_code, headers, media_type, background)
++ 
++     async def __call__(self, scope, receive, send) -> None:
++         request = self.context.get("request", {})
++         extensions = request.get("extensions", {})
++         if "http.response.template" in extensions:
++             await send(
++                 {
++                     "type": "http.response.template",
++                     "template": self.template,
++                     "context": self.context,
++                 }
++             )
++         await super().__call__(scope, receive, send)
++ 
++ 
++ class Jinja2Templates:
++     """
++     templates = Jinja2Templates("templates")
++ 
++     return templates.TemplateResponse("index.html", {"request": request})
++     """
++ 
++     def __init__(
++         self, directory: str = None, env: "jinja2.Environment" = None
++     ) -> None:
++         assert jinja2 is not None, "jinja2 must be installed to use Jinja2Templates"
++         if env is None:
++             assert directory is not None, "either 'directory' or 'env' argument must be passed"
++             self.env = self._create_env(directory)
++         else:
++             self.env = env
++ 
++     def _create_env(self, directory: str) -> "jinja2.Environment":
++         loader = jinja2.FileSystemLoader(directory)
++         env = jinja2.Environment(
++             loader=loader, autoescape=select_autoescape()
++         )
++         return env
++ 
++     def get_template(self, name: str) -> "jinja2.Template":
++         return self.env.get_template(name)
++ 
++     def TemplateResponse(
++         self,
++         name: str,
++         context: dict,
++         status_code: int = 200,
++         headers: dict = None,
++         media_type: str = None,
++         background: BackgroundTask = None,
++     ) -> _TemplateResponse:
++         if "request" not in context:
++             raise ValueError('context must include a "request" key')
++         template = self.get_template(name)
++         return _TemplateResponse(
++             template,
++             context=context,
++             status_code=status_code,
++             headers=headers,
++             media_type=media_type,
++             background=background,
++         )
+*** Add File: tests/test_templating.py
++ import os
++ 
++ import pytest
++ 
++ from starlette.applications import Starlette
++ from starlette.requests import Request
++ from starlette.routing import Route
++ from starlette.templating import Jinja2Templates
++ from starlette.testclient import TestClient
++ 
++ 
++ @pytest.fixture
++ def tmpdir_with_templates(tmp_path):
++     """Create a temporary directory with some template files."""
++     templates_dir = tmp_path / "templates"
++     templates_dir.mkdir()
++     return templates_dir
++ 
++ 
++ def test_request_must_be_in_context(tmpdir_with_templates):
++     templates = Jinja2Templates(directory=str(tmpdir_with_templates))
++     (tmpdir_with_templates / "index.html").write_text("<html>Hello</html>")
++     scope = {
++         "type": "http",
++         "method": "GET",
++         "path": "/",
++         "query_string": b"",
++         "headers": [],
++     }
++     request = Request(scope)
++     with pytest.raises(ValueError):
++         templates.TemplateResponse("index.html", {"not_request": request})
++ 
++ 
++ def test_templates_response(tmpdir_with_templates):
++     (tmpdir_with_templates / "index.html").write_text(
++         "<html>Hello, {{ name }}!</html>"
++     )
++ 
++     async def homepage(request):
++         return templates.TemplateResponse(
++             "index.html", {"request": request, "name": "World"}
++         )
++ 
++     templates = Jinja2Templates(directory=str(tmpdir_with_templates))
++     app = Starlette(routes=[Route("/", endpoint=homepage)])
++     client = TestClient(app)
++     response = client.get("/")
++     assert response.status_code == 200
++     assert response.text == "<html>Hello, World!</html>"
++ 
++ 
++ def test_templates_autoescape_enabled_for_html(tmpdir_with_templates):
++     """HTML templates should have autoescaping enabled by default."""
++     (tmpdir_with_templates / "index.html").write_text(
++         "<html>{{ dangerous }}</html>"
++     )
++ 
++     async def homepage(request):
++         return templates.TemplateResponse(
++             "index.html",
++             {"request": request, "dangerous": "<script>alert('xss')</script>"},
++         )
++ 
++     templates = Jinja2Templates(directory=str(tmpdir_with_templates))
++     app = Starlette(routes=[Route("/", endpoint=homepage)])
++     client = TestClient(app)
++     response = client.get("/")
++     assert response.status_code == 200
++     # The dangerous content should be escaped
++     assert "<script>" not in response.text
++     assert "&lt;script&gt;" in response.text
++ 
++ 
++ def test_templates_autoescape_disabled_for_txt(tmpdir_with_templates):
++     """Non-HTML templates should not have autoescaping enabled by default."""
++     (tmpdir_with_templates / "index.txt").write_text("{{ dangerous }}")
++ 
++     async def homepage(request):
++         return templates.TemplateResponse(
++             "index.txt",
++             {"request": request, "dangerous": "<script>alert('xss')</script>"},
++         )
++ 
++     templates = Jinja2Templates(directory=str(tmpdir_with_templates))
++     app = Starlette(routes=[Route("/", endpoint=homepage)])
++     client = TestClient(app)
++     response = client.get("/")
++     assert response.status_code == 200
++     # The dangerous content should NOT be escaped in txt templates
++     assert "<script>" in response.text
++ 
++ 
++ def test_templates_with_custom_env(tmpdir_with_templates):
++     """When a custom environment is provided, it should be used as-is."""
++     import jinja2
++ 
++     (tmpdir_with_templates / "index.html").write_text(
++         "<html>{{ dangerous }}</html>"
++     )
++ 
++     # Create an environment with autoescaping disabled
++     loader = jinja2.FileSystemLoader(str(tmpdir_with_templates))
++     env = jinja2.Environment(loader=loader, autoescape=False)
++ 
++     async def homepage(request):
++         return templates.TemplateResponse(
++             "index.html",
++             {"request": request, "dangerous": "<script>alert('xss')</script>"},
++         )
++ 
++     templates = Jinja2Templates(env=env)
++     app = Starlette(routes=[Route("/", endpoint=homepage)])
++     client = TestClient(app)
++     response = client.get("/")
++     assert response.status_code == 200
++     # With custom env that has autoescape=False, content should NOT be escaped
++     assert "<script>" in response.text
++ 
++ 
++ def test_templates_require_directory_or_env():
++     """Must provide either directory or env."""
++     with pytest.raises(AssertionError):
++         Jinja2Templates()
+*** Add File: starlette/__init__.py
++ __version__ = "0.14.2"
+*** Add File: starlette/background.py
++ import asyncio
++ import typing
++ 
++ 
++ class BackgroundTask:
++     def __init__(
++         self, func: typing.Callable, *args: typing.Any, **kwargs: typing.Any
++     ) -> None:
++         self.func = func
++         self.args = args
++         self.kwargs = kwargs
++         self.is_async = asyncio.iscoroutinefunction(func)
++ 
++     async def __call__(self) -> None:
++         if self.is_async:
++             await self.func(*self.args, **self.kwargs)
++         else:
++             await asyncio.get_event_loop().run_in_executor(
++                 None, self.func, *self.args, **self.kwargs
++             )
++ 
++ 
++ class BackgroundTasks(BackgroundTask):
++     def __init__(self, tasks: typing.Sequence[BackgroundTask] = []):
++         self.tasks = list(tasks)
++ 
++     def add_task(
++         self, func: typing.Callable, *args: typing.Any, **kwargs: typing.Any
++     ) -> None:
++         task = BackgroundTask(func, *args, **kwargs)
++         self.tasks.append(task)
++ 
++     async def __call__(self) -> None:
++         for task in self.tasks:
++             await task()
+*** Add File: starlette/datastructures.py
++ import typing
++ 
++ 
++ class URL(str):
++     pass
++ 
++ 
++ class Headers(typing.Mapping[str, str]):
++     def __init__(
++         self,
++         headers: typing.List[typing.Tuple[bytes, bytes]] = None,
++         scope: dict = None,
++     ) -> None:
++         self._list = headers if headers is not None else scope.get("headers", [])
++ 
++     def __getitem__(self, key: str) -> str:
++         for header_key, header_value in self._list:
++             if header_key.decode("latin-1").lower() == key.lower():
++                 return header_value.decode("latin-1")
++         raise KeyError(key)
++ 
++     def __contains__(self, key: typing.Any) -> bool:
++         try:
++             self[key]
++             return True
++         except KeyError:
++             return False
++ 
++     def __iter__(self) -> typing.Iterator[str]:
++         return iter(
++             [key.decode("latin-1") for key, _ in self._list]
++         )
++ 
++     def __len__(self) -> int:
++         return len(self._list)
++ 
++     def __repr__(self) -> str:
++         return f"{self.__class__.__name__}({list(self._list)!r})"
+*** Add File: starlette/requests.py
++ import asyncio
++ import json
++ import typing
++ 
++ from starlette.datastructures import URL, Headers
++ 
++ 
++ class HTTPConnection(typing.Mapping[str, typing.Any]):
++     """
++     A base class for incoming HTTP connections.
++     """
++ 
++     def __init__(self, scope: dict) -> None:
++         assert scope["type"] in ("http", "websocket")
++         self._scope = scope
++ 
++     def __getitem__(self, key: str) -> str:
++         return self._scope[key]
++ 
++     def __iter__(self) -> typing.Iterator[str]:
++         return iter(self._scope)
++ 
++     def __len__(self) -> int:
++         return len(self._scope)
++ 
++     @property
++     def method(self) -> str:
++         return self._scope["method"]
++ 
++     @property
++     def url(self) -> URL:
++         if not hasattr(self, "_url"):
++             scheme = self._scope["scheme"] if "scheme" in self._scope else "http"
++             server = self._scope.get("server")
++             path = self._scope.get("root_path", "") + self._scope["path"]
++             if server is None:
++                 url = path
++             else:
++                 host, port = server
++                 default_port = {"http": 80, "https": 443, "ws": 80, "wss": 443}[scheme]
++                 if port == default_port:
++                     url = f"{scheme}://{host}{path}"
++                 else:
++                     url = f"{scheme}://{host}:{port}{path}"
++             query_string = self._scope.get("query_string", b"")
++             if query_string:
++                 url += "?" + query_string.decode()
++             self._url = URL(url)
++         return self._url
++ 
++     @property
++     def headers(self) -> Headers:
++         if not hasattr(self, "_headers"):
++             self._headers = Headers(scope=self._scope)
++         return self._headers
++ 
++ 
++ class Request(HTTPConnection):
++     def __init__(self, scope: dict, receive: typing.Callable = None) -> None:
++         super().__init__(scope)
++         self._receive = receive
++         self._stream_consumed = False
+*** Add File: starlette/responses.py
++ import asyncio
++ import http.cookies
++ import json
++ import typing
++ 
++ from starlette.background import BackgroundTask
++ 
++ 
++ class Response:
++     media_type = None
++     charset = "utf-8"
++ 
++     def __init__(
++         self,
++         content: typing.Any = None,
++         status_code: int = 200,
++         headers: dict = None,
++         media_type: str = None,
++         background: BackgroundTask = None,
++     ) -> None:
++         self.status_code = status_code
++         if headers is None:
++             raw_headers = []
++             populate_content_length = True
++             populate_content_type = True
++         else:
++             raw_headers = [
++                 (k.lower().encode("latin-1"), v.encode("latin-1"))
++                 for k, v in headers.items()
++             ]
++             keys = [h[0] for h in raw_headers]
++             populate_content_length = b"content-length" not in keys
++             populate_content_type = b"content-type" not in keys
++ 
++         body = self.render(content)
++         if body is not None:
++             if populate_content_length:
++                 content_length = str(len(body))
++                 raw_headers.append((b"content-length", content_length.encode("latin-1")))
++             if populate_content_type:
++                 content_type = self.media_type or ""
++                 if content_type.startswith("text/") and "charset=" not in content_type:
++                     content_type += "; charset=" + self.charset
++                 raw_headers.append((b"content-type", content_type.encode("latin-1")))
++ 
++         self.body = body
++         self.background = background
++         self.raw_headers = raw_headers
++ 
++     def render(self, content: typing.Any) -> bytes:
++         if content is None:
++             return b""
++         if isinstance(content, bytes):
++             return content
++         return content.encode(self.charset)
++ 
++     async def __call__(self, scope, receive, send) -> None:
++         prefix = "websocket." if scope["type"] == "websocket" else ""
++         await send(
++             {
++                 "type": prefix + "http.response.start",
++                 "status": self.status_code,
++                 "headers": self.raw_headers,
++             }
++         )
++         await send({"type": prefix + "http.response.body", "body": self.body})
++ 
++         if self.background is not None:
++             await self.background()
++ 
++ 
++ class HTMLResponse(Response):
++     media_type = "text/html"
+*** Add File: starlette/routing.py
++ import asyncio
++ import typing
++ 
++ from starlette.requests import Request
++ from starlette.responses import Response
++ 
++ 
++ class Route:
++     def __init__(
++         self,
++         path: str,
++         endpoint: typing.Callable,
++         *,
++         methods: typing.List[str] = None,
++         name: str = None,
++     ) -> None:
++         self.path = path
++         self.endpoint = endpoint
++         self.methods = methods
++         self.name = name or endpoint.__name__
++ 
++     async def handle(self, scope, receive, send):
++         request = Request(scope, receive)
++         if asyncio.iscoroutinefunction(self.endpoint):
++             response = await self.endpoint(request)
++         else:
++             response = self.endpoint(request)
++         await response(scope, receive, send)
++ 
++     def matches(self, scope):
++         if scope["type"] == "http":
++             path = scope["path"]
++             if path == self.path:
++                 if self.methods is None or scope["method"] in self.methods:
++                     return True
++         return False
+*** Add File: starlette/applications.py
++ import typing
++ 
++ from starlette.requests import Request
++ from starlette.responses import Response
++ from starlette.routing import Route
++ 
++ 
++ class Starlette:
++     def __init__(
++         self,
++         routes: typing.List[Route] = None,
++     ) -> None:
++         self.routes = [] if routes is None else routes
++ 
++     async def __call__(self, scope, receive, send) -> None:
++         scope["app"] = self
++         if scope["type"] == "http":
++             for route in self.routes:
++                 if route.matches(scope):
++                     await route.handle(scope, receive, send)
++                     return
++             # 404
++             response = Response("Not Found", status_code=404)
++             await response(scope, receive, send)
+*** Add File: starlette/testclient.py
++ import io
++ import json
++ import typing
++ import asyncio
++ 
++ import requests
++ 
++ 
++ class _HeaderDict(requests.structures.CaseInsensitiveDict):
++     def get_all(self, key, default):
++         if key in self:
++             return [self[key]]
++         return default
++ 
++ 
++ class _MockOriginalResponse:
++     """
++     We have to jump through some hoops to present the response as if
++     it was made using urllib3.
++     """
++     def __init__(self, headers):
++         self.msg = _HeaderDict(headers)
++         self.closed = False
++ 
++     def isclosed(self):
++         return self.closed
++ 
++     def read(self, amt=None):
++         return b""
++ 
++ 
++ class _ASGIAdapter(requests.adapters.HTTPAdapter):
++     def __init__(self, app: typing.Callable) -> None:
++         self.app = app
++ 
++     def send(self, request, *args, **kwargs):
++         scheme, netloc, path, params, query, fragment = (
++             request.url.split("://", 1)[0],
++             *request.url.split("://", 1)[1].split("/", 1),
++             "",
++             "",
++             "",
++         )
++         # Simpler URL parsing
++         url = request.url
++         parsed = requests.utils.urlparse(url)
++         scheme = parsed.scheme
++         host = parsed.hostname
++         port = parsed.port
++         path = parsed.path or "/"
++         query_string = (parsed.query or "").encode("utf-8")
++ 
++         headers = [(k.lower().encode(), v.encode()) for k, v in request.headers.items()]
++ 
++         scope = {
++             "type": "http",
++             "asgi": {"version": "3.0"},
++             "http_version": "1.1",
++             "method": request.method,
++             "headers": headers,
++             "path": path,
++             "query_string": query_string,
++             "root_path": "",
++             "scheme": scheme,
++             "server": (host, port or (443 if scheme == "https" else 80)),
++             "extensions": {"http.response.template": {}},
++         }
++ 
++         status_code = None
++         response_headers = None
++         body_parts = []
++ 
++         async def receive():
++             return {"type": "http.request", "body": request.body or b""}
++ 
++         async def send_response(message):
++             nonlocal status_code, response_headers
++             if message["type"] == "http.response.start":
++                 status_code = message["status"]
++                 response_headers = [
++                     (k.decode("latin-1"), v.decode("latin-1"))
++                     for k, v in message.get("headers", [])
++                 ]
++             elif message["type"] == "http.response.body":
++                 body = message.get("body", b"")
++                 if body:
++                     body_parts.append(body)
++             # Ignore other message types like http.response.template
++ 
++         loop = asyncio.new_event_loop()
++         try:
++             loop.run_until_complete(self.app(scope, receive, send_response))
++         finally:
++             loop.close()
++ 
++         response = requests.models.Response()
++         response.status_code = status_code
++         response.headers = requests.structures.CaseInsensitiveDict(response_headers)
++         response._content = b"".join(body_parts)
++         return response
++ 
++ 
++ class TestClient(requests.Session):
++     def __init__(self, app: typing.Callable, base_url: str = "http://testserver") -> None:
++         super().__init__()
++         self.app = app
++         self.base_url = base_url
++         adapter = _ASGIAdapter(app)
++         self.mount("http://", adapter)
++         self.mount("https://", adapter)
++         self.mount("ws://", adapter)
++         self.mount("wss://", adapter)
+*** Add File: setup.py
++ from setuptools import setup, find_packages
++ 
++ setup(
++     name="starlette",
++     version="0.14.2",
++     packages=find_packages(),
++     install_requires=[
++         "jinja2",
++         "requests",
++     ],
++ )
+*** End Patch

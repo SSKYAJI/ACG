@@ -1,0 +1,238 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-12T05:48:27.679550Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "qwen/qwen3-coder-30b-a3b-instruct",
+    "tokens_planner_total": 29674,
+    "tokens_scope_review_total": 7780,
+    "tokens_planner_completion_total": 601,
+    "tokens_planner_method": "provider_usage",
+    "compile_wall_seconds": 9.5476,
+    "compile_cost_usd": 0.00224217
+  },
+  "repo": {
+    "root": "experiments/real_repos/starlette/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "python"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr3148-jinja2-autoescape",
+      "prompt": "Make Jinja2Templates use Jinja2's select_autoescape default when creating an environment from a template directory, while preserving caller-supplied environments and adding tests for escaping behavior.",
+      "predicted_writes": [
+        {
+          "path": "starlette/templating.py",
+          "confidence": 0.9,
+          "reason": "Task involves modifying Jinja2Templates behavior related to autoescape, which is defined in starlette/templating.py. Signals: bm25, llm, symbol. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "tests/test_templates.py",
+          "confidence": 0.85,
+          "reason": "Task requires adding tests for escaping behavior, and this file tests template-related functionality. Signals: bm25, hint, llm, testlink. Scope review kept this file at its existing tier."
+        }
+      ],
+      "allowed_paths": [
+        "starlette/templating.py",
+        "tests/test_templates.py"
+      ],
+      "candidate_context_paths": [
+        "tests/middleware/test_base.py",
+        "tests/test_responses.py",
+        "tests/test_routing.py",
+        "tests/test_websockets.py",
+        "tests/conftest.py",
+        "tests/middleware/test_cors.py",
+        "tests/middleware/test_errors.py",
+        "tests/middleware/test_gzip.py",
+        "tests/middleware/test_https_redirect.py",
+        "tests/middleware/test_session.py",
+        "tests/middleware/test_trusted_host.py"
+      ],
+      "file_scopes": [
+        {
+          "path": "starlette/templating.py",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "llm",
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "Task involves modifying Jinja2Templates behavior related to autoescape, which is defined in starlette/templating.py. Signals: bm25, llm, symbol. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "tests/test_templates.py",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "bm25",
+            "hint",
+            "llm",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Task requires adding tests for escaping behavior, and this file tests template-related functionality. Signals: bm25, hint, llm, testlink. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "tests/middleware/test_base.py",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "hint",
+            "pagerank",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "personalized PageRank rank #7, top symbol matches: aMiddleware, sleep_and_set, test_app_middleware_argument. Candidate context only; requires replan before write. Signals: hint, pagerank, testlink. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "tests/test_responses.py",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "hint",
+            "pagerank",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "personalized PageRank rank #5, top symbol matches: numbers_for_cleanup, test_bytes_response, test_delete_cookie. Candidate context only; requires replan before write. Signals: hint, pagerank, testlink. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "tests/test_routing.py",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "hint",
+            "pagerank",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "personalized PageRank rank #3, top symbol matches: disable_user, test_add_route_to_app_after_mount, test_base_route_middleware. Candidate context only; requires replan before write. Signals: hint, pagerank, testlink. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "tests/test_websockets.py",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "hint",
+            "pagerank",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "personalized PageRank rank #8, top symbol matches: test_additional_headers, test_application_close, test_client_close. Candidate context only; requires replan before write. Signals: hint, pagerank, testlink. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "tests/conftest.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "hint",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/testclient.py. Candidate context only; requires replan before write. Signals: hint, testlink. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "tests/middleware/test_cors.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "bm25",
+            "hint",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/requests.py. Candidate context only; requires replan before write. Signals: bm25, hint, testlink. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "tests/middleware/test_errors.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "hint",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/requests.py. Candidate context only; requires replan before write. Signals: hint, testlink. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "tests/middleware/test_gzip.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "hint",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/requests.py. Candidate context only; requires replan before write. Signals: hint, testlink. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "tests/middleware/test_https_redirect.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "hint",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/requests.py. Candidate context only; requires replan before write. Signals: hint, testlink. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "tests/middleware/test_session.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "hint",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/requests.py. Candidate context only; requires replan before write. Signals: hint, testlink. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "tests/middleware/test_trusted_host.py",
+          "tier": "candidate_context",
+          "score": 0.82,
+          "signals": [
+            "hint",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Test-source mapping: existing test imports or mentions source candidate starlette/requests.py. Candidate context only; requires replan before write. Signals: hint, testlink. Scope review requested a drop, but protected evidence kept it."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 2,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr3137-cors-credentials-origin",
+          "pr3166-session-middleware"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      },
+      {
+        "id": 2,
+        "tasks": [
+          "pr3148-jinja2-autoescape"
+        ],
+        "type": "serial",
+        "waits_for": [
+          1
+        ]
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

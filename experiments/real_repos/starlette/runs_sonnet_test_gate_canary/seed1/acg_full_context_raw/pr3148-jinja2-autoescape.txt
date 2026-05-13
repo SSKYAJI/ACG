@@ -1,0 +1,45 @@
+*** Begin Patch
+*** Update File: starlette/templating.py
+@@
+         if directory is not None:
+             loader = jinja2.FileSystemLoader(directory)
+-            self.env = jinja2.Environment(loader=loader)
++            self.env = jinja2.Environment(loader=loader, autoescape=jinja2.select_autoescape())
+         elif env is not None:  # pragma: no branch
+             self.env = env
+*** Update File: tests/test_templates.py
+@@
+ def test_templates_with_directory(tmpdir: Path) -> None:
+     path = os.path.join(tmpdir, "index.html")
+     with open(path, "w") as file:
+         file.write("Hello")
+
+     templates = Jinja2Templates(directory=str(tmpdir))
+     template = templates.get_template("index.html")
+     assert template.render({}) == "Hello"
++
++
++def test_templates_autoescape_enabled(tmpdir: Path) -> None:
++    path = os.path.join(tmpdir, "index.html")
++    with open(path, "w") as file:
++        file.write("<html>{{ name }}</html>")
++
++    templates = Jinja2Templates(directory=str(tmpdir))
++    template = templates.get_template("index.html")
++    assert template.render({"name": "<script>alert('xss')</script>"}) == (
++        "<html>&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;</html>"
++    )
++
++
++def test_templates_autoescape_disabled_with_env(tmpdir: Path) -> None:
++    path = os.path.join(tmpdir, "index.html")
++    with open(path, "w") as file:
++        file.write("<html>{{ name }}</html>")
++
++    env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(tmpdir)), autoescape=False)
++    templates = Jinja2Templates(env=env)
++    template = templates.get_template("index.html")
++    assert template.render({"name": "<script>alert('xss')</script>"}) == (
++        "<html><script>alert('xss')</script></html>"
++    )
+*** End Patch

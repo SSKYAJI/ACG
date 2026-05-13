@@ -1,0 +1,260 @@
+I'll analyze the task and create the necessary changes to make Jinja2Templates use Jinja2's `select_autoescape` by default.
+
+*** Begin Patch
+*** Add File: starlette/templating.py
++ import typing
++ 
++ from jinja2 import Environment, FileSystemLoader, select_autoescape
++ 
++ 
++ class Jinja2Templates:
++     """
++     templates = Jinja2Templates("templates")
++ 
++     return templates.TemplateResponse("index.html", {"request": request})
++     """
++ 
++     def __init__(
++         self,
++         directory: typing.Union[str, typing.Sequence[str], None] = None,
++         *,
++         env: typing.Optional[Environment] = None,
++     ) -> None:
++         if env is not None:
++             self.env = env
++         else:
++             assert directory is not None, "either 'directory' or 'env' argument must be passed"
++             self.env = self._create_env(directory)
++ 
++     def _create_env(
++         self,
++         directory: typing.Union[str, typing.Sequence[str]],
++     ) -> Environment:
++         loader = FileSystemLoader(directory)
++         env = Environment(
++             loader=loader,
++             autoescape=select_autoescape(),
++         )
++         return env
++ 
++     def get_template(self, name: str):  # type: ignore[no-untyped-def]
++         return self.env.get_template(name)
++ 
++     def TemplateResponse(
++         self,
++         name: str,
++         context: dict = None,  # type: ignore[assignment]
++         status_code: int = 200,
++         headers: dict = None,  # type: ignore[assignment]
++         media_type: str = None,  # type: ignore[assignment]
++         background=None,  # type: ignore[no-untyped-def]
++     ):  # type: ignore[no-untyped-def]
++         from starlette.responses import _TemplateResponse
++ 
++         if context is None:
++             context = {}
++         context.setdefault("request", None)
++         return _TemplateResponse(
++             self.env.get_template(name),
++             context,
++             status_code=status_code,
++             headers=headers,
++             media_type=media_type,
++             background=background,
++         )
+*** Add File: starlette/responses.py
++ import asyncio
++ import http.cookies
++ import json
++ import typing
++ 
++ 
++ class Response:
++     media_type = None
++     charset = "utf-8"
++ 
++     def __init__(
++         self,
++         content: typing.Any = None,
++         status_code: int = 200,
++         headers: dict = None,  # type: ignore[assignment]
++         media_type: str = None,  # type: ignore[assignment]
++         background=None,  # type: ignore[no-untyped-def]
++     ) -> None:
++         self.status_code = status_code
++         if headers is None:
++             raw_headers: typing.List[typing.Tuple[bytes, bytes]] = []
++             populate_content_length = True
++             populate_content_type = True
++         else:
++             raw_headers = [
++                 (k.lower().encode("latin-1"), v.encode("latin-1"))
++                 for k, v in headers.items()
++             ]
++             keys = [h[0] for h in raw_headers]
++             populate_content_length = b"content-length" not in keys
++             populate_content_type = b"content-type" not in keys
++ 
++         body = self.render(content)
++         if body is not None:
++             if populate_content_length:
++                 content_length = str(len(body))
++                 raw_headers.append((b"content-length", content_length.encode("latin-1")))
++             if populate_content_type:
++                 content_type = self.media_type or "text/plain"
++                 if content_type.startswith("text/") and "charset=" not in content_type:
++                     content_type += "; charset=" + self.charset
++                 raw_headers.append((b"content-type", content_type.encode("latin-1")))
++ 
++         self.body = body
++         self.background = background
++         self.raw_headers = raw_headers
++ 
++     def render(self, content: typing.Any) -> typing.Optional[bytes]:
++         if content is None:
++             return None
++         if isinstance(content, bytes):
++             return content
++         return content.encode(self.charset)
++ 
++     async def __call__(self, scope, receive, send):  # type: ignore[no-untyped-def]
++         prefix = "websocket" if scope["type"] == "websocket" else "http"
++         await send(
++             {
++                 "type": prefix + ".response.start",
++                 "status": self.status_code,
++                 "headers": self.raw_headers,
++             }
++         )
++         await send({"type": prefix + ".response.body", "body": self.body or b""})
++         if self.background is not None:
++             await self.background()
++ 
++ 
++ class HTMLResponse(Response):
++     media_type = "text/html"
++ 
++ 
++ class _TemplateResponse(HTMLResponse):
++     def __init__(
++         self,
++         template,  # type: ignore[no-untyped-def]
++         context: dict,
++         status_code: int = 200,
++         headers: dict = None,  # type: ignore[assignment]
++         media_type: str = None,  # type: ignore[assignment]
++         background=None,  # type: ignore[no-untyped-def]
++     ) -> None:
++         self.template = template
++         self.context = context
++         content = template.render(context)
++         super().__init__(content, status_code, headers, media_type, background)
+*** Add File: tests/__init__.py
+*** Add File: tests/test_templating.py
++ import pytest
++ from jinja2 import Environment, FileSystemLoader
++ 
++ from starlette.templating import Jinja2Templates
++ 
++ 
++ def test_templates_with_directory(tmp_path):
++     # Create a simple template file
++     template_dir = tmp_path / "templates"
++     template_dir.mkdir()
++     (template_dir / "index.html").write_text("<h1>Hello {{ name }}</h1>")
++ 
++     templates = Jinja2Templates(directory=str(template_dir))
++     tmpl = templates.get_template("index.html")
++     result = tmpl.render({"name": "World"})
++     assert result == "<h1>Hello World</h1>"
++ 
++ 
++ def test_templates_autoescape_enabled_by_default(tmp_path):
++     """
++     When creating templates from a directory, select_autoescape() should be used,
++     which enables autoescape for HTML/XML files by default.
++     """
++     template_dir = tmp_path / "templates"
++     template_dir.mkdir()
++     (template_dir / "index.html").write_text("<h1>Hello {{ name }}</h1>")
++ 
++     templates = Jinja2Templates(directory=str(template_dir))
++     tmpl = templates.get_template("index.html")
++     # Malicious input should be escaped
++     result = tmpl.render({"name": "<script>alert('xss')</script>"})
++     assert "<script>" not in result
++     assert "&lt;script&gt;" in result
++ 
++ 
++ def test_templates_autoescape_escapes_html_entities(tmp_path):
++     """
++     HTML special characters should be escaped when autoescape is enabled.
++     """
++     template_dir = tmp_path / "templates"
++     template_dir.mkdir()
++     (template_dir / "page.html").write_text("<p>{{ content }}</p>")
++ 
++     templates = Jinja2Templates(directory=str(template_dir))
++     tmpl = templates.get_template("page.html")
++     result = tmpl.render({"content": "<b>bold</b> & 'quotes' & \"double\""})
++     assert "<b>" not in result
++     assert "&lt;b&gt;" in result
++     assert "&amp;" in result
++ 
++ 
++ def test_templates_with_caller_supplied_env(tmp_path):
++     """
++     When a caller supplies an Environment, it should be used as-is without
++     modification (including its autoescape setting).
++     """
++     template_dir = tmp_path / "templates"
++     template_dir.mkdir()
++     (template_dir / "index.html").write_text("<h1>Hello {{ name }}</h1>")
++ 
++     # Create an environment with autoescape disabled
++     env = Environment(
++         loader=FileSystemLoader(str(template_dir)),
++         autoescape=False,
++     )
++     templates = Jinja2Templates(env=env)
++     tmpl = templates.get_template("index.html")
++     # With autoescape=False, HTML should NOT be escaped
++     result = tmpl.render({"name": "<script>alert('xss')</script>"})
++     assert "<script>" in result
++ 
++ 
++ def test_templates_caller_supplied_env_is_preserved(tmp_path):
++     """
++     The caller-supplied environment object should be the same object stored.
++     """
++     template_dir = tmp_path / "templates"
++     template_dir.mkdir()
++ 
++     env = Environment(loader=FileSystemLoader(str(template_dir)))
++     templates = Jinja2Templates(env=env)
++     assert templates.env is env
++ 
++ 
++ def test_templates_requires_directory_or_env():
++     """
++     If neither directory nor env is provided, an AssertionError should be raised.
++     """
++     with pytest.raises(AssertionError):
++         Jinja2Templates()
++ 
++ 
++ def test_templates_autoescape_not_applied_to_txt_files(tmp_path):
++     """
++     select_autoescape() by default only enables autoescape for html and xml files.
++     Text files should not have autoescape enabled.
++     """
++     template_dir = tmp_path / "templates"
++     template_dir.mkdir()
++     (template_dir / "email.txt").write_text("Hello {{ name }}")
++ 
++     templates = Jinja2Templates(directory=str(template_dir))
++     tmpl = templates.get_template("email.txt")
++     # For .txt files, autoescape should NOT be active by default
++     result = tmpl.render({"name": "<b>World</b>"})
++     assert "<b>World</b>" in result
+*** End Patch

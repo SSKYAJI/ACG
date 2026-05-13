@@ -1,0 +1,141 @@
+*** Begin Patch
+*** Add File: tests/test_sessions.py
+import pytest
+from starlette.applications import Starlette
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Route
+from starlette.testclient import TestClient
+
+
+def view_session(request: Request):
+    return JSONResponse({"session": request.session})
+
+
+async def update_session(request: Request):
+    data = await request.json()
+    request.session.update(data)
+    return JSONResponse({"session": request.session})
+
+
+async def clear_session(request: Request):
+    request.session.clear()
+    return JSONResponse({"session": request.session})
+
+
+def create_app():
+    app = Starlette(
+        routes=[
+            Route("/view", endpoint=view_session),
+            Route("/update", endpoint=update_session, methods=["POST"]),
+            Route("/clear", endpoint=clear_session),
+        ]
+    )
+    app.add_middleware(SessionMiddleware, secret_key="example")
+    return app
+
+
+def test_session(test_client_factory):
+    app = create_app()
+    client = test_client_factory(app)
+
+    response = client.post("/update", json={"username": "tom"})
+    assert response.json() == {"session": {"username": "tom"}}
+    assert "set-cookie" in response.headers
+
+    response = client.get("/view")
+    assert response.json() == {"session": {"username": "tom"}}
+
+    response = client.get("/clear")
+    assert response.json() == {"session": {}}
+
+
+def test_session_expires(test_client_factory):
+    app = create_app()
+    client = test_client_factory(app)
+
+    response = client.post("/update", json={"username": "tom"})
+    assert response.status_code == 200
+
+    # Manually expire the cookie
+    client.cookies.clear()
+    response = client.get("/view")
+    assert response.json() == {"session": {}}
+
+
+def test_session_cookie_not_set_for_read_only(test_client_factory):
+    """
+    If the session is only read (not mutated), no Set-Cookie header should be sent
+    for a request that had no session cookie to begin with.
+    """
+    app = create_app()
+    client = test_client_factory(app, raise_server_exceptions=True)
+
+    # First request: no session cookie, just view (read-only)
+    response = client.get("/view")
+    assert response.json() == {"session": {}}
+    # No Set-Cookie should be sent since session was empty and unchanged
+    assert "set-cookie" not in response.headers
+
+
+def test_session_cookie_set_after_mutation(test_client_factory):
+    """
+    Set-Cookie should be sent when session is mutated.
+    """
+    app = create_app()
+    client = test_client_factory(app)
+
+    response = client.post("/update", json={"key": "value"})
+    assert "set-cookie" in response.headers
+
+
+def test_session_cookie_cleared(test_client_factory):
+    """
+    When session is cleared after having data, a delete cookie should be sent.
+    """
+    app = create_app()
+    client = test_client_factory(app)
+
+    # Set session data
+    client.post("/update", json={"key": "value"})
+
+    # Clear session
+    response = client.get("/clear")
+    assert "set-cookie" in response.headers
+    # The cookie should be expired
+    assert "Max-Age=0" in response.headers["set-cookie"]
+
+
+def test_session_read_only_with_existing_cookie(test_client_factory):
+    """
+    If the session is read but not mutated, and there was an existing cookie,
+    we should still refresh the cookie (to reset expiry).
+    """
+    app = create_app()
+    client = test_client_factory(app)
+
+    # Set session data
+    client.post("/update", json={"key": "value"})
+
+    # Read-only access - cookie should still be refreshed
+    response = client.get("/view")
+    assert response.json() == {"session": {"key": "value"}}
+    # Cookie should be refreshed since session was non-empty
+    assert "set-cookie" in response.headers
+
+
+def test_https_session(test_client_factory):
+    app = Starlette(
+        routes=[
+            Route("/update", endpoint=update_session, methods=["POST"]),
+            Route("/view", endpoint=view_session),
+        ]
+    )
+    app.add_middleware(
+        SessionMiddleware, secret_key="example", https_only=True
+    )
+    client = test_client_factory(app, base_url="https://testserver")
+    response = client.post("/update", json={"username": "tom"})
+    assert "secure" in response.headers["set-cookie"]
+*** End Patch

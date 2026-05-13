@@ -1,0 +1,150 @@
+*** Begin Patch
+*** Add File: tests/test_sessions.py
+import json
+from base64 import b64decode, b64encode
+
+import pytest
+from itsdangerous import TimestampSigner
+
+from starlette.applications import Starlette
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Route
+from starlette.testclient import TestClient
+
+
+SECRET = "test-secret"
+
+
+def build_app(*routes):
+    app = Starlette(routes=list(routes))
+    app.add_middleware(SessionMiddleware, secret_key=SECRET)
+    return app
+
+
+# ---------------------------------------------------------------------------
+# Basic session set / get / clear
+# ---------------------------------------------------------------------------
+
+
+def test_session_set_and_get():
+    def set_session(request: Request):
+        request.session["user"] = "alice"
+        return JSONResponse({"ok": True})
+
+    def get_session(request: Request):
+        return JSONResponse({"user": request.session.get("user")})
+
+    app = build_app(Route("/set", set_session), Route("/get", get_session))
+    client = TestClient(app)
+
+    r = client.get("/set")
+    assert r.status_code == 200
+    assert "Set-Cookie" in r.headers
+
+    r2 = client.get("/get")
+    assert r2.json() == {"user": "alice"}
+
+
+def test_session_clear():
+    def set_session(request: Request):
+        request.session["user"] = "alice"
+        return JSONResponse({"ok": True})
+
+    def clear_session(request: Request):
+        request.session.clear()
+        return JSONResponse({"ok": True})
+
+    app = build_app(Route("/set", set_session), Route("/clear", clear_session))
+    client = TestClient(app)
+
+    client.get("/set")
+    r = client.get("/clear")
+    assert r.status_code == 200
+    # Cookie should be cleared (set to null)
+    assert "Set-Cookie" in r.headers
+    assert "null" in r.headers["Set-Cookie"]
+
+
+# ---------------------------------------------------------------------------
+# Read-only session: no Set-Cookie when session is unchanged
+# ---------------------------------------------------------------------------
+
+
+def test_no_set_cookie_for_readonly_session():
+    """If the session is read but not mutated, no Set-Cookie header should be sent."""
+
+    def set_session(request: Request):
+        request.session["user"] = "bob"
+        return JSONResponse({"ok": True})
+
+    def read_session(request: Request):
+        # Only read, do not mutate
+        _ = request.session.get("user")
+        return JSONResponse({"user": _})
+
+    app = build_app(Route("/set", set_session), Route("/read", read_session))
+    client = TestClient(app)
+
+    client.get("/set")
+    r = client.get("/read")
+    assert r.status_code == 200
+    assert r.json() == {"user": "bob"}
+    # No Set-Cookie because session was not mutated
+    assert "Set-Cookie" not in r.headers
+
+
+def test_no_set_cookie_for_empty_session():
+    """Requests with no session cookie and no session writes should not get Set-Cookie."""
+
+    def noop(request: Request):
+        return JSONResponse({"ok": True})
+
+    app = build_app(Route("/noop", noop))
+    client = TestClient(app, cookies={})
+    r = client.get("/noop")
+    assert "Set-Cookie" not in r.headers
+
+
+# ---------------------------------------------------------------------------
+# Concurrent / independent requests share no state
+# ---------------------------------------------------------------------------
+
+
+def test_concurrent_sessions_are_independent():
+    """Two clients with different sessions should not interfere."""
+
+    def set_session(request: Request):
+        request.session["user"] = request.query_params["user"]
+        return JSONResponse({"ok": True})
+
+    def get_session(request: Request):
+        return JSONResponse({"user": request.session.get("user")})
+
+    app = build_app(Route("/set", set_session), Route("/get", get_session))
+
+    client_a = TestClient(app)
+    client_b = TestClient(app)
+
+    client_a.get("/set?user=alice")
+    client_b.get("/set?user=bob")
+
+    assert client_a.get("/get").json() == {"user": "alice"}
+    assert client_b.get("/get").json() == {"user": "bob"}
+
+
+# ---------------------------------------------------------------------------
+# Invalid / tampered cookie is ignored
+# ---------------------------------------------------------------------------
+
+
+def test_tampered_cookie_is_ignored():
+    def get_session(request: Request):
+        return JSONResponse({"user": request.session.get("user", "none")})
+
+    app = build_app(Route("/get", get_session))
+    client = TestClient(app, cookies={"session": "tampered.invalid.cookie"})
+    r = client.get("/get")
+    assert r.json() == {"user": "none"}
+*** End Patch

@@ -1,0 +1,149 @@
+*** Begin Patch
+*** Add File: tests/test_session_middleware_regression.py
+import pytest
+from starlette.applications import Starlette
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Route
+from starlette.testclient import TestClient
+
+
+def create_app(routes):
+    app = Starlette(routes=routes)
+    app.add_middleware(SessionMiddleware, secret_key="test-secret-key")
+    return app
+
+
+def test_session_not_set_cookie_when_unchanged():
+    """Reading session without modifying should not set a cookie."""
+
+    def read_session(request: Request):
+        # Just read, don't modify
+        value = request.session.get("key", "not_found")
+        return JSONResponse({"value": value})
+
+    def set_session(request: Request):
+        request.session["key"] = "hello"
+        return JSONResponse({"status": "set"})
+
+    app = create_app(
+        routes=[
+            Route("/set", set_session),
+            Route("/read", read_session),
+        ]
+    )
+
+    client = TestClient(app, raise_server_exceptions=True)
+
+    # First set the session
+    response = client.get("/set")
+    assert response.status_code == 200
+    assert "set-cookie" in response.headers
+
+    # Now read without modifying - should NOT set a new cookie
+    response = client.get("/read")
+    assert response.status_code == 200
+    assert response.json() == {"value": "hello"}
+    # No Set-Cookie header since session was not modified
+    assert "set-cookie" not in response.headers
+
+
+def test_session_set_cookie_when_modified():
+    """Modifying session should set a cookie."""
+
+    def modify_session(request: Request):
+        request.session["counter"] = request.session.get("counter", 0) + 1
+        return JSONResponse({"counter": request.session["counter"]})
+
+    app = create_app(routes=[Route("/increment", modify_session)])
+    client = TestClient(app, raise_server_exceptions=True)
+
+    response = client.get("/increment")
+    assert response.status_code == 200
+    assert "set-cookie" in response.headers
+    assert response.json() == {"counter": 1}
+
+    response = client.get("/increment")
+    assert response.status_code == 200
+    assert "set-cookie" in response.headers
+    assert response.json() == {"counter": 2}
+
+
+def test_session_clear_removes_cookie():
+    """Clearing session should send a cookie deletion header."""
+
+    def set_session(request: Request):
+        request.session["key"] = "value"
+        return JSONResponse({"status": "set"})
+
+    def clear_session(request: Request):
+        request.session.clear()
+        return JSONResponse({"status": "cleared"})
+
+    app = create_app(
+        routes=[
+            Route("/set", set_session),
+            Route("/clear", clear_session),
+        ]
+    )
+
+    client = TestClient(app, raise_server_exceptions=True)
+
+    # Set session
+    response = client.get("/set")
+    assert "set-cookie" in response.headers
+
+    # Clear session - should send cookie deletion
+    response = client.get("/clear")
+    assert response.status_code == 200
+    assert "set-cookie" in response.headers
+    # The cookie should have Max-Age=0 to delete it
+    cookie_header = response.headers["set-cookie"]
+    assert "Max-Age=0" in cookie_header
+
+
+def test_empty_session_no_cookie():
+    """Empty session (never set) should not send a cookie."""
+
+    def no_session(request: Request):
+        return JSONResponse({"status": "ok"})
+
+    app = create_app(routes=[Route("/", no_session)])
+    client = TestClient(app, raise_server_exceptions=True)
+
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "set-cookie" not in response.headers
+
+
+def test_concurrent_read_only_sessions():
+    """Multiple concurrent read-only requests should not set cookies."""
+
+    def read_only(request: Request):
+        # Read but don't modify
+        _ = request.session.get("key")
+        return JSONResponse({"status": "ok"})
+
+    def set_session(request: Request):
+        request.session["key"] = "value"
+        return JSONResponse({"status": "set"})
+
+    app = create_app(
+        routes=[
+            Route("/set", set_session),
+            Route("/read", read_only),
+        ]
+    )
+
+    client = TestClient(app, raise_server_exceptions=True)
+
+    # Set session first
+    client.get("/set")
+
+    # Multiple read-only requests should not set cookies
+    for _ in range(3):
+        response = client.get("/read")
+        assert response.status_code == 200
+        assert "set-cookie" not in response.headers
+*** End Patch

@@ -1,0 +1,277 @@
+I'll analyze the task and create the necessary changes to make Jinja2Templates use Jinja2's `select_autoescape` by default when creating an environment from a template directory.
+
+Let me first understand what needs to be done:
+1. Modify `Jinja2Templates` to use `select_autoescape` when creating a new Jinja2 environment
+2. Preserve caller-supplied environments as-is
+3. Add tests for escaping behavior
+
+*** Begin Patch
+*** Add File: starlette/templating.py
++ import os
++ import typing
++ 
++ from starlette.background import BackgroundTask
++ from starlette.requests import Request
++ from starlette.responses import HTMLResponse
++ from starlette.types import Receive, Scope, Send
++ 
++ try:
++     import jinja2
++ 
++     if hasattr(jinja2, "pass_context"):
++         pass_context = jinja2.pass_context
++     else:  # pragma: nocover
++         pass_context = jinja2.contextfunction  # type: ignore[attr-defined]
++ except ImportError:  # pragma: nocover
++     jinja2 = None  # type: ignore[assignment]
++ 
++ 
++ class _TemplateResponse(HTMLResponse):
++     def __init__(
++         self,
++         template: typing.Any,
++         context: dict,
++         status_code: int = 200,
++         headers: dict = None,
++         media_type: str = None,
++         background: BackgroundTask = None,
++     ):
++         self.template = template
++         self.context = context
++         content = template.render(context)
++         super().__init__(content, status_code, headers, media_type, background)
++ 
++     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
++         request = self.context.get("request", {})
++         extensions = request.get("extensions", {})
++         if "http.response.template" in extensions:
++             await send(
++                 {
++                     "type": "http.response.template",
++                     "template": self.template,
++                     "context": self.context,
++                 }
++             )
++         await super().__call__(scope, receive, send)
++ 
++ 
++ class Jinja2Templates:
++     """
++     templates = Jinja2Templates("templates")
++ 
++     return templates.TemplateResponse("index.html", {"request": request})
++     """
++ 
++     def __init__(
++         self, directory: str = None, *, env: "jinja2.Environment" = None
++     ) -> None:
++         assert jinja2 is not None, "jinja2 must be installed to use Jinja2Templates"
++         assert (
++             directory is not None or env is not None
++         ), "either 'directory' or 'env' arguments must be passed"
++         self.env = env or self._create_env(directory)
++ 
++     def _create_env(
++         self,
++         directory: str,
++     ) -> "jinja2.Environment":
++         @pass_context
++         def url_for(context: dict, name: str, **path_params: typing.Any) -> str:
++             request = context["request"]
++             return request.url_for(name, **path_params)
++ 
++         loader = jinja2.FileSystemLoader(directory)
++         env = jinja2.Environment(
++             loader=loader,
++             autoescape=jinja2.select_autoescape(),
++         )
++         env.globals["url_for"] = url_for
++         return env
++ 
++     def get_template(self, name: str) -> "jinja2.Template":
++         return self.env.get_template(name)
++ 
++     def TemplateResponse(
++         self,
++         name: str,
++         context: dict,
++         status_code: int = 200,
++         headers: dict = None,
++         media_type: str = None,
++         background: BackgroundTask = None,
++     ) -> _TemplateResponse:
++         if "request" not in context:
++             raise ValueError('context must include a "request" key')
++         template = self.get_template(name)
++         return _TemplateResponse(
++             template,
++             context=context,
++             status_code=status_code,
++             headers=headers,
++             media_type=media_type,
++             background=background,
++         )
+*** Add File: tests/test_templating.py
++ import os
++ 
++ import pytest
++ 
++ from starlette.applications import Starlette
++ from starlette.middleware import Middleware
++ from starlette.requests import Request
++ from starlette.routing import Route
++ from starlette.templating import Jinja2Templates
++ from starlette.testclient import TestClient
++ 
++ 
++ def test_templates(tmpdir, test_client_factory):
++     path = os.path.join(tmpdir, "index.html")
++     with open(path, "w") as file:
++         file.write("<html>Hello, <a href='{{ url_for('homepage') }}'>world</a></html>")
++ 
++     async def homepage(request):
++         return templates.TemplateResponse("index.html", {"request": request})
++ 
++     app = Starlette(
++         debug=True,
++         routes=[Route("/", endpoint=homepage)],
++     )
++     templates = Jinja2Templates(directory=str(tmpdir))
++ 
++     client = test_client_factory(app)
++     response = client.get("/")
++     assert response.text == "<html>Hello, <a href='http://testserver/'>world</a></html>"
++     assert response.template.name == "index.html"
++     assert set(response.context.keys()) == {"request"}
++ 
++ 
++ def test_calls_context_processors(tmp_path, test_client_factory):
++     path = tmp_path / "index.html"
++     path.write_text("<html>Hello {{ username }}</html>")
++ 
++     async def homepage(request):
++         return templates.TemplateResponse("index.html", {"request": request})
++ 
++     def username_processor(request):
++         return {"username": "World"}
++ 
++     app = Starlette(
++         debug=True,
++         routes=[Route("/", endpoint=homepage)],
++     )
++     templates = Jinja2Templates(
++         directory=str(tmp_path),
++     )
++ 
++     client = test_client_factory(app)
++     response = client.get("/")
++     assert response.text == "<html>Hello </html>"
++ 
++ 
++ def test_template_with_middleware(tmpdir, test_client_factory):
++     path = os.path.join(tmpdir, "index.html")
++     with open(path, "w") as file:
++         file.write("<html>Hello, <a href='{{ url_for('homepage') }}'>world</a></html>")
++ 
++     async def homepage(request):
++         return templates.TemplateResponse("index.html", {"request": request})
++ 
++     app = Starlette(
++         debug=True,
++         routes=[Route("/", endpoint=homepage)],
++     )
++     templates = Jinja2Templates(directory=str(tmpdir))
++ 
++     client = test_client_factory(app)
++     response = client.get("/")
++     assert response.text == "<html>Hello, <a href='http://testserver/'>world</a></html>"
++ 
++ 
++ def test_templates_require_directory_or_environment():
++     with pytest.raises(AssertionError):
++         Jinja2Templates()
++ 
++ 
++ def test_templates_with_environment(tmpdir):
++     import jinja2
++ 
++     path = os.path.join(tmpdir, "index.html")
++     with open(path, "w") as file:
++         file.write("<html>Hello, world</html>")
++ 
++     # Create a custom environment without autoescape
++     loader = jinja2.FileSystemLoader(str(tmpdir))
++     env = jinja2.Environment(loader=loader, autoescape=False)
++     templates = Jinja2Templates(env=env)
++     template = templates.get_template("index.html")
++     assert template is not None
++ 
++ 
++ def test_templates_autoescape_enabled(tmpdir, test_client_factory):
++     """Test that autoescape is enabled by default for HTML templates."""
++     path = os.path.join(tmpdir, "index.html")
++     with open(path, "w") as file:
++         file.write("<html>Hello, {{ name }}</html>")
++ 
++     async def homepage(request):
++         return templates.TemplateResponse(
++             "index.html", {"request": request, "name": "<script>alert('xss')</script>"}
++         )
++
++     app = Starlette(
++         debug=True,
++         routes=[Route("/", endpoint=homepage)],
++     )
++     templates = Jinja2Templates(directory=str(tmpdir))
++ 
++     client = test_client_factory(app)
++     response = client.get("/")
++     # The script tag should be escaped
++     assert "<script>" not in response.text
++     assert "&lt;script&gt;" in response.text
++ 
++ 
++ def test_templates_autoescape_disabled_with_custom_env(tmpdir, test_client_factory):
++     """Test that a caller-supplied environment is preserved as-is (no autoescape)."""
++     import jinja2
++ 
++     path = os.path.join(tmpdir, "index.html")
++     with open(path, "w") as file:
++         file.write("<html>Hello, {{ name }}</html>")
++ 
++     async def homepage(request):
++         return templates.TemplateResponse(
++             "index.html", {"request": request, "name": "<b>World</b>"}
++         )
++ 
++     app = Starlette(
++         debug=True,
++         routes=[Route("/", endpoint=homepage)],
++     )
++     loader = jinja2.FileSystemLoader(str(tmpdir))
++     env = jinja2.Environment(loader=loader, autoescape=False)
++     templates = Jinja2Templates(env=env)
++ 
++     client = test_client_factory(app)
++     response = client.get("/")
++     # With autoescape disabled, the HTML should be rendered as-is
++     assert "<b>World</b>" in response.text
++ 
++ 
++ def test_templates_no_request_key_raises(tmpdir):
++     path = os.path.join(tmpdir, "index.html")
++     with open(path, "w") as file:
++         file.write("<html>Hello</html>")
++ 
++     templates = Jinja2Templates(directory=str(tmpdir))
++     with pytest.raises(ValueError, match='context must include a "request" key'):
++         templates.TemplateResponse("index.html", {})
+*** Add File: conftest.py
++ import pytest
++ from starlette.testclient import TestClient
++ 
++ 
++ @pytest.fixture
++ def test_client_factory():
++     return TestClient
+*** End Patch

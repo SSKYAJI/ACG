@@ -1,0 +1,265 @@
+I'll analyze the task and create the necessary changes to make Jinja2Templates use Jinja2's `select_autoescape` by default when creating an environment from a template directory.
+
+Let me first understand what needs to be done:
+1. Modify `Jinja2Templates` to use `select_autoescape` when creating a new Jinja2 environment
+2. Preserve caller-supplied environments as-is
+3. Add tests for escaping behavior
+
+*** Begin Patch
+*** Add File: starlette/templating.py
++ import typing
++ 
++ from starlette.background import BackgroundTask
++ from starlette.requests import Request
++ from starlette.responses import HTMLResponse
++ 
++ try:
++     import jinja2
++ 
++     # Jinja2 3.x has select_autoescape
++     if hasattr(jinja2, "select_autoescape"):
++         from jinja2 import select_autoescape
++     else:
++         select_autoescape = None  # type: ignore[assignment]
++ except ImportError:  # pragma: nocover
++     jinja2 = None  # type: ignore[assignment]
++     select_autoescape = None  # type: ignore[assignment]
++ 
++ 
++ class _TemplateResponse(HTMLResponse):
++     def __init__(
++         self,
++         template: typing.Any,
++         context: dict,
++         status_code: int = 200,
++         headers: dict = None,
++         media_type: str = None,
++         background: BackgroundTask = None,
++     ):
++         self.template = template
++         self.context = context
++         content = template.render(context)
++         super().__init__(content, status_code, headers, media_type, background)
++ 
++     async def __call__(self, scope, receive, send) -> None:
++         request = self.context.get("request", {})
++         extensions = getattr(request, "extensions", None) or {}
++         if "http.response.debug" in extensions:
++             await send(
++                 {
++                     "type": "http.response.debug",
++                     "info": {
++                         "template": self.template,
++                         "context": self.context,
++                     },
++                 }
++             )
++         await super().__call__(scope, receive, send)
++ 
++ 
++ class Jinja2Templates:
++     """
++     templates = Jinja2Templates("templates")
++ 
++     return templates.TemplateResponse("index.html", {"request": request})
++     """
++ 
++     def __init__(
++         self, directory: str = None, *, env: "jinja2.Environment" = None
++     ) -> None:
++         assert jinja2 is not None, "jinja2 must be installed to use Jinja2Templates"
++         assert (
++             directory is not None or env is not None
++         ), "either 'directory' or 'env' argument must be passed"
++         assert (
++             directory is None or env is None
++         ), "either 'directory' or 'env' argument must be passed, not both"
++         if directory is not None:
++             self._setup_env_defaults(directory)
++         else:
++             self.env = env
++ 
++     def _setup_env_defaults(self, directory: str) -> None:
++         if select_autoescape is not None:
++             autoescape = select_autoescape(["html", "xml"])
++         else:
++             autoescape = True  # type: ignore[assignment]
++         self.env = jinja2.Environment(
++             loader=jinja2.FileSystemLoader(directory),
++             autoescape=autoescape,
++         )
++ 
++     def get_template(self, name: str) -> "jinja2.Template":
++         return self.env.get_template(name)
++ 
++     def TemplateResponse(
++         self,
++         name: str,
++         context: dict,
++         status_code: int = 200,
++         headers: dict = None,
++         media_type: str = None,
++         background: BackgroundTask = None,
++     ) -> _TemplateResponse:
++         if "request" not in context:
++             raise ValueError('context must include a "request" key')
++         template = self.get_template(name)
++         return _TemplateResponse(
++             template,
++             context=context,
++             status_code=status_code,
++             headers=headers,
++             media_type=media_type,
++             background=background,
++         )
+*** Add File: tests/test_templating.py
++ import os
++ 
++ import pytest
++ 
++ from starlette.applications import Starlette
++ from starlette.requests import Request
++ from starlette.routing import Route
++ from starlette.templating import Jinja2Templates
++ from starlette.testclient import TestClient
++ 
++ 
++ @pytest.fixture
++ def template_dir(tmp_path):
++     return tmp_path
++ 
++ 
++ def test_templates(template_dir, test_client_factory):
++     path = os.path.join(template_dir, "index.html")
++     with open(path, "w") as f:
++         f.write("<html>Hello, <a href='{{ url }}'>world</a></html>")
++ 
++     async def homepage(request):
++         return templates.TemplateResponse(
++             "index.html", {"request": request, "url": "https://example.org"}
++         )
++ 
++     app = Starlette(
++         routes=[Route("/", endpoint=homepage)],
++     )
++     templates = Jinja2Templates(directory=str(template_dir))
++ 
++     client = test_client_factory(app)
++     response = client.get("/")
++     assert response.text == "<html>Hello, <a href='https://example.org'>world</a></html>"
++     assert response.status_code == 200
++ 
++ 
++ def test_template_autoescape_html(template_dir, test_client_factory):
++     """Test that HTML templates have autoescaping enabled by default."""
++     path = os.path.join(template_dir, "index.html")
++     with open(path, "w") as f:
++         f.write("<html>{{ dangerous }}</html>")
++ 
++     async def homepage(request):
++         return templates.TemplateResponse(
++             "index.html",
++             {"request": request, "dangerous": "<script>alert('xss')</script>"},
++         )
++
++     app = Starlette(
++         routes=[Route("/", endpoint=homepage)],
++     )
++     templates = Jinja2Templates(directory=str(template_dir))
++ 
++     client = test_client_factory(app)
++     response = client.get("/")
++     assert "<script>" not in response.text
++     assert "&lt;script&gt;" in response.text
++ 
++ 
++ def test_template_no_autoescape_txt(template_dir, test_client_factory):
++     """Test that non-HTML templates do not have autoescaping enabled by default."""
++     path = os.path.join(template_dir, "index.txt")
++     with open(path, "w") as f:
++         f.write("{{ content }}")
++ 
++     async def homepage(request):
++         return templates.TemplateResponse(
++             "index.txt",
++             {"request": request, "content": "<b>bold</b>"},
++         )
++ 
++     app = Starlette(
++         routes=[Route("/", endpoint=homepage)],
++     )
++     templates = Jinja2Templates(directory=str(template_dir))
++ 
++     client = test_client_factory(app)
++     response = client.get("/")
++     assert response.text == "<b>bold</b>"
++ 
++ 
++ def test_templates_with_custom_env(template_dir, test_client_factory):
++     """Test that a caller-supplied environment is used as-is."""
++     import jinja2
++ 
++     path = os.path.join(template_dir, "index.html")
++     with open(path, "w") as f:
++         f.write("<html>{{ content }}</html>")
++ 
++     # Create env with autoescape disabled
++     env = jinja2.Environment(
++         loader=jinja2.FileSystemLoader(str(template_dir)),
++         autoescape=False,
++     )
++ 
++     async def homepage(request):
++         return templates.TemplateResponse(
++             "index.html",
++             {"request": request, "content": "<b>bold</b>"},
++         )
++ 
++     app = Starlette(
++         routes=[Route("/", endpoint=homepage)],
++     )
++     templates = Jinja2Templates(env=env)
++ 
++     client = test_client_factory(app)
++     response = client.get("/")
++     # Since autoescape is disabled in the custom env, raw HTML should appear
++     assert response.text == "<html><b>bold</b></html>"
++ 
++ 
++ def test_templates_require_directory_or_env():
++     """Test that Jinja2Templates requires either directory or env."""
++     with pytest.raises(AssertionError):
++         Jinja2Templates()
++ 
++ 
++ def test_templates_reject_both_directory_and_env(template_dir):
++     """Test that Jinja2Templates rejects both directory and env."""
++     import jinja2
++ 
++     env = jinja2.Environment(
++         loader=jinja2.FileSystemLoader(str(template_dir)),
++     )
++     with pytest.raises(AssertionError):
++         Jinja2Templates(directory=str(template_dir), env=env)
++ 
++ 
++ def test_template_context_missing_request(template_dir):
++     """Test that TemplateResponse raises ValueError if request not in context."""
++     path = os.path.join(template_dir, "index.html")
++     with open(path, "w") as f:
++         f.write("<html></html>")
++ 
++     templates = Jinja2Templates(directory=str(template_dir))
++     with pytest.raises(ValueError):
++         templates.TemplateResponse("index.html", {})
+*** Add File: conftest.py
++ import pytest
++ from starlette.testclient import TestClient
++ 
++ 
++ @pytest.fixture
++ def test_client_factory():
++     def factory(app, **kwargs):
++         return TestClient(app, **kwargs)
++     return factory
+*** End Patch
