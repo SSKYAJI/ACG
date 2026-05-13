@@ -15,9 +15,3 @@ export const LINKS = {
 
   demoVideoEmbed: "https://www.youtube.com/embed/dQw4w9WgXcQ",
 } as const;
-
-/** Fixed assumption for scoped vs naive token math (no slider). */
-export const CALCULATOR_FIXED_REDUCTION = 0.38;
-
-/** Baseline planner tokens per task when only the task count slider is shown. */
-export const CALCULATOR_FIXED_TOKENS_PER_TASK = 2800;

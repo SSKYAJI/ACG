@@ -22,7 +22,7 @@ export function Footer() {
                 <a href="#demo">Demo</a>
               </li>
               <li>
-                <a href="#calculator">Estimate</a>
+                <a href="#impact">Impact</a>
               </li>
             </ul>
           </div>

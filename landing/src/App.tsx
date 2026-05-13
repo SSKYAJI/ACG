@@ -2,8 +2,8 @@ import { ArtifactStory } from "./components/ArtifactStory";
 import { DemoSection } from "./components/DemoSection";
 import { Footer } from "./components/Footer";
 import { Hero } from "./components/Hero";
+import { ImpactStats } from "./components/ImpactStats";
 import { Navbar } from "./components/Navbar";
-import { TokenCalculator } from "./components/TokenCalculator";
 
 export default function App() {
   return (
@@ -13,7 +13,7 @@ export default function App() {
         <Hero />
         <DemoSection />
         <ArtifactStory />
-        <TokenCalculator />
+        <ImpactStats />
       </main>
       <Footer />
     </div>

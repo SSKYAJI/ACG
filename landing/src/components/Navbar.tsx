@@ -27,11 +27,14 @@ export function Navbar() {
         </div>
 
         <nav id="primary-nav" className={`nav-links${open ? " is-open" : ""}`} aria-label="Primary">
+          <a className="nav-link nav-link-internal" href="#demo" onClick={() => setOpen(false)}>
+            Demo
+          </a>
           <a className="nav-link nav-link-internal" href="#artifacts" onClick={() => setOpen(false)}>
             Pipeline
           </a>
-          <a className="nav-link nav-link-internal" href="#demo" onClick={() => setOpen(false)}>
-            Demo
+          <a className="nav-link nav-link-internal" href="#impact" onClick={() => setOpen(false)}>
+            Impact
           </a>
           <a
             className="nav-link ext-link"
