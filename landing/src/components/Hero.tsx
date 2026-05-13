@@ -18,11 +18,6 @@ export function Hero() {
           <p className="install-label">Try it in your repo</p>
           <CommandBlock command="npx acg init" />
         </div>
-
-        <div className="hero-scroll-cue" aria-hidden="true">
-          <span className="hero-scroll-text">Scroll</span>
-          <span className="hero-scroll-line" />
-        </div>
       </div>
     </section>
   );
