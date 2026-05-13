@@ -5,9 +5,9 @@ export function DemoSection() {
 
   return (
     <section id="demo" className="demo-section" aria-labelledby="demo-heading">
-      <div className="container demo-grid">
+      <div className="demo-grid">
         <div className="demo-copy">
-          <h2 className="h2 type-section-title" id="demo-heading">
+          <h2 className="h2 type-section-title demo-title" id="demo-heading">
             See it in action
           </h2>
           <p className="muted demo-subtitle">

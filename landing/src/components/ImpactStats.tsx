@@ -147,8 +147,8 @@ export function ImpactStats() {
     <section className="impact-section" id="impact" aria-labelledby="impact-heading">
       <div className="container impact-center">
         <p className="section-heading">By the numbers</p>
-        <h2 className="h2 type-section-title" id="impact-heading">
-          ACG vs <span className="emphasis-orange">current systems</span>
+        <h2 className="h2 type-section-title impact-title" id="impact-heading">
+          current systems vs <span className="emphasis-orange">ACG</span>
         </h2>
         <p className="muted impact-lede">
           Fewer out-of-scope writes, narrower prompts, smaller diffs. Two comparisons that matter most to teams shipping

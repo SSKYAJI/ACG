@@ -589,12 +589,12 @@ input:focus-visible,
   align-items: center;
   width: 100%;
   min-height: calc(100vh - clamp(8rem, 14vw, 12rem));
-  padding-inline: clamp(1rem, 3vw, 2.5rem);
+  padding-inline: var(--section-gutter);
 }
 
 @media (min-width: 820px) {
   .demo-grid {
-    grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.78fr);
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.55fr);
     gap: var(--space-10);
   }
 }
@@ -616,9 +616,6 @@ input:focus-visible,
   padding: var(--space-3);
   background: var(--bg-elevated);
   border-color: var(--border-dashed);
-  width: 100%;
-  max-width: min(78vw, 1120px);
-  justify-self: stretch;
 }
 
 .demo-video-wrap .video-ratio {
