@@ -1,0 +1,89 @@
+I need to look at the repository structure to understand the codebase before making changes.
+
+Let me analyze the task: The `validate.Email` validator needs to reject IDN email addresses where domain labels start or end with a hyphen. I need to fix the validator and add regression tests.
+
+Since I don't have the file listing, I'll work with common Go validation library patterns (this appears to be `govalidator` or similar based on the PR number).
+
+*** Begin Patch
+*** Update File: validator.go
+@@
+-func isValidDomain(domain string) bool {
++func isValidDomain(domain string) bool {
+ 	// see RFC 1035, section 2.3.4
+ 	if len(domain) == 0 || len(domain) > 255 {
+ 		return false
+ 	}
+@@
+ 	for _, label := range labels {
+ 		if len(label) == 0 || len(label) > 63 {
+ 			return false
+ 		}
++		if label[0] == '-' || label[len(label)-1] == '-' {
++			return false
++		}
+ 	}
+*** Update File: validator_test.go
+@@
+ 	{"user@münchen.de", true},
++	{"user@-münchen.de", false},
++	{"user@münchen-.de", false},
++	{"user@münchen.-de", false},
++	{"user@münchen.de-", false},
+*** End Patch
+
+Wait, I need to be more careful. Let me think about what files likely exist and what the actual code looks like. This seems to be the `govalidator` package. Let me provide a more complete patch.
+
+*** Begin Patch
+*** Update File: validator.go
+@@
+ func isValidDomain(domain string) bool {
+ 	// see RFC 1035, section 2.3.4
+ 	if len(domain) == 0 || len(domain) > 255 {
+ 		return false
+ 	}
+-	labels := strings.Split(domain, ".")
+-	for _, label := range labels {
+-		if len(label) == 0 || len(label) > 63 {
+-			return false
+-		}
+-	}
+-	return true
++	labels := strings.Split(domain, ".")
++	for _, label := range labels {
++		if len(label) == 0 || len(label) > 63 {
++			return false
++		}
++		if label[0] == '-' || label[len(label)-1] == '-' {
++			return false
++		}
++	}
++	return true
+*** Update File: validator_test.go
+@@
+ 	{"user@münchen.de", true},
++	{"user@-münchen.de", false},
++	{"user@münchen-.de", false},
+*** End Patch
+
+I realize I'm guessing at the file contents. Let me provide a targeted patch that's more likely to apply correctly based on common patterns in Go validation libraries.
+
+*** Begin Patch
+*** Update File: validator.go
+@@
+ func isValidDomain(domain string) bool {
+@@
+ 	for _, label := range labels {
+ 		if len(label) == 0 || len(label) > 63 {
+ 			return false
+ 		}
++		if label[0] == '-' || label[len(label)-1] == '-' {
++			return false
++		}
+ 	}
+ 	return true
+*** Update File: validator_test.go
+@@
+ 	{"user@münchen.de", true},
++	{"user@-münchen.de", false},
++	{"user@münchen-.de", false},
+*** End Patch

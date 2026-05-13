@@ -1,0 +1,274 @@
+*** Begin Patch
+*** Add File: src/click/testing.py
+--- /dev/null
++++ src/click/testing.py
+@@ -0,0 +1,280 @@
++"""Testing utilities for Click."""
++from __future__ import annotations
++import io
++import os
++import shlex
++import sys
++import typing as t
++from contextlib import contextmanager
++from types import TracebackType
++
++if t.TYPE_CHECKING:
++    from .core import BaseCommand
++
++
++class BytesIOCopy(io.RawIOBase):
++    """Writes to multiple BytesIO buffers simultaneously."""
++
++    def __init__(self, buffers: t.List[io.BytesIO]) -> None:
++        self.buffers = buffers
+
++    def readable(self) -> bool:
++        return False
+
++    def writable(self) -> bool:
++        return True
+
++    def write(self, b: bytes) -> int:
++        for buf in self.buffers:
++            buf.write(b)
++        return len(b)
+
+
++class Result:
++    """Holds the captured result of an invoked CLI script."""
+
++    def __init__(
++        self,
++        runner: CliRunner,
++        stdout_bytes: bytes,
++        stderr_bytes: t.Optional[bytes],
++        exit_code: int,
++        exception: t.Optional[BaseException] = None,
++        exc_info: t.Optional[t.Any] = None,
++        return_value: t.Any = None,
++    ) -> None:
++        self.runner = runner
++        self.stdout_bytes = stdout_bytes
++        self.stderr_bytes = stderr_bytes
++        self.exit_code = exit_code
++        self.exception = exception
++        self.exc_info = exc_info
++        self.return_value = return_value
+
++    @property
++    def output(self) -> str:
++        return self.stdout
+
++    @property
++    def stdout(self) -> str:
++        return self.stdout_bytes.decode(self.runner.charset, "replace").replace(
++            "\r\n", "\n"
++        )
+
++    @property
++    def stderr(self) -> str:
++        if self.stderr_bytes is None:
++            raise ValueError(
++                "stderr not separately captured, use mix_stderr=False"
++            )
++        return self.stderr_bytes.decode(self.runner.charset, "replace").replace(
++            "\r\n", "\n"
++        )
+
++    def __repr__(self) -> str:
++        return (
++            f"<Result {self.exception!r}>"
++            if self.exception
++            else f"<Result {self.exit_code}>"
++        )
+
+
++class CliRunner:
++    """The CLI runner provides functionality to invoke a Click command line
++    script for unittesting purposes in an isolated environment.
+
++    :param charset: the character set for the input and output data.
++    :param env: a dictionary with environment variables for overriding.
++    :param echo_input: if this is set to ``True``, then reading from stdin
++        writes to stdout.
++    :param mix_stderr: if this is set to ``False``, then stdout and stderr
++        are preserved as independent streams.
++    """
+
++    def __init__(
++        self,
++        charset: str = "utf-8",
++        env: t.Optional[t.Mapping[str, str]] = None,
++        echo_input: bool = False,
++        mix_stderr: bool = True,
++    ) -> None:
++        self.charset = charset
++        self.env: t.Mapping[str, str] = env or {}
++        self.echo_input = echo_input
++        self.mix_stderr = mix_stderr
+
++    def get_default_prog_name(self, cli: BaseCommand) -> str:
++        return cli.name or "root"
+
++    @contextmanager
++    def isolated_filesystem(
++        self, temp_dir: t.Optional[t.Union[str, os.PathLike]] = None
++    ) -> t.Iterator[str]:
++        """A context manager that creates a temporary directory and changes
++        the current working directory to it for isolated filesystem tests.
++        """
++        import tempfile
++        import shutil
+
++        cwd = os.getcwd()
++        t_dir = tempfile.mkdtemp(dir=temp_dir)
++        os.chdir(t_dir)
++        try:
++            yield t_dir
++        finally:
++            os.chdir(cwd)
++            try:
++                shutil.rmtree(t_dir)
++            except Exception:
++                pass
+
++    def invoke(
++        self,
++        cli: BaseCommand,
++        args: t.Optional[t.Union[str, t.Sequence[str]]] = None,
++        input: t.Optional[t.Union[str, bytes, t.IO]] = None,
++        env: t.Optional[t.Mapping[str, str]] = None,
++        catch_exceptions: bool = True,
++        color: bool = False,
++        **extra: t.Any,
++    ) -> Result:
++        """Invokes a command in an isolated environment.
+
++        :param cli: the command to invoke
++        :param args: the arguments as a byte string or as a list of strings.
++        :param input: the input data for ``sys.stdin``.
++        :param env: the environment overrides.
++        :param catch_exceptions: Whether to catch any other exceptions than
++            ``SystemExit``.
++        :param color: whether the output should contain color codes.
++        :param extra: the keyword arguments are passed to :meth:`main`.
++        :return: the return value
++        """
++        exc_info = None
++        return_value = None
++        exception = None
++        exit_code = 0
+
++        if isinstance(args, str):
++            args = shlex.split(args)
+
++        if input is not None:
++            if isinstance(input, str):
++                input = input.encode(self.charset)
++            if isinstance(input, bytes):
++                input = io.BytesIO(input)
+
++        bytes_stdout = io.BytesIO()
++        bytes_stderr = io.BytesIO()
+
++        if self.mix_stderr:
++            bytes_input = input or io.BytesIO(b"")
++            raw_output = BytesIOCopy([bytes_stdout, bytes_stderr])
++            output_stream = io.BufferedWriter(raw_output)  # type: ignore[arg-type]
++            error_stream = output_stream
++        else:
++            bytes_input = input or io.BytesIO(b"")
++            raw_output = BytesIOCopy([bytes_stdout])
++            output_stream = io.BufferedWriter(raw_output)  # type: ignore[arg-type]
++            raw_error = BytesIOCopy([bytes_stderr])
++            error_stream = io.BufferedWriter(raw_error)  # type: ignore[arg-type]
+
++        input_stream = io.TextIOWrapper(bytes_input, encoding=self.charset)
++        text_output = io.TextIOWrapper(output_stream, encoding=self.charset)
+
++        if self.mix_stderr:
++            text_error = text_output
++        else:
++            text_error = io.TextIOWrapper(error_stream, encoding=self.charset)
+
++        env_overrides = dict(self.env)
++        if env:
++            env_overrides.update(env)
+
++        old_stdin = sys.stdin
++        old_stdout = sys.stdout
++        old_stderr = sys.stderr
++        old_env: t.Dict[str, t.Optional[str]] = {}
+
++        try:
++            for key, value in env_overrides.items():
++                old_env[key] = os.environ.get(key)
++                os.environ[key] = value
+
++            sys.stdin = input_stream  # type: ignore[assignment]
++            sys.stdout = text_output  # type: ignore[assignment]
++            sys.stderr = text_error  # type: ignore[assignment]
+
++            try:
++                return_value = cli.main(
++                    args=args or (),
++                    prog_name=self.get_default_prog_name(cli),
++                    standalone_mode=False,
++                    **extra,
++                )
++            except SystemExit as e:
++                exc_info = sys.exc_info()
++                e_code = e.code
++                if e_code is None:
++                    e_code = 0
++                if e_code != 0:
++                    exception = e
++                if not isinstance(e_code, int):
++                    sys.stdout.write(str(e_code))
++                    sys.stdout.write("\n")
++                    e_code = 1
++                exit_code = e_code
++            except Exception as e:
++                if not catch_exceptions:
++                    raise
++                exception = e
++                exc_info = sys.exc_info()
++                exit_code = 1
++            finally:
++                # Flush stdout
++                sys.stdout.flush()
++                # Fix for pr2933: explicitly flush stderr so that data written
++                # without flush=True (e.g. print(...) default) is captured.
++                # Without this flush, the TextIOWrapper internal buffer may
++                # still hold data when sys.stderr is restored, causing it to
++                # be lost from the test result.
++                sys.stderr.flush()
++                # Flush the underlying buffered streams
++                output_stream.flush()
++                if not self.mix_stderr:
++                    error_stream.flush()
++        finally:
++            sys.stdin = old_stdin
++            sys.stdout = old_stdout
++            sys.stderr = old_stderr
+
++            for key, value in old_env.items():
++                if value is None:
++                    try:
++                        del os.environ[key]
++                    except KeyError:
++                        pass
++                else:
++                    os.environ[key] = value
+
++        return Result(
++            runner=self,
++            stdout_bytes=bytes_stdout.getvalue(),
++            stderr_bytes=bytes_stderr.getvalue() if not self.mix_stderr else None,
++            exit_code=exit_code,
++            exception=exception,
++            exc_info=exc_info,
++            return_value=return_value,
++        )
+*** End Patch

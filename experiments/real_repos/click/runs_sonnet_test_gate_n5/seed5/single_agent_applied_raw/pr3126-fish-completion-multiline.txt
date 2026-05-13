@@ -1,0 +1,322 @@
+*** Begin Patch
+*** Add File: src/click/shell_completion.py
+--- /dev/null
++++ src/click/shell_completion.py
+@@ -0,0 +1,280 @@
++"""Shell completion support."""
++from __future__ import annotations
++import os
++import re
++import typing as t
++
++if t.TYPE_CHECKING:
++    from .core import Command, Context, Parameter
++
++
++def shell_complete(
++    cli: Command,
++    ctx_args: t.MutableMapping[str, t.Any],
++    prog_name: str,
++    complete_var: str,
++    instruction: str,
++) -> int:
++    shell, _, instruction = instruction.partition("_")
++    comp_cls = _available_shells.get(shell)
++    if comp_cls is None:
++        return 1
++    comp = comp_cls(cli, ctx_args, prog_name, instruction)
++    from .utils import echo
++    echo(comp.source())
++    return 0
++
++
++class CompletionItem:
++    """Represents a completion item."""
++    __slots__ = ("value", "type", "help")
++
++    def __init__(
++        self,
++        value: str,
++        type: str = "plain",
++        help: t.Optional[str] = None,
++    ) -> None:
++        self.value = value
++        self.type = type
++        self.help = help
++
++    def __eq__(self, other: object) -> bool:
++        if not isinstance(other, CompletionItem):
++            return NotImplemented
++        return self.value == other.value and self.type == other.type
++
++    def __repr__(self) -> str:
++        return f"CompletionItem({self.value!r}, type={self.type!r})"
++
++
++class ShellComplete:
++    """Base class for shell completion."""
++    name: t.ClassVar[str]
++    source_template: t.ClassVar[str]
++
++    def __init__(
++        self,
++        cli: Command,
++        ctx_args: t.MutableMapping[str, t.Any],
++        prog_name: str,
++        instruction: str,
++    ) -> None:
++        self.cli = cli
++        self.ctx_args = ctx_args
++        self.prog_name = prog_name
++        self.instruction = instruction
++
++    def source_vars(self) -> t.Dict[str, t.Any]:
++        return {
++            "complete_func": f"_{self.prog_name.replace('-', '_')}_completion",
++            "prog_name": self.prog_name,
++            "complete_var": f"_{self.prog_name.replace('-', '_').upper()}_COMPLETE",
++        }
++
++    def source(self) -> str:
++        return self.source_template % self.source_vars()
++
++    def get_completion_args(self) -> t.Tuple[t.List[str], str]:
++        raise NotImplementedError
++
++    def get_completions(
++        self, args: t.List[str], incomplete: str
++    ) -> t.List[CompletionItem]:
++        ctx = _resolve_context(self.cli, self.ctx_args, self.prog_name, args)
++        if ctx is None:
++            return []
++        return _resolve_completions(ctx, incomplete)
++
++    def format_completion(self, item: CompletionItem) -> str:
++        raise NotImplementedError
++
++    def complete(self) -> str:
++        args, incomplete = self.get_completion_args()
++        completions = self.get_completions(args, incomplete)
++        out = [self.format_completion(item) for item in completions]
++        return "\n".join(out)
++
++
++class BashComplete(ShellComplete):
++    name = "bash"
++    source_template = (
++        "%(complete_func)s() {\n"
++        "    local IFS=$'\\n'\n"
++        "    local response\n"
++        "\n"
++        "    response=$(env COMP_WORDS=\"${COMP_WORDS[*]}\" COMP_CWORD=$COMP_CWORD"
++        " %(complete_var)s=bash_complete $1)\n"
++        "\n"
++        "    for completion in $response; do\n"
++        "        IFS=',' read type value <<< \"$completion\"\n"
++        "\n"
++        "        if [[ $type == 'dir' ]]; then\n"
++        "            COMPREPLY=()\n"
++        "            compopt -o dirnames\n"
++        "        elif [[ $type == 'file' ]]; then\n"
++        "            COMPREPLY=()\n"
++        "            compopt -o default\n"
++        "        elif [[ $type == 'plain' ]]; then\n"
++        "            COMPREPLY+=($value)\n"
++        "        fi\n"
++        "    done\n"
++        "\n"
++        "    return 0\n"
++        "}\n"
++        "\n"
++        "%(complete_func)s_setup() {\n"
++        "    complete -o nosort -F %(complete_func)s %(prog_name)s\n"
++        "}\n"
++        "\n"
++        "%(complete_func)s_setup;\n"
++    )
++
++    def get_completion_args(self) -> t.Tuple[t.List[str], str]:
++        cwords = re.split(r"\s+", os.environ.get("COMP_WORDS", ""))[1:]
++        cword = int(os.environ.get("COMP_CWORD", 0))
++        if cword == len(cwords):
++            cwords.append("")
++        args = cwords[:cword]
++        incomplete = cwords[cword]
++        return args, incomplete
++
++    def format_completion(self, item: CompletionItem) -> str:
++        return f"{item.type},{item.value}"
++
++
++class ZshComplete(ShellComplete):
++    name = "zsh"
++    source_template = (
++        "#compdef %(prog_name)s\n"
++        "\n"
++        "%(complete_func)s() {\n"
++        "    local -a completions\n"
++        "    local -a completions_with_descriptions\n"
++        "    local -a response\n"
++        "    (( ! $+commands[%(prog_name)s] )) && return 1\n"
++        "\n"
++        "    response=(\"${(@f)$(env COMP_WORDS=\"${words[*]}\" COMP_CWORD=$((CURRENT-1))"
++        " %(complete_var)s=zsh_complete %(prog_name)s)}\")\n"
++        "\n"
++        "    for type key descr in ${response}; do\n"
++        "        if [[ \"$type\" == \"plain\" ]]; then\n"
++        "            if [[ \"$descr\" == \"_\" ]]; then\n"
++        "                completions+=(\"$key\")\n"
++        "            else\n"
++        "                completions_with_descriptions+=(\"$key\":\"$descr\")\n"
++        "            fi\n"
++        "        elif [[ \"$type\" == \"dir\" ]]; then\n"
++        "            _path_files -/\n"
++        "        elif [[ \"$type\" == \"file\" ]]; then\n"
++        "            _path_files -f\n"
++        "        fi\n"
++        "    done\n"
++        "\n"
++        "    if [ -n \"$completions_with_descriptions\" ]; then\n"
++        "        _describe -V unsorted completions_with_descriptions -U\n"
++        "    fi\n"
++        "\n"
++        "    if [ -n \"$completions\" ]; then\n"
++        "        compadd -U -V unsorted -a completions\n"
++        "    fi\n"
++        "}\n"
++        "\n"
++        "compdef %(complete_func)s %(prog_name)s;\n"
++    )
++
++    def get_completion_args(self) -> t.Tuple[t.List[str], str]:
++        cwords = re.split(r"\s+", os.environ.get("COMP_WORDS", ""))[1:]
++        cword = int(os.environ.get("COMP_CWORD", 0))
++        if cword == len(cwords):
++            cwords.append("")
++        args = cwords[:cword]
++        incomplete = cwords[cword]
++        return args, incomplete
++
++    def format_completion(self, item: CompletionItem) -> str:
++        if item.help:
++            return f"{item.type}\t{item.value}\t{item.help}"
++        return f"{item.type}\t{item.value}\t_"
++
++
++class FishComplete(ShellComplete):
++    """Shell completion for Fish.
+
++    Fix for pr3126: multiline help strings are collapsed to a single line
++    so they don't break fish completion output (which is line-based).
++    """
++    name = "fish"
++    source_template = (
++        "function %(complete_func)s;\n"
++        "    set -l response (env %(complete_var)s=fish_complete"
++        " COMP_WORDS=(commandline -cp) COMP_CWORD=(commandline -t) %(prog_name)s);\n"
++        "\n"
++        "    for completion in $response;\n"
++        "        set -l metadata (string split \",\" $completion);\n"
++        "\n"
++        "        if test $metadata[1] = \"dir\";\n"
++        "            __fish_complete_directories $metadata[2];\n"
++        "        else if test $metadata[1] = \"file\";\n"
++        "            __fish_complete_path $metadata[2];\n"
++        "        else if test $metadata[1] = \"plain\";\n"
++        "            echo $metadata[2];\n"
++        "        end;\n"
++        "    end;\n"
++        "end;\n"
++        "\n"
++        "complete --no-files --command %(prog_name)s"
++        " --arguments \"(%(complete_func)s)\";\n"
++    )
++
++    def get_completion_args(self) -> t.Tuple[t.List[str], str]:
++        cwords = re.split(r"\s+", os.environ.get("COMP_WORDS", ""))[1:]
++        incomplete = os.environ.get("COMP_CWORD", "")
++        args = cwords
++        return args, incomplete
++
++    def format_completion(self, item: CompletionItem) -> str:
++        if item.help:
++            # Fix for pr3126: collapse all whitespace (including newlines)
++            # into a single space so multiline help strings don't produce
++            # broken/malformed fish completion output.
++            help_str = re.sub(r"\s+", " ", item.help).strip()
++            return f"{item.type},{item.value}\t{help_str}"
++        return f"{item.type},{item.value}"
++
++
++def _resolve_context(
++    cli: Command,
++    ctx_args: t.MutableMapping[str, t.Any],
++    prog_name: str,
++    args: t.List[str],
++) -> t.Optional[Context]:
++    ctx = cli.make_context(
++        prog_name, list(args), resilient_parsing=True, **ctx_args
++    )
++    args_remaining = ctx.protected_args + ctx.args
++    while args_remaining:
++        if not hasattr(ctx.command, "resolve_command"):
++            return ctx
++        cmd_name, cmd, args_remaining = ctx.command.resolve_command(ctx, args_remaining)
++        if cmd is None:
++            return ctx
++        ctx = cmd.make_context(
++            cmd_name,
++            args_remaining,
++            parent=ctx,
++            allow_extra_args=True,
++            allow_interspersed_args=False,
++            ignore_unknown_options=True,
++            resilient_parsing=True,
++        )
++        args_remaining = ctx.protected_args + ctx.args
++    return ctx
++
++
++def _resolve_completions(
++    ctx: Context, incomplete: str
++) -> t.List[CompletionItem]:
++    completions: t.List[CompletionItem] = []
++    cmd = ctx.command
++    if ctx.info_name is None:
++        return completions
++    if not incomplete or not incomplete[0:1].startswith("-"):
++        if hasattr(cmd, "list_commands"):
++            for name in cmd.list_commands(ctx):
++                if name.startswith(incomplete):
++                    sub = cmd.get_command(ctx, name)
++                    if sub is None:
++                        continue
++                    completions.append(
++                        CompletionItem(name, help=sub.get_short_help_str(limit=45))
++                    )
++        return completions
++    for param in ctx.command.params:
++        if not hasattr(param, "opts"):
++            continue
++        for opt in param.opts:
++            if opt.startswith(incomplete):
++                completions.append(
++                    CompletionItem(opt, help=getattr(param, "help", None))
++                )
++    return completions
++
++
++_available_shells: t.Dict[str, t.Type[ShellComplete]] = {
++    "bash": BashComplete,
++    "zsh": ZshComplete,
++    "fish": FishComplete,
++}
++
++
++def add_completion_class(
++    cls: t.Type[ShellComplete], name: t.Optional[str] = None
++) -> None:
++    if name is None:
++        name = cls.name
++    _available_shells[name] = cls
+*** End Patch

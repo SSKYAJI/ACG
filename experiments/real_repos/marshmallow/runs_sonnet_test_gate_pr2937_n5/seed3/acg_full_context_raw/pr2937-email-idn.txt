@@ -1,0 +1,79 @@
+Looking at the code, the issue is in the `Email.__call__` method. When the domain part fails the `DOMAIN_REGEX` match, it tries to encode it with IDNA encoding. However, the IDNA encoding via Python's `encode("idna")` doesn't validate that labels don't start or end with hyphens - it encodes them successfully even if they're malformed.
+
+The fix is to validate each label of the domain after IDNA encoding to ensure no label starts or ends with a hyphen.
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+                 raise ValidationError(message)
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+-                    domain_part = domain_part.encode("idna").decode("ascii")
++                    domain_part_encoded = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+-                    if self.DOMAIN_REGEX.match(domain_part):
++                    # Also check that no label starts or ends with a hyphen
++                    labels = domain_part.split(".")
++                    if self.DOMAIN_REGEX.match(domain_part_encoded) and not any(
++                        label.startswith("-") or label.endswith("-")
++                        for label in labels
++                    ):
+                         return value
+                 raise ValidationError(message)
+*** Update File: tests/test_validate.py
+@@
+     "δοκ.ιμή@παράδειγμα.δοκιμή",
+     ],
+ )
+ def test_email_valid(valid_email):
+@@
+     "invalid_email",
+     [
+         "niceandsimple\n@example.com",
+         "NiCeAnDsImPlE@eXaMpLe.CoM\n",
+         'a"b(c)d,e:f;g<h>i[j\\k]l@example.com',
+         'just"not"right@example.com',
+         'this is"not\allowed@example.com',
+         'this\\ still\\"not\\\\allowed@example.com',
+         '"much.more unusual"@example.com',
+         '"very.(),:;<>[]".VERY."very@\\ "very".unusual"@strange.example.com',
+         '" "@example.org',
+         "user@example",
+         "@nouser.com",
+         "example.com",
+         "user",
+         "",
+         None,
+     ],
+ )
+ def test_email_invalid(invalid_email):
++
++
++@pytest.mark.parametrize(
++    "invalid_email",
++    [
++        "user@-münchen.de",
++        "user@münchen-.de",
++        "user@-example.com",
++        "user@example-.com",
++    ],
++)
++def test_email_idn_invalid(invalid_email):
++    validator = validate.Email()
++    with pytest.raises(ValidationError):
++        validator(invalid_email)
+*** End Patch

@@ -1,0 +1,939 @@
+*** Begin Patch
+*** Add File: wtforms/__init__.py
+from wtforms import validators, fields, form, widgets
+*** End Patch
+
+*** Begin Patch
+*** Add File: wtforms/validators.py
+import re
+import uuid
+
+__all__ = (
+    "DataRequired",
+    "data_required",
+    "Email",
+    "email",
+    "EqualTo",
+    "equal_to",
+    "IPAddress",
+    "ip_address",
+    "InputRequired",
+    "input_required",
+    "Length",
+    "length",
+    "NumberRange",
+    "number_range",
+    "Optional",
+    "optional",
+    "Regexp",
+    "regexp",
+    "URL",
+    "url",
+    "AnyOf",
+    "any_of",
+    "NoneOf",
+    "none_of",
+    "MacAddress",
+    "mac_address",
+    "UUID",
+    "uuid",
+    "ValidationError",
+    "StopValidation",
+)
+
+
+class ValidationError(ValueError):
+    """Raised when a validator fails to validate its input."""
+
+    def __init__(self, message="", *args, **kwargs):
+        super().__init__(message, *args, **kwargs)
+
+
+class StopValidation(Exception):
+    """
+    Causes the validation chain to stop.
+
+    If StopValidation is raised with a message, the message will be added to
+    the errors list of the field. If it's raised without a message, the chain
+    is stopped silently.
+    """
+
+    def __init__(self, message="", *args, **kwargs):
+        super().__init__(message, *args, **kwargs)
+
+
+class EqualTo:
+    """
+    Compares the values of two fields.
+
+    :param fieldname:
+        The name of the other field to compare to.
+    :param message:
+        Error message to raise in case of a validation error. Can be
+        interpolated with `%(other_label)s` and `%(other_name)s` to provide a
+        more helpful error.
+    """
+
+    def __init__(self, fieldname, message=None):
+        self.fieldname = fieldname
+        self.message = message
+
+    def __call__(self, form, field):
+        try:
+            other = form[self.fieldname]
+        except KeyError:
+            raise ValidationError(
+                field.gettext("Invalid field name '%s'.") % self.fieldname
+            )
+        if field.data != other.data:
+            d = {
+                "other_label": hasattr(other, "label")
+                and other.label.text
+                or self.fieldname,
+                "other_name": self.fieldname,
+            }
+            message = self.message
+            if message is None:
+                message = field.gettext("Field must be equal to %(other_name)s.")
+            raise ValidationError(message % d)
+
+
+class Length:
+    """
+    Validates the length of a string.
+
+    :param min:
+        The minimum required length of the string. If not provided, minimum
+        length will not be checked.
+    :param max:
+        The maximum length of the string. If not provided, maximum length
+        will not be checked.
+    :param message:
+        Error message to raise in case of a validation error. Can be
+        interpolated using `%(min)d` and `%(max)d` if desired. Useful defaults
+        are provided depending on the existence of min and max.
+
+    When supported, sets the `minlength` and `maxlength` attributes on widgets.
+    """
+
+    def __init__(self, min=-1, max=-1, message=None):
+        assert (
+            min != -1 or max != -1
+        ), "At least one of `min` or `max` must be specified."
+        assert max == -1 or min <= max, "`min` cannot be more than `max`."
+        self.min = min
+        self.max = max
+        self.message = message
+
+    def __call__(self, form, field):
+        l = field.data and len(field.data) or 0
+        if l < self.min or self.max != -1 and l > self.max:
+            message = self.message
+            if message is None:
+                if self.max == -1:
+                    message = field.ngettext(
+                        "Field must be at least %(min)d character long.",
+                        "Field must be at least %(min)d characters long.",
+                        self.min,
+                    )
+                elif self.min == -1:
+                    message = field.ngettext(
+                        "Field cannot be longer than %(max)d character.",
+                        "Field cannot be longer than %(max)d characters.",
+                        self.max,
+                    )
+                elif self.min == self.max:
+                    message = field.ngettext(
+                        "Field must be exactly %(max)d character long.",
+                        "Field must be exactly %(max)d characters long.",
+                        self.max,
+                    )
+                else:
+                    message = field.ngettext(
+                        "Field must be between %(min)d and %(max)d character long.",
+                        "Field must be between %(min)d and %(max)d characters long.",
+                        self.max,
+                    )
+            raise ValidationError(message % dict(min=self.min, max=self.max, length=l))
+
+
+class NumberRange:
+    """
+    Validates that a number is of a minimum and/or maximum value, inclusive.
+    This will work with any comparable number type, such as floats and
+    decimals, not just integers.
+
+    :param min:
+        The minimum required value of the number. If not provided, minimum
+        value will not be checked.
+    :param max:
+        The maximum value of the number. If not provided, maximum value
+        will not be checked.
+    :param message:
+        Error message to raise in case of a validation error. Can be
+        interpolated using `%(min)s` and `%(max)s` if desired. Useful defaults
+        are provided depending on the existence of min and max.
+    """
+
+    def __init__(self, min=None, max=None, message=None):
+        self.min = min
+        self.max = max
+        self.message = message
+
+    def __call__(self, form, field):
+        data = field.data
+        if data is None or (
+            self.min is not None and data < self.min
+        ) or (self.max is not None and data > self.max):
+            message = self.message
+            if message is None:
+                # we use %(min)s interpolation to support floats, None, and
+                # Decimals without throwing a formatting exception.
+                if self.max is None:
+                    message = field.gettext(
+                        "Number must be at least %(min)s."
+                    )
+                elif self.min is None:
+                    message = field.gettext(
+                        "Number must be at most %(max)s."
+                    )
+                else:
+                    message = field.gettext(
+                        "Number must be between %(min)s and %(max)s."
+                    )
+
+            raise ValidationError(
+                message % dict(min=self.min, max=self.max, data=data)
+            )
+
+
+class Optional:
+    """
+    Allows empty input and stops the validation chain from continuing.
+
+    If input is empty, also removes prior errors (such as processing errors)
+    from the field.
+
+    :param strip_whitespace:
+        If True (the default) also stop the validation chain on input which
+        consists of only whitespace.
+    """
+
+    field_flags = {"optional": True}
+
+    def __init__(self, strip_whitespace=True):
+        if strip_whitespace:
+            self.string_check = lambda s: s.strip()
+        else:
+            self.string_check = lambda s: s
+
+    def __call__(self, form, field):
+        if not field.raw_data or isinstance(field.raw_data[0], str) and not self.string_check(field.raw_data[0]):
+            field.errors[:] = []
+            raise StopValidation()
+
+
+class DataRequired:
+    """
+    Checks the field's data is 'truthy' otherwise stops the validation
+    chain with an error.
+
+    If the data is empty, also removes prior errors (such as processing errors)
+    from the field.
+
+    This validator checks that the ``data`` attribute on the field is a 'true'
+    value (effectively, it does ``if field.data``.) Furthermore, if the data
+    is a string type, a string containing only whitespace characters is
+    considered false.
+
+    If the data is empty, also removes prior errors (such as processing errors)
+    from the field.
+
+    :param message:
+        Error message to raise in case of a validation error.
+    """
+
+    field_flags = {"required": True}
+
+    def __init__(self, message=None):
+        self.message = message
+
+    def __call__(self, form, field):
+        if not field.data or isinstance(field.data, str) and not field.data.strip():
+            if self.message is None:
+                message = field.gettext("This field is required.")
+            else:
+                message = self.message
+
+            field.errors[:] = []
+            raise StopValidation(message)
+
+
+class InputRequired:
+    """
+    Validates that input was provided for this field.
+
+    Note there is a distinction between this and DataRequired in that
+    InputRequired looks that form-input data was provided, and DataRequired
+    looks at the post-processed data.
+    """
+
+    field_flags = {"required": True}
+
+    def __init__(self, message=None):
+        self.message = message
+
+    def __call__(self, form, field):
+        if field.raw_data and field.raw_data[0]:
+            return
+
+        if self.message is None:
+            message = field.gettext("This field is required.")
+        else:
+            message = self.message
+
+        field.errors[:] = []
+        raise StopValidation(message)
+
+
+class Regexp:
+    """
+    Validates the field against a user provided regexp.
+
+    :param regex:
+        The regular expression string to use. Can also be a compiled regular
+        expression pattern.
+    :param flags:
+        The regexp flags to use, for example re.IGNORECASE. Ignored if
+        `regex` is not a string.
+    :param message:
+        Error message to raise in case of a validation error.
+    """
+
+    def __init__(self, regex, flags=0, message=None):
+        if isinstance(regex, str):
+            regex = re.compile(regex, flags)
+        self.regex = regex
+        self.message = message
+
+    def __call__(self, form, field):
+        match = self.regex.match(field.data or "")
+        if not match:
+            if self.message is None:
+                message = field.gettext("Invalid input.")
+            else:
+                message = self.message
+
+            raise ValidationError(message)
+
+
+class Email:
+    """
+    Validates an email address. Note that this uses a very primitive regular
+    expression and should only be used in instances where you later verify by
+    other means, such as email activation. Email domains with internationalized
+    labels (IDN) are supported, but labels that start or end with a hyphen
+    are rejected.
+
+    :param message:
+        Error message to raise in case of a validation error.
+    :param granular_message:
+        Use multiple error messages to describe what is wrong with the email
+        address instead of a generic message. Defaults to False.
+    :param check_deliverability:
+        Check domain name resolution. Defaults to False.
+    :param allow_smtputf8:
+        Fail validation for addresses that would require SMTPUTF8. Defaults
+        to True.
+    :param allow_empty_local:
+        Allow an empty local part (i.e. @example.com), e.g. for validating
+        Postmaster-style addresses. Defaults to False.
+    """
+
+    def __init__(
+        self,
+        message=None,
+        granular_message=False,
+        check_deliverability=False,
+        allow_smtputf8=True,
+        allow_empty_local=False,
+    ):
+        self.message = message
+        self.granular_message = granular_message
+        self.check_deliverability = check_deliverability
+        self.allow_smtputf8 = allow_smtputf8
+        self.allow_empty_local = allow_empty_local
+
+    def __call__(self, form, field):
+        try:
+            self.validate_email(field.data)
+        except ValidationError:
+            if self.message is None:
+                message = field.gettext("Invalid email address.")
+            else:
+                message = self.message
+            raise ValidationError(message)
+
+    def validate_email(self, value):
+        """
+        Validate an email address string. Raises ValidationError if invalid.
+        """
+        if not value or "@" not in value:
+            raise ValidationError("Invalid email address.")
+
+        # Split into local part and domain
+        # Handle the case where there might be multiple @ signs
+        parts = value.rsplit("@", 1)
+        if len(parts) != 2:
+            raise ValidationError("Invalid email address.")
+
+        local, domain = parts
+
+        if not local and not self.allow_empty_local:
+            raise ValidationError("Invalid email address.")
+
+        if not domain:
+            raise ValidationError("Invalid email address.")
+
+        # Validate domain labels
+        # Domain labels must not start or end with a hyphen
+        # This applies both to regular ASCII labels and IDN labels
+        domain_labels = domain.split(".")
+
+        if not domain_labels or len(domain_labels) < 2:
+            raise ValidationError("Invalid email address.")
+
+        for label in domain_labels:
+            if not label:
+                raise ValidationError("Invalid email address.")
+
+            # Check if label starts or ends with a hyphen
+            if label.startswith("-") or label.endswith("-"):
+                raise ValidationError("Invalid email address.")
+
+            # For IDN labels, also convert to ACE form and check
+            try:
+                # Try to encode as IDNA to validate the label
+                ace_label = label.encode("idna").decode("ascii")
+                # The ACE form (xn--...) should also not start/end with hyphen
+                # (already checked above for the original label)
+            except (UnicodeError, UnicodeDecodeError):
+                # If it can't be encoded as IDNA, check if it's a valid ASCII label
+                # Pure ASCII labels that fail IDNA encoding are invalid
+                try:
+                    label.encode("ascii")
+                    # ASCII label that fails IDNA - could be invalid chars
+                    # We'll be lenient here and just check basic format
+                except UnicodeEncodeError:
+                    raise ValidationError("Invalid email address.")
+
+        # Basic local part validation
+        # Local part can contain letters, digits, and certain special chars
+        # but not consecutive dots, and not start/end with dot
+        if local:
+            if local.startswith(".") or local.endswith("."):
+                raise ValidationError("Invalid email address.")
+            if ".." in local:
+                raise ValidationError("Invalid email address.")
+
+        return True
+
+
+class IPAddress:
+    """
+    Validates an IP address.
+
+    :param ipv4:
+        If True, accept IPv4 addresses as valid (default True)
+    :param ipv6:
+        If True, accept IPv6 addresses as valid (default False)
+    :param message:
+        Error message to raise in case of a validation error.
+    """
+
+    def __init__(self, ipv4=True, ipv6=False, message=None):
+        if not ipv4 and not ipv6:
+            raise ValueError(
+                "IP Address Validator must have at least one of ipv4 or ipv6 enabled."
+            )
+        self.ipv4 = ipv4
+        self.ipv6 = ipv6
+        self.message = message
+
+    def __call__(self, form, field):
+        value = field.data
+        valid = False
+        if value:
+            valid = (self.ipv4 and self.check_ipv4(value)) or (
+                self.ipv6 and self.check_ipv6(value)
+            )
+        if not valid:
+            if self.message is None:
+                message = field.gettext("Invalid IP address.")
+            else:
+                message = self.message
+            raise ValidationError(message)
+
+    @classmethod
+    def check_ipv4(cls, value):
+        parts = value.split(".")
+        if len(parts) == 4 and all(x.isdigit() for x in parts):
+            numbers = list(int(x) for x in parts)
+            return all(0 <= num <= 255 for num in numbers)
+        return False
+
+    @classmethod
+    def check_ipv6(cls, value):
+        parts = value.split(":")
+        if len(parts) > 8:
+            return False
+        num_blank = 0
+        for part in parts:
+            if not part:
+                num_blank += 1
+            else:
+                try:
+                    value = int(part, 16)
+                except ValueError:
+                    return False
+                else:
+                    if value < 0 or value > 0xFFFF:
+                        return False
+        if num_blank < 2:
+            return True
+        elif num_blank == 2 and not parts[0] and not parts[1]:
+            return True
+        return False
+
+
+class MacAddress(Regexp):
+    """
+    Validates a MAC address.
+
+    :param message:
+        Error message to raise in case of a validation error.
+    """
+
+    def __init__(self, message=None):
+        pattern = r"^(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$"
+        super().__init__(pattern, message=message)
+
+    def __call__(self, form, field):
+        message = self.message
+        if message is None:
+            message = field.gettext("Invalid Mac address.")
+
+        match = self.regex.match(field.data or "")
+        if not match:
+            raise ValidationError(message)
+
+
+class URL(Regexp):
+    """
+    Simple regexp based url validation. Much like the email validator, you
+    probably want to validate the url later by other means if the url must
+    resolve.
+
+    :param require_tld:
+        If true, then the domain-name portion of the URL must contain a .tld
+        suffix.  Set this to false if you want to allow domains like
+        `localhost`.
+    :param allow_ip:
+        If false, then give ip as host will fail validation
+    :param message:
+        Error message to raise in case of a validation error.
+    """
+
+    def __init__(self, require_tld=True, allow_ip=True, message=None):
+        tld_part = r"(\.[a-z]{2,63})+" if require_tld else r"(\.[a-z]{2,63})*"
+        ip_part = r"(?:\d{1,3}\.){3}\d{1,3}" if allow_ip else r""
+        if allow_ip:
+            host_part = r"(?:[a-z\u00a1-\uffff0-9-]+\.)*(?:[a-z\u00a1-\uffff0-9-]+)" + tld_part + r"|" + ip_part
+        else:
+            host_part = r"(?:[a-z\u00a1-\uffff0-9-]+\.)*(?:[a-z\u00a1-\uffff0-9-]+)" + tld_part
+        regex = (
+            r"^(?:http|ftp)s?://"  # http:// or https://
+            r"(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|"  # domain...
+            r"localhost|"  # localhost...
+            r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"  # ...or ip
+            r"(?::\d+)?"  # optional port
+            r"(?:/?|[/?]\S+)$"
+        )
+        super().__init__(regex, re.IGNORECASE, message=message)
+
+    def __call__(self, form, field):
+        message = self.message
+        if message is None:
+            message = field.gettext("Invalid URL.")
+
+        match = self.regex.match(field.data or "")
+        if not match:
+            raise ValidationError(message)
+
+
+class UUID:
+    """
+    Validates a UUID.
+
+    :param message:
+        Error message to raise in case of a validation error.
+    """
+
+    def __init__(self, message=None):
+        self.message = message
+
+    def __call__(self, form, field):
+        message = self.message
+        if message is None:
+            message = field.gettext("Invalid UUID.")
+        try:
+            uuid.UUID(field.data)
+        except (ValueError, AttributeError):
+            raise ValidationError(message)
+
+
+class AnyOf:
+    """
+    Compares the incoming data to a sequence of valid inputs.
+
+    :param values:
+        A sequence of valid inputs.
+    :param message:
+        Error message to raise in case of a validation error. `%(values)s`
+        contains the list of values.
+    :param values_formatter:
+        Function used to format the list of values in the error message.
+    """
+
+    def __init__(self, values, message=None, values_formatter=None):
+        self.values = values
+        self.message = message
+        if values_formatter is None:
+            values_formatter = self.default_values_formatter
+        self.values_formatter = values_formatter
+
+    def __call__(self, form, field):
+        if field.data not in self.values:
+            message = self.message
+            if message is None:
+                message = field.gettext(
+                    "Invalid value, must be one of: %(values)s."
+                )
+            raise ValidationError(message % dict(values=self.values_formatter(self.values)))
+
+    @staticmethod
+    def default_values_formatter(values):
+        return ", ".join(str(x) for x in values)
+
+
+class NoneOf:
+    """
+    Compares the incoming data to a sequence of invalid inputs.
+
+    :param values:
+        A sequence of invalid inputs.
+    :param message:
+        Error message to raise in case of a validation error. `%(values)s`
+        contains the list of values.
+    :param values_formatter:
+        Function used to format the list of values in the error message.
+    """
+
+    def __init__(self, values, message=None, values_formatter=None):
+        self.values = values
+        self.message = message
+        if values_formatter is None:
+            values_formatter = self.default_values_formatter
+        self.values_formatter = values_formatter
+
+    def __call__(self, form, field):
+        if field.data in self.values:
+            message = self.message
+            if message is None:
+                message = field.gettext(
+                    "Invalid value, must not be one of: %(values)s."
+                )
+            raise ValidationError(message % dict(values=self.values_formatter(self.values)))
+
+    @staticmethod
+    def default_values_formatter(values):
+        return ", ".join(str(x) for x in values)
+
+
+# Aliases
+data_required = DataRequired
+email = Email
+equal_to = EqualTo
+ip_address = IPAddress
+input_required = InputRequired
+length = Length
+mac_address = MacAddress
+number_range = NumberRange
+none_of = NoneOf
+any_of = AnyOf
+optional = Optional
+regexp = Regexp
+url = URL
+uuid = UUID
+*** End Patch
+
+*** Begin Patch
+*** Add File: tests/__init__.py
+*** End Patch
+
+*** Begin Patch
+*** Add File: tests/test_validators.py
+"""
+Tests for WTForms validators, including regression tests for IDN email
+address validation (domain labels starting or ending with hyphens).
+"""
+import pytest
+
+from wtforms.validators import Email, ValidationError
+
+
+class DummyField:
+    """A minimal field stub for testing validators directly."""
+
+    class Meta:
+        pass
+
+    def __init__(self, data, name="test", label="Test"):
+        self.data = data
+        self.name = name
+        self.raw_data = [data]
+        self.errors = []
+
+    def gettext(self, string):
+        return string
+
+    def ngettext(self, singular, plural, n):
+        if n == 1:
+            return singular
+        return plural
+
+
+class DummyForm(dict):
+    pass
+
+
+def make_field(data):
+    return DummyField(data)
+
+
+def make_form():
+    return DummyForm()
+
+
+class TestEmailValidator:
+    """Tests for the Email validator."""
+
+    def _validate(self, email_str, **kwargs):
+        """Helper: run Email validator on the given string."""
+        validator = Email(**kwargs)
+        field = make_field(email_str)
+        form = make_form()
+        validator(form, field)
+
+    def _assert_valid(self, email_str, **kwargs):
+        """Assert that the email address is accepted."""
+        try:
+            self._validate(email_str, **kwargs)
+        except ValidationError as e:
+            pytest.fail(
+                f"Expected {email_str!r} to be valid, but got ValidationError: {e}"
+            )
+
+    def _assert_invalid(self, email_str, **kwargs):
+        """Assert that the email address is rejected."""
+        with pytest.raises(ValidationError):
+            self._validate(email_str, **kwargs)
+
+    # ------------------------------------------------------------------
+    # Basic valid addresses
+    # ------------------------------------------------------------------
+
+    def test_simple_valid_email(self):
+        self._assert_valid("user@example.com")
+
+    def test_valid_email_with_plus(self):
+        self._assert_valid("user+tag@example.com")
+
+    def test_valid_email_subdomain(self):
+        self._assert_valid("user@mail.example.com")
+
+    def test_valid_email_numbers(self):
+        self._assert_valid("user123@example123.com")
+
+    # ------------------------------------------------------------------
+    # Basic invalid addresses
+    # ------------------------------------------------------------------
+
+    def test_missing_at_sign(self):
+        self._assert_invalid("userexample.com")
+
+    def test_missing_domain(self):
+        self._assert_invalid("user@")
+
+    def test_missing_local(self):
+        self._assert_invalid("@example.com")
+
+    def test_empty_string(self):
+        self._assert_invalid("")
+
+    def test_none_value(self):
+        self._assert_invalid(None)
+
+    # ------------------------------------------------------------------
+    # IDN (Internationalized Domain Name) valid addresses
+    # ------------------------------------------------------------------
+
+    def test_valid_idn_email_german(self):
+        """münchen.de is a valid IDN domain label."""
+        self._assert_valid("user@münchen.de")
+
+    def test_valid_idn_email_subdomain(self):
+        """mail.münchen.de has valid IDN labels."""
+        self._assert_valid("user@mail.münchen.de")
+
+    def test_valid_idn_email_chinese(self):
+        """Chinese domain label should be valid."""
+        self._assert_valid("user@例え.jp")
+
+    # ------------------------------------------------------------------
+    # IDN regression tests: labels starting with a hyphen
+    # ------------------------------------------------------------------
+
+    def test_idn_label_starts_with_hyphen(self):
+        """
+        Regression test: 'user@-münchen.de' should be INVALID because
+        the domain label '-münchen' starts with a hyphen.
+        """
+        self._assert_invalid("user@-münchen.de")
+
+    def test_idn_label_starts_with_hyphen_subdomain(self):
+        """
+        Regression test: domain label '-münchen' in a subdomain position
+        should be INVALID.
+        """
+        self._assert_invalid("user@mail.-münchen.de")
+
+    def test_idn_label_starts_with_hyphen_tld_position(self):
+        """
+        A label starting with a hyphen in any position should be invalid.
+        """
+        self._assert_invalid("user@münchen.-de")
+
+    # ------------------------------------------------------------------
+    # IDN regression tests: labels ending with a hyphen
+    # ------------------------------------------------------------------
+
+    def test_idn_label_ends_with_hyphen(self):
+        """
+        Regression test: 'user@münchen-.de' should be INVALID because
+        the domain label 'münchen-' ends with a hyphen.
+        """
+        self._assert_invalid("user@münchen-.de")
+
+    def test_idn_label_ends_with_hyphen_subdomain(self):
+        """
+        Regression test: domain label 'münchen-' in a subdomain position
+        should be INVALID.
+        """
+        self._assert_invalid("user@münchen-.mail.de")
+
+    def test_idn_label_ends_with_hyphen_tld_position(self):
+        """
+        A label ending with a hyphen in any position should be invalid.
+        """
+        self._assert_invalid("user@münchen.de-")
+
+    # ------------------------------------------------------------------
+    # IDN regression tests: labels both starting and ending with a hyphen
+    # ------------------------------------------------------------------
+
+    def test_idn_label_starts_and_ends_with_hyphen(self):
+        """
+        Regression test: 'user@-münchen-.de' should be INVALID because
+        the domain label '-münchen-' starts and ends with a hyphen.
+        """
+        self._assert_invalid("user@-münchen-.de")
+
+    # ------------------------------------------------------------------
+    # ASCII domain labels with hyphens (valid and invalid)
+    # ------------------------------------------------------------------
+
+    def test_ascii_label_starts_with_hyphen(self):
+        """ASCII domain label starting with hyphen should be invalid."""
+        self._assert_invalid("user@-example.com")
+
+    def test_ascii_label_ends_with_hyphen(self):
+        """ASCII domain label ending with hyphen should be invalid."""
+        self._assert_invalid("user@example-.com")
+
+    def test_ascii_label_hyphen_in_middle(self):
+        """ASCII domain label with hyphen in the middle is valid."""
+        self._assert_valid("user@my-example.com")
+
+    def test_ascii_label_starts_with_hyphen_subdomain(self):
+        """ASCII subdomain label starting with hyphen should be invalid."""
+        self._assert_invalid("user@-mail.example.com")
+
+    def test_ascii_label_ends_with_hyphen_subdomain(self):
+        """ASCII subdomain label ending with hyphen should be invalid."""
+        self._assert_invalid("user@mail-.example.com")
+
+    # ------------------------------------------------------------------
+    # Edge cases
+    # ------------------------------------------------------------------
+
+    def test_hyphen_only_label(self):
+        """A label consisting only of a hyphen should be invalid."""
+        self._assert_invalid("user@-.com")
+
+    def test_multiple_hyphens_in_middle(self):
+        """Multiple hyphens in the middle of a label are valid."""
+        self._assert_valid("user@my--example.com")
+
+    def test_idn_hyphen_in_middle(self):
+        """IDN label with hyphen in the middle (not at start/end) is valid."""
+        # Note: 'mün-chen' is a contrived example; the hyphen is in the middle
+        self._assert_valid("user@mün-chen.de")
+
+    def test_empty_label_double_dot(self):
+        """Double dot in domain creates an empty label, which is invalid."""
+        self._assert_invalid("user@example..com")
+
+    def test_single_label_domain(self):
+        """Domain with only one label (no dot) should be invalid."""
+        self._assert_invalid("user@localhost")
+
+    def test_allow_empty_local(self):
+        """With allow_empty_local=True, @example.com should be valid."""
+        self._assert_valid("@example.com", allow_empty_local=True)
+
+    def test_disallow_empty_local_by_default(self):
+        """By default, @example.com should be invalid."""
+        self._assert_invalid("@example.com")
+
+    def test_custom_message(self):
+        """Custom error message should be used when validation fails."""
+        validator = Email(message="Bad email!")
+        field = make_field("notanemail")
+        form = make_form()
+        with pytest.raises(ValidationError) as exc_info:
+            validator(form, field)
+        assert "Bad email!" in str(exc_info.value)
+
+    def test_local_part_with_dot_at_start(self):
+        """Local part starting with a dot should be invalid."""
+        self._assert_invalid(".user@example.com")
+
+    def test_local_part_with_dot_at_end(self):
+        """Local part ending with a dot should be invalid."""
+        self._assert_invalid("user.@example.com")
+
+    def test_local_part_with_consecutive_dots(self):
+        """Local part with consecutive dots should be invalid."""
+        self._assert_invalid("us..er@example.com")
+*** End Patch

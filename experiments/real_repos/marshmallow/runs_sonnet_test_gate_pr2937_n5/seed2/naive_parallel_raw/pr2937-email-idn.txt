@@ -1,0 +1,159 @@
+I'll analyze the task and implement the fix for IDN email validation.
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+     USER_REGEX = re.compile(
+         r"(^[-!#$%&'*+/=?^`{}|~\w]+(\.[-!#$%&'*+/=?^`{}|~\w]+)*\Z"  # dot-atom
+         r'|^"([\001-\010\013\014\016-\037!#-\[\]-\177]|\\[\001-\011\013\014\016-\177])*"\Z)',  # quoted-string
+         re.IGNORECASE | re.UNICODE,
+     )
+ 
+     DOMAIN_REGEX = re.compile(
+         r"(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}|[A-Z0-9-]{2,})\Z",
+         re.IGNORECASE,
+     )
+ 
+     DOMAIN_WHITELIST = ("localhost",)
+@@
+     def _validate_domain_part(self, domain_part: str) -> bool:
+         if self.DOMAIN_REGEX.match(domain_part):
+             return True
+ 
+         try:
+             domain_part = domain_part.encode("idna").decode("ascii")
+-            return bool(self.DOMAIN_REGEX.match(domain_part))
+         except (UnicodeError, UnicodeDecodeError):
+             return False
++
++        # After IDNA encoding, validate the ASCII form
++        if not self.DOMAIN_REGEX.match(domain_part):
++            return False
++
++        # Additionally, check each label in the original domain does not
++        # start or end with a hyphen (IDNA encoding may not catch all cases)
++        labels = domain_part.split(".")
++        for label in labels:
++            if label.startswith("-") or label.endswith("-"):
++                return False
++
++        return True
+*** End Patch
+
+Wait, I need to look more carefully. The issue is that when we have `user@-münchen.de`, the label `-münchen` starts with a hyphen. After IDNA encoding, `-münchen` would become `-xn--mnchen-3ya` or similar, which starts with a hyphen. The DOMAIN_REGEX requires labels to start with `[A-Z0-9]`, so it should catch it... unless the IDNA encoding fails or the regex doesn't match properly.
+
+Let me reconsider - the fix should check the original labels (before IDNA encoding) for hyphen issues, since IDNA encoding might fail or succeed inconsistently.
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+     def _validate_domain_part(self, domain_part: str) -> bool:
+         if self.DOMAIN_REGEX.match(domain_part):
+             return True
+ 
+         try:
+             domain_part = domain_part.encode("idna").decode("ascii")
+             return bool(self.DOMAIN_REGEX.match(domain_part))
+         except (UnicodeError, UnicodeDecodeError):
+             return False
+*** Update File: src/marshmallow/validate.py
+@@
+     def _validate_domain_part(self, domain_part: str) -> bool:
+         if self.DOMAIN_REGEX.match(domain_part):
+             return True
+ 
++        # Check each label in the original domain does not start or end with a hyphen
++        for label in domain_part.split("."):
++            if label.startswith("-") or label.endswith("-"):
++                return False
++
+         try:
+             domain_part = domain_part.encode("idna").decode("ascii")
+             return bool(self.DOMAIN_REGEX.match(domain_part))
+         except (UnicodeError, UnicodeDecodeError):
+             return False
+*** Update File: tests/test_validate.py
+@@
+         assert validator("niceandsimple@example.com") == "niceandsimple@example.com"
+@@
+     @pytest.mark.parametrize(
+         "val",
+         [
+             "niceandsimple@example.com",
+             "very.common@example.com",
+             "disposable.style.email.with+symbol@example.com",
+             "other.email-with-dash@example.com",
+             "user@localserver",
+             "user@[IPv6:2001:db8::1]",
+         ],
+     )
+     def test_email_valid(self, val):
+         assert validate.Email()(val) == val
+ 
+     @pytest.mark.parametrize(
+         "val",
+         [
+             "plainaddress",
+             "@missingusername.com",
+             "missingatsign",
+             "missingdomain@",
+             "two@@signs.com",
+         ],
+     )
+     def test_email_invalid(self, val):
+         with pytest.raises(ValidationError):
+             validate.Email()(val)
+*** Update File: tests/test_validate.py
+@@
+     @pytest.mark.parametrize(
+         "val",
+         [
+             "niceandsimple@example.com",
+             "very.common@example.com",
+             "disposable.style.email.with+symbol@example.com",
+             "other.email-with-dash@example.com",
+             "user@localserver",
+             "user@[IPv6:2001:db8::1]",
+         ],
+     )
+     def test_email_valid(self, val):
+         assert validate.Email()(val) == val
+ 
+     @pytest.mark.parametrize(
+         "val",
+         [
+             "plainaddress",
+             "@missingusername.com",
+             "missingatsign",
+             "missingdomain@",
+             "two@@signs.com",
+         ],
+     )
+     def test_email_invalid(self, val):
+         with pytest.raises(ValidationError):
+             validate.Email()(val)
++
++    @pytest.mark.parametrize(
++        "val",
++        [
++            "user@münchen.de",
++            "user@bücher.example",
++            "user@xn--mnchen-3ya.de",
++        ],
++    )
++    def test_email_valid_idn(self, val):
++        assert validate.Email()(val) == val
++
++    @pytest.mark.parametrize(
++        "val",
++        [
++            "user@-münchen.de",
++            "user@münchen-.de",
++            "user@-example.com",
++            "user@example-.com",
++        ],
++    )
++    def test_email_invalid_idn_hyphen(self, val):
++        with pytest.raises(ValidationError):
++            validate.Email()(val)
+*** End Patch

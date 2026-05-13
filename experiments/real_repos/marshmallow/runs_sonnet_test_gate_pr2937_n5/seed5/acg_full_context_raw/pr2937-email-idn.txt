@@ -1,0 +1,63 @@
+Looking at the code, the issue is in the `Email.__call__` method. When the domain part fails the `DOMAIN_REGEX` match, it tries to encode it with IDNA encoding. However, the IDNA encoding itself doesn't reject labels starting or ending with hyphens - that check needs to happen after encoding.
+
+Let me trace through what happens with `user@-münchen.de`:
+1. `domain_part = "-münchen.de"` fails `DOMAIN_REGEX` (starts with hyphen)
+2. It tries `domain_part.encode("idna")` - Python's `idna` codec may or may not raise for leading hyphens
+3. If encoding succeeds, it checks `DOMAIN_REGEX.match(domain_part)` on the ASCII result
+
+The fix should validate that after IDNA encoding, the resulting domain labels don't start or end with hyphens. Actually, the better fix is to check the original domain labels before encoding - if any label starts or ends with a hyphen, reject it.
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+                 raise ValidationError(message)
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
++                    # Reject labels that start or end with a hyphen before IDNA encoding
++                    labels = domain_part.split(".")
++                    if any(label.startswith("-") or label.endswith("-") for label in labels):
++                        raise ValidationError(message)
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+                 raise ValidationError(message)
+*** Update File: tests/test_validate.py
+@@
+ def test_email_repr():
+     assert repr(validate.Email(error=None)) == "<Email(error={!r})>".format(
+         "Not a valid email address."
+     )
+     assert repr(validate.Email(error="foo")) == "<Email(error={!r})>".format("foo")
++
++
++@pytest.mark.parametrize(
++    "invalid_email",
++    [
++        "user@-münchen.de",
++        "user@münchen-.de",
++        "user@-example.com",
++        "user@example-.com",
++        "user@foo.-bar.com",
++        "user@foo.bar-.com",
++    ],
++)
++def test_email_invalid_idn_hyphen(invalid_email):
++    validator = validate.Email()
++    with pytest.raises(ValidationError):
++        validator(invalid_email)
+*** End Patch
