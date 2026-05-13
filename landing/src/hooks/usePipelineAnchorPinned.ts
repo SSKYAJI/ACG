@@ -9,57 +9,74 @@ function readScrollPaddingTopPx(): number {
   return Number.isFinite(px) ? px : 80;
 }
 
-/**
- * Sticky pipeline headline: introductory flow is top-aligned with the right stack;
- * once native `position: sticky` engages, a sentinel above the sticky node leaves
- * the viewport band below `scroll-padding-top`, and we toggle centered flex layout.
- */
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
 export function usePipelineAnchorPinned() {
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const [pinnedCentered, setPinnedCentered] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [translateY, setTranslateY] = useState(0);
 
   useLayoutEffect(() => {
     const mq = window.matchMedia(PIPELINE_TWO_COL_MQ);
-    let observer: IntersectionObserver | null = null;
+    let frame = 0;
 
-    const teardown = () => {
-      observer?.disconnect();
-      observer = null;
+    const cancelFrame = () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+        frame = 0;
+      }
     };
 
-    const setup = () => {
-      teardown();
-      const node = sentinelRef.current;
-      if (!mq.matches || !node) {
-        setPinnedCentered(false);
+    const update = () => {
+      const sentinel = sentinelRef.current;
+      const content = contentRef.current;
+
+      if (!mq.matches || !sentinel || !content) {
+        setTranslateY(0);
         return;
       }
+
       const inset = readScrollPaddingTopPx();
-      observer = new IntersectionObserver(
-        ([entry]) => {
-          setPinnedCentered(!entry.isIntersecting);
-        },
-        {
-          root: null,
-          rootMargin: `-${inset}px 0px 0px 0px`,
-          threshold: 0,
-        }
-      );
-      observer.observe(node);
+      const availableHeight = Math.max(0, window.innerHeight - inset);
+      const contentHeight = content.getBoundingClientRect().height;
+      const centeredOffset = Math.max(0, (availableHeight - contentHeight) / 2);
+      const distancePastStickyTop = inset - sentinel.getBoundingClientRect().top;
+      const ramp = Math.max(180, centeredOffset || 0);
+      const progress = clamp(distancePastStickyTop / ramp, 0, 1);
+      const next = progress * centeredOffset;
+
+      setTranslateY((prev) => (Math.abs(prev - next) < 0.5 ? prev : next));
     };
 
-    setup();
-    mq.addEventListener("change", setup);
+    const requestUpdate = () => {
+      cancelFrame();
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        update();
+      });
+    };
 
-    const ro = new ResizeObserver(() => setup());
+    requestUpdate();
+    mq.addEventListener("change", requestUpdate);
+    window.addEventListener("scroll", requestUpdate, { passive: true });
+    window.addEventListener("resize", requestUpdate);
+
+    const ro = new ResizeObserver(() => requestUpdate());
     ro.observe(document.documentElement);
+    if (contentRef.current) {
+      ro.observe(contentRef.current);
+    }
 
     return () => {
-      mq.removeEventListener("change", setup);
+      mq.removeEventListener("change", requestUpdate);
+      window.removeEventListener("scroll", requestUpdate);
+      window.removeEventListener("resize", requestUpdate);
       ro.disconnect();
-      teardown();
+      cancelFrame();
     };
   }, []);
 
-  return { sentinelRef, pinnedCentered };
+  return { sentinelRef, contentRef, translateY };
 }

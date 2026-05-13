@@ -718,21 +718,22 @@ input:focus-visible,
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+}
+
+.pipeline-anchor-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: var(--space-3);
+  will-change: transform;
 }
 
 @media (min-width: 880px) {
-  /* Sentinel + IO in ArtifactStory toggle .pipeline-anchor--pinned-centered once sticky engages */
   .pipeline-anchor {
     position: sticky;
     top: 5rem;
     width: 100%;
-    justify-content: flex-start;
-  }
-
-  .pipeline-anchor.pipeline-anchor--pinned-centered {
     min-height: calc(100vh - 5rem);
-    justify-content: center;
   }
 }
 
