@@ -867,6 +867,65 @@ input:focus-visible,
   gap: var(--space-4);
 }
 
+.impact-chart-figure {
+  margin: 0;
+  width: 100%;
+}
+
+.impact-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  max-height: 280px;
+}
+
+.impact-svg .impact-axis-line {
+  stroke: rgb(26 26 26 / 0.35);
+  stroke-width: 1;
+}
+
+.impact-svg .impact-grid-line {
+  stroke: rgb(26 26 26 / 0.08);
+  stroke-width: 1;
+}
+
+.impact-svg .impact-y-tick {
+  fill: rgb(105 107 117);
+  font-size: 11px;
+  font-weight: 600;
+  font-family:
+    "DM Sans",
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+
+.impact-svg .impact-bar-baseline {
+  fill: rgb(26 26 26 / 0.52);
+}
+
+.impact-svg .impact-bar-acg {
+  fill: var(--accent-orange);
+}
+
+.impact-svg .impact-bar-value {
+  fill: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--mono);
+}
+
+.impact-svg .impact-x-label {
+  fill: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  font-family:
+    "DM Sans",
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+
 .impact-card-label {
   margin: 0;
   font-size: 0.75rem;
@@ -874,59 +933,6 @@ input:focus-visible,
   letter-spacing: 0.1em;
   font-weight: 800;
   color: var(--muted);
-}
-
-.impact-rows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.impact-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.impact-row-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--space-4);
-  font-size: 0.9rem;
-}
-
-.impact-row-name {
-  color: var(--text);
-  font-weight: 600;
-}
-
-.impact-row-value {
-  font-size: 1.05rem;
-  font-weight: 800;
-  color: var(--text);
-}
-
-.impact-track {
-  height: 14px;
-  border-radius: 999px;
-  background: rgb(26 26 26 / 0.06);
-  overflow: hidden;
-  border: 1px dashed var(--border-dashed);
-}
-
-.impact-fill {
-  height: 100%;
-  border-radius: inherit;
-  transition: width 240ms ease;
-}
-
-.impact-fill-baseline {
-  background: rgb(26 26 26 / 0.55);
-}
-
-.impact-fill-acg {
-  background: linear-gradient(90deg, var(--accent-orange), rgb(242 173 116));
 }
 
 .impact-caption {
