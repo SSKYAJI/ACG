@@ -28,7 +28,7 @@ All Python commands assume the project venv at `.venv/`. Install once with `make
 | Compile demo lockfile (offline) | `make compile` |
 | Run end-to-end demo (offline) | `make demo` |
 | Run mock runtime + viz | `make run-mock && make viz` |
-| Run live GX10 runtime | `make compile-gemma && make run-gemma && make viz` |
+| Run live LLM runtime | `make compile-gemma && make run-gemma && make viz` |
 | Clean working artifacts | `make clean` |
 
 The CLI itself is `acg <subcommand>` — see `acg/cli.py` for the full surface (`compile`, `plan-tasks`, `init-graph`, `explain`, `validate-write`, `validate-diff`, `validate-lockfile`, `run`, `run-benchmark`, `report`, `analyze-runs`, `mcp`).
@@ -41,7 +41,7 @@ The predictor / orchestrator / worker LLMs are configured by env vars (see `.env
 - `ACG_MOCK_LLM=1` (offline deterministic mock — required for CI and unit tests that exercise the predictor without network)
 - `ACG_ORCH_*` overrides the orchestrator endpoint; `ACG_SUB_*` is aliased from `ACG_LLM_*` if unset.
 
-For the live two-server Gemma demo, the orchestrator hits port 8081 (thinking) and sub-agents hit 8080 (`--reasoning-budget 0`). Override host/port via `make compile-gemma GEMMA_HOST=… GEMMA_PORT=…`.
+For the live two-server demo, the orchestrator hits port 8081 (thinking) and sub-agents hit 8080 (`--reasoning-budget 0`). Override host/port via `make compile-gemma GEMMA_HOST=… GEMMA_PORT=…`.
 
 ## Architecture
 

@@ -1,10 +1,10 @@
 .PHONY: install scan compile demo benchmark test lint clean viz-install viz gemma-ping compile-gemma demo-gemma run-gemma run-mock setup-greenhouse compile-greenhouse eval-greenhouse-mock eval-greenhouse-local eval-greenhouse-applied-diff eval-greenhouse-devin-manual eval-greenhouse-devin-api eval-greenhouse-tight-mock eval-greenhouse-report mcp-serve cascade-hook-test setup-realworld compile-realworld compile-realworld-blind setup-python-fastapi compile-python-fastapi eval-python-fastapi-mock analyze-python-fastapi-mock eval-realworld-local eval-realworld-blind-local eval-realworld-blind-openrouter-ablation eval-realworld-tight-openrouter eval-realworld-applied-kimi eval-realworld-mock analyze-realworld analyze-realworld-blind analyze-realworld-blind-openrouter
 
-# Override these on the command line if your ASUS hostname / port differ:
-#   make compile-gemma GEMMA_HOST=100.x.y.z GEMMA_PORT=8080
+# Override these on the command line if your local LLM host / port differ:
+#   make compile-gemma GEMMA_HOST=192.168.1.10 GEMMA_PORT=8080
 # NOTE: do NOT put inline `# comments` after the value — GNU make preserves the
 # trailing whitespace, which then breaks the URL expansion below.
-GEMMA_HOST      ?= gx10-f2c9
+GEMMA_HOST      ?= localhost
 # sub-agent / predictor server (--reasoning-budget 0)
 GEMMA_PORT      ?= 8080
 # orchestrator server (thinking enabled)
@@ -76,7 +76,7 @@ run-gemma:
 	  --repo demo-app \
 	  --out demo-app/.acg/run_trace.json
 
-# Offline runtime against the deterministic mock client. No GX10 needed.
+# Offline runtime against the deterministic mock client. No LLM server needed.
 run-mock:
 	./.venv/bin/acg run --mock \
 	  --lock demo-app/agent_lock.json \
@@ -107,7 +107,7 @@ eval-greenhouse-mock: compile-greenhouse
 	  --strategy both \
 	  --out-dir experiments/greenhouse/runs
 
-# Live local LLM (GX10) — same harness, real worker calls.
+# Live local LLM — same harness, real worker calls.
 eval-greenhouse-local: compile-greenhouse
 	$(GEMMA_ENV) $(GEMMA_ORCH_ENV) ./.venv/bin/python -m experiments.greenhouse.headtohead \
 	  --lock experiments/greenhouse/agent_lock.json \

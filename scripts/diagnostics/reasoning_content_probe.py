@@ -7,7 +7,7 @@ each with a different "make it think" payload knob, so we can compare:
   - whether reasoning_content is populated
 
 Usage:
-    LLM_URL=http://gx10-f2c9:8080/v1/chat/completions python3 probe_thinking.py
+    LLM_URL=http://localhost:8080/v1/chat/completions python3 probe_thinking.py
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import time
 
 import httpx
 
-URL = os.environ.get("LLM_URL", "http://gx10-f2c9:8080/v1/chat/completions")
+URL = os.environ.get("LLM_URL", "http://localhost:8080/v1/chat/completions")
 
 ORCHESTRATOR_PROMPT = [
     {
