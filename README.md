@@ -2,20 +2,20 @@
 
 > **It's `package-lock.json` for parallel coding agents.**
 
-Multi-agent coding systems today coordinate at the wrong stage — they let workers edit in parallel and absorb the cost of overlapping file modifications through merge tools, manual intervention, and trial-and-error convergence. **Agent Context Graph (ACG) introduces write contracts as a compileable primitive.** By moving conflict detection to a static pre-execution phase, ACG compiles natural language task lists and repository context into a committable, human-reviewable `agent_lock.json` contract. This lockfile restricts each agent's filesystem write authority via strict boundaries (`allowed_paths`), sequences contending tasks into parallel-safe execution groups, and provides a continuous validation substrate that audits proposed edits mid-flight or post-hoc from pull requests.
+Multi-agent coding systems often coordinate work only after edits land—merge tools and manual cleanup absorb overlapping changes. **Agent Context Graph (ACG) compiles natural-language task lists plus repository context into a committable `agent_lock.json` write contract.** The lockfile scopes each task’s filesystem authority (`allowed_paths`), records predicted and contextual paths, sequences contending work into parallel-safe groups, and supports mid-flight validation of proposed edits.
 
 ## Live execution mode
 
-ACG ships with a runtime (`acg/runtime.py`) that executes a lockfile against two local LLM server instances:
+ACG ships with a runtime (`acg/runtime.py`) that executes a lockfile against two local LLM endpoints (or a deterministic mock):
 
-- **Orchestrator** (port 8081) — thinks aloud about the dispatch plan
-- **Sub-agents** (port 8080) — propose write-sets per task, no thinking
+- **Orchestrator** (port 8081 by convention) — planning / dispatch narrative
+- **Sub-agents** (port 8080 by convention) — per-task workers
 
-Each worker's proposed writes are validated against its task's `allowed_paths` via `validate_write()`. Both ALLOWED and BLOCKED proposals are recorded to `demo-app/.acg/run_trace.json`. The visualizer replays the trace in real time:
+Workers emit **OpenAI-style `apply_patch` envelopes**; successful patches are applied on disk, then each touched path is checked with **`validate_write`**. Writes that only match **`candidate_context_paths`** (not yet promoted to the hard write contract) can be marked **needs replan**; with `ACG_AUTO_REPLAN=1`, the runtime may **promote** approved candidates via `promote_candidate_paths` in `acg/compiler.py`. ALLOWED / BLOCKED / replan-related outcomes are recorded to `run_trace.json` (for example under `demo-app/.acg/` in the default Gemma flow). The visualizer replays the trace against the static lockfile DAG.
 
 ```bash
-make compile-gemma   # build the lockfile against live local server
-make run-gemma       # execute it; ~30s, writes run_trace.json
+make compile-gemma   # build the lockfile against your local OpenAI-compatible servers
+make run-gemma       # execute it; writes run_trace.json
 make viz             # open the live-replay visualizer
 ```
 
@@ -25,48 +25,62 @@ Offline / CI mode uses a deterministic mock:
 make run-mock && make viz
 ```
 
-See `viz/README.md` for the visualizer architecture and `acg/runtime.py` for the runtime's prompt construction and validation pipeline. Full multi-codebase evaluation results are available in [`papers/GREENHOUSE_RESULTS.md`](papers/GREENHOUSE_RESULTS.md).
+See `viz/README.md` for the visualizer and `acg/runtime.py` for prompts, patch application, and enforcement. **Evaluation write-ups in this repository** (not an external `papers/` tree) include [`experiments/greenhouse/RESULTS.md`](experiments/greenhouse/RESULTS.md) (Greenhouse + broader claims with cited artifacts) and [`experiments/real_repos/aggregate_all.md`](experiments/real_repos/aggregate_all.md) (multi-repo aggregator notes).
 
 ## Architecture
 
-ACG operates as a rigorous three-step compiler pipeline transforming repository goals into static write-boundary guarantees:
+End-to-end flow:
 
 ```text
-tasks.json + repo  ──► Step 1: Repo Graph Construction   ──► context_graph.json
-                                  │
-                                  ▼
-                       Step 2: Write-Set Predictor       ──► PredictedWrite[]
-                                  │
-                                  ▼
-                       Step 3: DAG Solver                ──► execution_plan
-                                  │
-                                  ▼
-                           agent_lock.json
-                                  │
-            ┌─────────────────────┴─────────────────────┐
-            ▼                                           ▼
-     Scoped Workers                             Write Validator
+tasks.json + repo
+      │
+      ▼ scan + localization (native / scip / auto)
+   context_graph.json  ←  ts-morph (TS/JS), in-process scanners (Python, Java),
+                          optional SCIP metadata merged in acg/repo_graph.py
+      │
+      ▼ predictor (acg/predictor.py)
+   PredictedWrite[] + tiered FileScope[]  ←  deterministic seeds + LLM re-rank
+      │
+      ▼ compiler (acg/compiler.py)
+   predicted_writes[], candidate_context_paths[], allowed_paths[] (glob contract)
+      │
+      ▼ solver (acg/solver.py)
+   depends_on[], parallel_group, execution_plan  →  agent_lock.json
+      │
+      ├──────── runtime (acg/runtime.py): apply_patch → validate_write
+      │         optional auto-replan / promotion for candidate-context paths
+      └──────── hooks / MCP / validate-diff consumers
 ```
 
-1. **Repository Graph Construction**: Scans the target codebase using dedicated parsers (`ts-morph` for TypeScript/JavaScript, native AST for Python, `tree-sitter` for Java) to build a robust file-level dependency and co-change graph.
-2. **Write-Set Predictor**: Expands lightweight multi-seed heuristics (regex patterns, symbol references, index hits) via LLM re-ranking to emit high-confidence predicted write targets for each individual task.
-3. **DAG Solver**: Analyzes cross-task contention on predicted write targets to construct a dependency graph. Tasks with disjoint write-sets are assigned to parallel execution groups, while contending tasks are serialized deterministically. The resulting execution schedule and file permissions are codified into `agent_lock.json`.
+1. **Repository scan and localization**: `acg/repo_graph.scan_context_graph` dispatches by `--language`, writes `<repo>/.acg/context_graph.json`, and merges **native** graph fields with optional **SCIP** metadata when `--localization-backend` is `scip` or `auto`.
 
-During runtime execution, scoped workers receive focused context tailored to their task boundaries, and every proposed edit passes through a write validator to block unauthorized repository access. Long form architectural details are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+2. **Predictor**: Produces **`predicted_writes`** (tight targets) and **`file_scopes`** with tiers such as **must_write**, **candidate_context**, and **needs_replan**, using multiple deterministic seed paths plus optional scope review / SCIP-informed signals and a single LLM re-rank when configured.
 
-## Empirical Results
+3. **Compiler**: Assembles **`predicted_writes`**, **`candidate_context_paths`**, **`allowed_paths`**, **`file_scopes`**, task metadata, then hands tasks to the solver.
 
-Evaluated extensively across 6 repositories and 3 model families per the ASE NIER 2026 paper, ACG demonstrates substantial improvements in safety and efficiency:
+4. **Solver**: Builds the contention DAG and assigns **`parallel_group`** and **`depends_on`** (deterministic ordering rules in `acg/solver.py`).
 
-- **Prompt-Token Reduction**: Achieves **9.7% to 56%** reduction in per-worker prompt tokens by delivering tightly scoped context windows instead of complete repository maps.
-- **Productivity Lift**: Significantly improves Commits-per-Prompt (CuPP) efficiency by eliminating parallel agent collisions and expensive post-hoc manual merge cycles.
-- **Write-Boundary Safety**: Guarantees **zero non-target modifications** for ACG-planned tasks across extensive baseline testing. Under negative-control testing with tightened scopes, unauthorized write attempts are deterministically intercepted and blocked by the validator.
+At **runtime**, scoped prompts and graph context feed workers; **`apply_patch_adapter`** applies patches; **`validate_write`** enforces **`allowed_paths`**. Replans are an **optional** path (environment-gated), not a guarantee for every deployment.
 
-## Demo
+Full detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## Evidence and demos (what the repo actually contains)
+
+This repository includes **point-in-time evaluation artifacts** (JSON runs, lockfiles, analyzer output) alongside narrative summaries. Figures and tables should be read as **illustrative of the bundled fixtures**, not as a fully general multi-trial benchmark—see `experiments/greenhouse/RESULTS.md` for scope and caveats.
+
+The **`demo-app`** Makefile targets (`make compile`, `make demo`, `make run-gemma`, `make run-mock`, …) exercise the canonical TypeScript demo and offline benchmark chart.
+
+**Separate experiment harnesses** (additional checkouts and suites) are driven by dedicated Makefile targets:
+
+- **Greenhouse** (Java legacy harness): `setup-greenhouse`, `compile-greenhouse`, `eval-greenhouse-mock`, `eval-greenhouse-local`, variants for applied-diff / Devin—see Makefile and `experiments/greenhouse/`.
+- **Realworld** (NestJS/OpenRouter pipelines): `setup-realworld`, `compile-realworld`, `eval-realworld-*`, `analyze-realworld*`—see Makefile and `experiments/realworld/`.
+- **Python FastAPI** mock eval: `setup-python-fastapi`, `compile-python-fastapi`, `eval-python-fastapi-mock`, `analyze-python-fastapi-mock`—see `experiments/python_fastapi/`.
+
+## Demo snapshot (demo-app)
 
 ![Agent coordination tax — naive vs ACG-planned](docs/benchmark.png)
 
-Same 4 tasks (`oauth`, `billing`, `settings`, `tests`) on the same `demo-app`, comparing two strategies:
+Same four tasks (`oauth`, `billing`, `settings`, `tests`) on `demo-app`, comparing naive parallel simulation vs planned execution from **`make demo`**:
 
 | Metric               | Naive parallel | ACG-planned |
 | -------------------- | -------------- | ----------- |
@@ -76,81 +90,96 @@ Same 4 tasks (`oauth`, `billing`, `settings`, `tests`) on the same `demo-app`, c
 | Tests pass first run | no             | yes         |
 | Wall time (min)      | 20             | 13          |
 
-The `oauth` and `settings` tasks are write-disjoint — ACG runs them safely in parallel.
-`billing` overlaps with both (`prisma/schema.prisma` with `oauth`, `src/components/Sidebar.tsx` with `settings`) — ACG serializes it after group 1.
-`tests` waits for all prior tasks to complete to target the converged final state.
+`oauth` and `settings` are write-disjoint and can run in parallel; `billing` overlaps both and is serialized; `tests` follows prior groups. Exact numbers depend on the pinned tasks and simulator—re-run **`make demo`** to regenerate.
 
 ## 60-second quickstart
 
 ```bash
 git clone <this repo>
-cd cognition
+cd <repository-root>
 
-make install           # creates .venv, pip installs ACG, npm installs ts-morph
-cp .env.example .env   # put your API key in ACG_LLM_API_KEY (or leave blank for offline mock)
+make install           # creates .venv, pip installs ACG, npm installs ts-morph graph builder
+cp .env.example .env   # API keys for compile/runtime LLMs (or use mock / offline flows)
 
 make demo              # scan + compile + benchmark + chart in one shot
 ```
 
-`make demo` produces:
+`make demo` produces (under default paths):
 
-- `demo-app/.acg/context_graph.json` — repo graph (16 files, 3 hotspots)
-- `demo-app/agent_lock.json` — committable plan (4 tasks, 3 groups, 2 conflicts)
+- `demo-app/.acg/context_graph.json` — repo graph snapshot
+- `demo-app/agent_lock.json` — committable plan
 - `.acg/run_naive.json` + `.acg/run_acg.json` — benchmark metrics
-- `docs/benchmark.png` — the comparison chart shown above
+- `docs/benchmark.png` — comparison chart
 
-To watch the enforcement layer block an out-of-bounds write proposal:
+To watch the validator reject an out-of-bounds proposal:
 
 ```bash
 ./.venv/bin/acg validate-write \
   --lock demo-app/agent_lock.json \
   --task settings \
   --path src/server/auth/config.ts
-# BLOCKED: path 'src/server/auth/config.ts' is outside task 'settings''s allowed_paths
-# exit code 2
+# BLOCKED … exit code 2
 ```
 
 ## What is `agent_lock.json`?
 
-A committable, human-reviewable, schema-validated artifact that declares for each task:
+A schema-validated artifact (`schema/agent_lock.schema.json`, `acg/schema.py`) that declares for each task:
 
-- `prompt` — the natural-language task description
-- `predicted_writes[]` — high-confidence files defining the hard write scope
-- `allowed_paths[]` — derived file globs strictly enforced by the validator
-- `candidate_context_paths[]` — broader localization references exposed as context
-- `file_scopes[]` — tiered localization tracking records
-- `depends_on[]` — explicit upstream tasks
-- `parallel_group` — which DAG execution tier this task belongs to
+- `prompt` — natural-language task description
+- `predicted_writes[]` — predicted write targets
+- `allowed_paths[]` — glob patterns enforced by the validator
+- `candidate_context_paths[]` — broader localization / context references
+- `file_scopes[]` — tiered scope records bridging predictions and enforcement
+- `depends_on[]` — explicit DAG edges
+- `parallel_group` — execution tier within the solver plan
 
-…plus an `execution_plan.groups[]` array ordering tasks into parallel-safe and serial groups, and a `conflicts_detected[]` array documenting cross-task overlaps. See `examples/lockfile.dag.example.json` for a complete example and `schema/agent_lock.schema.json` for the JSON Schema.
+…and lockfile-level `execution_plan.groups[]`, `conflicts_detected[]`, etc. Example: `examples/lockfile.dag.example.json`.
 
 ## CLI surface
 
-```text
-acg plan-tasks       --repo PATH --goal TEXT --out tasks.json
-acg compile          --repo PATH --tasks FILE --out FILE
-acg explain          --lock FILE
-acg validate-write   --lock FILE --task ID --path PATH
-acg validate-diff    --lock FILE --repo PATH --task ID [--base-ref REF] [--head-ref REF]
-acg report           --naive FILE --planned FILE --out FILE
-acg run-benchmark    --mode {naive,planned} --repo PATH --tasks FILE --out FILE
-acg mcp              [--transport stdio]    # MCP server (requires .[mcp] extra)
-```
+Authoritative enumeration and flags live in **`acg/cli.py`**. High-level grouping:
 
-`plan-tasks` decomposes high-level repository goals into reviewable task structures prior to compilation. `validate-diff` audits modified files in a `git diff` against per-task contracts to score real applied patches alongside proposal-only runtime traces.
+**Compile / graph**
+
+- `acg plan-tasks` — goal → `tasks.json` (`--localization-backend`, `--language`, …)
+- `acg init-graph` — scan repo → `.acg/context_graph.json`
+- `acg compile` — `tasks.json` + repo graph → `agent_lock.json` (`--language`, `--use-cached-graph` / `--rescan-graph`, `--localization-backend`)
+
+**Validation / introspection**
+
+- `acg explain` — human-readable lockfile summary
+- `acg validate-lockfile` — JSON Schema check
+- `acg validate-write` — single path vs task contract (exit **2** = blocked)
+- `acg validate-diff` — git diff vs task contract
+
+**Runtime**
+
+- `acg run` — execute lockfile, emit trace (`--mock`, concurrency / perf options—see `--help`)
+
+**Eval / charts**
+
+- `acg run-benchmark` — naive vs planned simulator metrics
+- `acg report` — PNG chart from metric JSON pairs
+
+**Analysis**
+
+- `acg analyze-runs` — aggregate `eval_run*.json` style artifacts into Markdown / JSON summaries
+
+**MCP**
+
+- `acg mcp --transport stdio` — FastMCP server (`pip install -e '.[mcp]'`): see [`docs/MCP_SERVER.md`](docs/MCP_SERVER.md)
 
 ## Integrations
 
-- **Cognition (Devin)** — ACG provides pre-flight static contracts that a coordinator agent can consume prior to fanning out child workers. See [`docs/COGNITION_INTEGRATION.md`](docs/COGNITION_INTEGRATION.md).
-- **Cascade Integration** — ACG integrates seamlessly via Windsurf Cascade `pre_write_code` and `post_write_code` hook scripts (`.windsurf/hooks.json`). The pre-hook validates file edits inline, blocking out-of-bounds modifications instantly with clear user interface feedback. See [`docs/CASCADE_INTEGRATION.md`](docs/CASCADE_INTEGRATION.md).
-- **Model Context Protocol (MCP)** — Core ACG primitives are fully exposed as standard MCP tools. Compatible with leading agent frameworks. See [`docs/MCP_SERVER.md`](docs/MCP_SERVER.md).
+- **Cognition (Devin)** — pre-flight contracts and MCP: [`docs/COGNITION_INTEGRATION.md`](docs/COGNITION_INTEGRATION.md)
+- **Cascade (Windsurf)** — hooks: [`docs/CASCADE_INTEGRATION.md`](docs/CASCADE_INTEGRATION.md)
+- **Model Context Protocol** — [`docs/MCP_SERVER.md`](docs/MCP_SERVER.md)
 
-## Limitations and Future Work
+## Limitations and future work
 
-- **File-Level Granularity**: Write boundaries are enforced at the file level today. Mitigating semantic drift across disjoint files or performing import/export risk analysis represents an exciting direction for future research.
-- **Language Coverage**: Production parsers and write-set heuristics currently support Java, TypeScript/JavaScript, and Python. Extending to additional languages requires writing modular graph scanners.
-- **Runtime Synchronization**: ACG focuses exclusively on pre-flight static scheduling and contract compilation, operating as a clean upstream complement to runtime synchronization layers (e.g., CodeCRDT).
-- **Sample Size Focus**: Current benchmarks provide strong directional indicators across representative codebases; expanding to large-scale, automated multi-trial evaluation suites is ongoing.
+- **File-level scope**: Enforcement is path / glob oriented; finer-grained semantic coupling is future work.
+- **Languages**: TypeScript/JavaScript, Python, and Java scanners ship in-tree; additional languages need new scanners and predictor tuning.
+- **Runtime**: Replans and SCIP backends are optional; production behavior depends on environment, lockfile tiering, and provider capabilities.
 
 ## License
 

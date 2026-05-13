@@ -4,12 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-**Agent Context Graph (ACG)** — a compiler from `tasks.json` (NL task list) + repo scan into `agent_lock.json`, a per-task write contract (`predicted_writes`, `allowed_paths`, `depends_on`, `parallel_group`). Two surfaces consume the lockfile:
+**Agent Context Graph (ACG)** — a compiler from `tasks.json` (NL task list) + repo scan into **`agent_lock.json`**, a per-task write contract: **`predicted_writes`**, **`candidate_context_paths`**, **`allowed_paths`**, **`file_scopes`**, **`depends_on`**, **`parallel_group`**. Consumers include:
 
-1. **Pre-flight**: Cascade / Devin / Claude get the lockfile, scope writes to `allowed_paths`. `acg validate-write` and `acg validate-diff` enforce.
-2. **Runtime**: `acg run` executes the plan against a live orchestrator + sub-agent LLM pair, validating each proposed write against the contract and recording allow/block events to `run_trace.json`.
+1. **Pre-flight / editors**: Coordinators read the lockfile; `acg validate-write` and `acg validate-diff` enforce boundaries (e.g. Windsurf Cascade hooks).
+2. **Runtime**: `acg run` drives orchestrator + worker LLMs (`acg/runtime.py`): workers propose **`apply_patch`** envelopes; the runtime applies patches, runs **`validate_write`** per path, optionally handles **candidate-context / replan** flows, and records events to **`run_trace.json`**.
+3. **Viz**: `viz/` replays `run_trace.json` against the static DAG.
 
-The viz (`viz/`) replays `run_trace.json` against the static lockfile DAG.
+Behavioral contracts and field semantics are defined in **`acg/schema.py`**; compilation logic in **`acg/compiler.py`**; runtime loop in **`acg/runtime.py`**; CLI entrypoints and flags in **`acg/cli.py`**.
 
 ## Common commands
 
@@ -31,7 +32,14 @@ All Python commands assume the project venv at `.venv/`. Install once with `make
 | Run live LLM runtime | `make compile-gemma && make run-gemma && make viz` |
 | Clean working artifacts | `make clean` |
 
-The CLI itself is `acg <subcommand>` — see `acg/cli.py` for the full surface (`compile`, `plan-tasks`, `init-graph`, `explain`, `validate-write`, `validate-diff`, `validate-lockfile`, `run`, `run-benchmark`, `report`, `analyze-runs`, `mcp`).
+### CLI by surface (`acg/cli.py`)
+
+- **Compile / graph**: `compile` ( `--language`, `--use-cached-graph` / `--rescan-graph`, `--localization-backend`), `plan-tasks`, `init-graph`
+- **Validation / introspection**: `explain`, `validate-write`, `validate-diff`, `validate-lockfile`
+- **Runtime**: `run` (`--mock`, concurrency / `--perf-trace`, etc.)
+- **Eval / charts**: `run-benchmark`, `report`
+- **Analysis**: `analyze-runs`
+- **MCP**: `mcp --transport stdio` (requires `.[mcp]` extra)
 
 ### LLM configuration
 
@@ -41,6 +49,10 @@ The predictor / orchestrator / worker LLMs are configured by env vars (see `.env
 - `ACG_MOCK_LLM=1` (offline deterministic mock — required for CI and unit tests that exercise the predictor without network)
 - `ACG_ORCH_*` overrides the orchestrator endpoint; `ACG_SUB_*` is aliased from `ACG_LLM_*` if unset.
 
+Compile can pin separate endpoints via **`ACG_COMPILE_*`** (see `LLMClient.from_env_for_compile` in `acg/llm.py`).
+
+Runtime optional behavior includes **`ACG_AUTO_REPLAN`** (candidate-context promotion path—see `RuntimeConfig` in `acg/runtime.py`).
+
 For the live two-server demo, the orchestrator hits port 8081 (thinking) and sub-agents hit 8080 (`--reasoning-budget 0`). Override host/port via `make compile-gemma GEMMA_HOST=… GEMMA_PORT=…`.
 
 ## Architecture
@@ -49,25 +61,36 @@ For the live two-server demo, the orchestrator hits port 8081 (thinking) and sub
 
 ```
 tasks.json + repo
-   │
-   ▼  graph_builder/scan.ts (TS/JS, ts-morph)
-   │  acg/repo_graph.py + scan_java.py + scan_python.py (multi-language dispatcher)
-   ▼
-.acg/context_graph.json  (cached; reused unless --rescan-graph)
-   │
-   ▼  acg/predictor.py  (7 seeds: regex/symbol/topical/index/… → LLM rerank)
-   ▼  acg/index/aggregate.py (PageRank + BM25 + co-change + framework fusion)
-   │
-   ▼  acg/compiler.py  (build allowed_paths globs, test-task heuristic)
-   ▼  acg/solver.py  (conflict detection → DAG → topological groups)
-   │
-   ▼
+ │
+ ▼  acg/repo_graph.py — multi-language scan + localization merge
+ │    • TS/JS: graph_builder/scan.ts (ts-morph)
+ │    • Python: in-process AST (scan_python)
+ │    • Java: tree-sitter (scan_java)
+ │    • Optional SCIP: acg/localization/ + metadata on context graph
+ ▼
+.acg/context_graph.json  (cached; reused unless --rescan-graph / backend mismatch)
+ │
+ ▼  acg/predictor.py
+ │    • Eight documented baseline seed strategies (module docstring:
+ │      static, symbol, topical, test scaffold, env, sibling pattern,
+ │      index aggregate, module name) plus merges such as graph expansion,
+ │      planner hints, test/source links, auth/package seeds where applicable
+ │    • LLM re-rank when configured; deterministic fallback on failure
+ │    • Outputs PredictedWrite[] and tiered FileScope[] (must_write /
+ │      candidate_context / needs_replan)
+ ▼  acg/index/aggregate.py (BM25 / PageRank / co-change / framework / optional SCIP)
+ │
+ ▼  acg/compiler.py — predicted_writes, candidate_context_paths,
+ │                    allowed_paths, promote_candidate_paths (runtime/helper)
+ ▼  acg/solver.py — conflict DAG + parallel groups
+ │
+ ▼
 agent_lock.json (Pydantic v2 + JSON Schema validated)
 ```
 
 ### Runtime path
 
-`acg run` (in `acg/runtime.py`) reads `agent_lock.json`, fans tasks out by `parallel_group`. Per worker: builds prompt → calls sub-agent LLM → parses proposed writes → calls `acg.enforce.validate_write` per path. All ALLOWED/BLOCKED events stream to `run_trace.json`. `acg/perf.py` optionally records a `perf_trace.json`.
+`acg run` reads `agent_lock.json`, executes tasks by **`parallel_group`**, parses worker **`apply_patch`** output, applies patches via **`acg/apply_patch_adapter.py`**, validates with **`acg/enforce.validate_write`**, optionally auto-approves **candidate_context** paths via **`promote_candidate_paths`**, streams trace rows to **`run_trace.json`**. Optional **`perf_trace.json`** via `acg/perf.py`.
 
 ### Key invariants (don't break)
 
@@ -75,18 +98,18 @@ agent_lock.json (Pydantic v2 + JSON Schema validated)
 - **Enforce exit codes are stable**: `0` allowed, `1` user error, `2` blocked. Cascade hooks consume this. (`acg/enforce.py`)
 - **Schema versioning**: `agent_lock.schema.json` `version` is `const "1.0"`. Bumping the major is a breaking change for Devin / Windsurf / MCP consumers. Both JSON Schema and Pydantic models in `acg/schema.py` must accept the lockfile.
 - **LLM failure → seed fallback, never abort**: `acg/predictor.py` and `acg/llm.py` catch transport / JSON-parse / schema errors, log a warning, and fall through to the deterministic seed path. Don't add exceptions that escape compile.
-- **Module size discipline**: every `acg/*.py` module is kept under 300 lines. If a module grows past that, split before merging.
+- **Module size**: Prefer keeping new logic in focused modules. **Do not assume a 300-line cap still holds**—`acg/runtime.py`, `acg/predictor.py`, `acg/cli.py`, and `acg/repo_graph.py` are already larger; grow by **splitting new submodules** rather than inflating monoliths further.
 
 ### Multi-language graph scanning
 
-`acg compile --language` accepts `typescript` (default, runs `graph_builder/scan.ts` via `tsx`), `javascript`, `python` (in-process AST, `acg/repo_graph.py` → `scan_python.py` integration), `java` (in-process tree-sitter scanner, `graph_builder/scan_java.py`), or `auto`. Adding a new language means a new scanner + `predictor.py` heuristics — see `experiments/python_fastapi/` for a worked example.
+`acg compile --language` accepts `typescript` (default, runs `graph_builder/scan.ts` via `tsx`), `javascript`, `python` (in-process AST), `java` (tree-sitter), or `auto`. **`--localization-backend`** is `native` (default), `scip`, or `auto`.
 
 ### Experiments layout
 
 - `experiments/greenhouse/` — Java legacy demo; head-to-head harness (`headtohead.py`) with backends `mock`, `local`, `applied-diff`, `devin-manual`, `devin-api`. Results in `RESULTS.md`.
 - `experiments/realworld/` — NestJS / OpenRouter blind-evaluation pipeline.
 - `experiments/python_fastapi/` — Python-FastAPI mock evaluation.
-- `experiments/real_repos/` — upstream OSS repos cloned to `checkout/` at runtime (gitignored).
+- `experiments/real_repos/` — upstream OSS repos cloned to `checkout/` at runtime (gitignored); aggregator notes under `aggregate_all.md`.
 
 The greenhouse harness is reused by other experiments (`python -m experiments.greenhouse.headtohead --suite-name …`). Test discovery (`pyproject.toml`) is pinned to `tests/` so upstream `checkout/` test suites don't get collected.
 
@@ -96,7 +119,7 @@ The greenhouse harness is reused by other experiments (`python -m experiments.gr
 
 ### MCP
 
-`acg mcp --transport stdio` exposes `analyze_repo`, `predict_writes`, `compile_lockfile`, `validate_writes` over FastMCP. Requires the `mcp` extra: `pip install -e '.[mcp]'`. See `docs/MCP_SERVER.md`.
+`acg mcp --transport stdio` exposes `analyze_repo`, `predict_writes`, `compile_lockfile`, `validate_writes` over FastMCP. Implementation: **`acg/mcp/server.py`**. Requires the `mcp` extra: `pip install -e '.[mcp]'`. See `docs/MCP_SERVER.md`.
 
 ## Testing gotchas
 
