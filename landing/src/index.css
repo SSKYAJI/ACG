@@ -714,13 +714,35 @@ input:focus-visible,
 }
 
 @media (min-width: 880px) {
+  /* Sentinel + IO in ArtifactStory toggle .pipeline-anchor--pinned-centered once sticky engages */
   .pipeline-anchor {
     position: sticky;
     top: 5rem;
-    align-self: start;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .pipeline-anchor.pipeline-anchor--pinned-centered {
     min-height: calc(100vh - 5rem);
     justify-content: center;
   }
+}
+
+/* In-flow sentinel; keeps IO geometry stable (zero-height can be flaky across engines) */
+.pipeline-sticky-sentinel {
+  flex-shrink: 0;
+  width: 100%;
+  height: 1px;
+  margin: 0 0 -1px;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.pipeline-left-col {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
 }
 
 .pipeline-anchor .section-heading {

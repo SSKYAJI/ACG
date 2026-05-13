@@ -1,3 +1,4 @@
+import { usePipelineAnchorPinned } from "../hooks/usePipelineAnchorPinned";
 import { LINKS } from "../constants";
 
 type StoryItem = {
@@ -35,17 +36,27 @@ const STORIES: StoryItem[] = [
 
 export function ArtifactStory() {
   const embed = LINKS.demoVideoEmbed;
+  const { sentinelRef, pinnedCentered } = usePipelineAnchorPinned();
 
   return (
     <section className="story-section" id="artifacts" aria-labelledby="story-heading">
       <div className="container pipeline-grid">
-        <div className="pipeline-anchor">
-          <h2 className="h2 type-section-title" id="story-heading">
-            From repo scan to <span className="emphasis-orange">safer parallel execution</span>
-          </h2>
-          <p className="muted story-lead">
-            Scan → predict writes → enforce boundaries → run agents in parallel.
-          </p>
+        <div className="pipeline-left-col">
+          <div ref={sentinelRef} className="pipeline-sticky-sentinel" aria-hidden />
+          <div
+            className={
+              pinnedCentered
+                ? "pipeline-anchor pipeline-anchor--pinned-centered"
+                : "pipeline-anchor"
+            }
+          >
+            <h2 className="h2 type-section-title" id="story-heading">
+              From repo scan to <span className="emphasis-orange">safer parallel execution</span>
+            </h2>
+            <p className="muted story-lead">
+              Scan → predict writes → enforce boundaries → run agents in parallel.
+            </p>
+          </div>
         </div>
 
         <div className="pipeline-stack" aria-labelledby="story-heading">
