@@ -735,6 +735,10 @@ input:focus-visible,
     width: 100%;
     min-height: calc(100vh - 5rem);
   }
+
+  .pipeline-anchor-inner {
+    transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
 }
 
 /* In-flow sentinel; keeps IO geometry stable (zero-height can be flaky across engines) */
@@ -860,6 +864,11 @@ input:focus-visible,
 .impact-center .h2 {
   margin-left: auto;
   margin-right: auto;
+}
+
+.impact-title {
+  font-size: clamp(2rem, 4.4vw, 3rem);
+  line-height: 1.08;
 }
 
 .impact-lede {

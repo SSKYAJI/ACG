@@ -43,7 +43,7 @@ export function usePipelineAnchorPinned() {
       const contentHeight = content.getBoundingClientRect().height;
       const centeredOffset = Math.max(0, (availableHeight - contentHeight) / 2);
       const distancePastStickyTop = inset - sentinel.getBoundingClientRect().top;
-      const ramp = Math.max(180, centeredOffset || 0);
+      const ramp = Math.max(320, centeredOffset * 1.45 || 0);
       const progress = clamp(distancePastStickyTop / ramp, 0, 1);
       const next = progress * centeredOffset;
 
