@@ -1,0 +1,43 @@
+I'll analyze the `withoutBase` function and fix the normalization of repeated leading slashes.
+
+*** Begin Patch
+*** Update File: src/utils.ts
+@@
+ export function withoutBase(input: string, base: string) {
+   if (isEmptyURL(base)) {
+     return input;
+   }
+-  const _base = withoutTrailingSlash(base);
+-  if (!input.startsWith(_base)) {
++  const _base = withoutTrailingSlash(base);
++  const normalizedInput = input.replace(/^\/+/, "/");
++  if (!normalizedInput.startsWith(_base)) {
+     return input;
+   }
+-  const trimmed = input.slice(_base.length);
++  const trimmed = normalizedInput.slice(_base.length);
+   return trimmed.startsWith("/") ? trimmed : "/" + trimmed;
+ }
+*** Update File: test/base.test.ts
+@@
+ import { describe, expect, it } from "vitest";
+-import { withBase, withoutBase } from "../src";
++import { withBase, withoutBase } from "../src";
+ 
+ describe("withoutBase", () => {
+@@
+   it("handles empty base", () => {
+     expect(withoutBase("/foo/bar", "")).toBe("/foo/bar");
+   });
++
++  it("normalizes repeated leading slashes before stripping base", () => {
++    expect(withoutBase("//foo/bar", "/foo")).toBe("/bar");
++    expect(withoutBase("///foo/bar", "/foo")).toBe("/bar");
++    expect(withoutBase("//foo/bar/baz", "/foo/bar")).toBe("/baz");
++  });
++
++  it("returns original input when base does not match after normalization", () => {
++    expect(withoutBase("//other/bar", "/foo")).toBe("//other/bar");
++  });
+ });
+*** End Patch

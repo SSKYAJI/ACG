@@ -1,0 +1,89 @@
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+             if isinstance(a
+- # … [truncated; original file is 18487 bytes]
+*** End Patch
+
+I need to see the full invoke method. Let me provide the actual fix based on what I can see:
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+         stream_mixer = StreamMixer()
+ 
+         if self.echo_stdin:
+@@
+         finally:
+             for key, value in old_env.items():
+                 if value is None:
+                     try:
+                         del os.environ[key]
+                     except Exception:
+                         pass
+                 else:
+                     os.environ[key] = value
+             sys.stdout = old_stdout
+             sys.stderr = old_stderr
+             sys.stdin = old_stdin
++            sys.stdout.flush()
++            sys.stderr.flush()
+             termui.visible_prompt_func = old_visible_prompt_func
+*** End Patch
+
+The above won't work since sys.stdout/stderr are already restored. Let me look more carefully at the structure and provide the correct fix:
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+         finally:
+             for key, value in old_env.items():
+                 if value is None:
+                     try:
+                         del os.environ[key]
+                     except Exception:
+                         pass
+                 else:
+                     os.environ[key] = value
+             sys.stdout = old_stdout
+             sys.stderr = old_stderr
+             sys.stdin = old_stdin
+             termui.visible_prompt_func = old_visible_prompt_func
+@@
+-            sys.stdout = old_stdout
+-            sys.stderr = old_stderr
+-            sys.stdin = old_stdin
++            sys.stdout.flush()
++            sys.stderr.flush()
++            sys.stdout = old_stdout
++            sys.stderr = old_stderr
++            sys.stdin = old_stdin
+             termui.visible_prompt_func = old_visible_prompt_func
+*** End Patch
+
+*** Begin Patch
+*** Update File: tests/test_testing.py
+@@
+ def test_isolation_stderr_errors():
+     """Writing to stderr should escape invalid characters instead of
+     raising a UnicodeEncodeError.
+     """
+     runner = CliRunner()
+ 
+     with runner.isolation() as (_, err, _):
+         click.echo("\udce2", err=True, nl=False)
+ 
+     assert err.getvalue() == b"\\udce2"
++
++
++def test_stderr_unflushed():
++    """Data written to stderr without explicit flush should be captured."""
++
++    @click.command()
++    def cli():
++        print("error message", file=sys.stderr, flush=False)
++
++    runner = CliRunner()
++    result = runner.invoke(cli)
++    assert result.stderr == "error message\n"
+*** End Patch

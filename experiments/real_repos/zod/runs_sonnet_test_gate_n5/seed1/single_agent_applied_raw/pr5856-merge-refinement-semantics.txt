@@ -1,0 +1,132 @@
+*** Begin Patch
+*** Add File: packages/zod/src/v4/core/__tests__/merge-refinement-semantics.test.ts
+*** Content:
+import { describe, expect, it } from "vitest";
+import * as z from "../../index";
+
+describe("ZodObject.merge() refinement preservation regression", () => {
+  it("should preserve refinements from the base object when merging", () => {
+    const base = z
+      .object({ name: z.string(), age: z.number() })
+      .refine((data) => data.age >= 0, { message: "Age must be non-negative" });
+
+    const extension = z.object({ email: z.string() });
+
+    const merged = base.merge(extension);
+
+    // Should fail because age is negative
+    const result = merged.safeParse({ name: "Alice", age: -1, email: "a@b.com" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.message === "Age must be non-negative")).toBe(true);
+    }
+  });
+
+  it("should pass validation when refinement is satisfied after merge", () => {
+    const base = z
+      .object({ name: z.string(), age: z.number() })
+      .refine((data) => data.age >= 0, { message: "Age must be non-negative" });
+
+    const extension = z.object({ email: z.string() });
+
+    const merged = base.merge(extension);
+
+    const result = merged.safeParse({ name: "Alice", age: 25, email: "a@b.com" });
+    expect(result.success).toBe(true);
+  });
+
+  it("should preserve superRefine from the base object when merging", () => {
+    const base = z
+      .object({ password: z.string(), confirm: z.string() })
+      .superRefine((data, ctx) => {
+        if (data.password !== data.confirm) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Passwords do not match",
+          });
+        }
+      });
+
+    const extension = z.object({ username: z.string() });
+    const merged = base.merge(extension);
+
+    const failResult = merged.safeParse({
+      password: "abc",
+      confirm: "xyz",
+      username: "user1",
+    });
+    expect(failResult.success).toBe(false);
+    if (!failResult.success) {
+      expect(failResult.error.issues.some((i) => i.message === "Passwords do not match")).toBe(true);
+    }
+
+    const passResult = merged.safeParse({
+      password: "abc",
+      confirm: "abc",
+      username: "user1",
+    });
+    expect(passResult.success).toBe(true);
+  });
+
+  it("merge() should behave the same as extend() with respect to refinements", () => {
+    const base = z
+      .object({ count: z.number() })
+      .refine((data) => data.count > 0, { message: "Count must be positive" });
+
+    const extra = z.object({ label: z.string() });
+
+    const merged = base.merge(extra);
+    const extended = base.extend({ label: z.string() });
+
+    const invalidInput = { count: -1, label: "test" };
+
+    const mergedResult = merged.safeParse(invalidInput);
+    const extendedResult = extended.safeParse(invalidInput);
+
+    expect(mergedResult.success).toBe(extendedResult.success);
+    expect(mergedResult.success).toBe(false);
+  });
+
+  it("should preserve multiple refinements after merge", () => {
+    const base = z
+      .object({ a: z.number(), b: z.number() })
+      .refine((d) => d.a > 0, { message: "a must be positive" })
+      .refine((d) => d.b > 0, { message: "b must be positive" });
+
+    const merged = base.merge(z.object({ c: z.string() }));
+
+    const result = merged.safeParse({ a: -1, b: -1, c: "hello" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i) => i.message);
+      expect(messages).toContain("a must be positive");
+      expect(messages).toContain("b must be positive");
+    }
+  });
+
+  it("merge() without refinements should still work correctly", () => {
+    const base = z.object({ a: z.string() });
+    const other = z.object({ b: z.number() });
+    const merged = base.merge(other);
+
+    expect(merged.parse({ a: "hello", b: 42 })).toEqual({ a: "hello", b: 42 });
+  });
+
+  it("fields from the merged schema should override base fields", () => {
+    const base = z
+      .object({ a: z.string(), b: z.string() })
+      .refine((d) => d.a.length > 0, { message: "a must not be empty" });
+
+    const other = z.object({ b: z.number() }); // b overrides base's b
+    const merged = base.merge(other);
+
+    // b should now be a number
+    const result = merged.safeParse({ a: "hello", b: 42 });
+    expect(result.success).toBe(true);
+
+    // Refinement should still apply
+    const failResult = merged.safeParse({ a: "", b: 42 });
+    expect(failResult.success).toBe(false);
+  });
+});
+*** End Patch

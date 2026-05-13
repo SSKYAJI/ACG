@@ -1,0 +1,105 @@
+*** Begin Patch
+*** Add File: tests/test_enum_by_name.py
+--- /dev/null
++++ tests/test_enum_by_name.py
+@@ -0,0 +1,97 @@
++"""Regression tests for Enum field by-name lookup (pr2902)."""
++import enum
++import pytest
++from marshmallow import Schema, fields
++from marshmallow.exceptions import ValidationError
++
++
++class Color(enum.Enum):
++    RED = 1
++    GREEN = 2
++    BLUE = 3
++
++    def describe(self):
++        return f"I am {self.name}"
++
++    @property
++    def label(self):
++        return self.name.lower()
++
++    @classmethod
++    def from_string(cls, s):
++        return cls[s.upper()]
++
++
++class Status(enum.Enum):
++    ACTIVE = "active"
++    INACTIVE = "inactive"
++
++
++class TestEnumByNameLookup:
++    """Tests for Enum field by-name lookup."""
++
++    def test_valid_member_by_name(self):
++        """Valid enum member names should deserialize correctly."""
++        field = fields.Enum(Color)
++        result = field.deserialize("RED", "color", {})
++        assert result == Color.RED
++
++    def test_valid_member_by_name_green(self):
++        """Valid enum member name GREEN should deserialize correctly."""
++        field = fields.Enum(Color)
++        result = field.deserialize("GREEN", "color", {})
++        assert result == Color.GREEN
++
++    def test_method_name_raises_validation_error(self):
++        """Accessing a method name (non-member) should raise ValidationError."""
++        field = fields.Enum(Color)
++        with pytest.raises(ValidationError):
++            field.deserialize("describe", "color", {})
++
++    def test_property_name_raises_validation_error(self):
++        """Accessing a property name (non-member) should raise ValidationError."""
++        field = fields.Enum(Color)
++        with pytest.raises(ValidationError):
++            field.deserialize("label", "color", {})
++
++    def test_classmethod_name_raises_validation_error(self):
++        """Accessing a classmethod name (non-member) should raise ValidationError."""
++        field = fields.Enum(Color)
++        with pytest.raises(ValidationError):
++            field.deserialize("from_string", "color", {})
++
++    def test_nonexistent_name_raises_validation_error(self):
++        """Accessing a nonexistent name should raise ValidationError."""
++        field = fields.Enum(Color)
++        with pytest.raises(ValidationError):
++            field.deserialize("PURPLE", "color", {})
++
++    def test_by_value_still_works(self):
++        """By-value lookup should still work correctly."""
++        field = fields.Enum(Color, by_value=True)
++        result = field.deserialize(1, "color", {})
++        assert result == Color.RED
++
++    def test_by_value_invalid_raises_error(self):
++        """By-value lookup with invalid value should raise ValidationError."""
++        field = fields.Enum(Color, by_value=True)
++        with pytest.raises(ValidationError):
++            field.deserialize(99, "color", {})
++
++    def test_serialize_by_name(self):
++        """Serialization by name should return the member name."""
++        field = fields.Enum(Color)
++        result = field._serialize(Color.RED, "color", {})
++        assert result == "RED"
++
++    def test_serialize_by_value(self):
++        """Serialization by value should return the member value."""
++        field = fields.Enum(Color, by_value=True)
++        result = field._serialize(Color.RED, "color", {})
++        assert result == 1
++
++    def test_enum_member_access_uses_enum_members_only(self):
++        """Enum field should only return actual enum members, not class attributes."""
++        field = fields.Enum(Color)
++        # These are actual members and should work
++        for name in ["RED", "GREEN", "BLUE"]:
++            result = field.deserialize(name, "color", {})
++            assert isinstance(result, Color)
+*** End Patch

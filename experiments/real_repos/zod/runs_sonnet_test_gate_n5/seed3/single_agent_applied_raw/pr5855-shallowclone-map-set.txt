@@ -1,0 +1,61 @@
+*** Begin Patch
+*** Add File: packages/zod/src/v4/core/__tests__/regression-shallowclone-map-set.test.ts
++import { describe, expect, it } from "vitest";
++import * as z from "zod/v4";
++
++describe("regression: shallowClone Map and Set defaults (pr5855)", () => {
++  it("Map default values are independent copies across parses", () => {
++    const schema = z.object({
++      data: z.map(z.string(), z.number()).default(new Map([["a", 1], ["b", 2]])),
++    });
++
++    const r1 = schema.parse({});
++    const r2 = schema.parse({});
++
++    // They should not be the same reference
++    expect(r1.data).not.toBe(r2.data);
++
++    // Mutating r1 should not affect r2
++    r1.data.set("c", 3);
++    expect(r2.data.has("c")).toBe(false);
++    expect(r2.data.size).toBe(2);
++  });
++
++  it("Set default values are independent copies across parses", () => {
++    const schema = z.object({
++      tags: z.set(z.string()).default(new Set(["foo", "bar"])),
++    });
++
++    const r1 = schema.parse({});
++    const r2 = schema.parse({});
++
++    // They should not be the same reference
++    expect(r1.tags).not.toBe(r2.tags);
++
++    // Mutating r1 should not affect r2
++    r1.tags.add("baz");
++    expect(r2.tags.has("baz")).toBe(false);
++    expect(r2.tags.size).toBe(2);
++  });
++
++  it("Map default is not the same reference as the original default value", () => {
++    const originalDefault = new Map<string, number>([["x", 10]]);
++    const schema = z.object({
++      m: z.map(z.string(), z.number()).default(originalDefault),
++    });
++
++    const result = schema.parse({});
++    expect(result.m).not.toBe(originalDefault);
++  });
++
++  it("Set default is not the same reference as the original default value", () => {
++    const originalDefault = new Set<number>([1, 2, 3]);
++    const schema = z.object({
++      s: z.set(z.number()).default(originalDefault),
++    });
++
++    const result = schema.parse({});
++    expect(result.s).not.toBe(originalDefault);
++  });
++});
+*** End Patch

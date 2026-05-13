@@ -1,0 +1,40 @@
+ starting (group 0)
+[worker pr3960-tasklist-setext] still waiting at 30s...
+ proposed 4 writes (44.20s, 3849 tokens)
+   BLOCKED pr3960-tasklist-setext → gfm/tokenizer.js: path 'gfm/tokenizer.js' is
+outside task 'pr3960-tasklist-setext''s allowed_paths (src/Tokenizer.ts, 
+test/unit/Lexer.test.js)
+   BLOCKED pr3960-tasklist-setext → gfm/tokenizer.test.js: path 
+'gfm/tokenizer.test.js' is outside task 'pr3960-tasklist-setext''s allowed_paths
+(src/Tokenizer.ts, test/unit/Lexer.test.js)
+   BLOCKED pr3960-tasklist-setext → gfm/spec.md: path 'gfm/spec.md' is outside 
+task 'pr3960-tasklist-setext''s allowed_paths (src/Tokenizer.ts, 
+test/unit/Lexer.test.js)
+   BLOCKED pr3960-tasklist-setext → package.json: path 'package.json' is outside
+task 'pr3960-tasklist-setext''s allowed_paths (src/Tokenizer.ts, 
+test/unit/Lexer.test.js)
+[naive_parallel_blind/local] wrote experiments/real_repos/marked/runs_sonnet_test_gate_canary/seed1/eval_run_naive_parallel_blind.json — completed=0/1, evidence=naive_parallel_blind_applied_diff, overlaps=0, oob=4, blocked=4, wall=47.438s
+ starting (group 0)
+ proposed 7 writes (19.49s, 1426 tokens)
+   ALLOWED pr3960-tasklist-setext → src/Tokenizer.ts
+   ALLOWED pr3960-tasklist-setext → src/Tokenizer.ts
+   ALLOWED pr3960-tasklist-setext → src/Tokenizer.ts
+   ALLOWED pr3960-tasklist-setext → src/Tokenizer.ts
+   ALLOWED pr3960-tasklist-setext → test/unit/Lexer.test.js
+   ALLOWED pr3960-tasklist-setext → src/Tokenizer.ts
+   ALLOWED pr3960-tasklist-setext → test/unit/Lexer.test.js
+[naive_parallel/local] wrote experiments/real_repos/marked/runs_sonnet_test_gate_canary/seed1/eval_run_naive.json — completed=1/1, evidence=applied_diff, overlaps=0, oob=0, blocked=0, wall=21.459s
+ starting (group 1)
+[worker pr3960-tasklist-setext] still waiting at 30s...
+[bold red][worker pr3960-tasklist-setext] LLM finish_reason=length — 
+finish_reason=length; output truncated at max_tokens=4096
+[acg_planned_full_context/local] wrote experiments/real_repos/marked/runs_sonnet_test_gate_canary/seed1/eval_run_acg_full_context.json — completed=0/1, evidence=applied_diff, overlaps=0, oob=0, blocked=0, wall=50.172s
+ starting (group 1)
+[worker pr3960-tasklist-setext] still waiting at 30s...
+[bold red][worker pr3960-tasklist-setext] LLM finish_reason=length — 
+finish_reason=length; output truncated at max_tokens=4096
+[acg_planned/local] wrote experiments/real_repos/marked/runs_sonnet_test_gate_canary/seed1/eval_run_acg.json — completed=0/1, evidence=applied_diff, overlaps=0, oob=0, blocked=0, wall=60.607s
+[worker single_agent_applied] still waiting at 30s...
+[worker single_agent_applied] still waiting at 60s...
+[single_agent/local] wrote experiments/real_repos/marked/runs_sonnet_test_gate_canary/seed1/eval_run_single_agent.json — completed=0/1, evidence=suite_applied_diff, overlaps=0, oob=9, blocked=0, wall=63.234s
+[combined] wrote experiments/real_repos/marked/runs_sonnet_test_gate_canary/seed1/eval_run_combined.json

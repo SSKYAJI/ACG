@@ -1,0 +1,350 @@
+{
+  "backend": "local",
+  "created_at": "2026-05-13T06:56:10Z",
+  "evidence_kind": "applied_diff",
+  "execution_mode": "applied_diff_live",
+  "lockfile": "experiments/real_repos/zod/agent_lock_combined.json",
+  "model": {
+    "model": "claude-sonnet-4-6",
+    "provider": "openai-compatible",
+    "url": "https://api.anthropic.com/v1"
+  },
+  "repo": {
+    "commit": "b6b1288277e6ca87dab0ad1c7251b92612b7445c",
+    "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/zod/checkout",
+    "url": "https://github.com/colinhacks/zod.git"
+  },
+  "run_id": "greenhouse-local-acg_planned_full_context-20260513-065610",
+  "strategy": "acg_planned_full_context",
+  "suite_name": "zod-sonnet-test-gate-n5-seed4",
+  "summary_metrics": {
+    "acus_consumed_total": null,
+    "applied_changed_files_total": 4,
+    "blocked_invalid_write_count": 0,
+    "compile_cost_usd": null,
+    "compile_wall_seconds": 9.2772,
+    "cost_method": null,
+    "cost_per_completed_task": null,
+    "cost_source": null,
+    "cost_usd_total": null,
+    "cupp_rate": 0.3333,
+    "first_run_pass_rate": 0.0,
+    "human_interventions": 0,
+    "integration_burden": {
+      "blocked_events_total": 0,
+      "changed_file_mentions_total": 4,
+      "changed_lines_added": null,
+      "changed_lines_deleted": null,
+      "changed_lines_total": null,
+      "diff_stats_kind": null,
+      "duplicate_file_touches": 1,
+      "out_of_bounds_files_total": 0,
+      "overlapping_files": [
+        "packages/zod/src/v4/core/util.ts"
+      ],
+      "overlapping_task_pairs": 1,
+      "review_file_mentions_total": 4,
+      "review_unique_files_total": 3,
+      "unique_changed_files": 3
+    },
+    "merge_conflicts": 0,
+    "model_silence_count": 0,
+    "oob_files_per_task_mean": 0.0,
+    "out_of_bounds_write_count": 0,
+    "overlapping_write_pairs": 1,
+    "patch_na_count": 0,
+    "proposal_completion_rate": 0.0,
+    "proposal_status_counts": {
+      "declined": 0,
+      "ok": 3,
+      "transport_error": 0,
+      "truncated": 0,
+      "unparseable": 0
+    },
+    "replan_rescued_count": 0,
+    "resolved_unsafe_rate": 0.0,
+    "successful_parallel_speedup": null,
+    "task_completion_rate": 0.0,
+    "tasks_completed": 0,
+    "tasks_completed_per_hour": 0.0,
+    "tasks_total": 3,
+    "tested_completion_rate": 0.0,
+    "tested_tasks_completed": 0,
+    "tests_ran_count": 3,
+    "tests_total_run": 128,
+    "tokens_all_in": 79606,
+    "tokens_completion_method": "provider_usage_completion_tokens",
+    "tokens_completion_total": 11193,
+    "tokens_orchestrator_overhead": null,
+    "tokens_per_cupp": 11193.0,
+    "tokens_planner_completion_total": 491,
+    "tokens_planner_method": "provider_usage",
+    "tokens_planner_total": 23192,
+    "tokens_prompt_method": "provider_usage_prompt_tokens",
+    "tokens_prompt_total": 55043,
+    "tokens_scope_review_total": 1371,
+    "tokens_total_per_task_mean": 22078.6667,
+    "tokens_worker_prompt_total": 55043,
+    "total_cost_usd_with_compile": null,
+    "total_wall_seconds_with_compile": 106.1561,
+    "typecheck_fail_count": 3,
+    "typecheck_pass_count": 0,
+    "typecheck_skipped_count": 0,
+    "unresolved_safe_rate": 0.6667,
+    "unresolved_unsafe_rate": 0.0,
+    "wall_time_seconds": 96.8789
+  },
+  "tasks": [
+    {
+      "actual_changed_files": [
+        "packages/zod/src/v4/classic/tests/default.test.ts",
+        "packages/zod/src/v4/core/util.ts"
+      ],
+      "actual_changed_files_kind": "applied_diff",
+      "allowed_write_globs": [
+        "packages/zod/src/v3/**",
+        "packages/zod/src/v4/classic/tests/**",
+        "packages/zod/src/v4/core/**"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "raw_reply": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "fail_to_pass_passed": 8,
+      "fail_to_pass_total": 8,
+      "failure_reason": "FAILED_TYPECHECK",
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": null,
+        "cost_usd": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "patch_applies": true,
+        "tokens_completion": 503,
+        "tokens_prompt": 14241,
+        "typecheck_diagnostic_count": 0,
+        "typecheck_exit_code": 2,
+        "typecheck_ran": true,
+        "typecheck_wall_seconds": 7.5771,
+        "wall_time_seconds": 5.8457
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [
+        "pr5856-merge-refinement-semantics"
+      ],
+      "overlay_applied": true,
+      "overlay_skip_reason": "",
+      "pass_to_pass_passed": 32,
+      "pass_to_pass_total": 32,
+      "patch_na_reason": null,
+      "predicted_write_files": [
+        "packages/zod/src/v4/core/util.ts",
+        "packages/zod/src/v3/types.ts",
+        "packages/zod/src/v4/classic/tests/default.test.ts"
+      ],
+      "prompt": "In v4, Map and Set values returned by defaulted schemas are shared references rather than independent copies. After parsing an object with a defaulted Map or Set field, mutating the returned value affects subsequent parses. Fix shallowClone in packages/zod/src/v4/core/util.ts so each parse returns an independent copy for Map and Set types, and add regression tests.",
+      "proposal_status": "ok",
+      "proposal_write_count": 2,
+      "session_id": null,
+      "status": "failed",
+      "task_id": "pr5855-shallowclone-map-set",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "tests_collection_error": false,
+      "tests_exit_code": 0,
+      "tests_failed_count": 0,
+      "tests_passed_count": 40,
+      "tests_ran": true,
+      "tests_skip_reason": "",
+      "tests_total_count": 40,
+      "timestamps": {
+        "finished_at": "2026-05-13T06:56:10Z",
+        "started_at": "2026-05-13T06:54:33Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "packages/zod/src/v4/core/util.ts"
+      ],
+      "actual_changed_files_kind": "applied_diff",
+      "allowed_write_globs": [
+        "packages/integration/fixtures/ai-sdk/**",
+        "packages/zod/src/v3/**",
+        "packages/zod/src/v4/classic/tests/**",
+        "packages/zod/src/v4/core/**"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "raw_reply": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "fail_to_pass_passed": 3,
+      "fail_to_pass_total": 6,
+      "failure_reason": "FAILED_TYPECHECK",
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": null,
+        "cost_usd": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "patch_applies": true,
+        "tokens_completion": 6884,
+        "tokens_prompt": 17082,
+        "typecheck_diagnostic_count": 0,
+        "typecheck_exit_code": 2,
+        "typecheck_ran": true,
+        "typecheck_wall_seconds": 7.2987,
+        "wall_time_seconds": 60.22
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [
+        "pr5855-shallowclone-map-set"
+      ],
+      "overlay_applied": true,
+      "overlay_skip_reason": "",
+      "pass_to_pass_passed": 49,
+      "pass_to_pass_total": 98,
+      "patch_na_reason": null,
+      "predicted_write_files": [
+        "packages/zod/src/v4/core/util.ts",
+        "packages/zod/src/v3/types.ts",
+        "packages/integration/fixtures/ai-sdk/index.ts",
+        "packages/zod/src/v4/classic/tests/object.test.ts"
+      ],
+      "prompt": "In v4, calling .merge() on a ZodObject that has refinements (e.g., .refine(), .superRefine()) silently discards those refinements from the merged result, while .extend() preserves them. Align .merge() to preserve refinements the same way .extend() does by updating packages/zod/src/v4/core/util.ts, and add regression tests.",
+      "proposal_status": "ok",
+      "proposal_write_count": 8,
+      "session_id": null,
+      "status": "failed",
+      "task_id": "pr5856-merge-refinement-semantics",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "tests_collection_error": false,
+      "tests_exit_code": 0,
+      "tests_failed_count": 0,
+      "tests_passed_count": 52,
+      "tests_ran": true,
+      "tests_skip_reason": "",
+      "tests_total_count": 52,
+      "timestamps": {
+        "finished_at": "2026-05-13T06:56:10Z",
+        "started_at": "2026-05-13T06:54:33Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "packages/zod/src/v4/classic/tests/tuple.test.ts"
+      ],
+      "actual_changed_files_kind": "applied_diff",
+      "allowed_write_globs": [
+        "packages/zod/src/v3/**",
+        "packages/zod/src/v4/classic/tests/**",
+        "packages/zod/src/v4/core/**"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "raw_reply": null,
+        "session_id": null
+      },
+      "blocked_write_events": [],
+      "fail_to_pass_passed": 3,
+      "fail_to_pass_total": 6,
+      "failure_reason": "FAILED_TYPECHECK",
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": null,
+        "cost_usd": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "patch_applies": true,
+        "tokens_completion": 3806,
+        "tokens_prompt": 23720,
+        "typecheck_diagnostic_count": 0,
+        "typecheck_exit_code": 2,
+        "typecheck_ran": true,
+        "typecheck_wall_seconds": 7.0776,
+        "wall_time_seconds": 45.8637
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "overlay_applied": true,
+      "overlay_skip_reason": "",
+      "pass_to_pass_passed": 26,
+      "pass_to_pass_total": 30,
+      "patch_na_reason": null,
+      "predicted_write_files": [
+        "packages/zod/src/v4/core/schemas.ts",
+        "packages/zod/src/v3/types.ts",
+        "packages/zod/src/v4/classic/tests/tuple.test.ts",
+        "packages/zod/src/v4/core/json-schema-processors.ts",
+        "packages/zod/src/v4/core/to-json-schema.ts",
+        "packages/zod/src/v4/core/util.ts"
+      ],
+      "prompt": "In v4, tuple schemas with optional elements followed by required elements with defaults incorrectly accept inputs that have holes (undefined) before the required default fields, when they should be rejected. Fix the tuple parsing logic in packages/zod/src/v4/core/schemas.ts to reject such inputs and add regression tests.",
+      "proposal_status": "ok",
+      "proposal_write_count": 3,
+      "session_id": null,
+      "status": "failed",
+      "task_id": "pr5900-tuple-holes-defaults",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "tests_collection_error": false,
+      "tests_exit_code": 1,
+      "tests_failed_count": 7,
+      "tests_passed_count": 29,
+      "tests_ran": true,
+      "tests_skip_reason": "",
+      "tests_total_count": 36,
+      "timestamps": {
+        "finished_at": "2026-05-13T06:56:10Z",
+        "started_at": "2026-05-13T06:54:33Z"
+      }
+    }
+  ],
+  "version": "0.1"
+}

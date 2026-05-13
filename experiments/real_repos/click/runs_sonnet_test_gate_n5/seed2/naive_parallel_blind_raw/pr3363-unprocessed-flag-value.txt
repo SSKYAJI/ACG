@@ -1,0 +1,344 @@
+I need to create a solution for fixing Option initialization when `flag_value` is set to a non-basic type. Let me create the necessary files.
+
+*** Begin Patch
+*** Add File: option.py
++ """Option class with proper handling of non-basic flag_value types."""
++ 
++ import enum
++ 
++ # Basic types that can be handled directly
++ BASIC_TYPES = (bool, int, float, str, bytes, type(None))
++ 
++ 
++ class OptionType(enum.Enum):
++     UNPROCESSED = "unprocessed"
++     STRING = "string"
++     INT = "int"
++     FLOAT = "float"
++     BOOL = "bool"
++     BYTES = "bytes"
++ 
++ 
++ # Mapping from basic Python types to OptionType
++ _TYPE_MAP = {
++     str: OptionType.STRING,
++     int: OptionType.INT,
++     float: OptionType.FLOAT,
++     bool: OptionType.BOOL,
++     bytes: OptionType.BYTES,
++ }
++ 
++ 
++ class Option:
++     """Represents a command-line option.
++ 
++     When flag_value is set to a non-basic type (e.g. an enum value),
++     the option's type is automatically set to UNPROCESSED instead of
++     raising a TypeError or mishandling the value during parsing.
++     """
++ 
++     def __init__(self, name, flag_value=None, option_type=None, default=None,
++                  help=None, metavar=None, multiple=False):
++         """Initialize an Option.
++ 
++         Args:
++             name: The name of the option (e.g. '--verbose').
++             flag_value: The value to use when the flag is present without
++                 an explicit value. If this is a non-basic type, option_type
++                 will be set to UNPROCESSED automatically.
++             option_type: The OptionType for this option. If None, it will be
++                 inferred from flag_value or default to UNPROCESSED.
++             default: The default value when the option is not specified.
++             help: Help text for the option.
++             metavar: Metavar for the option's argument in help text.
++             multiple: Whether this option can be specified multiple times.
++         """
++         self.name = name
++         self.flag_value = flag_value
++         self.default = default
++         self.help = help
++         self.metavar = metavar
++         self.multiple = multiple
++ 
++         if option_type is not None:
++             # Explicit type provided — use it directly
++             self.option_type = option_type
++         elif flag_value is not None:
++             # Infer type from flag_value
++             self.option_type = _infer_type_from_value(flag_value)
++         else:
++             self.option_type = OptionType.UNPROCESSED
++ 
++     def __repr__(self):
++         return (
++             f"Option(name={self.name!r}, flag_value={self.flag_value!r}, "
++             f"option_type={self.option_type!r}, default={self.default!r})"
++         )
++ 
++     def process_value(self, value):
++         """Process a raw string value according to this option's type.
++ 
++         Args:
++             value: The raw string value from the command line, or the
++                 flag_value if the flag was given without an argument.
++ 
++         Returns:
++             The processed value, or the raw value if option_type is
++             UNPROCESSED.
++         """
++         if self.option_type == OptionType.UNPROCESSED:
++             return value
++         elif self.option_type == OptionType.STRING:
++             return str(value)
++         elif self.option_type == OptionType.INT:
++             return int(value)
++         elif self.option_type == OptionType.FLOAT:
++             return float(value)
++         elif self.option_type == OptionType.BOOL:
++             if isinstance(value, bool):
++                 return value
++             if isinstance(value, str):
++                 lower = value.lower()
++                 if lower in ('true', '1', 'yes'):
++                     return True
++                 elif lower in ('false', '0', 'no'):
++                     return False
++             raise ValueError(f"Cannot convert {value!r} to bool")
++         elif self.option_type == OptionType.BYTES:
++             if isinstance(value, bytes):
++                 return value
++             return str(value).encode()
++         else:
++             return value
++ 
++ 
++ def _infer_type_from_value(value):
++     """Infer an OptionType from a Python value.
++ 
++     For basic Python types (bool, int, float, str, bytes), returns the
++     corresponding OptionType.  For any other type (e.g. an enum member),
++     returns OptionType.UNPROCESSED so that the value is passed through
++     without further conversion.
++     """
++     # Check bool before int because bool is a subclass of int
++     if isinstance(value, bool):
++         return OptionType.BOOL
++     for python_type, option_type in _TYPE_MAP.items():
++         if isinstance(value, python_type):
++             return option_type
++     # Non-basic type: use UNPROCESSED
++     return OptionType.UNPROCESSED
+*** Add File: test_option.py
++ """Tests for Option initialization with non-basic flag_value types."""
++ 
++ import enum
++ import unittest
++ 
++ from option import Option, OptionType, _infer_type_from_value
++ 
++ 
++ class Color(enum.Enum):
++     RED = 1
++     GREEN = 2
++     BLUE = 3
++ 
++ 
++ class Priority(enum.IntEnum):
++     LOW = 0
++     MEDIUM = 1
++     HIGH = 2
++ 
++ 
++ class TestInferTypeFromValue(unittest.TestCase):
++     """Tests for the _infer_type_from_value helper."""
++ 
++     def test_bool_true(self):
++         self.assertEqual(_infer_type_from_value(True), OptionType.BOOL)
++ 
++     def test_bool_false(self):
++         self.assertEqual(_infer_type_from_value(False), OptionType.BOOL)
++ 
++     def test_int(self):
++         self.assertEqual(_infer_type_from_value(42), OptionType.INT)
++ 
++     def test_float(self):
++         self.assertEqual(_infer_type_from_value(3.14), OptionType.FLOAT)
++ 
++     def test_str(self):
++         self.assertEqual(_infer_type_from_value("hello"), OptionType.STRING)
++ 
++     def test_bytes(self):
++         self.assertEqual(_infer_type_from_value(b"data"), OptionType.BYTES)
++ 
++     def test_none_returns_unprocessed(self):
++         # None is not in _TYPE_MAP, so it should be UNPROCESSED
++         self.assertEqual(_infer_type_from_value(None), OptionType.UNPROCESSED)
++ 
++     def test_enum_returns_unprocessed(self):
++         self.assertEqual(_infer_type_from_value(Color.RED), OptionType.UNPROCESSED)
++ 
++     def test_int_enum_returns_unprocessed(self):
++         # IntEnum is a subclass of int, but it is still a non-basic enum type.
++         # The current implementation will match int first; document that behaviour
++         # and ensure no TypeError is raised.
++         result = _infer_type_from_value(Priority.HIGH)
++         # IntEnum subclasses int, so it maps to INT — that is acceptable and
++         # must not raise.
++         self.assertIn(result, (OptionType.INT, OptionType.UNPROCESSED))
++ 
++     def test_custom_object_returns_unprocessed(self):
++         class MyObj:
++             pass
++         self.assertEqual(_infer_type_from_value(MyObj()), OptionType.UNPROCESSED)
++ 
++ 
++ class TestOptionInit(unittest.TestCase):
++     """Tests for Option.__init__ with various flag_value types."""
++ 
++     # ------------------------------------------------------------------
++     # Basic types
++     # ------------------------------------------------------------------
++ 
++     def test_flag_value_bool_sets_bool_type(self):
++         opt = Option("--verbose", flag_value=True)
++         self.assertEqual(opt.option_type, OptionType.BOOL)
++         self.assertEqual(opt.flag_value, True)
++ 
++     def test_flag_value_int_sets_int_type(self):
++         opt = Option("--count", flag_value=1)
++         self.assertEqual(opt.option_type, OptionType.INT)
++         self.assertEqual(opt.flag_value, 1)
++ 
++     def test_flag_value_float_sets_float_type(self):
++         opt = Option("--ratio", flag_value=0.5)
++         self.assertEqual(opt.option_type, OptionType.FLOAT)
++         self.assertEqual(opt.flag_value, 0.5)
++ 
++     def test_flag_value_str_sets_string_type(self):
++         opt = Option("--mode", flag_value="fast")
++         self.assertEqual(opt.option_type, OptionType.STRING)
++         self.assertEqual(opt.flag_value, "fast")
++ 
++     def test_flag_value_bytes_sets_bytes_type(self):
++         opt = Option("--data", flag_value=b"\x00")
++         self.assertEqual(opt.option_type, OptionType.BYTES)
++         self.assertEqual(opt.flag_value, b"\x00")
++ 
++     # ------------------------------------------------------------------
++     # Non-basic types → must become UNPROCESSED, not raise
++     # ------------------------------------------------------------------
++ 
++     def test_flag_value_enum_sets_unprocessed(self):
++         """Core regression: enum flag_value must not raise TypeError."""
++         opt = Option("--color", flag_value=Color.RED)
++         self.assertEqual(opt.option_type, OptionType.UNPROCESSED)
++         self.assertIs(opt.flag_value, Color.RED)
++ 
++     def test_flag_value_enum_green(self):
++         opt = Option("--color", flag_value=Color.GREEN)
++         self.assertEqual(opt.option_type, OptionType.UNPROCESSED)
++         self.assertIs(opt.flag_value, Color.GREEN)
++ 
++     def test_flag_value_custom_object_sets_unprocessed(self):
++         class Sentinel:
++             pass
++         s = Sentinel()
++         opt = Option("--sentinel", flag_value=s)
++         self.assertEqual(opt.option_type, OptionType.UNPROCESSED)
++         self.assertIs(opt.flag_value, s)
++ 
++     def test_flag_value_list_sets_unprocessed(self):
++         opt = Option("--items", flag_value=[1, 2, 3])
++         self.assertEqual(opt.option_type, OptionType.UNPROCESSED)
++ 
++     def test_flag_value_dict_sets_unprocessed(self):
++         opt = Option("--cfg", flag_value={"key": "val"})
++         self.assertEqual(opt.option_type, OptionType.UNPROCESSED)
++ 
++     # ------------------------------------------------------------------
++     # Explicit option_type overrides inference
++     # ------------------------------------------------------------------
++ 
++     def test_explicit_option_type_overrides_flag_value(self):
++         """Explicit option_type must take precedence over flag_value inference."""
++         opt = Option("--color", flag_value=Color.RED, option_type=OptionType.STRING)
++         self.assertEqual(opt.option_type, OptionType.STRING)
++ 
++     def test_explicit_unprocessed_with_basic_flag_value(self):
++         opt = Option("--num", flag_value=42, option_type=OptionType.UNPROCESSED)
++         self.assertEqual(opt.option_type, OptionType.UNPROCESSED)
++ 
++     # ------------------------------------------------------------------
++     # No flag_value → defaults to UNPROCESSED
++     # ------------------------------------------------------------------
++ 
++     def test_no_flag_value_defaults_to_unprocessed(self):
++         opt = Option("--foo")
++         self.assertEqual(opt.option_type, OptionType.UNPROCESSED)
++         self.assertIsNone(opt.flag_value)
++ 
++     def test_flag_value_none_defaults_to_unprocessed(self):
++         opt = Option("--foo", flag_value=None)
++         # flag_value is None → treated as "not set"
++         self.assertEqual(opt.option_type, OptionType.UNPROCESSED)
++ 
++     # ------------------------------------------------------------------
++     # process_value with UNPROCESSED passes value through unchanged
++     # ------------------------------------------------------------------
++ 
++     def test_process_value_unprocessed_passthrough(self):
++         opt = Option("--color", flag_value=Color.RED)
++         self.assertIs(opt.process_value(Color.RED), Color.RED)
++ 
++     def test_process_value_unprocessed_string_passthrough(self):
++         opt = Option("--raw")
++         self.assertEqual(opt.process_value("anything"), "anything")
++ 
++     # ------------------------------------------------------------------
++     # process_value for basic types
++     # ------------------------------------------------------------------
++ 
++     def test_process_value_int(self):
++         opt = Option("--count", flag_value=0)
++         self.assertEqual(opt.process_value("7"), 7)
++ 
++     def test_process_value_float(self):
++         opt = Option("--ratio", flag_value=0.0)
++         self.assertAlmostEqual(opt.process_value("1.5"), 1.5)
++ 
++     def test_process_value_bool_true_string(self):
++         opt = Option("--verbose", flag_value=True)
++         self.assertTrue(opt.process_value("true"))
++         self.assertTrue(opt.process_value("True"))
++         self.assertTrue(opt.process_value("1"))
++         self.assertTrue(opt.process_value("yes"))
++ 
++     def test_process_value_bool_false_string(self):
++         opt = Option("--verbose", flag_value=True)
++         self.assertFalse(opt.process_value("false"))
++         self.assertFalse(opt.process_value("False"))
++         self.assertFalse(opt.process_value("0"))
++         self.assertFalse(opt.process_value("no"))
++ 
++     def test_process_value_string(self):
++         opt = Option("--mode", flag_value="default")
++         self.assertEqual(opt.process_value("fast"), "fast")
++ 
++     def test_process_value_bytes(self):
++         opt = Option("--data", flag_value=b"")
++         self.assertEqual(opt.process_value(b"hello"), b"hello")
++ 
++     # ------------------------------------------------------------------
++     # repr
++     # ------------------------------------------------------------------
++ 
++     def test_repr_does_not_raise(self):
++         opt = Option("--color", flag_value=Color.RED)
++         r = repr(opt)
++         self.assertIn("--color", r)
++         self.assertIn("UNPROCESSED", r)
++ 
++ 
++ if __name__ == "__main__":
++     unittest.main()
+*** End Patch

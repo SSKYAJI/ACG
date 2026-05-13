@@ -1,0 +1,30 @@
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+--- src/marshmallow/validate.py
++++ src/marshmallow/validate.py
+@@ -234,6 +234,22 @@ class Email(Validator):
+         if not domain_part:
+             raise ValidationError(self.error)
+ 
++        # Validate each label in the domain part for IDN hyphen rules.
++        # Domain labels must not start or end with a hyphen, including
++        # when the label is an internationalized (IDN/punycode) label.
++        labels = domain_part.split(".")
++        for label in labels:
++            if not label:
++                raise ValidationError(self.error)
++            # For punycode (IDN) labels, decode to unicode to check hyphen placement
++            unicode_label = label
++            if label.lower().startswith("xn--"):
++                try:
++                    unicode_label = label.encode("ascii").decode("idna")
++                except (UnicodeError, UnicodeDecodeError):
++                    raise ValidationError(self.error)
++            # Reject labels that start or end with a hyphen
++            if unicode_label.startswith("-") or unicode_label.endswith("-"):
++                raise ValidationError(self.error)
++
+         try:
+             domain_part.encode("idna")
+         except UnicodeError:
+*** End Patch

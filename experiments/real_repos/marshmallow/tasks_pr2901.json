@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr2901-constant-required",
+      "prompt": "Using the Constant field with required=True raises a ValueError unexpectedly. The Constant field should accept required=True without raising an error, since it always provides its constant value. Fix the Constant field initialization so it works correctly with required=True and add regression tests for this case."
+    }
+  ]
+}

@@ -1,0 +1,188 @@
+I'll analyze the task and implement the fix for IDN email validation in marshmallow.
+
+Let me first understand the issue: Email addresses with domain labels starting or ending with a hyphen (like `user@-münchen.de` or `user@münchen-.de`) should be rejected, but currently they're not.
+
+The fix needs to:
+1. Check domain labels after IDNA encoding for hyphen at start/end
+2. Add regression tests
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+     def _validate_email(self, value):
+         if not value or "@" not in value:
+             raise ValidationError(self.error)
+ 
+         user_part, domain_part = value.rsplit("@", 1)
+ 
+         if not self.USER_REGEX.match(user_part):
+             raise ValidationError(self.error)
+ 
+         if not self.DOMAIN_REGEX.match(domain_part):
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 raise ValidationError(self.error)
+ 
+         try:
+             domain_part.encode("ascii")
+         except UnicodeEncodeError:
+             try:
+                 domain_part = domain_part.encode("idna").decode("ascii")
+             except (UnicodeError, UnicodeDecodeError):
+                 raise ValidationError(self.error)
+ 
+         if not self.DOMAIN_REGEX.match(domain_part):
+             raise ValidationError(self.error)
+*** Update File: src/marshmallow/validate.py
+@@
+     def _validate_email(self, value):
+         if not value or "@" not in value:
+             raise ValidationError(self.error)
+ 
+         user_part, domain_part = value.rsplit("@", 1)
+ 
+         if not self.USER_REGEX.match(user_part):
+             raise ValidationError(self.error)
+ 
+         if not self.DOMAIN_REGEX.match(domain_part):
+-            if not self.DOMAIN_REGEX.match(domain_part):
+-                raise ValidationError(self.error)
++            raise ValidationError(self.error)
+ 
+         try:
+             domain_part.encode("ascii")
+         except UnicodeEncodeError:
+             try:
+                 domain_part = domain_part.encode("idna").decode("ascii")
+             except (UnicodeError, UnicodeDecodeError):
+                 raise ValidationError(self.error)
+ 
+         if not self.DOMAIN_REGEX.match(domain_part):
+             raise ValidationError(self.error)
+*** End Patch
+
+Let me look at the actual file content more carefully to make a proper patch.
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+     def _validate_email(self, value):
+         if not value or "@" not in value:
+             raise ValidationError(self.error)
+ 
+         user_part, domain_part = value.rsplit("@", 1)
+ 
+         if not self.USER_REGEX.match(user_part):
+             raise ValidationError(self.error)
+ 
+         if not self.DOMAIN_REGEX.match(domain_part):
+             raise ValidationError(self.error)
+ 
+         try:
+             domain_part.encode("ascii")
+         except UnicodeEncodeError:
+             try:
+                 domain_part = domain_part.encode("idna").decode("ascii")
+             except (UnicodeError, UnicodeDecodeError):
+                 raise ValidationError(self.error)
+ 
+         if not self.DOMAIN_REGEX.match(domain_part):
+             raise ValidationError(self.error)
++
++        # Validate each domain label: labels must not start or end with a hyphen
++        for label in domain_part.split("."):
++            if label.startswith("-") or label.endswith("-"):
++                raise ValidationError(self.error)
+*** Update File: tests/test_validate.py
+@@
+ import pytest
+@@
+     @pytest.mark.parametrize(
+         "valid_email",
+         [
+             "niceandsimple@example.com",
+             "NiCeAnDsImPlE@example.com",
+             "very.common@example.com",
+             "a.little.lengthy.but.fine@dept.example.com",
+             "disposable.style.email.with+symbol@example.com",
+             "user@[IPv6:2001:db8:1ff::a0b:dbd0]",
+             '"much.more unusual"@example.com',
+             '"very.unusual.@.unusual.com"@example.com',
+             "!#$%&'*+/=?^_`{}|~@example.org",
+             "user@münchen.de",
+             "user@valid-münchen.de",
+         ],
+     )
+     def test_email_valid(self, valid_email):
+@@
+     @pytest.mark.parametrize(
+         "invalid_email",
+         [
+             "invalidemail",
+             "invalid-email",
+             "@invalid-email",
+             "invalid-email@",
+             "invalid email",
+             "invalid@email",
+             "invalid@email.",
+             "invalid@.email",
+             "invalid@email.com.",
+             "invalid@email..com",
+             "invalid@.email.com",
++            "user@-münchen.de",
++            "user@münchen-.de",
++            "user@-example.com",
++            "user@example-.com",
+         ],
+     )
+     def test_email_invalid(self, valid_email):
+*** End Patch
+
+I need to see the actual file structure. Let me provide a more targeted patch based on what I know about the marshmallow codebase:
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+     def _validate_email(self, value):
+         if not value or "@" not in value:
+             raise ValidationError(self.error)
+ 
+         user_part, domain_part = value.rsplit("@", 1)
+ 
+         if not self.USER_REGEX.match(user_part):
+             raise ValidationError(self.error)
+ 
+         if not self.DOMAIN_REGEX.match(domain_part):
+             raise ValidationError(self.error)
+ 
+         try:
+             domain_part.encode("ascii")
+         except UnicodeEncodeError:
+             try:
+                 domain_part = domain_part.encode("idna").decode("ascii")
+             except (UnicodeError, UnicodeDecodeError):
+                 raise ValidationError(self.error)
+ 
+         if not self.DOMAIN_REGEX.match(domain_part):
+             raise ValidationError(self.error)
++
++        # Validate each domain label does not start or end with a hyphen
++        for label in domain_part.split("."):
++            if label.startswith("-") or label.endswith("-"):
++                raise ValidationError(self.error)
+*** Update File: tests/test_validate.py
+@@
+             "user@münchen.de",
++            "user@valid-münchen.de",
+         ],
+     )
+     def test_email_valid(self, valid_email):
+@@
+             "invalid@.email.com",
++            "user@-münchen.de",
++            "user@münchen-.de",
++            "user@-example.com",
++            "user@example-.com",
+         ],
+     )
+     def test_email_invalid(self, valid_email):
+*** End Patch

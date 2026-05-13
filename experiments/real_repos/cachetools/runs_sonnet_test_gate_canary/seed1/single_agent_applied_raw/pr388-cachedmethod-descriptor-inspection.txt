@@ -1,0 +1,346 @@
+*** Begin Patch
+*** Update File: src/cachetools/_cachedmethod.py
+@@
+-class cachedmethod:
++class cachedmethod:
+     """Decorator to wrap a class or instance method with a memoizing
+     callable that saves results in a cache.
+     """
+ 
+     def __init__(self, cache, key=keys.hashkey, lock=None):
+         self.__cache = cache
+         self.__key = key
+         self.__lock = lock
+ 
+     def __call__(self, method):
+-        return _CachedMethod(method, self.__cache, self.__key, self.__lock)
++        wrapper = _CachedMethod(method, self.__cache, self.__key, self.__lock)
++        return wrapper
+ 
+ 
+ class _CachedMethod:
+     def __init__(self, method, cache, key, lock):
+         self.__method = method
+         self.__cache = cache
+         self.__key = key
+         self.__lock = lock
+         functools.update_wrapper(self, method)
+ 
+     def __get__(self, obj, objtype=None):
+-        if obj is None:
+-            return self
++        if obj is None:
++            return self
+         return _BoundCachedMethod(
+             obj, self.__method, self.__cache, self.__key, self.__lock
+         )
+*** End Patch
+
+Hmm, let me look more carefully at the actual file content first to understand what's there.
+*** Begin Patch
+*** Update File: src/cachetools/_cachedmethod.py
+@@
+ import functools
+ import operator
+ 
+ from . import keys
+ 
+ 
+ class _CachedMethod:
+     def __init__(self, method, cache, key, lock):
+         self.__method = method
+         self.__cache = cache
+         self.__key = key
+         self.__lock = lock
+         functools.update_wrapper(self, method)
+ 
+     def __get__(self, obj, objtype=None):
+-        if obj is None:
+-            return self.__method
++        if obj is None:
++            return self
+         return _BoundCachedMethod(
+             obj, self.__method, self.__cache, self.__key, self.__lock
+         )
+*** End Patch
+
+*** Begin Patch
+*** Update File: tests/test_cachedmethod.py
+@@
++class ClassLevelInspectionTest(unittest.TestCase):
++    """Regression tests for class-level inspection of cached methods (PR #388)."""
++
++    def test_class_level_access_returns_descriptor(self):
++        """Accessing a cachedmethod on the class should return the descriptor itself."""
++        cache = {}
++
++        class MyClass:
++            @cachedmethod(lambda self: cache)
++            def method(self):
++                return 42
++
++        # Accessing via the class should return the descriptor, not raise
++        descriptor = MyClass.method
++        self.assertIsNotNone(descriptor)
++
++    def test_class_level_access_has_wrapped_attributes(self):
++        """The descriptor returned from class-level access should have __wrapped__ attrs."""
++        cache = {}
++
++        class MyClass:
++            @cachedmethod(lambda self: cache)
++            def my_method(self):
++                """My method docstring."""
++                return 42
++
++        descriptor = MyClass.my_method
++        self.assertEqual(descriptor.__name__, "my_method")
++        self.assertEqual(descriptor.__doc__, "My method docstring.")
++
++    def test_class_level_access_does_not_raise(self):
++        """Class-level descriptor access should not raise AttributeError or TypeError."""
++        cache = {}
++
++        class MyClass:
++            @cachedmethod(lambda self: cache)
++            def method(self):
++                return 99
++
++        try:
++            _ = MyClass.method
++        except (AttributeError, TypeError) as e:
++            self.fail(f"Class-level access raised an exception: {e}")
++
++    def test_instance_still_works_after_class_access(self):
++        """Instance method should still work correctly after class-level access."""
++        cache = {}
++
++        class MyClass:
++            @cachedmethod(lambda self: cache)
++            def method(self):
++                return 7
++
++        # Access at class level first
++        _ = MyClass.method
++
++        # Then use via instance
++        obj = MyClass()
++        result = obj.method()
++        self.assertEqual(result, 7)
++
++    def test_inspect_works_on_cached_method(self):
++        """inspect.getmembers should work on a class with cachedmethod."""
++        import inspect
++        cache = {}
++
++        class MyClass:
++            @cachedmethod(lambda self: cache)
++            def method(self):
++                return 1
++
++        # This should not raise
++        try:
++            members = inspect.getmembers(MyClass)
++        except Exception as e:
++            self.fail(f"inspect.getmembers raised: {e}")
++
++        names = [name for name, _ in members]
++        self.assertIn("method", names)
++
++    def test_class_level_descriptor_is_same_object(self):
++        """Class-level access should return the same descriptor object each time."""
++        cache = {}
++
++        class MyClass:
++            @cachedmethod(lambda self: cache)
++            def method(self):
++                return 0
++
++        d1 = MyClass.method
++        d2 = MyClass.method
++        self.assertIs(d1, d2)
++
++
+*** End Patch
+
+Now let me check the actual content of `_cachedmethod.py` to make sure my patch is correct:
+*** Begin Patch
+*** Update File: src/cachetools/_cachedmethod.py
+@@
+ import functools
+ import operator
+ 
+ from . import keys
+ 
+ 
+ class _BoundCachedMethod:
+     def __init__(self, obj, method, cache, key, lock):
+         self.__obj = obj
+         self.__method = method
+         self.__cache = cache
+         self.__key = key
+         self.__lock = lock
+         functools.update_wrapper(self, method)
+ 
+     def __call__(self, *args, **kwargs):
+         cache = self.__cache(self.__obj)
+         if cache is None:
+             return self.__method(self.__obj, *args, **kwargs)
+         key = self.__key(*args, **kwargs)
+         if self.__lock is not None:
+             lock = self.__lock(self.__obj)
+         else:
+             lock = None
+         if lock is not None:
+             with lock:
+                 try:
+                     return cache[key]
+                 except KeyError:
+                     pass
+             result = self.__method(self.__obj, *args, **kwargs)
+             with lock:
+                 try:
+                     cache[key] = result
+                 except ValueError:
+                     pass
+             return result
+         else:
+             try:
+                 return cache[key]
+             except KeyError:
+                 pass
+             result = self.__method(self.__obj, *args, **kwargs)
+             try:
+                 cache[key] = result
+             except ValueError:
+                 pass
+             return result
+ 
+ 
+ class _CachedMethod:
+     def __init__(self, method, cache, key, lock):
+         self.__method = method
+         self.__cache = cache
+         self.__key = key
+         self.__lock = lock
+         functools.update_wrapper(self, method)
+ 
+     def __get__(self, obj, objtype=None):
+         if obj is None:
+-            return self.__method
++            return self
+         return _BoundCachedMethod(
+             obj, self.__method, self.__cache, self.__key, self.__lock
+         )
+ 
+ 
+ class cachedmethod:
+     """Decorator to wrap a class or instance method with a memoizing
+     callable that saves results in a cache.
+     """
+ 
+     def __init__(self, cache, key=keys.hashkey, lock=None):
+         self.__cache = cache
+         self.__key = key
+         self.__lock = lock
+ 
+     def __call__(self, method):
+         return _CachedMethod(method, self.__cache, self.__key, self.__lock)
+*** End Patch
+
+Now let me add the regression tests to the test file. First let me check what's already in the test file:
+*** Begin Patch
+*** Update File: tests/test_cachedmethod.py
+@@
++import inspect
+ import unittest
+@@
++
++
++class ClassLevelInspectionTest(unittest.TestCase):
++    """Regression tests for class-level inspection of cached methods (PR #388)."""
++
++    def test_class_level_access_returns_descriptor(self):
++        """Accessing a cachedmethod on the class should return the descriptor itself."""
++        cache = {}
++
++        class MyClass:
++            @cachedmethod(lambda self: cache)
++            def method(self):
++                return 42
++
++        descriptor = MyClass.method
++        self.assertIsNotNone(descriptor)
++
++    def test_class_level_access_has_wrapped_attributes(self):
++        """The descriptor returned from class-level access should have __wrapped__ attrs."""
++        cache = {}
++
++        class MyClass:
++            @cachedmethod(lambda self: cache)
++            def my_method(self):
++                """My method docstring."""
++                return 42
++
++        descriptor = MyClass.my_method
++        self.assertEqual(descriptor.__name__, "my_method")
++        self.assertEqual(descriptor.__doc__, "My method docstring.")
++
++    def test_class_level_access_does_not_raise(self):
++        """Class-level descriptor access should not raise AttributeError or TypeError."""
++        cache = {}
++
++        class MyClass:
++            @cachedmethod(lambda self: cache)
++            def method(self):
++                return 99
++
++        try:
++            _ = MyClass.method
++        except (AttributeError, TypeError) as e:
++            self.fail(f"Class-level access raised an exception: {e}")
++
++    def test_instance_still_works_after_class_access(self):
++        """Instance method should still work correctly after class-level access."""
++        cache = {}
++
++        class MyClass:
++            @cachedmethod(lambda self: cache)
++            def method(self):
++                return 7
++
++        _ = MyClass.method
++        obj = MyClass()
++        result = obj.method()
++        self.assertEqual(result, 7)
++
++    def test_inspect_getmembers_works(self):
++        """inspect.getmembers should work on a class with cachedmethod."""
++        cache = {}
++
++        class MyClass:
++            @cachedmethod(lambda self: cache)
++            def method(self):
++                return 1
++
++        try:
++            members = inspect.getmembers(MyClass)
++        except Exception as e:
++            self.fail(f"inspect.getmembers raised: {e}")
++
++        names = [name for name, _ in members]
++        self.assertIn("method", names)
++
++    def test_class_level_descriptor_is_same_object(self):
++        """Class-level access should return the same descriptor object each time."""
++        cache = {}
++
++        class MyClass:
++            @cachedmethod(lambda self: cache)
++            def method(self):
++                return 0
++
++        d1 = MyClass.method
++        d2 = MyClass.method
++        self.assertIs(d1, d2)
+*** End Patch

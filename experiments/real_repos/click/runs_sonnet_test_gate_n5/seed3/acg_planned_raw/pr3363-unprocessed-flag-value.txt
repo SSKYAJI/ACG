@@ -1,0 +1,105 @@
+Looking at the task, I need to fix `Option` initialization so that when `flag_value` is set to a non-basic type (e.g. an enum), the option's type is automatically set to `UNPROCESSED` instead of raising a `TypeError`.
+
+Let me find the relevant section in `core.py` where `flag_value` is handled during `Option.__init__`. I need to look at how the type is inferred from `flag_value`.
+
+The key logic is: when `flag_value` is provided and no explicit `type` is given, Click tries to guess the type from the value. If the value is an enum or other non-basic type, `convert_type` would return `STRING` or raise an error. The fix should set the type to `UNPROCESSED` when `flag_value` is a non-basic type that can't be mapped to a Click type.
+
+Let me look at the `convert_type` function and the `Option.__init__` to understand the flow, then apply the fix.
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+     def __init__(
+         self,
+         param_decls: cabc.Sequence[str] | None = None,
+         show_default: bool | str | None = None,
+         is_flag: bool | None = None,
+         flag_value: t.Any | None = None,
+         multiple: bool = False,
+         count: bool = False,
+         allow_from_autoenv: bool = False,
+         type: types.ParamType | t.Any | None = None,
+         help: str | None = None,
+         hidden: bool = False,
+         show_choices: bool = True,
+         is_eager: bool = False,
+         expose_value: bool = True,
+         default: t.Any | None = None,
+         callback: t.Callable[[Context, Parameter, t.Any], t.Any] | None = None,
+         nargs: int | None = None,
+         metavar: str | None = None,
+         required: bool = False,
+         envvar: str | cabc.Sequence[str] | None = None,
+         show_envvar: bool = False,
+         prompt: bool | str = False,
+         confirmation_prompt: bool | str = False,
+         prompt_required: bool = True,
+         hide_input: bool = False,
+         is_composite: bool = False,
+         attrs: dict[str, t.Any] | None = None,
+         deprecated: bool | str = False,
+     ) -> None:
+@@
+         if flag_value is not None:
+             # if a flag value is set, it implies is_flag=True unless
+             # secondary_opts is set.
+             if is_flag is None:
+                 is_flag = bool(self.secondary_opts)
+             self.flag_value: t.Any = flag_value
+             if type is None:
+                 type = self.flag_value
++            if not isinstance(type, types.ParamType) and not isinstance(
++                type,
++                (bool, int, float, str, bytes, type(None)),
++            ):
++                # flag_value is a non-basic type (e.g. an enum); use UNPROCESSED
++                # so Click doesn't try to convert it and just passes it through.
++                type = types.UNPROCESSED
+         else:
+             self.flag_value = True
+@@
+*** Update File: tests/test_options.py
+@@
+ import os
+ import re
++import enum
+ 
+ import pytest
+@@
+ def test_l
+@@
++def test_flag_value_enum_type():
++    """When flag_value is set to a non-basic type like an enum, the option's
++    type should be automatically set to UNPROCESSED."""
++
++    class Color(enum.Enum):
++        RED = "red"
++        BLUE = "blue"
++
++    opt = click.Option(["--color/--no-color"], flag_value=Color.RED)
++    assert opt.type is click.UNPROCESSED
++    assert opt.flag_value is Color.RED
++
++
++def test_flag_value_enum_parsing(runner):
++    """When flag_value is an enum, parsing should return the enum value."""
++
++    class Color(enum.Enum):
++        RED = "red"
++        BLUE = "blue"
++
++    @click.command()
++    @click.option("--color", is_flag=True, flag_value=Color.RED, default=Color.BLUE)
++    def cmd(color):
++        click.echo(color.value)
++
++    result = runner.invoke(cmd, ["--color"])
++    assert not result.exception, result.output
++    assert result.output.strip() == "red"
++
++    result = runner.invoke(cmd, [])
++    assert not result.exception, result.output
++    assert result.output.strip() == "blue"
++
++
+*** End Patch

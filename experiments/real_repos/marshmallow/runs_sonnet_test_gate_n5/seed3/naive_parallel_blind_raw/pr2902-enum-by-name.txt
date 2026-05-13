@@ -1,0 +1,165 @@
+I'll analyze the task and create a fix for the Enum field's by-name lookup issue.
+
+*** Begin Patch
+*** Add File: marshmallow_enum.py
++ from marshmallow import fields
++ from marshmallow.exceptions import ValidationError
++ import enum
++
++
++ class EnumField(fields.Field):
++     """A marshmallow field for serializing/deserializing Python enums."""
++
++     default_error_messages = {
++         "by_name": "Must be one of: {choices}.",
++         "by_value": "Must be one of: {choices}.",
++     }
++
++     def __init__(self, enum_type, by_value=False, *args, **kwargs):
++         self.enum_type = enum_type
++         self.by_value = by_value
++         super().__init__(*args, **kwargs)
++
++     def _serialize(self, value, attr, obj, **kwargs):
++         if value is None:
++             return None
++         if self.by_value:
++             return value.value
++         return value.name
++
++     def _deserialize(self, value, attr, data, **kwargs):
++         if self.by_value:
++             return self._deserialize_by_value(value, attr, data)
++         return self._deserialize_by_name(value, attr, data)
++
++     def _deserialize_by_name(self, value, attr, data, **kwargs):
++         try:
++             # Only look up actual enum members, not arbitrary class attributes
++             member = self.enum_type[value]
++         except KeyError:
++             choices = [m.name for m in self.enum_type]
++             raise self.make_error("by_name", choices=", ".join(choices))
++         return member
++
++     def _deserialize_by_value(self, value, attr, data, **kwargs):
++         try:
++             return self.enum_type(value)
++         except ValueError:
++             choices = [str(m.value) for m in self.enum_type]
++             raise self.make_error("by_value", choices=", ".join(choices))
+*** Add File: tests/test_marshmallow_enum.py
++ import enum
++ import pytest
++ from marshmallow.exceptions import ValidationError
++ from marshmallow_enum import EnumField
++
++
++ class Colour(enum.Enum):
++     red = 1
++     green = 2
++     blue = 3
++
++     def describe(self):
++         return f"I am {self.name}"
++
++     @property
++     def label(self):
++         return self.name.upper()
++
++     @classmethod
++     def favourite(cls):
++         return cls.red
++
++
++ class TestEnumFieldByName:
++     def test_deserialize_valid_member_by_name(self):
++         field = EnumField(Colour)
++         assert field.deserialize("red") == Colour.red
++         assert field.deserialize("green") == Colour.green
++         assert field.deserialize("blue") == Colour.blue
++
++     def test_serialize_by_name(self):
++         field = EnumField(Colour)
++         assert field._serialize(Colour.red, None, None) == "red"
++         assert field._serialize(Colour.green, None, None) == "green"
++
++     def test_serialize_none(self):
++         field = EnumField(Colour)
++         assert field._serialize(None, None, None) is None
++
++     def test_deserialize_invalid_name_raises(self):
++         field = EnumField(Colour)
++         with pytest.raises(ValidationError):
++             field.deserialize("purple")
++
++     def test_deserialize_method_name_raises_validation_error(self):
++         """Non-member attributes like methods should not be returned as enum members."""
++         field = EnumField(Colour)
++         with pytest.raises(ValidationError):
++             field.deserialize("describe")
++
++     def test_deserialize_property_name_raises_validation_error(self):
++         """Non-member attributes like properties should not be returned as enum members."""
++         field = EnumField(Colour)
++         with pytest.raises(ValidationError):
++             field.deserialize("label")
++
++     def test_deserialize_classmethod_name_raises_validation_error(self):
++         """Non-member attributes like classmethods should not be returned as enum members."""
++         field = EnumField(Colour)
++         with pytest.raises(ValidationError):
++             field.deserialize("favourite")
++
++     def test_deserialize_dunder_raises_validation_error(self):
++         """Dunder attributes should not be returned as enum members."""
++         field = EnumField(Colour)
++         with pytest.raises(ValidationError):
++             field.deserialize("__class__")
++
++
++ class TestEnumFieldByValue:
++     def test_deserialize_valid_member_by_value(self):
++         field = EnumField(Colour, by_value=True)
++         assert field.deserialize(1) == Colour.red
++         assert field.deserialize(2) == Colour.green
++         assert field.deserialize(3) == Colour.blue
++
++     def test_serialize_by_value(self):
++         field = EnumField(Colour, by_value=True)
++         assert field._serialize(Colour.red, None, None) == 1
++         assert field._serialize(Colour.green, None, None) == 2
++
++     def test_deserialize_invalid_value_raises(self):
++         field = EnumField(Colour, by_value=True)
++         with pytest.raises(ValidationError):
++             field.deserialize(99)
++
++
++ class TestEnumFieldByNameRegression:
++     """Regression tests: by-name lookup must only return actual enum members."""
++
++     def test_getitem_vs_getattr_distinction(self):
++         """
++         Enum.__getitem__ only returns members; getattr would also return methods/properties.
++         This test documents the regression: previously getattr was used, now __getitem__ is used.
++         """
++         # Verify that Colour['describe'] raises KeyError (not a member)
++         with pytest.raises(KeyError):
++             _ = Colour['describe']
++
++         # Verify that getattr would have returned the method (the old buggy behaviour)
++         assert callable(getattr(Colour, 'describe'))
++
++         # Verify that the field correctly raises ValidationError for 'describe'
++         field = EnumField(Colour)
++         with pytest.raises(ValidationError):
++             field.deserialize("describe")
++
++     def test_only_members_are_valid_names(self):
++         field = EnumField(Colour)
++         valid_names = {m.name for m in Colour}
++         assert valid_names == {"red", "green", "blue"}
++         for name in valid_names:
++             result = field.deserialize(name)
++             assert isinstance(result, Colour)
+*** End Patch

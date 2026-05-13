@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr1153-numeric-range-reversed-empty",
+      "prompt": "numeric_range currently mishandles reversing empty ranges: calling reversed() on an empty numeric_range should produce no values, but some empty ranges yield unexpected output. Fix the reversed iteration behavior and add regression tests.",
+      "hints": {
+        "touches": [
+          "numeric_range",
+          "__reversed__",
+          "tests"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,216 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-13T05:34:59.727819Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "mock-llm-canned",
+    "tokens_planner_total": 3587,
+    "tokens_scope_review_total": 617,
+    "tokens_planner_completion_total": null,
+    "tokens_planner_method": "estimate_chars_div_4",
+    "compile_wall_seconds": 0.4463,
+    "compile_cost_usd": null
+  },
+  "repo": {
+    "root": "experiments/real_repos/marked/checkout",
+    "git_url": "https://github.com/markedjs/marked.git",
+    "commit": "dba76f68043a429bede1d16c07b36c7758db091d",
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr3960-tasklist-setext",
+      "prompt": "The GFM tokenizer incorrectly treats the text portion of a setext heading (e.g., '[ ] heading') as a task list checkbox, producing wrong output. Fix the tokenizer so it only applies the checkbox pattern inside list item paragraphs, not setext heading text, and add unit and spec coverage for the corrected behavior.",
+      "predicted_writes": [
+        {
+          "path": "src/Tokenizer.ts",
+          "confidence": 1.0,
+          "reason": "manual curation: ACG predictor included built artifacts; corrected to match PR ground_truth_files"
+        },
+        {
+          "path": "test/unit/Lexer.test.js",
+          "confidence": 1.0,
+          "reason": "manual curation: ACG predictor included built artifacts; corrected to match PR ground_truth_files"
+        }
+      ],
+      "allowed_paths": [
+        "src/Tokenizer.ts",
+        "test/unit/Lexer.test.js"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "src/rules.ts",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "bm25",
+            "symbol"
+          ],
+          "reason": "Symbol 'heading' referenced in prompt; defined in src/rules.ts. Signals: bm25, symbol."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    },
+    {
+      "id": "pr3947-infinite-loop-guard",
+      "prompt": "The marked lexer enters an infinite loop when parsing certain indented code blocks that contain blank lines with special characters (e.g., a tab followed by a vertical tab). Add a loop-termination guard so that if the remaining source does not shrink between iterations the parser breaks out cleanly and refactor the existing inline infinite-loop error path to reuse the same guard logic.",
+      "predicted_writes": [
+        {
+          "path": "src/Lexer.ts",
+          "confidence": 1.0,
+          "reason": "manual curation: ACG predictor included built artifacts; corrected to match PR ground_truth_files"
+        },
+        {
+          "path": "src/helpers.ts",
+          "confidence": 1.0,
+          "reason": "manual curation: ACG predictor included built artifacts; corrected to match PR ground_truth_files"
+        },
+        {
+          "path": "test/specs/redos/code_blank_line.cjs",
+          "confidence": 1.0,
+          "reason": "manual curation: ACG predictor included built artifacts; corrected to match PR ground_truth_files"
+        }
+      ],
+      "allowed_paths": [
+        "src/Lexer.ts",
+        "src/helpers.ts",
+        "test/specs/redos/code_blank_line.cjs"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "lib/marked.esm.js",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "pagerank",
+            "symbol"
+          ],
+          "reason": "personalized PageRank rank #1, top symbol matches: $e, A, E.; BM25 lexical match over path, identifiers, imports, docstrings (score 24.60). Signals: bm25, pagerank, symbol."
+        },
+        {
+          "path": "lib/marked.umd.js",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "pagerank"
+          ],
+          "reason": "personalized PageRank rank #2, top symbol matches: G, a, blockTokens.; BM25 lexical match over path, identifiers, imports, docstrings (score 27.80). Signals: bm25, pagerank."
+        },
+        {
+          "path": "src/Lexer.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "pagerank"
+          ],
+          "reason": "personalized PageRank rank #8, top symbol matches: _Lexer, blockTokens, if.; BM25 lexical match over path, identifiers, imports, docstrings (score 7.89). Signals: bm25, pagerank."
+        },
+        {
+          "path": "src/rules.ts",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "bm25",
+            "symbol"
+          ],
+          "reason": "Symbol 'inline' referenced in prompt; defined in src/rules.ts. Signals: bm25, symbol."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    },
+    {
+      "id": "pr3924-async-race",
+      "prompt": "When marked is used with async hooks and multiple parallel parse calls share the same Marked instance, they can interfere with each other's state, causing race conditions and incorrect output. Fix the async parallel parse and parseInline paths so each invocation operates on isolated state, and add regression tests for concurrent async hook usage.",
+      "predicted_writes": [
+        {
+          "path": "src/Hooks.ts",
+          "confidence": 1.0,
+          "reason": "manual curation: ACG predictor included built artifacts; corrected to match PR ground_truth_files"
+        },
+        {
+          "path": "src/Instance.ts",
+          "confidence": 1.0,
+          "reason": "manual curation: ACG predictor included built artifacts; corrected to match PR ground_truth_files"
+        },
+        {
+          "path": "test/unit/Hooks.test.js",
+          "confidence": 1.0,
+          "reason": "manual curation: ACG predictor included built artifacts; corrected to match PR ground_truth_files"
+        }
+      ],
+      "allowed_paths": [
+        "src/Hooks.ts",
+        "src/Instance.ts",
+        "test/unit/Hooks.test.js"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "lib/marked.esm.js",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "pagerank",
+            "symbol"
+          ],
+          "reason": "personalized PageRank rank #1, top symbol matches: Hooks, Marked, Parser. Signals: pagerank, symbol."
+        },
+        {
+          "path": "src/Instance.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "pagerank"
+          ],
+          "reason": "personalized PageRank rank #6, top symbol matches: Marked, hook, hooks.; BM25 lexical match over path, identifiers, imports, docstrings (score 13.04). Signals: bm25, pagerank."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr3960-tasklist-setext"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      },
+      {
+        "id": 2,
+        "tasks": [
+          "pr3947-infinite-loop-guard"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      },
+      {
+        "id": 3,
+        "tasks": [
+          "pr3924-async-race"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": [],
+  "manual_curation_note": "marked locks were manually curated 2026-05-12 because the ACG predictor included built lib/ artifacts. See per-task reasons. Predictor accuracy on this repo is a separate paper finding; contract behavior is what is being evaluated."
+}

@@ -1,0 +1,90 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-13T04:58:36.107754Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "claude-sonnet-4-6",
+    "tokens_planner_total": 1750,
+    "tokens_scope_review_total": 863,
+    "tokens_planner_completion_total": 203,
+    "tokens_planner_method": "provider_usage",
+    "compile_wall_seconds": 5.4622,
+    "compile_cost_usd": null
+  },
+  "repo": {
+    "root": "experiments/real_repos/click/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr3126-fish-completion-multiline",
+      "prompt": "Fix fish shell completion so that commands and options with multiline help strings are handled correctly. Currently, multiline help text causes broken or malformed fish completion scripts.",
+      "predicted_writes": [
+        {
+          "path": "src/click/shell_completion.py",
+          "confidence": 1.0,
+          "reason": "manual: ACG predictor returned empty allowed_paths/predicted_writes for click; populated from manifest ground_truth_files. Predictor accuracy on click is a separate paper finding."
+        },
+        {
+          "path": "tests/test_shell_completion.py",
+          "confidence": 0.7,
+          "reason": "manual: test file from manifest ground_truth_files"
+        }
+      ],
+      "allowed_paths": [
+        "src/click/shell_completion.py",
+        "tests/test_shell_completion.py"
+      ],
+      "candidate_context_paths": [
+        "src/click/shell_completion.py",
+        "CHANGES.rst"
+      ],
+      "file_scopes": [
+        {
+          "path": "src/click/shell_completion.py",
+          "tier": "candidate_context",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "llm",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "FishComplete class handles fish shell completion generation and needs to fix multiline help string handling. Candidate context only; requires replan before write. Signals: bm25, llm, pagerank. Scope review requested promotion, but non-review signals did not justify must_write."
+        },
+        {
+          "path": "CHANGES.rst",
+          "tier": "candidate_context",
+          "score": 0.7,
+          "signals": [
+            "cochange",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "Changelog typically updated when fixing bugs like multiline help in fish completion. Candidate context only; requires replan before write. Signals: cochange, llm. Scope review requested a drop, but protected evidence kept it."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr3126-fish-completion-multiline"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

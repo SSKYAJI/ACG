@@ -1,0 +1,66 @@
+Looking at the code, I need to understand the issue. When inspecting a cached method at the class level (e.g., `Cached.get`), Python calls `__get__` with `obj=None`. The current `_DescriptorBase.__get__` method tries to call `self.Wrapper(obj)` with `obj=None`, which will fail or cause issues.
+
+The fix should handle the case where `obj is None` (class-level access) by returning the descriptor itself or some appropriate object.
+
+Let me trace through the code:
+
+1. `_DescriptorBase.__get__(self, obj, objtype=None)` - when accessed from class, `obj` is `None`
+2. It calls `self.Wrapper(obj)` which calls `_WrapperBase.__init__(obj, ...)` with `obj=None`
+3. Then tries `obj.__dict__.setdefault(...)` which fails with `AttributeError` on `None`
+
+The fix: when `obj is None`, return the descriptor itself (standard Python descriptor pattern).
+
+*** Begin Patch
+*** Update File: src/cachetools/_cachedmethod.py
+@@
+     def __get__(self, obj, objtype=None):
+         wrapper = self.Wrapper(obj)
+         if self.__attrname is not None:
++            # class-level access: return the descriptor itself
++            if obj is None:
++                return self
+             # replace descriptor instance with wrapper in instance dict
+             try:
+*** Update File: tests/test_cachedmethod.py
+@@
+     def test_decorator_wrapped(self):
+         cache = self.cache(2)
+         cached = Cached(cache)
+ 
+         self.assertEqual(len(cache), 0)
+         self.assertEqual(cached.get.__wrapped__(cached, 0), 0)
+         self.assertEqual(cached.get.__name__, "get")
+         self.assertEqual(cached.get.__doc__.strip(), "docstring")
+         self.assertEqual(len(cache), 0)
+         self.assertEqual(cached.get(0), 1)
+         self.assertEqual(len(cache), 1)
+         self.assertEqual(cached.get(0), 1)
+         self.assertEqual(len(cache), 1)
+ 
++    def test_class_level_inspection(self):
++        # Accessing a cachedmethod on the class (not an instance) should not raise
++        descriptor = Cached.get
++        self.assertIsNotNone(descriptor)
++        # The descriptor should be accessible and have the wrapped function's name
++        self.assertEqual(descriptor.__name__, "get")
++
++    def test_class_level_inspection_lock(self):
++        # Accessing a cachedmethod with lock on the class should not raise
++        descriptor = Cached.get_lock
++        self.assertIsNotNone(descriptor)
++        self.assertEqual(descriptor.__name__, "get_lock")
++
++    def test_class_level_inspection_info(self):
++        # Accessing a cachedmethod with info on the class should not raise
++        descriptor = Cached.get_info
++        self.assertIsNotNone(descriptor)
++        self.assertEqual(descriptor.__name__, "get_info")
++
++    def test_class_level_inspection_cond(self):
++        # Accessing a cachedmethod with condition on the class should not raise
++        descriptor = Cached.get_cond
++        self.assertIsNotNone(descriptor)
++        self.assertEqual(descriptor.__name__, "get_cond")
++
+     def test_decorator_attributes(self):
+*** End Patch

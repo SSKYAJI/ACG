@@ -1,0 +1,80 @@
+Looking at the code, the issue is in the `Email.__call__` method. When an IDN domain like `-münchen.de` or `münchen-.de` is processed, it gets encoded via `.encode("idna")` and then checked against `DOMAIN_REGEX`. However, the `encode("idna")` call may succeed for some malformed labels (or the regex may not catch them), allowing invalid emails through.
+
+The fix should validate each label of the domain after IDNA encoding to ensure no label starts or ends with a hyphen.
+
+Let me trace through: `münchen-.de` → `encode("idna")` → this might raise `UnicodeError` or produce `xn--mnchen-3ya-.de`. Let me check: Python's `encodings.idna` should reject labels starting/ending with hyphens... but actually it might not for all cases.
+
+The safest fix is to explicitly check each domain label after IDNA encoding to ensure none starts or ends with a hyphen.
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+                 raise ValidationError(message)
+ 
+         return value
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
++                        # Reject labels that start or end with a hyphen
++                        labels = domain_part.split(".")
++                        if any(label.startswith("-") or label.endswith("-") for label in labels):
++                            raise ValidationError(message)
+                         return value
+                 raise ValidationError(message)
+ 
+         return value
+*** Update File: tests/test_validate.py
+@@
+     "δοκ.ιμή@παράδειγμα.δοκιμή",
+     ],
+ )
+ def test_email_valid(valid_email):
+@@
+     "δοκ.ιμή@παράδειγμα.δοκιμή",
++    "user@münchen.de",
++    "user@παράδειγμα.δοκιμή",
+     ],
+ )
+ def test_email_valid(valid_email):
+*** Update File: tests/test_validate.py
+@@
+         "user@example",
+         "@nouser.com",
+         "example.com",
+         "user",
+         "",
+         None,
+     ],
+ )
+ def test_email_invalid(invalid_email):
+@@
+         "user@example",
+         "@nouser.com",
+         "example.com",
+         "user",
+         "",
+         None,
++        "user@-münchen.de",
++        "user@münchen-.de",
++        "user@-example.com",
++        "user@example-.com",
+     ],
+ )
+ def test_email_invalid(invalid_email):
+*** End Patch

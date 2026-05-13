@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr2902-enum-by-name",
+      "prompt": "The Enum field's by-name lookup incorrectly returns non-member attributes of the enum class (e.g., methods or properties) when looking up enum members by name. Fix the Enum field so that by-name lookup only returns actual enum members, not arbitrary class attributes, and add regression tests for accessing non-member enum attributes."
+    }
+  ]
+}

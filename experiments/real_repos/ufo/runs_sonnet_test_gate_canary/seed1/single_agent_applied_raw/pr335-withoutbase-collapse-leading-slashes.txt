@@ -1,0 +1,20 @@
+*** Begin Patch
+*** Update File: test/base.test.ts
+--- test/base.test.ts
++++ test/base.test.ts
+@@ *** unchanged leading context ***
+ import { describe, expect, it } from "vitest";
+ import { withBase, withoutBase } from "../src";
+ 
+ describe("withoutBase", () => {
++  it("normalizes repeated leading slashes before stripping base", () => {
++    expect(withoutBase("//foo/bar", "/foo")).toBe("/bar");
++    expect(withoutBase("///foo/bar", "/foo")).toBe("/bar");
++    expect(withoutBase("//foo/bar", "//foo")).toBe("/bar");
++    expect(withoutBase("///foo/bar", "//foo")).toBe("/bar");
++    expect(withoutBase("//foo", "/foo")).toBe("/");
++    expect(withoutBase("//foo/", "/foo")).toBe("/");
++  });
++
+*** unchanged trailing context ***
+*** End Patch

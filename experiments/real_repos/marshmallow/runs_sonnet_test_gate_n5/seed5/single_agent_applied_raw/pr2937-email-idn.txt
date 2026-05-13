@@ -1,0 +1,64 @@
+*** Begin Patch
+*** Add File: tests/test_email_idn.py
+"""Regression tests for IDN email validation (pr2937)."""
+import pytest
+from marshmallow.validate import Email
+from marshmallow import ValidationError
+
+
+class TestEmailIDNValidation:
+    """Tests for internationalized domain name (IDN) email validation."""
+
+    def setup_method(self):
+        self.validator = Email()
+
+    def test_valid_idn_email(self):
+        """Valid IDN email addresses should pass validation."""
+        # Standard ASCII email
+        self.validator("user@example.com")
+
+    def test_invalid_idn_domain_starts_with_hyphen(self):
+        """Email with domain label starting with hyphen should be rejected."""
+        with pytest.raises(ValidationError):
+            self.validator("user@-münchen.de")
+
+    def test_invalid_idn_domain_ends_with_hyphen(self):
+        """Email with domain label ending with hyphen should be rejected."""
+        with pytest.raises(ValidationError):
+            self.validator("user@münchen-.de")
+
+    def test_invalid_ascii_domain_starts_with_hyphen(self):
+        """Email with ASCII domain label starting with hyphen should be rejected."""
+        with pytest.raises(ValidationError):
+            self.validator("user@-example.com")
+
+    def test_invalid_ascii_domain_ends_with_hyphen(self):
+        """Email with ASCII domain label ending with hyphen should be rejected."""
+        with pytest.raises(ValidationError):
+            self.validator("user@example-.com")
+
+    def test_invalid_idn_subdomain_starts_with_hyphen(self):
+        """Email with IDN subdomain label starting with hyphen should be rejected."""
+        with pytest.raises(ValidationError):
+            self.validator("user@sub.-münchen.de")
+
+    def test_invalid_idn_subdomain_ends_with_hyphen(self):
+        """Email with IDN subdomain label ending with hyphen should be rejected."""
+        with pytest.raises(ValidationError):
+            self.validator("user@sub.münchen-.de")
+
+    def test_valid_regular_email(self):
+        """Regular ASCII email addresses should still pass."""
+        self.validator("test@example.com")
+        self.validator("user.name+tag@example.co.uk")
+
+    def test_invalid_email_no_at(self):
+        """Email without @ should be rejected."""
+        with pytest.raises(ValidationError):
+            self.validator("notanemail")
+
+    def test_invalid_email_empty(self):
+        """Empty email should be rejected."""
+        with pytest.raises(ValidationError):
+            self.validator("")
+*** End Patch

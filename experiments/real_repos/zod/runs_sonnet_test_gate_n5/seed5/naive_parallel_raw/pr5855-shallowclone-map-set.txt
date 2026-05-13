@@ -1,0 +1,50 @@
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/util.ts
+@@
+ export function shallowClone<T>(value: T): T {
+   if (value === undefined || value === null) return value;
+   if (Array.isArray(value)) return [...value] as T;
++  if (value instanceof Map) return new Map(value) as T;
++  if (value instanceof Set) return new Set(value) as T;
+   if (typeof value === "object") return { ...value } as T;
+   return value;
+ }
+*** Update File: packages/zod/src/v4/classic/tests/default.test.ts
+@@
+ import { expect, test } from "vitest";
+ import * as z from "zod/v4";
+@@
++test("default Map returns independent copy each parse", () => {
++  const schema = z.object({
++    m: z.map(z.string(), z.number()).default(new Map([["a", 1]])),
++  });
++
++  const result1 = schema.parse({});
++  const result2 = schema.parse({});
++
++  expect(result1.m).toEqual(new Map([["a", 1]]));
++  expect(result2.m).toEqual(new Map([["a", 1]]));
++
++  result1.m.set("b", 2);
++
++  expect(result1.m).toEqual(new Map([["a", 1], ["b", 2]]));
++  expect(result2.m).toEqual(new Map([["a", 1]]));
++});
++
++test("default Set returns independent copy each parse", () => {
++  const schema = z.object({
++    s: z.set(z.string()).default(new Set(["x", "y"])),
++  });
++
++  const result1 = schema.parse({});
++  const result2 = schema.parse({});
++
++  expect(result1.s).toEqual(new Set(["x", "y"]));
++  expect(result2.s).toEqual(new Set(["x", "y"]));
++
++  result1.s.add("z");
++
++  expect(result1.s).toEqual(new Set(["x", "y", "z"]));
++  expect(result2.s).toEqual(new Set(["x", "y"]));
++});
+*** End Patch

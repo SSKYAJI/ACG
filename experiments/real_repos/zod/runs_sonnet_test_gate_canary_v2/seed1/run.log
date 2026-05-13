@@ -1,0 +1,43 @@
+ starting (group 0)
+ proposed 2 writes (7.32s, 626 tokens)
+   ALLOWED pr5855-shallowclone-map-set → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5855-shallowclone-map-set → 
+packages/zod/src/v4/core/__tests__/shallowClone.test.ts
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/Users/prajit/Desktop/projects/cognition/experiments/greenhouse/headtohead.py", line 587, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/Users/prajit/Desktop/projects/cognition/experiments/greenhouse/headtohead.py", line 527, in main
+    run = _run_one(
+          ^^^^^^^^^
+  File "/Users/prajit/Desktop/projects/cognition/experiments/greenhouse/headtohead.py", line 385, in _run_one
+    return run_strategy(
+           ^^^^^^^^^^^^^
+  File "/Users/prajit/Desktop/projects/cognition/experiments/greenhouse/strategies.py", line 2543, in run_strategy
+    tasks, wall_s, prompt_token_method = asyncio.run(
+                                         ^^^^^^^^^^^^
+  File "/opt/homebrew/anaconda3/lib/python3.12/asyncio/runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/anaconda3/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/anaconda3/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/Users/prajit/Desktop/projects/cognition/experiments/greenhouse/strategies.py", line 1394, in _run_naive_parallel_blind_applied
+    outcome = await asyncio.to_thread(
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/anaconda3/lib/python3.12/asyncio/threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/anaconda3/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/prajit/Desktop/projects/cognition/experiments/greenhouse/strategies.py", line 892, in _apply_writes_git_sync
+    subprocess.run(
+  File "/opt/homebrew/anaconda3/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['git', '-C', '/Users/prajit/Desktop/projects/cognition/experiments/real_repos/zod/checkout', 'branch', '-f', 'acg-applied/pr5855-shallowclone-map-set', '630a3d586d9e4bc329e1931912d4df4f07796bb9']' returned non-zero exit status 128.

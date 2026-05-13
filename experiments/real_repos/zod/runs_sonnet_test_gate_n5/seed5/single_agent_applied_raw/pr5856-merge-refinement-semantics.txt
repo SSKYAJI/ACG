@@ -1,0 +1,132 @@
+*** Begin Patch
+*** Add File: packages/zod/src/v4/core/__tests__/regression-merge-refinements.test.ts
++/**
++ * Regression tests for ZodObject.merge() refinement preservation fix.
++ *
++ * Bug: Calling .merge() on a ZodObject that has refinements (e.g., .refine(),
++ * .superRefine()) silently discards those refinements from the merged result,
++ * while .extend() preserves them.
++ *
++ * Fix: .merge() now uses this.extend(incoming.shape) instead of unwrapping
++ * the base schema, so refinements are preserved.
++ */
++import { describe, expect, it } from "vitest";
++import * as z from "zod/v4";
++
++describe("ZodObject.merge() preserves refinements", () => {
++  it("merge preserves .refine() from base schema", () => {
++    const base = z
++      .object({ name: z.string() })
++      .refine((val) => val.name.length >= 2, {
++        message: "name must be at least 2 characters",
++      });
++
++    const merged = base.merge(z.object({ age: z.number() }));
++
++    // Valid input
++    expect(merged.parse({ name: "Jo", age: 25 })).toEqual({
++      name: "Jo",
++      age: 25,
++    });
++
++    // Should fail refinement
++    const result = merged.safeParse({ name: "J", age: 25 });
++    expect(result.success).toBe(false);
++    if (!result.success) {
++      expect(result.error.issues[0].message).toBe(
++        "name must be at least 2 characters"
++      );
++    }
++  });
++
++  it("merge preserves .superRefine() from base schema", () => {
++    const base = z.object({ score: z.number() }).superRefine((val, ctx) => {
++      if (val.score < 0 || val.score > 100) {
++        ctx.addIssue({
++          code: z.ZodIssueCode.custom,
++          message: "score must be between 0 and 100",
++        });
++      }
++    });
++
++    const merged = base.merge(z.object({ label: z.string() }));
+
++    // Valid
++    expect(merged.parse({ score: 50, label: "pass" })).toEqual({
++      score: 50,
++      label: "pass",
++    });
++
++    // Fails superRefine
++    expect(merged.safeParse({ score: -1, label: "fail" }).success).toBe(false);
++    expect(merged.safeParse({ score: 101, label: "fail" }).success).toBe(false);
++  });
++
++  it("merge behavior matches extend behavior for refinements", () => {
++    const refineFn = (val: { value: number }) => val.value > 0;
++    const base = z
++      .object({ value: z.number() })
++      .refine(refineFn, "value must be positive");
+
++    const extra = { extra: z.string() };
++
++    const merged = base.merge(z.object(extra));
++    const extended = base.extend(extra);
++
++    const valid = { value: 1, extra: "ok" };
++    const invalid = { value: -1, extra: "ok" };
++
++    // Both should accept valid input
++    expect(merged.parse(valid)).toEqual(valid);
++    expect(extended.parse(valid)).toEqual(valid);
++
++    // Both should reject invalid input
++    expect(merged.safeParse(invalid).success).toBe(false);
++    expect(extended.safeParse(invalid).success).toBe(false);
++  });
+
++  it("merge preserves chained refinements", () => {
++    const base = z
++      .object({ a: z.number(), b: z.number() })
++      .refine((v) => v.a > 0, "a must be positive")
++      .refine((v) => v.b > 0, "b must be positive");
++
++    const merged = base.merge(z.object({ c: z.string() }));
++
++    expect(merged.parse({ a: 1, b: 2, c: "x" })).toEqual({
++      a: 1,
++      b: 2,
++      c: "x",
++    });
++    expect(merged.safeParse({ a: -1, b: 2, c: "x" }).success).toBe(false);
++    expect(merged.safeParse({ a: 1, b: -1, c: "x" }).success).toBe(false);
++  });
++
++  it("merge without refinements still works correctly", () => {
++    const base = z.object({ a: z.string() });
++    const merged = base.merge(z.object({ b: z.number() }));
++
++    expect(merged.parse({ a: "hello", b: 42 })).toEqual({
++      a: "hello",
++      b: 42,
++    });
++  });
++
++  it("incoming schema fields override base schema fields in merge", () => {
++    const base = z
++      .object({ a: z.string(), b: z.string() })
++      .refine((v) => v.a.length > 0, "a must not be empty");
++
++    // b is overridden to number in the merge
++    const merged = base.merge(z.object({ b: z.number() }));
++
++    expect(merged.parse({ a: "hello", b: 42 })).toEqual({
++      a: "hello",
++      b: 42,
++    });
++
++    // Refinement still applies
++    expect(merged.safeParse({ a: "", b: 42 }).success).toBe(false);
++  });
++});
+*** End Patch

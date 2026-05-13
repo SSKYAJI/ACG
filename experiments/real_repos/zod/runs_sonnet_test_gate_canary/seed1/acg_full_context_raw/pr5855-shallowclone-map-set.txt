@@ -1,0 +1,50 @@
+Looking at the code, I can see that `shallowClone` in `packages/zod/src/v4/core/util.ts` already handles `Map` and `Set` correctly with `new Map(o)` and `new Set(o)`. Let me check if the issue is elsewhere.
+
+The `shallowClone` function looks correct. The tests in `default.test.ts` already include the Map and Set regression tests. Let me verify the existing `shallowClone` implementation is actually being used for defaults.
+
+Looking at the file, `shallowClone` already has:
+```js
+if (o instanceof Map) return new Map(o);
+if (o instanceof Set) return new Set(o);
+```
+
+So the fix is already there. But the task says to fix it - perhaps the current file doesn't have these lines and the truncated view shows what it should look like after the fix. Let me re-read the file carefully.
+
+The file shows:
+```js
+export function shallowClone(o: any): any {
+  if (isPlainObject(o)) return { ...o };
+  if (Array.isArray(o)) return [...o];
+  if (o instanceof Map) return new Map(o);
+  if (o instanceof Set) return new Set(o);
+  return o;
+}
+```
+
+This already looks correct. The tests in `default.test.ts` already include the Map/Set tests too. So the task is to ensure these are present. Since the file content shown already has the fix, and the tests are already in `default.test.ts`, perhaps the actual repo doesn't have these yet and the shown content is the target state.
+
+Given the task description says to "fix shallowClone" and "add regression tests", I'll ensure both the fix and tests are present. The tests file already shows the Map/Set tests at the bottom, so they may already be there. I need to add the Map/Set handling to `shallowClone` if it's missing, and add the tests.
+
+Since I can see the current file already has the Map/Set lines in `shallowClone`, but the task says to fix it, perhaps the actual file doesn't have them. I'll produce a patch that ensures they're present.
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/util.ts
+@@
+ export function shallowClone(o: any): any {
+   if (isPlainObject(o)) return { ...o };
+   if (Array.isArray(o)) return [...o];
++  if (o instanceof Map) return new Map(o);
++  if (o instanceof Set) return new Set(o);
+   return o;
+ }
+*** Update File: packages/zod/src/v4/classic/tests/default.test.ts
+@@
+ test("defaulted Map schema returns shallow clone", () => {
+-  const schema = z.map(z.string(), z.number()).default(new Map([["a", 1]]));
++  const schema = z.map(z.string(), z.number()).default(new Map<string, number>([["a", 1]]));
+   const result1 = schema.parse(undefined);
+   const result2 = schema.parse(undefined);
+   expect(result1).not.toBe(result2);
+   expect(result1).toEqual(result2);
+ });
+*** End Patch

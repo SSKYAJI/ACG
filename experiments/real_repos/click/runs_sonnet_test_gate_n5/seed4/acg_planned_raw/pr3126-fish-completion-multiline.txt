@@ -1,0 +1,29 @@
+*** Begin Patch
+*** Update File: src/click/shell_completion.py
+@@
+     def format_completion(self, item: CompletionItem) -> str:
+         if item.help:
+-            return f"{item.type},{item.value}\t{item.help}"
++            return f"{item.type},{item.value}\t{item.help.splitlines()[0]}"
+ 
+         return f"{item.type},{item.value}"
+*** Update File: tests/test_shell_completion.py
+@@
+ def test_full_complete(runner, shell, env, expect):
+     cli = Group("cli", commands=[Command("a"), Command("b", help="bee")])
+     env["_CLI_COMPLETE"] = f"{shell}_complete"
+     result = runner.invoke(cli, env=env)
+     assert result.output == expect
++
++
++@pytest.mark.usefixtures("_patch_for_completion")
++def test_fish_multiline_help(runner):
++    cli = Group(
++        "cli",
++        commands=[Command("a"), Command("b", help="first line\nsecond line")],
++    )
++    env = {"COMP_WORDS": "", "COMP_CWORD": "", "_CLI_COMPLETE": "fish_complete"}
++    result = runner.invoke(cli, env=env)
++    assert "plain,b\tfirst line\n" in result.output
++    assert "second line" not in result.output
+*** End Patch

@@ -1,0 +1,173 @@
+I need to create a fix for fish shell completion handling of multiline help strings. Let me create the necessary files.
+
+*** Begin Patch
+*** Add File: fish_completion.go
++ package main
++ 
++ import (
++ 	"fmt"
++ 	"strings"
++ )
++ 
++ // sanitizeFishDescription sanitizes a help string for use in fish shell completion.
++ // Fish completion's `complete` command does not support multiline descriptions,
++ // so we collapse any newlines (and surrounding whitespace) into a single space,
++ // and also escape any special characters that would break the fish `complete` command.
++ func sanitizeFishDescription(s string) string {
++ 	// Split on newlines and rejoin with a space, trimming each segment.
++ 	lines := strings.Split(s, "\n")
++ 	parts := make([]string, 0, len(lines))
++ 	for _, line := range lines {
++ 		trimmed := strings.TrimSpace(line)
++ 		if trimmed != "" {
++ 			parts = append(parts, trimmed)
++ 		}
++ 	}
++ 	result := strings.Join(parts, " ")
++ 
++ 	// Escape single quotes for fish shell safety.
++ 	result = strings.ReplaceAll(result, "'", "\\'")
++ 
++ 	return result
++ }
++ 
++ // fishCompletionCommand returns a fish `complete` command string for a given
++ // command name, flag name, short flag, and description.
++ func fishCompletionCommand(cmdName, longFlag, shortFlag, description string) string {
++ 	desc := sanitizeFishDescription(description)
++ 
++ 	var sb strings.Builder
++ 	sb.WriteString(fmt.Sprintf("complete -c %s", cmdName))
++ 	if shortFlag != "" {
++ 		sb.WriteString(fmt.Sprintf(" -s %s", shortFlag))
++ 	}
++ 	if longFlag != "" {
++ 		sb.WriteString(fmt.Sprintf(" -l %s", longFlag))
++ 	}
++ 	if desc != "" {
++ 		sb.WriteString(fmt.Sprintf(" -d '%s'", desc))
++ 	}
++ 	return sb.String()
++ }
+*** Add File: fish_completion_test.go
++ package main
++ 
++ import (
++ 	"testing"
++ )
++ 
++ func TestSanitizeFishDescription_SingleLine(t *testing.T) {
++ 	input := "A simple description"
++ 	want := "A simple description"
++ 	got := sanitizeFishDescription(input)
++ 	if got != want {
++ 		t.Errorf("sanitizeFishDescription(%q) = %q; want %q", input, got, want)
++ 	}
++ }
++ 
++ func TestSanitizeFishDescription_MultiLine(t *testing.T) {
++ 	input := "First line\nSecond line\nThird line"
++ 	want := "First line Second line Third line"
++ 	got := sanitizeFishDescription(input)
++ 	if got != want {
++ 		t.Errorf("sanitizeFishDescription(%q) = %q; want %q", input, got, want)
++ 	}
++ }
++ 
++ func TestSanitizeFishDescription_MultiLineWithBlankLines(t *testing.T) {
++ 	input := "First line\n\nSecond line\n\n"
++ 	want := "First line Second line"
++ 	got := sanitizeFishDescription(input)
++ 	if got != want {
++ 		t.Errorf("sanitizeFishDescription(%q) = %q; want %q", input, got, want)
++ 	}
++ }
++ 
++ func TestSanitizeFishDescription_MultiLineWithLeadingTrailingWhitespace(t *testing.T) {
++ 	input := "  First line  \n  Second line  "
++ 	want := "First line Second line"
++ 	got := sanitizeFishDescription(input)
++ 	if got != want {
++ 		t.Errorf("sanitizeFishDescription(%q) = %q; want %q", input, got, want)
++ 	}
++ }
++ 
++ func TestSanitizeFishDescription_WithSingleQuote(t *testing.T) {
++ 	input := "It's a description"
++ 	want := "It\\'s a description"
++ 	got := sanitizeFishDescription(input)
++ 	if got != want {
++ 		t.Errorf("sanitizeFishDescription(%q) = %q; want %q", input, got, want)
++ 	}
++ }
++ 
++ func TestSanitizeFishDescription_MultiLineWithSingleQuote(t *testing.T) {
++ 	input := "It's the first line\nIt's the second line"
++ 	want := "It\\'s the first line It\\'s the second line"
++ 	got := sanitizeFishDescription(input)
++ 	if got != want {
++ 		t.Errorf("sanitizeFishDescription(%q) = %q; want %q", input, got, want)
++ 	}
++ }
++ 
++ func TestSanitizeFishDescription_Empty(t *testing.T) {
++ 	input := ""
++ 	want := ""
++ 	got := sanitizeFishDescription(input)
++ 	if got != want {
++ 		t.Errorf("sanitizeFishDescription(%q) = %q; want %q", input, got, want)
++ 	}
++ }
++ 
++ func TestSanitizeFishDescription_OnlyNewlines(t *testing.T) {
++ 	input := "\n\n\n"
++ 	want := ""
++ 	got := sanitizeFishDescription(input)
++ 	if got != want {
++ 		t.Errorf("sanitizeFishDescription(%q) = %q; want %q", input, got, want)
++ 	}
++ }
++ 
++ func TestFishCompletionCommand_WithAllFields(t *testing.T) {
++ 	got := fishCompletionCommand("mytool", "verbose", "v", "Enable verbose\noutput mode")
++ 	want := "complete -c mytool -s v -l verbose -d 'Enable verbose output mode'"
++ 	if got != want {
++ 		t.Errorf("fishCompletionCommand() = %q; want %q", got, want)
++ 	}
++ }
++ 
++ func TestFishCompletionCommand_NoShortFlag(t *testing.T) {
++ 	got := fishCompletionCommand("mytool", "verbose", "", "Enable verbose output")
++ 	want := "complete -c mytool -l verbose -d 'Enable verbose output'"
++ 	if got != want {
++ 		t.Errorf("fishCompletionCommand() = %q; want %q", got, want)
++ 	}
++ }
++ 
++ func TestFishCompletionCommand_NoDescription(t *testing.T) {
++ 	got := fishCompletionCommand("mytool", "verbose", "v", "")
++ 	want := "complete -c mytool -s v -l verbose"
++ 	if got != want {
++ 		t.Errorf("fishCompletionCommand() = %q; want %q", got, want)
++ 	}
++ }
++ 
++ func TestFishCompletionCommand_MultilineDescriptionCollapsed(t *testing.T) {
++ 	got := fishCompletionCommand("mytool", "output", "o", "Set output\nfile path\n\nDefaults to stdout")
++ 	want := "complete -c mytool -s o -l output -d 'Set output file path Defaults to stdout'"
++ 	if got != want {
++ 		t.Errorf("fishCompletionCommand() = %q; want %q", got, want)
++ 	}
++ }
+*** Add File: main.go
++ package main
++ 
++ import "fmt"
++ 
++ func main() {
++ 	// Example usage: generate a fish completion entry for a command with a multiline description.
++ 	desc := "Enable verbose output.\nThis prints extra information\nabout what the tool is doing."
++ 	line := fishCompletionCommand("mytool", "verbose", "v", desc)
++ 	fmt.Println(line)
++ }
+*** End Patch

@@ -1,0 +1,48 @@
+*** Begin Patch
+*** Update File: src/click/shell_completion.py
+@@
+     def format_completion(self, item: CompletionItem) -> str:
+         if item.help:
+-            return f"{item.type},{item.value}\t{item.help}"
++            return f"{item.type},{item.value}\t{item.help.splitlines()[0]}"
+ 
+         return f"{item.type},{item.value}"
+*** Update File: tests/test_shell_completion.py
+@@
+ @pytest.mark.parametrize(
+     ("shell", "env", "expect"),
+     [
+         ("bash", {"COMP_WORDS": "", "COMP_CWORD": "0"}, "plain,a\nplain,b\n"),
+         ("bash", {"COMP_WORDS": "a b", "COMP_CWORD": "1"}, "plain,b\n"),
+         ("zsh", {"COMP_WORDS": "", "COMP_CWORD": "0"}, "plain\na\n_\nplain\nb\nbee\n"),
+         ("zsh", {"COMP_WORDS": "a b", "COMP_CWORD": "1"}, "plain\nb\nbee\n"),
+         ("fish", {"COMP_WORDS": "", "COMP_CWORD": ""}, "plain,a\nplain,b\tbee\n"),
+         ("fish", {"COMP_WORDS": "a b", "COMP_CWORD": "b"}, "plain,b\tbee\n"),
+     ],
+ )
+ @pytest.mark.usefixtures("_patch_for_completion")
+ def test_full_complete(runner, shell, env, expect):
+     cli = Group("cli", commands=[Command("a"), Command("b", help="bee")])
+@@
+ @pytest.mark.usefixtures("_patch_for_completion")
+ def test_full_complete(runner, shell, env, expect):
+     cli = Group("cli", commands=[Command("a"), Command("b", help="bee")])
+     env["_CLI_COMPLETE"] = f"{shell}_complete"
+     result = runner.invoke(cli, env=env)
+     assert result.output == expect
++
++
++@pytest.mark.usefixtures("_patch_for_completion")
++def test_fish_multiline_help(runner):
++    """Fish completion should only use the first line of multiline help strings."""
++    cli = Group(
++        "cli",
++        commands=[
++            Command("a", help="first line\nsecond line\nthird line"),
++            Command("b", help="single line"),
++        ],
++    )
++    env = {"COMP_WORDS": "", "COMP_CWORD": "", "_CLI_COMPLETE": "fish_complete"}
++    result = runner.invoke(cli, env=env)
++    assert result.output == "plain,a\tfirst line\nplain,b\tsingle line\n"
+*** End Patch

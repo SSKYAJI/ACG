@@ -1,0 +1,50 @@
+Looking at the code, I can see the issue. In `fields.py`, the `Constant` field's `__init__` method sets `load_default` to the constant value, but then the parent `Field.__init__` raises a `ValueError` if `required=True` and `load_default` is not `missing_`.
+
+Let me find the `Constant` field in the file to understand its structure, then fix it.
+
+The fix should be in `Field.__init__`: when checking if `required=True` conflicts with `load_default`, we need to allow the `Constant` field (or more generally, allow subclasses to bypass this check). The cleanest fix is to make the `Constant` field pass `load_default=missing_` to the parent and handle the constant value separately, OR to modify the validation check to not raise when the subclass is `Constant`.
+
+Looking at the code more carefully, the best fix is to modify the check in `Field.__init__` to allow `Constant` fields to have `required=True` with a `load_default` set. We can do this by checking if the class has a special attribute, or by modifying `Constant.__init__` to call `super().__init__` without `load_default` and set it afterward.
+
+The cleanest approach: in `Constant.__init__`, call `super().__init__` without `load_default`, then set `self.load_default` after the parent init.
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+        if required is True and load_default is not missing_:
+            raise ValueError("'load_default' must not be set for required fields.")
+@@
+        if required is True and load_default is not missing_ and not isinstance(self, Constant):
+            raise ValueError("'load_default' must not be set for required fields.")
+*** Update File: tests/test_fields.py
+@@
+    def test_error_raised_if_missing_is_set_on_required_field(self):
+        with pytest.raises(
+            ValueError, match="'load_default' must not be set for required fields"
+        ):
+            fields.Raw(required=True, load_default=42)
+@@
+    def test_error_raised_if_missing_is_set_on_required_field(self):
+        with pytest.raises(
+            ValueError, match="'load_default' must not be set for required fields"
+        ):
+            fields.Raw(required=True, load_default=42)
+
+    def test_constant_field_with_required_true(self):
+        # Constant field should accept required=True without raising ValueError
+        field = fields.Constant(42, required=True)
+        assert field.required is True
+        assert field.load_default == 42
+
+    def test_constant_field_with_required_true_in_schema(self):
+        class MySchema(Schema):
+            value = fields.Constant(42, required=True)
+
+        # Should load successfully even without the field in input
+        result = MySchema().load({})
+        assert result == {"value": 42}
+
+        # Should also work when field is present in input
+        result = MySchema().load({"value": "anything"})
+        assert result == {"value": 42}
+*** End Patch

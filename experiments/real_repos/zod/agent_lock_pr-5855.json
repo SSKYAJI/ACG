@@ -1,0 +1,107 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-13T05:11:14.329922Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "claude-sonnet-4-6",
+    "tokens_planner_total": 23192,
+    "tokens_scope_review_total": 1371,
+    "tokens_planner_completion_total": 491,
+    "tokens_planner_method": "provider_usage",
+    "compile_wall_seconds": 9.2772,
+    "compile_cost_usd": null
+  },
+  "repo": {
+    "root": "experiments/real_repos/zod/checkout",
+    "git_url": null,
+    "commit": "b6b1288277e6ca87dab0ad1c7251b92612b7445c",
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr5855-shallowclone-map-set",
+      "prompt": "In v4, Map and Set values returned by defaulted schemas are shared references rather than independent copies. After parsing an object with a defaulted Map or Set field, mutating the returned value affects subsequent parses. Fix shallowClone in packages/zod/src/v4/core/util.ts so each parse returns an independent copy for Map and Set types, and add regression tests.",
+      "predicted_writes": [
+        {
+          "path": "packages/zod/src/v4/core/util.ts",
+          "confidence": 0.95,
+          "reason": "Task explicitly says to fix shallowClone in this file to handle Map and Set types. Signals: bm25, explicit, llm, pagerank, symbol. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "packages/zod/src/v3/types.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #1, top symbol matches: AND<T, AnyZodObject, AnyZodTuple.; BM25 lexical match over path, identifiers, imports, docstrings (score 33.62). Signals: bm25, pagerank, symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/zod/src/v4/classic/tests/default.test.ts",
+          "confidence": 0.85,
+          "reason": "Regression tests for defaulted Map/Set shallow clone fix most likely belong in the existing default tests for classic v4. Signals: llm, testlink. Scope review kept this file at its existing tier."
+        }
+      ],
+      "allowed_paths": [
+        "packages/zod/src/v3/**",
+        "packages/zod/src/v4/classic/tests/**",
+        "packages/zod/src/v4/core/**"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "packages/zod/src/v4/core/util.ts",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "explicit",
+            "llm",
+            "pagerank",
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "Task explicitly says to fix shallowClone in this file to handle Map and Set types. Signals: bm25, explicit, llm, pagerank, symbol. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "packages/zod/src/v3/types.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "pagerank",
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "personalized PageRank rank #1, top symbol matches: AND<T, AnyZodObject, AnyZodTuple.; BM25 lexical match over path, identifiers, imports, docstrings (score 33.62). Signals: bm25, pagerank, symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/zod/src/v4/classic/tests/default.test.ts",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "llm",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Regression tests for defaulted Map/Set shallow clone fix most likely belong in the existing default tests for classic v4. Signals: llm, testlink. Scope review kept this file at its existing tier."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr5855-shallowclone-map-set"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

@@ -1,0 +1,113 @@
+I'll analyze the issue with the `Constant` field and `required=True`. Let me look at the relevant code.
+
+The `Constant` field in marshmallow sets a constant value regardless of input. The issue is that when `required=True` is passed, it raises a `ValueError` because the field's `__init__` likely conflicts with the `required` parameter.
+
+Let me create the fix:
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+ class Constant(Field):
+     """A field that (de)serializes to a preset constant.  If you only want
+     the constant added for serialization or deserialization, you should use
+     ``dump_default`` or ``load_default`` instead.
+ 
+     :param constant: The constant returned for field value.
+ 
+     .. versionadded:: 2.0.0
+     """
+ 
+     #: Default error messages.
+     default_error_messages: dict[str, str] = {"null": "May not be null."}
+ 
+     def __init__(self, constant: typing.Any, **kwargs):
++        kwargs.pop("required", None)
+         super().__init__(**kwargs)
+         self.constant = constant
+         self.load_default = constant
+         self.missing_ = constant
+         self.dump_default = constant
+*** Update File: tests/test_fields.py
+@@
+ class TestConstant:
+@@
+     def test_constant_is_always_set(self):
++        field = ma.fields.Constant("hello", required=True)
++        assert field.deserialize(ma.missing) == "hello"
++        assert field.deserialize(None) == "hello"
++        assert field.deserialize("ignored") == "hello"
++
++    def test_constant_required_true_does_not_raise(self):
++        # required=True should be accepted without raising ValueError
++        field = ma.fields.Constant(42, required=True)
++        assert field.constant == 42
++
++    def test_constant_required_false_works(self):
++        field = ma.fields.Constant("value", required=False)
++        assert field.constant == "value"
++
+*** End Patch
+
+Wait, I need to look more carefully at the actual file structure. Let me provide a more careful patch that accounts for the actual code:
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+     def __init__(self, constant: typing.Any, **kwargs):
++        kwargs.pop("required", None)
+         super().__init__(**kwargs)
+         self.constant = constant
+         self.load_default = constant
+         self.missing_ = constant
+         self.dump_default = constant
+*** Update File: tests/test_fields.py
+@@
+ class TestConstant:
+@@
+     def test_constant_is_always_set(self):
++        pass
++
++    def test_constant_required_true_does_not_raise(self):
++        """Constant field should accept required=True without raising ValueError."""
++        field = ma.fields.Constant(42, required=True)
++        assert field.constant == 42
++        assert field.load_default == 42
++        assert field.dump_default == 42
++
++    def test_constant_required_true_deserializes(self):
++        """Constant field with required=True should still return constant value."""
++        field = ma.fields.Constant("hello", required=True)
++        assert field.deserialize(ma.missing) == "hello"
++        assert field.deserialize("anything") == "hello"
++
+*** End Patch
+
+I need to be more careful. Let me provide a clean, unambiguous patch:
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+     def __init__(self, constant: typing.Any, **kwargs):
++        kwargs.pop("required", None)
+         super().__init__(**kwargs)
+         self.constant = constant
+         self.load_default = constant
+         self.missing_ = constant
+         self.dump_default = constant
+*** Update File: tests/test_fields.py
+@@
+ class TestConstant:
+@@
+     def test_constant_is_always_set(self):
++        pass
++
++    def test_constant_required_true_no_error(self):
++        """Regression test: Constant(required=True) should not raise ValueError."""
++        field = ma.fields.Constant("always", required=True)
++        assert field.constant == "always"
++
++    def test_constant_required_true_returns_constant(self):
++        field = ma.fields.Constant(99, required=True)
++        assert field.deserialize(ma.missing) == 99
++
+*** End Patch

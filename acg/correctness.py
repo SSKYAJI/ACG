@@ -81,6 +81,17 @@ def resolve_task_meta(
     return None, [], None, [], [], None
 
 
+def _resolve_repo_runner(manifest: dict, repo_short_name: str) -> tuple[str, str | None]:
+    """Return (test_runner, working_directory) for a repo entry.
+
+    Defaults to ("pytest", None) for back-compat.
+    """
+    for repo in manifest.get("repos", []):
+        if repo.get("short_name") == repo_short_name:
+            return repo.get("test_runner", "pytest"), repo.get("working_directory")
+    return "pytest", None
+
+
 def filter_test_files(ground_truth_files: list[str]) -> list[str]:
     """Filter to paths that look like test files.
 
@@ -303,6 +314,75 @@ def parse_pytest_output(stdout: str) -> tuple[int | None, int | None, int | None
     return None, None, None
 
 
+def _run_pr_tests_js(
+    checkout: Path,
+    test_command: str,
+    test_files: list[str],
+    fail_to_pass: list[str],
+    pass_to_pass: list[str],
+    *,
+    runner: str,
+    working_directory: str | None,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+) -> CorrectnessOutcome:
+    """JS test-runner dispatch (vitest | node:test) for run_pr_tests.
+
+    Honors the manifest's ``working_directory`` so monorepo packages (e.g.
+    zod's ``packages/zod``) run their tests from the right cwd. Mirrors the
+    pytest path's timeout / FileNotFoundError handling.
+    """
+    from experiments.real_repos._parsers import run_node_test, run_vitest
+
+    cwd = checkout / working_directory if working_directory else checkout
+    t0 = time.perf_counter()
+    try:
+        if runner == "vitest":
+            per_test = run_vitest(cwd, test_command, test_files, timeout=timeout)
+        elif runner == "node:test":
+            per_test = run_node_test(cwd, test_command, test_files, timeout=timeout)
+        else:
+            return CorrectnessOutcome(ran=False, skip_reason=f"unknown_runner_{runner}")
+    except subprocess.TimeoutExpired:
+        return CorrectnessOutcome(
+            ran=True, exit_code=-1, skip_reason="timeout", test_files_run=test_files
+        )
+    except FileNotFoundError:
+        return CorrectnessOutcome(ran=False, skip_reason="test_command_not_found")
+
+    wall = time.perf_counter() - t0
+    passed_c = sum(1 for s in per_test.values() if s == "PASSED")
+    failed_c = sum(1 for s in per_test.values() if s == "FAILED")
+    total_c = len(per_test)
+    exit_code = 0 if failed_c == 0 and total_c > 0 else (1 if total_c > 0 else 2)
+
+    ftp_passed: int | None = None
+    ftp_total: int | None = None
+    ptp_passed: int | None = None
+    ptp_total: int | None = None
+    if fail_to_pass or pass_to_pass:
+        ftp_passed, ftp_total, ptp_passed, ptp_total = score_fail_to_pass(
+            per_test, fail_to_pass, pass_to_pass
+        )
+
+    is_collection_error = total_c == 0
+
+    return CorrectnessOutcome(
+        ran=True,
+        exit_code=exit_code,
+        passed_count=passed_c,
+        failed_count=failed_c,
+        total_count=total_c,
+        duration_seconds=round(wall, 4),
+        stdout_tail="",
+        test_files_run=test_files,
+        fail_to_pass_passed=ftp_passed,
+        fail_to_pass_total=ftp_total,
+        pass_to_pass_passed=ptp_passed,
+        pass_to_pass_total=ptp_total,
+        collection_error=is_collection_error,
+    )
+
+
 def run_pr_tests(
     checkout: Path,
     repo_short_name: str,
@@ -317,6 +397,7 @@ def run_pr_tests(
     - If no test files in ground_truth_files → CorrectnessOutcome(ran=False, skip_reason="no_test_files").
     - On TimeoutExpired: exit_code=-1, skip_reason="timeout".
     - On FileNotFoundError (test_command not found): ran=False, skip_reason="test_command_not_found".
+    - Dispatches to vitest parser when manifest test_runner=="vitest".
     """
     if not isinstance(checkout, Path):
         checkout = Path(checkout)
@@ -332,6 +413,7 @@ def run_pr_tests(
     test_command, ground_truth_files, _sha, fail_to_pass, pass_to_pass, _merge_sha = resolve_task_meta(
         manifest, repo_short_name, task_id
     )
+    test_runner, working_directory = _resolve_repo_runner(manifest, repo_short_name)
 
     if not test_command:
         return CorrectnessOutcome(ran=False, skip_reason="no_test_command")
@@ -341,6 +423,19 @@ def run_pr_tests(
     test_files = filter_test_files(ground_truth_files)
     if not test_files:
         return CorrectnessOutcome(ran=False, skip_reason="no_test_files")
+
+    # For JS test runners (vitest, node:test), dispatch to the unified JS branch.
+    if test_runner in ("vitest", "node:test"):
+        return _run_pr_tests_js(
+            checkout=checkout,
+            test_command=test_command,
+            test_files=test_files,
+            fail_to_pass=fail_to_pass,
+            pass_to_pass=pass_to_pass,
+            runner=test_runner,
+            working_directory=working_directory,
+            timeout=timeout,
+        )
 
     try:
         cmd_parts = shlex.split(test_command)

@@ -1,0 +1,83 @@
+I'll analyze the task and implement the fix for IDN email validation.
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+     USER_REGEX = re.compile(
+         r"(^[-!#$%&'*+/=?^`{}|~\w]+(\.[-!#$%&'*+/=?^`{}|~\w]+)*\Z"  # dot-atom
+         r"|^\"([\001-\010\013\014\016-\037!#-\[\]-\177]"
+         r'|\\[\001-\011\013\014\016-\177])*\"\Z)',  # quoted-string
+         re.IGNORECASE | re.UNICODE,
+     )
+ 
+     DOMAIN_REGEX = re.compile(
+         # domain
+         r"(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?"
+         r"\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?\Z)",
+         re.IGNORECASE,
+     )
+@@
+     def _validate_domain(self, domain: str) -> bool:
+         if self.DOMAIN_REGEX.match(domain):
+             return True
+ 
+         try:
+             domain_encoded = domain.encode("idna")
+         except (UnicodeError, UnicodeDecodeError):
+             return False
+ 
+         return bool(self.DOMAIN_REGEX.match(domain_encoded.decode("ascii")))
+- 
+*** Update File: src/marshmallow/validate.py
+@@
+     def _validate_domain(self, domain: str) -> bool:
+         if self.DOMAIN_REGEX.match(domain):
+             return True
+ 
+         try:
+             domain_encoded = domain.encode("idna")
+         except (UnicodeError, UnicodeDecodeError):
+             return False
+ 
+         return bool(self.DOMAIN_REGEX.match(domain_encoded.decode("ascii")))
+@@
+     def _validate_domain(self, domain: str) -> bool:
+         if self.DOMAIN_REGEX.match(domain):
+             return True
+ 
++        # Check that no domain label starts or ends with a hyphen
++        for label in domain.split("."):
++            if label.startswith("-") or label.endswith("-"):
++                return False
++
+         try:
+             domain_encoded = domain.encode("idna")
+         except (UnicodeError, UnicodeDecodeError):
+             return False
+ 
+         return bool(self.DOMAIN_REGEX.match(domain_encoded.decode("ascii")))
+*** Update File: tests/test_validate.py
+@@
+     @pytest.mark.parametrize(
+         "valid_email",
+         [
+@@
+     @pytest.mark.parametrize(
+         "invalid_email",
+         [
+             "invalidemail",
+             "invalid-email",
+             "invalid@email",
+             "invalid@email.c",
+             "invalid@.com",
+             "invalid@email.com" + ("x" * 250),
+@@
+             "invalid@email.com" + ("x" * 250),
++            "user@-münchen.de",
++            "user@münchen-.de",
++            "user@-example.com",
++            "user@example-.com",
+         ],
+     )
+     def test_email_invalid(self, invalid_email):
+*** End Patch

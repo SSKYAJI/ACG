@@ -1,0 +1,127 @@
+Looking at the task, I need to fix descriptor access in `_cachedmethod.py` so that class-level inspection works when no instance is provided.
+
+Let me examine the current implementation:
+
+*** Begin Patch
+*** Update File: src/cachetools/_cachedmethod.py
+@@
+ class cachedmethod:
+     """Decorator to wrap a class or instance method with a memoizing
+     callable that saves results in a cache.
+     """
+ 
+     def __init__(self, cache, key=keys.hashkey, lock=None):
+         self.__cache = cache
+         self.__key = key
+         self.__lock = lock
+ 
+     def __call__(self, method):
+         return _cachedmethod(self.__cache, self.__key, self.__lock, method)
+ 
+ 
+ class _cachedmethod:
+     def __init__(self, cache, key, lock, method):
+         self.__cache = cache
+         self.__key = key
+         self.__lock = lock
+         self.__method = method
+         functools.update_wrapper(self, method)
+ 
+     def __get__(self, instance, owner=None):
++        if instance is None:
++            return self
+         return functools.partial(self.__call__, instance)
+*** Update File: tests/test_cachedmethod.py
+@@
+ import unittest
+ 
+ import cachetools
+ 
+ 
++class ClassLevelInspectionTest(unittest.TestCase):
++    """Regression tests for class-level inspection of cached methods."""
++
++    def test_class_level_access_returns_descriptor(self):
++        """Accessing a cached method on the class should return the descriptor."""
++
++        class MyClass:
++            def __init__(self):
++                self.cache = {}
++
++            @cachetools.cachedmethod(lambda self: self.cache)
++            def my_method(self, x):
++                return x * 2
++
++        # Accessing via the class should not raise and should return the descriptor
++        descriptor = MyClass.my_method
++        self.assertIsNotNone(descriptor)
++
++    def test_class_level_access_has_wrapped_attributes(self):
++        """Accessing a cached method on the class should expose wrapped attributes."""
++
++        class MyClass:
++            def __init__(self):
++                self.cache = {}
++
++            @cachetools.cachedmethod(lambda self: self.cache)
++            def my_method(self, x):
++                """My method docstring."""
++                return x * 2
++
++        descriptor = MyClass.my_method
++        self.assertEqual(descriptor.__name__, "my_method")
++        self.assertEqual(descriptor.__doc__, "My method docstring.")
++
++    def test_class_level_access_does_not_raise(self):
++        """Accessing a cached method on the class should not raise AttributeError."""
++
++        class MyClass:
++            def __init__(self):
++                self.cache = {}
++
++            @cachetools.cachedmethod(lambda self: self.cache)
++            def compute(self, value):
++                return value + 1
++
++        try:
++            method = MyClass.compute
++        except Exception as e:
++            self.fail(f"Class-level access raised an exception: {e}")
++
++    def test_instance_still_works_after_class_access(self):
++        """Instance method should still work correctly after class-level access."""
++
++        class MyClass:
++            def __init__(self):
++                self.cache = {}
++
++            @cachetools.cachedmethod(lambda self: self.cache)
++            def double(self, x):
++                return x * 2
++
++        # Access at class level first
++        _ = MyClass.double
++
++        # Then use at instance level
++        obj = MyClass()
++        result = obj.double(5)
++        self.assertEqual(result, 10)
++
++    def test_inspect_cached_method_on_class(self):
++        """inspect module should be able to inspect cached methods on the class."""
++        import inspect
++
++        class MyClass:
++            def __init__(self):
++                self.cache = {}
++
++            @cachetools.cachedmethod(lambda self: self.cache)
++            def process(self, data):
++                return data
++
++        # Should not raise
++        descriptor = MyClass.process
++        self.assertTrue(callable(descriptor))
++
++
+*** End Patch

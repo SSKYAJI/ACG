@@ -1,0 +1,2553 @@
+*** Begin Patch
+*** Add File: src/click/__init__.py
+from .core import BaseCommand, Command, CommandCollection, Group, MultiCommand
+from .decorators import (
+    argument,
+    command,
+    confirmation_option,
+    group,
+    help_option,
+    make_pass_decorator,
+    option,
+    pass_context,
+    pass_obj,
+    password_option,
+    version_option,
+)
+from .exceptions import (
+    Abort,
+    BadArgumentUsage,
+    BadOptionUsage,
+    BadParameter,
+    ClickException,
+    FileError,
+    MissingParameter,
+    NoSuchOption,
+    UsageError,
+)
+from .formatting import HelpFormatter, wrap_text
+from .globals import get_current_context
+from .termui import (
+    clear,
+    confirm,
+    echo,
+    echo_via_pager,
+    edit,
+    get_terminal_size,
+    getchar,
+    launch,
+    pause,
+    progressbar,
+    prompt,
+    secho,
+    style,
+    unstyle,
+)
+from .testing import CliRunner
+from .types import (
+    BOOL,
+    FLOAT,
+    INT,
+    STRING,
+    UUID,
+    UNPROCESSED,
+    Choice,
+    DateTime,
+    File,
+    FloatRange,
+    IntRange,
+    Path,
+    Tuple,
+)
+from .utils import (
+    format_filename,
+    get_app_dir,
+    get_binary_stream,
+    get_text_stream,
+    open_file,
+)
+
+__version__ = "8.0.0"
+*** End Patch
+
+*** Add File: src/click/testing.py
+import io
+import os
+import sys
+import shlex
+import typing as t
+import contextlib
+from contextlib import contextmanager
+
+from . import formatting
+from . import termui
+from . import utils
+
+
+class BytesIOCopy(io.RawIOBase):
+    """A raw IO object that writes to two streams simultaneously."""
+
+    def __init__(self, buffers: t.List[io.BytesIO]) -> None:
+        self.buffers = buffers
+
+    def readable(self) -> bool:
+        return False
+
+    def writable(self) -> bool:
+        return True
+
+    def write(self, b: bytes) -> int:  # type: ignore[override]
+        for buf in self.buffers:
+            buf.write(b)
+        return len(b)
+
+
+class _default:
+    pass
+
+
+class Result:
+    """Holds the captured result of an invoked CLI script."""
+
+    def __init__(
+        self,
+        runner: "CliRunner",
+        stdout_bytes: bytes,
+        stderr_bytes: bytes,
+        return_value: t.Any,
+        exit_code: int,
+        exception: t.Optional[BaseException],
+        exc_info: t.Optional[
+            t.Tuple[
+                t.Type[BaseException],
+                BaseException,
+                t.Any,
+            ]
+        ] = None,
+        output: t.Optional[str] = None,
+    ) -> None:
+        self.runner = runner
+        self.stdout_bytes = stdout_bytes
+        self.stderr_bytes = stderr_bytes
+        self.return_value = return_value
+        self.exit_code = exit_code
+        self.exception = exception
+        self.exc_info = exc_info
+        self._output = output
+
+    @property
+    def output(self) -> str:
+        """The (standard) output as unicode string, decoded with the
+        runner's charset. If the runner mixed stderr into stdout, this
+        includes both.
+        """
+        return self.stdout_bytes.decode(self.runner.charset, "replace").replace(
+            "\r\n", "\n"
+        )
+
+    @property
+    def stdout(self) -> str:
+        """The standard output as unicode string."""
+        return self.output
+
+    @property
+    def stderr(self) -> str:
+        """The standard error as unicode string."""
+        if not self.runner.mix_stderr:
+            return self.stderr_bytes.decode(self.runner.charset, "replace").replace(
+                "\r\n", "\n"
+            )
+        raise ValueError("stderr is mixed into stdout, use output instead.")
+
+    def __repr__(self) -> str:
+        return f"<Result {self.exception!r}>" if self.exception else "<Result okay>"
+
+
+class CliRunner:
+    """The CLI runner provides functionality to invoke a Click command line
+    script for unittesting purposes in a isolated environment. Not only does
+    it catch exceptions, but it also captures stdout/stderr output.
+
+    :param charset: the character set for the input and output data.
+    :param env: a dictionary with environment variables to override.
+    :param echo_input: if this is set to `True`, then reading from stdin
+                       writes to stdout. This is useful for showing examples
+                       in documentation.
+    :param mix_stderr: if this is set to `False`, then the stderr output is
+                       captured separately from stdout. The default is `True`
+                       for legacy reasons.
+    """
+
+    def __init__(
+        self,
+        charset: str = "utf-8",
+        env: t.Optional[t.Mapping[str, str]] = None,
+        echo_input: bool = False,
+        mix_stderr: bool = True,
+    ) -> None:
+        self.charset = charset
+        self.env: t.Mapping[str, str] = env or {}
+        self.echo_input = echo_input
+        self.mix_stderr = mix_stderr
+
+    def get_default_text_stderr(self) -> t.TextIO:
+        return t.cast(t.TextIO, sys.stderr)
+
+    def isolation(
+        self,
+        input: t.Optional[t.Union[str, bytes, t.IO]] = None,
+        env: t.Optional[t.Mapping[str, str]] = None,
+        color: bool = False,
+    ) -> t.Iterator[t.Tuple[io.BytesIO, t.Optional[io.BytesIO]]]:
+        """A context manager that sets up the isolation for invoking of a
+        command line tool. This sets up stdin with the given input data
+        and redirects stdout and stderr to a buffer.
+
+        :param input: the input data for stdin.
+        :param env: environment overrides.
+        :param color: whether the output should contain color codes.
+        :return: a tuple of stdout and stderr byte buffers.
+        """
+        input = make_input_stream(input, self.charset)
+
+        old_stdin = sys.stdin
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        old_forced_width = formatting.FORCED_WIDTH
+
+        formatting.FORCED_WIDTH = 80
+
+        env = self.env if env is None else {**self.env, **env}
+
+        if self.echo_input:
+            input = EchoingInput(input, sys.stdout.buffer if hasattr(sys.stdout, 'buffer') else sys.stdout)
+
+        visible_input = None
+
+        if self.echo_input:
+            visible_input = input
+
+        # Create byte buffers for capturing output
+        bytes_stdout = io.BytesIO()
+        bytes_stderr = io.BytesIO()
+
+        if self.mix_stderr:
+            # When mixing stderr into stdout, both go to the same buffer
+            output_buffer = bytes_stdout
+            error_buffer = bytes_stdout
+        else:
+            output_buffer = bytes_stdout
+            error_buffer = bytes_stderr
+
+        # Create text wrappers
+        stdout_wrapper = _default_text_stdout_wrapper(output_buffer, self.charset, color)
+        stderr_wrapper = _default_text_stderr_wrapper(error_buffer, self.charset, color)
+
+        env_overrides = {}
+        if env:
+            env_overrides = dict(env)
+
+        old_env: t.Dict[str, t.Optional[str]] = {}
+        for key, value in env_overrides.items():
+            old_env[key] = os.environ.get(key)
+            os.environ[key] = value
+
+        sys.stdin = _default_text_stdin(input, self.charset)
+        sys.stdout = stdout_wrapper
+        sys.stderr = stderr_wrapper
+
+        try:
+            yield bytes_stdout, bytes_stderr if not self.mix_stderr else None
+        finally:
+            # Flush both wrappers to ensure all buffered data is captured
+            try:
+                sys.stdout.flush()
+            except Exception:
+                pass
+            try:
+                sys.stderr.flush()
+            except Exception:
+                pass
+
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+            sys.stdin = old_stdin
+            formatting.FORCED_WIDTH = old_forced_width
+
+            for key, value in old_env.items():
+                if value is None:
+                    try:
+                        del os.environ[key]
+                    except KeyError:
+                        pass
+                else:
+                    os.environ[key] = value
+
+    def invoke(
+        self,
+        cli: "BaseCommand",
+        args: t.Optional[t.Union[str, t.Sequence[str]]] = None,
+        input: t.Optional[t.Union[str, bytes, t.IO]] = None,
+        env: t.Optional[t.Mapping[str, str]] = None,
+        catch_exceptions: bool = True,
+        color: bool = False,
+        **extra: t.Any,
+    ) -> Result:
+        """Invokes a command in an isolated environment. The arguments are
+        forwarded directly to the command line script, the `extra` keyword
+        arguments are passed to the :meth:`~click.BaseCommand.main` function
+        of the command.
+
+        This returns a :class:`Result` object.
+
+        :param cli: the command to invoke
+        :param args: the arguments as a bytestring or as a list of strings.
+        :param input: the input data for stdin.
+        :param env: the environment overrides.
+        :param catch_exceptions: whether to catch any exceptions other than
+                                 ``SystemExit``.
+        :param color: whether the output should contain color codes.
+        :param extra: the keyword arguments to pass to :meth:`main`.
+        :return: the return value
+        """
+        exc_info = None
+        return_value = None
+        exception = None
+        exit_code = 0
+
+        if isinstance(args, str):
+            args = shlex.split(args)
+
+        with self.isolation(input=input, env=env, color=color) as outstreams:
+            if self.mix_stderr:
+                bytes_stdout = outstreams[0]
+                bytes_stderr = None
+            else:
+                bytes_stdout, bytes_stderr = outstreams
+
+            try:
+                return_value = cli.main(
+                    args=args or (),
+                    prog_name=self.get_default_prog_name(cli),
+                    standalone_mode=False,
+                    **extra,
+                )
+            except SystemExit as e:
+                exc_info = sys.exc_info()
+                e_code = e.code
+                if e_code is None:
+                    e_code = 0
+                if e_code != 0:
+                    exception = e
+                if not isinstance(e_code, int):
+                    sys.stdout.write(str(e_code))
+                    sys.stdout.write("\n")
+                    sys.stdout.flush()
+                    e_code = 1
+                exit_code = e_code
+            except Exception as e:
+                if not catch_exceptions:
+                    raise
+                exception = e
+                exc_info = sys.exc_info()
+                exit_code = 1
+            finally:
+                # Flush stdout and stderr before reading the buffers
+                try:
+                    sys.stdout.flush()
+                except Exception:
+                    pass
+                try:
+                    sys.stderr.flush()
+                except Exception:
+                    pass
+
+            stdout_bytes = bytes_stdout.getvalue()
+            stderr_bytes = bytes_stderr.getvalue() if bytes_stderr is not None else b""
+
+        return Result(
+            runner=self,
+            stdout_bytes=stdout_bytes,
+            stderr_bytes=stderr_bytes,
+            return_value=return_value,
+            exit_code=exit_code,
+            exception=exception,
+            exc_info=exc_info,
+        )
+
+    def get_default_prog_name(self, cli: "BaseCommand") -> str:
+        return cli.name or "root"
+
+    def isolated_filesystem(
+        self, temp_dir: t.Optional[t.Union[str, "os.PathLike[str]"]] = None
+    ) -> t.ContextManager[str]:
+        """A context manager that creates a temporary directory and changes
+        the current working directory to it for isolated filesystem tests.
+
+        :param temp_dir: if given, the directory is created inside this
+            directory.
+        """
+        import tempfile
+
+        t_dir = tempfile.mkdtemp(dir=temp_dir)
+        cwd = os.getcwd()
+
+        @contextmanager
+        def inner() -> t.Iterator[str]:
+            try:
+                os.chdir(t_dir)
+                yield t_dir
+            finally:
+                os.chdir(cwd)
+                try:
+                    import shutil
+                    shutil.rmtree(t_dir)
+                except Exception:
+                    pass
+
+        return inner()
+
+
+def make_input_stream(
+    input: t.Optional[t.Union[str, bytes, t.IO]], charset: str
+) -> io.BytesIO:
+    if input is None:
+        input = b""
+    elif isinstance(input, str):
+        input = input.encode(charset)
+
+    if isinstance(input, (bytes, bytearray)):
+        return io.BytesIO(input)
+
+    # It's a file-like object; read it
+    rv = input.read()
+    if isinstance(rv, str):
+        rv = rv.encode(charset)
+    return io.BytesIO(rv)
+
+
+class EchoingInput:
+    def __init__(self, input: io.BytesIO, output: t.IO) -> None:
+        self._input = input
+        self._output = output
+
+    def read(self, n: int = -1) -> bytes:
+        rv = self._input.read(n)
+        if rv:
+            if isinstance(self._output, io.RawIOBase) or isinstance(self._output, io.BufferedIOBase):
+                self._output.write(rv)
+            else:
+                self._output.write(rv.decode("utf-8", "replace"))
+        return rv
+
+    def readline(self, n: int = -1) -> bytes:
+        rv = self._input.readline(n)
+        if rv:
+            if isinstance(self._output, io.RawIOBase) or isinstance(self._output, io.BufferedIOBase):
+                self._output.write(rv)
+            else:
+                self._output.write(rv.decode("utf-8", "replace"))
+        return rv
+
+    def readlines(self) -> t.List[bytes]:
+        rv = self._input.readlines()
+        for line in rv:
+            if isinstance(self._output, io.RawIOBase) or isinstance(self._output, io.BufferedIOBase):
+                self._output.write(line)
+            else:
+                self._output.write(line.decode("utf-8", "replace"))
+        return rv
+
+
+def _default_text_stdin(input: io.BytesIO, charset: str) -> t.TextIO:
+    """Create a text stdin wrapper around a BytesIO."""
+    return io.TextIOWrapper(input, charset)
+
+
+def _default_text_stdout_wrapper(buffer: io.BytesIO, charset: str, color: bool) -> t.TextIO:
+    """Create a text stdout wrapper that writes to a BytesIO buffer."""
+    # Use line_buffering=False so we control flushing
+    raw = _BytesIOWrapper(buffer)
+    buffered = io.BufferedWriter(raw)
+    wrapper = io.TextIOWrapper(buffered, charset, line_buffering=False)
+    return wrapper
+
+
+def _default_text_stderr_wrapper(buffer: io.BytesIO, charset: str, color: bool) -> t.TextIO:
+    """Create a text stderr wrapper that writes to a BytesIO buffer."""
+    raw = _BytesIOWrapper(buffer)
+    buffered = io.BufferedWriter(raw)
+    wrapper = io.TextIOWrapper(buffered, charset, line_buffering=False)
+    return wrapper
+
+
+class _BytesIOWrapper(io.RawIOBase):
+    """A RawIOBase wrapper around a BytesIO that doesn't close the BytesIO."""
+
+    def __init__(self, buffer: io.BytesIO) -> None:
+        self._buffer = buffer
+
+    def readable(self) -> bool:
+        return False
+
+    def writable(self) -> bool:
+        return True
+
+    def write(self, b: bytes) -> int:  # type: ignore[override]
+        self._buffer.write(b)
+        return len(b)
+
+
+# Import BaseCommand for type hints
+from .core import BaseCommand
+*** End Patch
+
+*** Add File: src/click/core.py
+"""
+Minimal Click core implementation for testing purposes.
+"""
+import typing as t
+import sys
+import os
+
+
+class Context:
+    """A context object that holds state for a command invocation."""
+
+    def __init__(
+        self,
+        command: "BaseCommand",
+        parent: t.Optional["Context"] = None,
+        info_name: t.Optional[str] = None,
+        max_content_width: t.Optional[int] = None,
+        color: t.Optional[bool] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        self.command = command
+        self.parent = parent
+        self.info_name = info_name
+        self.max_content_width = max_content_width
+        self.color = color
+        self.params: t.Dict[str, t.Any] = {}
+        self._close_callbacks: t.List[t.Callable[[], t.Any]] = []
+        self.obj: t.Any = None
+        self.default_map: t.Optional[t.Dict[str, t.Any]] = None
+        self.allow_extra_args = False
+        self.allow_interspersed_args = True
+        self.ignore_unknown_options = False
+        self.args: t.List[str] = []
+        self.protected_args: t.List[str] = []
+        self.invoked_subcommand: t.Optional[str] = None
+        self.terminal_width: t.Optional[int] = None
+        self.resilient_parsing = False
+        self._depth = 0
+
+        # Copy parent attributes
+        if parent is not None:
+            self.obj = parent.obj
+            if self.color is None:
+                self.color = parent.color
+
+        _local_ctx_stack.append(self)
+
+    def __enter__(self) -> "Context":
+        self._depth += 1
+        return self
+
+    def __exit__(self, exc_type: t.Any, exc_val: t.Any, exc_tb: t.Any) -> None:
+        self._depth -= 1
+        if self._depth == 0:
+            self.close()
+
+    def close(self) -> None:
+        for cb in reversed(self._close_callbacks):
+            cb()
+        self._close_callbacks = []
+        if _local_ctx_stack and _local_ctx_stack[-1] is self:
+            _local_ctx_stack.pop()
+
+    def with_resource(self, context_manager: t.Any) -> t.Any:
+        value = context_manager.__enter__()
+        self._close_callbacks.append(lambda: context_manager.__exit__(None, None, None))
+        return value
+
+    def call_on_close(self, f: t.Callable[..., t.Any]) -> t.Callable[..., t.Any]:
+        self._close_callbacks.append(f)
+        return f
+
+    def fail(self, message: str) -> "t.NoReturn":
+        from .exceptions import UsageError
+        raise UsageError(message, self)
+
+    def find_root(self) -> "Context":
+        node = self
+        while node.parent is not None:
+            node = node.parent
+        return node
+
+    def find_object(self, object_type: t.Type) -> t.Optional[t.Any]:
+        node: t.Optional["Context"] = self
+        while node is not None:
+            if isinstance(node.obj, object_type):
+                return node.obj
+            node = node.parent
+        return None
+
+    def ensure_object(self, object_type: t.Type) -> t.Any:
+        rv = self.find_object(object_type)
+        if rv is None:
+            self.obj = rv = object_type()
+        return rv
+
+    def lookup_default(self, name: str) -> t.Optional[t.Any]:
+        if self.default_map is not None:
+            return self.default_map.get(name)
+        return None
+
+    def format_usage(self, formatter: t.Any) -> None:
+        self.command.format_usage(self, formatter)
+
+    def format_help(self, formatter: t.Any) -> None:
+        self.command.format_help(self, formatter)
+
+    def format_help_text(self, formatter: t.Any) -> None:
+        self.command.format_help_text(self, formatter)
+
+    def format_epilog(self, formatter: t.Any) -> None:
+        self.command.format_epilog(self, formatter)
+
+    def make_formatter(self) -> t.Any:
+        from .formatting import HelpFormatter
+        return HelpFormatter(
+            width=self.terminal_width,
+            max_width=self.max_content_width,
+        )
+
+    def get_help(self) -> str:
+        formatter = self.make_formatter()
+        self.format_help(formatter)
+        return formatter.getvalue()
+
+    def get_usage(self) -> str:
+        formatter = self.make_formatter()
+        self.format_usage(formatter)
+        return formatter.getvalue()
+
+
+_local_ctx_stack: t.List[Context] = []
+
+
+def get_current_context(silent: bool = False) -> t.Optional[Context]:
+    if _local_ctx_stack:
+        return _local_ctx_stack[-1]
+    if not silent:
+        raise RuntimeError("There is no active click context.")
+    return None
+
+
+class BaseCommand:
+    """The base class for all commands."""
+
+    name: t.Optional[str]
+    deprecated: bool = False
+
+    def __init__(
+        self,
+        name: t.Optional[str],
+        callback: t.Optional[t.Callable[..., t.Any]] = None,
+        params: t.Optional[t.List["Parameter"]] = None,
+        help: t.Optional[str] = None,
+        epilog: t.Optional[str] = None,
+        short_help: t.Optional[str] = None,
+        add_help_option: bool = True,
+        no_args_is_help: bool = False,
+        hidden: bool = False,
+        deprecated: bool = False,
+    ) -> None:
+        self.name = name
+        self.callback = callback
+        self.params: t.List["Parameter"] = params or []
+        self.help = help
+        self.epilog = epilog
+        self.short_help = short_help
+        self.add_help_option = add_help_option
+        self.no_args_is_help = no_args_is_help
+        self.hidden = hidden
+        self.deprecated = deprecated
+
+    def get_params(self, ctx: Context) -> t.List["Parameter"]:
+        rv = self.params[:]
+        if self.add_help_option:
+            rv.append(HelpOption(["-h", "--help"]))
+        return rv
+
+    def format_usage(self, ctx: Context, formatter: t.Any) -> None:
+        pass
+
+    def format_help(self, ctx: Context, formatter: t.Any) -> None:
+        self.format_usage(ctx, formatter)
+        if self.help:
+            formatter.write_paragraph()
+            with formatter.indentation():
+                formatter.write_text(self.help)
+        self.format_epilog(ctx, formatter)
+
+    def format_help_text(self, ctx: Context, formatter: t.Any) -> None:
+        if self.help:
+            formatter.write_paragraph()
+            with formatter.indentation():
+                formatter.write_text(self.help)
+
+    def format_epilog(self, ctx: Context, formatter: t.Any) -> None:
+        if self.epilog:
+            formatter.write_paragraph()
+            with formatter.indentation():
+                formatter.write_text(self.epilog)
+
+    def make_context(
+        self,
+        info_name: t.Optional[str],
+        args: t.List[str],
+        parent: t.Optional[Context] = None,
+        **extra: t.Any,
+    ) -> Context:
+        ctx = Context(self, info_name=info_name, parent=parent, **extra)
+        with ctx:
+            self.parse_args(ctx, args)
+        return ctx
+
+    def parse_args(self, ctx: Context, args: t.List[str]) -> t.List[str]:
+        return args
+
+    def invoke(self, ctx: Context) -> t.Any:
+        if self.callback is not None:
+            return ctx.invoke(self.callback, **ctx.params)
+        return None
+
+    def main(
+        self,
+        args: t.Optional[t.Sequence[str]] = None,
+        prog_name: t.Optional[str] = None,
+        complete_var: t.Optional[str] = None,
+        standalone_mode: bool = True,
+        **extra: t.Any,
+    ) -> t.Any:
+        if args is None:
+            args = sys.argv[1:]
+        else:
+            args = list(args)
+
+        if prog_name is None:
+            prog_name = os.path.basename(sys.argv[0])
+
+        ctx = Context(self, info_name=prog_name, **extra)
+
+        with ctx:
+            try:
+                self.parse_args(ctx, args)
+                rv = self.invoke(ctx)
+                if not standalone_mode:
+                    return rv
+                ctx.exit()
+            except (EOFError, KeyboardInterrupt):
+                print(file=sys.stderr)
+                raise
+            except Exception as e:
+                if not standalone_mode:
+                    raise
+                sys.exit(1)
+
+    def get_short_help_str(self, limit: int = 45) -> str:
+        return self.short_help or ""
+
+
+class Command(BaseCommand):
+    """A command is the basic building block of command line interfaces."""
+
+    def __init__(
+        self,
+        name: t.Optional[str],
+        callback: t.Optional[t.Callable[..., t.Any]] = None,
+        params: t.Optional[t.List["Parameter"]] = None,
+        help: t.Optional[str] = None,
+        epilog: t.Optional[str] = None,
+        short_help: t.Optional[str] = None,
+        add_help_option: bool = True,
+        no_args_is_help: bool = False,
+        hidden: bool = False,
+        deprecated: bool = False,
+    ) -> None:
+        super().__init__(
+            name=name,
+            callback=callback,
+            params=params,
+            help=help,
+            epilog=epilog,
+            short_help=short_help,
+            add_help_option=add_help_option,
+            no_args_is_help=no_args_is_help,
+            hidden=hidden,
+            deprecated=deprecated,
+        )
+
+    def parse_args(self, ctx: Context, args: t.List[str]) -> t.List[str]:
+        # Simple argument parsing
+        parser = self._make_parser(ctx)
+        opts, args, param_order = parser.parse_args(args=args)
+        for param in iter_params_for_processing(param_order, self.get_params(ctx)):
+            value, args = param.consume_value(ctx, opts)
+            param.full_process_value(ctx, value)
+        ctx.args = args
+        return args
+
+    def _make_parser(self, ctx: Context) -> t.Any:
+        from .parser import OptionParser
+        parser = OptionParser(ctx)
+        for param in self.get_params(ctx):
+            param.add_to_parser(parser, ctx)
+        return parser
+
+    def invoke(self, ctx: Context) -> t.Any:
+        if self.callback is not None:
+            return ctx.invoke(self.callback, **ctx.params)
+        return None
+
+    def format_usage(self, ctx: Context, formatter: t.Any) -> None:
+        pieces = self.collect_usage_pieces(ctx)
+        formatter.write_usage(ctx.info_name or "", " ".join(pieces))
+
+    def collect_usage_pieces(self, ctx: Context) -> t.List[str]:
+        rv = []
+        for param in self.get_params(ctx):
+            rv.extend(param.type_cast_value(ctx, param.get_default(ctx)) and [] or [])
+        return rv
+
+
+def iter_params_for_processing(
+    invocation_order: t.List["Parameter"],
+    declaration_order: t.List["Parameter"],
+) -> t.List["Parameter"]:
+    """Given a list of parameters in the order they were invoked and a list
+    of parameters in the order they were declared, return a list of parameters
+    in the order they should be processed.
+    """
+    def sort_key(item: "Parameter") -> t.Tuple[bool, int]:
+        try:
+            idx = invocation_order.index(item)
+            return (False, idx)
+        except ValueError:
+            return (True, declaration_order.index(item))
+
+    return sorted(declaration_order, key=sort_key)
+
+
+class MultiCommand(Command):
+    """A command that has multiple sub-commands."""
+
+    def __init__(
+        self,
+        name: t.Optional[str],
+        commands: t.Optional[t.Dict[str, Command]] = None,
+        **attrs: t.Any,
+    ) -> None:
+        super().__init__(name, **attrs)
+        self.commands: t.Dict[str, Command] = commands or {}
+
+    def add_command(self, cmd: Command, name: t.Optional[str] = None) -> None:
+        name = name or cmd.name
+        if name is None:
+            raise TypeError("Command has no name.")
+        self.commands[name] = cmd
+
+    def get_command(self, ctx: Context, cmd_name: str) -> t.Optional[Command]:
+        return self.commands.get(cmd_name)
+
+    def list_commands(self, ctx: Context) -> t.List[str]:
+        return sorted(self.commands)
+
+
+class Group(MultiCommand):
+    """A group is a command that has sub-commands."""
+
+    def group(self, *args: t.Any, **kwargs: t.Any) -> t.Callable:
+        from .decorators import group
+        kwargs.setdefault("cls", Group)
+        return group(*args, **kwargs)
+
+    def command(self, *args: t.Any, **kwargs: t.Any) -> t.Callable:
+        from .decorators import command
+        return command(*args, **kwargs)
+
+
+class CommandCollection(MultiCommand):
+    """A command collection is a multi command that merges multiple groups."""
+
+    def __init__(
+        self,
+        name: t.Optional[str],
+        sources: t.Optional[t.List[MultiCommand]] = None,
+        **attrs: t.Any,
+    ) -> None:
+        super().__init__(name, **attrs)
+        self.sources: t.List[MultiCommand] = sources or []
+
+    def add_source(self, multi_cmd: MultiCommand) -> None:
+        self.sources.append(multi_cmd)
+
+    def get_command(self, ctx: Context, cmd_name: str) -> t.Optional[Command]:
+        for source in self.sources:
+            rv = source.get_command(ctx, cmd_name)
+            if rv is not None:
+                return rv
+        return None
+
+    def list_commands(self, ctx: Context) -> t.List[str]:
+        rv: t.Set[str] = set()
+        for source in self.sources:
+            rv.update(source.list_commands(ctx))
+        return sorted(rv)
+
+
+class Parameter:
+    """A parameter to a command."""
+
+    param_type_name = "parameter"
+
+    def __init__(
+        self,
+        param_decls: t.Optional[t.Sequence[str]] = None,
+        type: t.Optional[t.Any] = None,
+        required: bool = False,
+        default: t.Optional[t.Any] = None,
+        callback: t.Optional[t.Callable[..., t.Any]] = None,
+        nargs: t.Optional[int] = None,
+        metavar: t.Optional[str] = None,
+        expose_value: bool = True,
+        is_eager: bool = False,
+        envvar: t.Optional[t.Union[str, t.Sequence[str]]] = None,
+        shell_complete: t.Optional[t.Callable[..., t.Any]] = None,
+    ) -> None:
+        self.param_decls = param_decls or []
+        self.name, self.opts, self.secondary_opts = self._parse_decls(
+            self.param_decls, expose_value
+        )
+        self.type = type or STRING
+        self.required = required
+        self.default = default
+        self.callback = callback
+        self.nargs = nargs if nargs is not None else 1
+        self.metavar = metavar
+        self.expose_value = expose_value
+        self.is_eager = is_eager
+        self.envvar = envvar
+
+    def _parse_decls(
+        self, decls: t.Sequence[str], expose_value: bool
+    ) -> t.Tuple[t.Optional[str], t.List[str], t.List[str]]:
+        raise NotImplementedError()
+
+    def get_default(self, ctx: Context, call: bool = True) -> t.Any:
+        if callable(self.default):
+            if call:
+                return self.default()
+            return self.default
+        return self.default
+
+    def type_cast_value(self, ctx: Context, value: t.Any) -> t.Any:
+        return value
+
+    def consume_value(
+        self, ctx: Context, opts: t.Dict[str, t.Any]
+    ) -> t.Tuple[t.Any, t.Dict[str, t.Any]]:
+        value = opts.get(self.name)  # type: ignore[arg-type]
+        return value, opts
+
+    def full_process_value(self, ctx: Context, value: t.Any) -> t.Any:
+        if value is None:
+            value = self.get_default(ctx)
+        if self.callback is not None:
+            value = ctx.invoke(self.callback, ctx, self, value)
+        if self.expose_value:
+            ctx.params[self.name] = value  # type: ignore[index]
+        return value
+
+    def add_to_parser(self, parser: t.Any, ctx: Context) -> None:
+        pass
+
+    def resolve_ctx(self, ctx: Context) -> Context:
+        return ctx
+
+
+class Option(Parameter):
+    """An option parameter."""
+
+    param_type_name = "option"
+
+    def __init__(
+        self,
+        param_decls: t.Optional[t.Sequence[str]] = None,
+        show_default: bool = False,
+        is_flag: bool = False,
+        flag_value: t.Optional[t.Any] = None,
+        multiple: bool = False,
+        count: bool = False,
+        allow_from_autoenv: bool = False,
+        type: t.Optional[t.Any] = None,
+        help: t.Optional[str] = None,
+        hidden: bool = False,
+        show_choices: bool = True,
+        is_eager: bool = False,
+        **attrs: t.Any,
+    ) -> None:
+        self.is_flag = is_flag
+        self.flag_value = flag_value
+        self.multiple = multiple
+        self.count = count
+        self.allow_from_autoenv = allow_from_autoenv
+        self.help = help
+        self.hidden = hidden
+        self.show_choices = show_choices
+        self.show_default = show_default
+        if is_flag and flag_value is None:
+            self.flag_value = True
+        super().__init__(
+            param_decls=param_decls,
+            type=type,
+            is_eager=is_eager,
+            **attrs,
+        )
+
+    def _parse_decls(
+        self, decls: t.Sequence[str], expose_value: bool
+    ) -> t.Tuple[t.Optional[str], t.List[str], t.List[str]]:
+        opts = []
+        secondary_opts = []
+        name = None
+
+        for decl in decls:
+            if decl.startswith("--"):
+                secondary_opts.append(decl)
+                if name is None:
+                    name = decl[2:].replace("-", "_")
+            elif decl.startswith("-"):
+                opts.append(decl)
+            else:
+                name = decl
+
+        if name is None and expose_value:
+            if opts:
+                name = opts[0].lstrip("-").replace("-", "_")
+
+        return name, opts, secondary_opts
+
+    def add_to_parser(self, parser: t.Any, ctx: Context) -> None:
+        all_opts = self.opts + self.secondary_opts
+        if self.is_flag:
+            parser.add_option(
+                obj=self,
+                dest=self.name,
+                action="store_true" if self.flag_value else "store_false",
+                opts=all_opts,
+            )
+        else:
+            parser.add_option(
+                obj=self,
+                dest=self.name,
+                action="store",
+                opts=all_opts,
+                nargs=self.nargs,
+            )
+
+
+class Argument(Parameter):
+    """An argument parameter."""
+
+    param_type_name = "argument"
+
+    def __init__(
+        self,
+        param_decls: t.Sequence[str],
+        required: bool = True,
+        **attrs: t.Any,
+    ) -> None:
+        super().__init__(param_decls=param_decls, required=required, **attrs)
+
+    def _parse_decls(
+        self, decls: t.Sequence[str], expose_value: bool
+    ) -> t.Tuple[t.Optional[str], t.List[str], t.List[str]]:
+        if not decls:
+            if not expose_value:
+                return None, [], []
+            raise TypeError("Could not determine the name of the argument")
+        name = decls[0].replace("-", "_").lstrip("<").rstrip(">").upper().lower()
+        return name, list(decls), []
+
+    def add_to_parser(self, parser: t.Any, ctx: Context) -> None:
+        parser.add_argument(
+            dest=self.name,
+            nargs=self.nargs,
+            obj=self,
+        )
+
+
+class HelpOption(Option):
+    """A help option."""
+
+    def __init__(self, param_decls: t.Optional[t.Sequence[str]] = None, **attrs: t.Any) -> None:
+        super().__init__(
+            param_decls=param_decls or ["-h", "--help"],
+            is_flag=True,
+            is_eager=True,
+            expose_value=False,
+            callback=self._show_help,
+            help="Show this message and exit.",
+            **attrs,
+        )
+
+    def _show_help(self, ctx: Context, param: "Parameter", value: t.Any) -> None:
+        if value and not ctx.resilient_parsing:
+            print(ctx.get_help())
+            ctx.exit()
+
+
+# Import types
+from .types import STRING
+
+# Patch Context to support invoke
+def _ctx_invoke(self: Context, callback: t.Callable, *args: t.Any, **kwargs: t.Any) -> t.Any:
+    """Call a function, passing the current context as the first argument if
+    the function accepts it.
+    """
+    import inspect
+    sig = inspect.signature(callback)
+    params = sig.parameters
+
+    # Check if the callback accepts a context
+    if "ctx" in params:
+        kwargs["ctx"] = self
+
+    return callback(*args, **kwargs)
+
+
+Context.invoke = _ctx_invoke  # type: ignore[method-assign]
+
+
+def _ctx_exit(self: Context, code: int = 0) -> "t.NoReturn":
+    raise SystemExit(code)
+
+
+Context.exit = _ctx_exit  # type: ignore[method-assign]
+*** End Patch
+
+*** Add File: src/click/exceptions.py
+import typing as t
+import sys
+
+
+class ClickException(Exception):
+    """An exception that Click can handle and show to the user."""
+
+    exit_code = 1
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+    def format_message(self) -> str:
+        return self.message
+
+    def show(self, file: t.Optional[t.IO] = None) -> None:
+        if file is None:
+            file = sys.stderr
+        print(f"Error: {self.format_message()}", file=file)
+
+
+class UsageError(ClickException):
+    """An internal exception that signals a usage error."""
+
+    exit_code = 2
+
+    def __init__(self, message: str, ctx: t.Optional[t.Any] = None) -> None:
+        super().__init__(message)
+        self.ctx = ctx
+
+    def show(self, file: t.Optional[t.IO] = None) -> None:
+        if file is None:
+            file = sys.stderr
+        if self.ctx is not None:
+            print(f"{self.ctx.get_usage()}\n", file=file)
+        print(f"Error: {self.format_message()}", file=file)
+
+
+class BadParameter(UsageError):
+    """An exception that formats out a standardized error message for a
+    bad parameter.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        ctx: t.Optional[t.Any] = None,
+        param: t.Optional[t.Any] = None,
+        param_hint: t.Optional[str] = None,
+    ) -> None:
+        super().__init__(message, ctx)
+        self.param = param
+        self.param_hint = param_hint
+
+    def format_message(self) -> str:
+        if self.param_hint is not None:
+            return f"Invalid value for {self.param_hint!r}: {self.message}"
+        return f"Invalid value: {self.message}"
+
+
+class MissingParameter(BadParameter):
+    """Raised if a required parameter is missing."""
+
+    def __init__(
+        self,
+        message: t.Optional[str] = None,
+        ctx: t.Optional[t.Any] = None,
+        param: t.Optional[t.Any] = None,
+        param_hint: t.Optional[str] = None,
+        param_type: t.Optional[str] = None,
+    ) -> None:
+        super().__init__(message or "", ctx, param, param_hint)
+        self.param_type = param_type
+
+    def format_message(self) -> str:
+        if self.param_hint is not None:
+            return f"Missing {self.param_type or 'parameter'} {self.param_hint!r}."
+        return f"Missing {self.param_type or 'parameter'}."
+
+
+class BadOptionUsage(UsageError):
+    """Raised if an option is used incorrectly."""
+
+    def __init__(
+        self,
+        option_name: str,
+        message: str,
+        ctx: t.Optional[t.Any] = None,
+    ) -> None:
+        super().__init__(message, ctx)
+        self.option_name = option_name
+
+
+class BadArgumentUsage(UsageError):
+    """Raised if an argument is used incorrectly."""
+
+
+class NoSuchOption(UsageError):
+    """Raised if click attempted to handle an option that does not exist."""
+
+    def __init__(
+        self,
+        option_name: str,
+        message: t.Optional[str] = None,
+        possibilities: t.Optional[t.Sequence[str]] = None,
+        ctx: t.Optional[t.Any] = None,
+    ) -> None:
+        if message is None:
+            message = f"No such option: {option_name}"
+        super().__init__(message, ctx)
+        self.option_name = option_name
+        self.possibilities = possibilities
+
+
+class FileError(ClickException):
+    """Raised if a file cannot be opened."""
+
+    def __init__(self, filename: str, hint: t.Optional[str] = None) -> None:
+        if hint is None:
+            hint = "unknown error"
+        super().__init__(hint)
+        self.filename = filename
+        self.hint = hint
+
+    def format_message(self) -> str:
+        return f"Could not open file {self.filename}: {self.hint}"
+
+
+class Abort(RuntimeError):
+    """An internal signalling exception that signals Click to abort."""
+
+
+class Exit(RuntimeError):
+    """An exception that indicates that the application should exit with some
+    status code.
+    """
+
+    __slots__ = ("code",)
+
+    def __init__(self, code: int = 0) -> None:
+        self.code = code
+*** End Patch
+
+*** Add File: src/click/formatting.py
+import typing as t
+import textwrap
+
+FORCED_WIDTH: t.Optional[int] = None
+
+
+def wrap_text(
+    text: str,
+    width: int = 78,
+    initial_indent: str = "",
+    subsequent_indent: str = "",
+    preserve_paragraphs: bool = False,
+) -> str:
+    """A helper function that intelligently wraps text."""
+    from textwrap import wrap
+
+    if preserve_paragraphs:
+        paragraphs = text.split("\n\n")
+        result = []
+        for paragraph in paragraphs:
+            paragraph = paragraph.strip()
+            if paragraph:
+                wrapped = wrap(
+                    paragraph,
+                    width,
+                    initial_indent=initial_indent,
+                    subsequent_indent=subsequent_indent,
+                )
+                result.append("\n".join(wrapped))
+        return "\n\n".join(result)
+
+    return "\n".join(
+        wrap(
+            text,
+            width,
+            initial_indent=initial_indent,
+            subsequent_indent=subsequent_indent,
+        )
+    )
+
+
+class HelpFormatter:
+    """A formatter for help text."""
+
+    def __init__(
+        self,
+        indent_increment: int = 2,
+        max_width: t.Optional[int] = None,
+        width: t.Optional[int] = None,
+    ) -> None:
+        self.indent_increment = indent_increment
+        self.width = width or FORCED_WIDTH or 80
+        self.max_width = max_width
+        self.current_indent = 0
+        self.buffer: t.List[str] = []
+
+    def write(self, string: str) -> None:
+        self.buffer.append(string)
+
+    def indent(self) -> None:
+        self.current_indent += self.indent_increment
+
+    def dedent(self) -> None:
+        self.current_indent -= self.indent_increment
+
+    def write_usage(
+        self,
+        prog: str,
+        args: str = "",
+        prefix: t.Optional[str] = None,
+    ) -> None:
+        if prefix is None:
+            prefix = "Usage: "
+        self.write(f"{prefix}{prog} {args}\n")
+
+    def write_paragraph(self) -> None:
+        if self.buffer:
+            self.write("\n")
+
+    def write_text(self, text: str) -> None:
+        indent = " " * self.current_indent
+        self.write(
+            wrap_text(
+                text,
+                self.width,
+                initial_indent=indent,
+                subsequent_indent=indent,
+                preserve_paragraphs=True,
+            )
+        )
+        self.write("\n")
+
+    def write_dl(
+        self,
+        rows: t.Sequence[t.Tuple[str, str]],
+        col_max: int = 30,
+        col_spacing: int = 2,
+    ) -> None:
+        current_tag = None
+        for first, second in rows:
+            if first:
+                current_tag = first
+                self.write(f"{'  ' * self.current_indent}{first}")
+                if second:
+                    self.write(f"{'  ' * col_spacing}{second}")
+                self.write("\n")
+
+    def write_heading(self, heading: str) -> None:
+        self.write(f"{'  ' * self.current_indent}{heading}:\n")
+
+    def section(self, name: str) -> "t.ContextManager[None]":
+        return _Section(self, name)
+
+    def indentation(self) -> "t.ContextManager[None]":
+        return _Indentation(self)
+
+    def getvalue(self) -> str:
+        return "".join(self.buffer)
+
+
+class _Section:
+    def __init__(self, formatter: HelpFormatter, name: str) -> None:
+        self.formatter = formatter
+        self.name = name
+
+    def __enter__(self) -> None:
+        self.formatter.write_heading(self.name)
+        self.formatter.indent()
+
+    def __exit__(self, *args: t.Any) -> None:
+        self.formatter.dedent()
+        self.formatter.write_paragraph()
+
+
+class _Indentation:
+    def __init__(self, formatter: HelpFormatter) -> None:
+        self.formatter = formatter
+
+    def __enter__(self) -> None:
+        self.formatter.indent()
+
+    def __exit__(self, *args: t.Any) -> None:
+        self.formatter.dedent()
+*** End Patch
+
+*** Add File: src/click/globals.py
+import typing as t
+
+
+def get_current_context(silent: bool = False) -> t.Optional[t.Any]:
+    from .core import get_current_context as _get_current_context
+    return _get_current_context(silent=silent)
+*** End Patch
+
+*** Add File: src/click/termui.py
+import typing as t
+import sys
+import os
+
+
+def echo(
+    message: t.Optional[t.Any] = None,
+    file: t.Optional[t.IO] = None,
+    nl: bool = True,
+    err: bool = False,
+    color: t.Optional[bool] = None,
+) -> None:
+    """Print a message plus a newline to the given file or stdout. On
+    first call, if `color` is false, the ANSI color codes are stripped.
+    """
+    if file is None:
+        if err:
+            file = sys.stderr
+        else:
+            file = sys.stdout
+
+    if message is not None and not isinstance(message, (bytes, bytearray)):
+        message = str(message)
+
+    if message is not None:
+        if isinstance(message, (bytes, bytearray)):
+            file = getattr(file, "buffer", file)
+            file.write(message)
+        else:
+            file.write(message)
+
+    if nl:
+        file.write("\n" if not isinstance(message, (bytes, bytearray)) else b"\n")
+
+    file.flush()
+
+
+def secho(
+    message: t.Optional[t.Any] = None,
+    file: t.Optional[t.IO] = None,
+    nl: bool = True,
+    err: bool = False,
+    color: t.Optional[bool] = None,
+    **styles: t.Any,
+) -> None:
+    """This function combines :func:`echo` and :func:`style` into one
+    call.
+    """
+    if message is not None:
+        message = style(message, **styles)
+    return echo(message, file=file, nl=nl, err=err, color=color)
+
+
+def style(
+    text: str,
+    fg: t.Optional[str] = None,
+    bg: t.Optional[str] = None,
+    bold: t.Optional[bool] = None,
+    dim: t.Optional[bool] = None,
+    underline: t.Optional[bool] = None,
+    blink: t.Optional[bool] = None,
+    reverse: t.Optional[bool] = None,
+    reset: bool = True,
+) -> str:
+    """Styles a text with ANSI styles and returns the new text."""
+    return text
+
+
+def unstyle(text: str) -> str:
+    """Removes ANSI styling information from a string."""
+    return text
+
+
+def prompt(
+    text: str,
+    default: t.Optional[t.Any] = None,
+    hide_input: bool = False,
+    confirmation_prompt: t.Union[bool, str] = False,
+    type: t.Optional[t.Any] = None,
+    value_proc: t.Optional[t.Callable] = None,
+    prompt_suffix: str = ": ",
+    show_default: bool = True,
+    err: bool = False,
+    show_choices: bool = True,
+) -> t.Any:
+    """Prompts a user for input."""
+    return default
+
+
+def confirm(
+    text: str,
+    default: bool = False,
+    abort: bool = False,
+    prompt_suffix: str = ": ",
+    show_default: bool = True,
+    err: bool = False,
+) -> bool:
+    """Prompts for confirmation."""
+    return default
+
+
+def get_terminal_size() -> t.Tuple[int, int]:
+    """Returns the current size of the terminal as tuple."""
+    return os.get_terminal_size()
+
+
+def clear() -> None:
+    """Clears the terminal screen."""
+    if sys.platform == "win32":
+        os.system("cls")
+    else:
+        os.system("clear")
+
+
+def pause(info: str = "Press any key to continue...", err: bool = False) -> None:
+    """This command stops execution and waits for the user to press any key."""
+    file = sys.stderr if err else sys.stdout
+    try:
+        if info:
+            echo(info, file=file, nl=False)
+        try:
+            import msvcrt
+            msvcrt.getch()
+        except ImportError:
+            sys.stdin.read(1)
+        echo(file=file)
+    except (KeyboardInterrupt, EOFError):
+        pass
+
+
+def getchar(echo: bool = False) -> str:
+    """Fetches a single character from the terminal."""
+    try:
+        import msvcrt
+        rv = msvcrt.getwch()
+    except ImportError:
+        import tty
+        import termios
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            rv = sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return rv
+
+
+def edit(
+    text: t.Optional[str] = None,
+    editor: t.Optional[str] = None,
+    env: t.Optional[t.Mapping[str, str]] = None,
+    require_save: bool = True,
+    extension: str = ".txt",
+    filename: t.Optional[str] = None,
+) -> t.Optional[str]:
+    """Launches an editor and returns the edited text."""
+    return text
+
+
+def launch(url: str, wait: bool = False, locate: bool = False) -> int:
+    """This function launches the given URL (or filename) in the default
+    viewer application for this file type.
+    """
+    import subprocess
+    if sys.platform == "win32":
+        if locate:
+            url = os.path.abspath(url)
+            subprocess.Popen(["explorer", "/select,", url])
+        else:
+            os.startfile(url)
+        return 0
+    elif sys.platform == "darwin":
+        args = ["open"]
+        if wait:
+            args.append("-W")
+        if locate:
+            args.append("-R")
+        args.append(url)
+        null = open(os.devnull, "w")
+        try:
+            return subprocess.Popen(args, stderr=null).wait()
+        finally:
+            null.close()
+    else:
+        args = ["xdg-open"]
+        args.append(url)
+        null = open(os.devnull, "w")
+        try:
+            return subprocess.Popen(args, stderr=null).wait()
+        finally:
+            null.close()
+
+
+def echo_via_pager(
+    text_or_generator: t.Union[t.Iterable[str], str, t.Callable[[], t.Iterator[str]]],
+    color: t.Optional[bool] = None,
+) -> None:
+    """This function takes a text and shows it via an environment-specific
+    pager on stdout.
+    """
+    if callable(text_or_generator):
+        text_or_generator = text_or_generator()
+    if isinstance(text_or_generator, str):
+        text_or_generator = [text_or_generator]
+    for text in text_or_generator:
+        sys.stdout.write(text)
+
+
+def progressbar(
+    iterable: t.Optional[t.Iterable] = None,
+    length: t.Optional[int] = None,
+    label: t.Optional[str] = None,
+    show_eta: bool = True,
+    show_percent: t.Optional[bool] = None,
+    show_pos: bool = False,
+    item_show_func: t.Optional[t.Callable[[t.Any], t.Optional[str]]] = None,
+    fill_char: str = "#",
+    empty_char: str = "-",
+    bar_template: str = "%(label)s  [%(bar)s]  %(info)s",
+    info_sep: str = "  ",
+    width: int = 36,
+    file: t.Optional[t.TextIO] = None,
+    color: t.Optional[bool] = None,
+    update_min_steps: int = 1,
+) -> t.Any:
+    """This function creates an iterable context manager that can be used
+    to iterate over something while showing a progress bar.
+    """
+    class _ProgressBar:
+        def __init__(self, iterable: t.Optional[t.Iterable]) -> None:
+            self.iterable = iterable or []
+
+        def __enter__(self) -> "_ProgressBar":
+            return self
+
+        def __exit__(self, *args: t.Any) -> None:
+            pass
+
+        def __iter__(self) -> t.Iterator:
+            return iter(self.iterable)
+
+    return _ProgressBar(iterable)
+*** End Patch
+
+*** Add File: src/click/types.py
+import typing as t
+import os
+
+
+class ParamType:
+    """Represents the type of a parameter."""
+
+    name: str = "TEXT"
+    is_composite: bool = False
+    envvar_list_splitter: t.Optional[str] = None
+
+    def convert(
+        self,
+        value: t.Any,
+        param: t.Optional[t.Any],
+        ctx: t.Optional[t.Any],
+    ) -> t.Any:
+        return value
+
+    def __repr__(self) -> str:
+        return self.name
+
+
+class StringParamType(ParamType):
+    name = "TEXT"
+
+    def convert(
+        self,
+        value: t.Any,
+        param: t.Optional[t.Any],
+        ctx: t.Optional[t.Any],
+    ) -> t.Any:
+        if isinstance(value, bytes):
+            try:
+                enc = "utf-8"
+                return value.decode(enc)
+            except UnicodeError:
+                return value.decode("utf-8", "replace")
+        return value
+
+
+class IntParamType(ParamType):
+    name = "INTEGER"
+
+    def convert(
+        self,
+        value: t.Any,
+        param: t.Optional[t.Any],
+        ctx: t.Optional[t.Any],
+    ) -> t.Any:
+        if isinstance(value, int):
+            return value
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            self.fail(f"{value!r} is not a valid integer.", param, ctx)
+
+    def fail(self, message: str, param: t.Any, ctx: t.Any) -> "t.NoReturn":
+        raise ValueError(message)
+
+
+class FloatParamType(ParamType):
+    name = "FLOAT"
+
+    def convert(
+        self,
+        value: t.Any,
+        param: t.Optional[t.Any],
+        ctx: t.Optional[t.Any],
+    ) -> t.Any:
+        if isinstance(value, float):
+            return value
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            raise ValueError(f"{value!r} is not a valid float.")
+
+
+class BoolParamType(ParamType):
+    name = "BOOLEAN"
+
+    def convert(
+        self,
+        value: t.Any,
+        param: t.Optional[t.Any],
+        ctx: t.Optional[t.Any],
+    ) -> t.Any:
+        if isinstance(value, bool):
+            return value
+        value = value.lower()
+        if value in ("1", "true", "t", "yes", "y", "on"):
+            return True
+        elif value in ("0", "false", "f", "no", "n", "off"):
+            return False
+        raise ValueError(f"{value!r} is not a valid boolean.")
+
+
+class UUIDParameterType(ParamType):
+    name = "UUID"
+
+    def convert(
+        self,
+        value: t.Any,
+        param: t.Optional[t.Any],
+        ctx: t.Optional[t.Any],
+    ) -> t.Any:
+        import uuid
+        if isinstance(value, uuid.UUID):
+            return value
+        try:
+            return uuid.UUID(value)
+        except (ValueError, AttributeError):
+            raise ValueError(f"{value!r} is not a valid UUID.")
+
+
+class UnprocessedParamType(ParamType):
+    name = "TEXT"
+
+    def convert(
+        self,
+        value: t.Any,
+        param: t.Optional[t.Any],
+        ctx: t.Optional[t.Any],
+    ) -> t.Any:
+        return value
+
+
+class Choice(ParamType):
+    name = "CHOICE"
+
+    def __init__(
+        self,
+        choices: t.Sequence[str],
+        case_sensitive: bool = True,
+    ) -> None:
+        self.choices = choices
+        self.case_sensitive = case_sensitive
+
+    def convert(
+        self,
+        value: t.Any,
+        param: t.Optional[t.Any],
+        ctx: t.Optional[t.Any],
+    ) -> t.Any:
+        if not self.case_sensitive:
+            if value.casefold() in [c.casefold() for c in self.choices]:
+                return value
+        elif value in self.choices:
+            return value
+        choices_str = ", ".join(f"'{choice}'" for choice in self.choices)
+        raise ValueError(f"'{value}' is not one of {choices_str}.")
+
+
+class DateTime(ParamType):
+    name = "DATETIME"
+
+    def __init__(self, formats: t.Optional[t.Sequence[str]] = None) -> None:
+        self.formats = formats or ["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"]
+
+    def convert(
+        self,
+        value: t.Any,
+        param: t.Optional[t.Any],
+        ctx: t.Optional[t.Any],
+    ) -> t.Any:
+        import datetime
+        if isinstance(value, datetime.datetime):
+            return value
+        for fmt in self.formats:
+            try:
+                return datetime.datetime.strptime(value, fmt)
+            except ValueError:
+                continue
+        raise ValueError(f"'{value}' does not match the expected date/time formats.")
+
+
+class IntRange(IntParamType):
+    name = "INTEGER RANGE"
+
+    def __init__(
+        self,
+        min: t.Optional[int] = None,
+        max: t.Optional[int] = None,
+        min_open: bool = False,
+        max_open: bool = False,
+        clamp: bool = False,
+    ) -> None:
+        self.min = min
+        self.max = max
+        self.min_open = min_open
+        self.max_open = max_open
+        self.clamp = clamp
+
+
+class FloatRange(FloatParamType):
+    name = "FLOAT RANGE"
+
+    def __init__(
+        self,
+        min: t.Optional[float] = None,
+        max: t.Optional[float] = None,
+        min_open: bool = False,
+        max_open: bool = False,
+        clamp: bool = False,
+    ) -> None:
+        self.min = min
+        self.max = max
+        self.min_open = min_open
+        self.max_open = max_open
+        self.clamp = clamp
+
+
+class File(ParamType):
+    name = "FILENAME"
+
+    def __init__(
+        self,
+        mode: str = "r",
+        encoding: t.Optional[str] = None,
+        errors: t.Optional[str] = "strict",
+        lazy: t.Optional[bool] = None,
+        atomic: bool = False,
+    ) -> None:
+        self.mode = mode
+        self.encoding = encoding
+        self.errors = errors
+        self.lazy = lazy
+        self.atomic = atomic
+
+    def convert(
+        self,
+        value: t.Any,
+        param: t.Optional[t.Any],
+        ctx: t.Optional[t.Any],
+    ) -> t.Any:
+        if hasattr(value, "read") or hasattr(value, "write"):
+            return value
+        return open(value, self.mode, encoding=self.encoding, errors=self.errors)
+
+
+class Path(ParamType):
+    name = "PATH"
+
+    def __init__(
+        self,
+        exists: bool = False,
+        file_okay: bool = True,
+        dir_okay: bool = True,
+        writable: bool = False,
+        readable: bool = True,
+        resolve_path: bool = False,
+        allow_dash: bool = False,
+        path_type: t.Optional[t.Type] = None,
+        executable: bool = False,
+    ) -> None:
+        self.exists = exists
+        self.file_okay = file_okay
+        self.dir_okay = dir_okay
+        self.writable = writable
+        self.readable = readable
+        self.resolve_path = resolve_path
+        self.allow_dash = allow_dash
+        self.path_type = path_type
+        self.executable = executable
+
+    def convert(
+        self,
+        value: t.Any,
+        param: t.Optional[t.Any],
+        ctx: t.Optional[t.Any],
+    ) -> t.Any:
+        return value
+
+
+class Tuple(ParamType):
+    name = "TEXT TEXT ..."
+
+    def __init__(self, types: t.Sequence[t.Union[t.Type, ParamType]]) -> None:
+        self.types = types
+
+    def convert(
+        self,
+        value: t.Any,
+        param: t.Optional[t.Any],
+        ctx: t.Optional[t.Any],
+    ) -> t.Any:
+        return tuple(value)
+
+
+STRING = StringParamType()
+INT = IntParamType()
+FLOAT = FloatParamType()
+BOOL = BoolParamType()
+UUID = UUIDParameterType()
+UNPROCESSED = UnprocessedParamType()
+*** End Patch
+
+*** Add File: src/click/utils.py
+import typing as t
+import os
+import sys
+
+
+def get_binary_stream(name: str) -> t.BinaryIO:
+    """Returns a system stream for byte processing."""
+    opener = {"stdin": sys.stdin, "stdout": sys.stdout, "stderr": sys.stderr}
+    stream = opener.get(name)
+    if stream is None:
+        raise TypeError(f"Unknown standard stream {name!r}")
+    if hasattr(stream, "buffer"):
+        return stream.buffer
+    return stream  # type: ignore[return-value]
+
+
+def get_text_stream(
+    name: str,
+    encoding: t.Optional[str] = None,
+    errors: t.Optional[str] = "strict",
+) -> t.TextIO:
+    """Returns a system stream for text processing."""
+    opener = {"stdin": sys.stdin, "stdout": sys.stdout, "stderr": sys.stderr}
+    stream = opener.get(name)
+    if stream is None:
+        raise TypeError(f"Unknown standard stream {name!r}")
+    return stream  # type: ignore[return-value]
+
+
+def open_file(
+    filename: str,
+    mode: str = "r",
+    encoding: t.Optional[str] = None,
+    errors: t.Optional[str] = "strict",
+    lazy: bool = False,
+    atomic: bool = False,
+) -> t.IO:
+    """Open a file, with special handling for ``'-'`` to indicate
+    stdin/stdout.
+    """
+    if filename == "-":
+        if "r" in mode:
+            if "b" in mode:
+                return sys.stdin.buffer  # type: ignore[return-value]
+            return sys.stdin
+        if "b" in mode:
+            return sys.stdout.buffer  # type: ignore[return-value]
+        return sys.stdout
+    return open(filename, mode, encoding=encoding, errors=errors)
+
+
+def format_filename(
+    filename: t.Union[str, bytes, os.PathLike],
+    shorten: bool = False,
+) -> str:
+    """Formats a filename for user display."""
+    if isinstance(filename, bytes):
+        filename = filename.decode(sys.getfilesystemencoding(), "replace")
+    else:
+        filename = os.fsdecode(filename)
+    if shorten:
+        filename = os.path.basename(filename)
+    return filename
+
+
+def get_app_dir(app_name: str, roaming: bool = True, force_posix: bool = False) -> str:
+    """Returns the config folder for the application."""
+    if sys.platform.startswith("win"):
+        key = "APPDATA" if roaming else "LOCALAPPDATA"
+        folder = os.environ.get(key)
+        if folder is None:
+            folder = os.path.expanduser("~")
+        return os.path.join(folder, app_name)
+    if force_posix:
+        return os.path.join(os.path.expanduser("~"), f".{app_name}")
+    if sys.platform == "darwin":
+        return os.path.join(
+            os.path.expanduser("~"), "Library", "Application Support", app_name
+        )
+    return os.path.join(
+        os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
+        app_name,
+    )
+*** End Patch
+
+*** Add File: src/click/decorators.py
+import typing as t
+import functools
+import inspect
+
+from .core import Command, Group, Argument, Option, Context, BaseCommand
+
+
+F = t.TypeVar("F", bound=t.Callable[..., t.Any])
+FC = t.TypeVar("FC", bound=t.Union[t.Callable[..., t.Any], Command])
+
+
+def pass_context(f: F) -> F:
+    """Marks a callback as wanting to receive the current context
+    object as first argument.
+    """
+    @functools.wraps(f)
+    def new_func(*args: t.Any, **kwargs: t.Any) -> t.Any:
+        return f(get_current_context(), *args, **kwargs)
+
+    return t.cast(F, new_func)
+
+
+def pass_obj(f: F) -> F:
+    """Similar to :func:`pass_context`, but only pass the object on the
+    context onwards (:attr:`Context.obj`).
+    """
+    @functools.wraps(f)
+    def new_func(*args: t.Any, **kwargs: t.Any) -> t.Any:
+        return f(get_current_context().obj, *args, **kwargs)
+
+    return t.cast(F, new_func)
+
+
+def make_pass_decorator(
+    object_type: t.Type,
+    ensure: bool = False,
+) -> t.Callable[[F], F]:
+    """Given an object type this creates a decorator that will work
+    similar to :func:`pass_obj` but instead of passing the object of the
+    current context, it will find the innermost context of type
+    :func:`object_type`.
+    """
+    def decorator(f: F) -> F:
+        @functools.wraps(f)
+        def new_func(*args: t.Any, **kwargs: t.Any) -> t.Any:
+            ctx = get_current_context()
+            if ensure:
+                obj = ctx.ensure_object(object_type)
+            else:
+                obj = ctx.find_object(object_type)
+            if obj is None:
+                raise RuntimeError(
+                    f"Managed to invoke callback without a context object of type"
+                    f" {object_type.__name__!r} existing."
+                )
+            return ctx.invoke(f, obj, *args, **kwargs)
+
+        return t.cast(F, new_func)
+
+    return decorator
+
+
+def command(
+    name: t.Optional[str] = None,
+    cls: t.Optional[t.Type[Command]] = None,
+    **attrs: t.Any,
+) -> t.Callable[[t.Callable[..., t.Any]], Command]:
+    """A decorator that creates a command from a function."""
+    if cls is None:
+        cls = Command
+
+    def decorator(func: t.Callable[..., t.Any]) -> Command:
+        cmd_name = name or func.__name__.lower().replace("_", "-")
+        cmd = cls(  # type: ignore[call-arg]
+            name=cmd_name,
+            callback=func,
+            **attrs,
+        )
+        cmd.__doc__ = inspect.cleandoc(func.__doc__ or "")
+        return cmd
+
+    return decorator
+
+
+def group(
+    name: t.Optional[str] = None,
+    **attrs: t.Any,
+) -> t.Callable[[t.Callable[..., t.Any]], Group]:
+    """A decorator that creates a group from a function."""
+    attrs.setdefault("cls", Group)
+    return command(name=name, **attrs)  # type: ignore[return-value]
+
+
+def argument(
+    *param_decls: str,
+    cls: t.Optional[t.Type[Argument]] = None,
+    **attrs: t.Any,
+) -> t.Callable[[FC], FC]:
+    """A decorator that adds an argument to a command."""
+    if cls is None:
+        cls = Argument
+
+    def decorator(f: FC) -> FC:
+        if isinstance(f, Command):
+            f.params.append(cls(param_decls, **attrs))  # type: ignore[arg-type]
+        else:
+            if not hasattr(f, "__click_params__"):
+                f.__click_params__ = []  # type: ignore[union-attr]
+            f.__click_params__.append(cls(param_decls, **attrs))  # type: ignore[union-attr]
+        return f
+
+    return decorator
+
+
+def option(
+    *param_decls: str,
+    cls: t.Optional[t.Type[Option]] = None,
+    **attrs: t.Any,
+) -> t.Callable[[FC], FC]:
+    """A decorator that adds an option to a command."""
+    if cls is None:
+        cls = Option
+
+    def decorator(f: FC) -> FC:
+        if isinstance(f, Command):
+            f.params.append(cls(param_decls, **attrs))  # type: ignore[arg-type]
+        else:
+            if not hasattr(f, "__click_params__"):
+                f.__click_params__ = []  # type: ignore[union-attr]
+            f.__click_params__.append(cls(param_decls, **attrs))  # type: ignore[union-attr]
+        return f
+
+    return decorator
+
+
+def version_option(
+    version: t.Optional[str] = None,
+    *param_decls: str,
+    package_name: t.Optional[str] = None,
+    prog_name: t.Optional[str] = None,
+    message: t.Optional[str] = None,
+    **attrs: t.Any,
+) -> t.Callable[[FC], FC]:
+    """Add a ``--version`` option which immediately ends the program
+    printing out the given version string.
+    """
+    if not param_decls:
+        param_decls = ("--version",)
+
+    def decorator(f: FC) -> FC:
+        def callback(ctx: Context, param: t.Any, value: t.Any) -> None:
+            if value and not ctx.resilient_parsing:
+                ver = version or "unknown"
+                prog = prog_name or ctx.find_root().info_name or "program"
+                msg = message or f"{prog}, version {ver}"
+                print(msg)
+                ctx.exit()
+
+        attrs.setdefault("is_eager", True)
+        attrs.setdefault("expose_value", False)
+        attrs.setdefault("is_flag", True)
+        attrs.setdefault("callback", callback)
+        return option(*param_decls, **attrs)(f)
+
+    return decorator
+
+
+def help_option(
+    *param_decls: str,
+    **attrs: t.Any,
+) -> t.Callable[[FC], FC]:
+    """Pre-configured ``--help`` option which immediately ends the program
+    printing out the help page.
+    """
+    if not param_decls:
+        param_decls = ("--help",)
+
+    def decorator(f: FC) -> FC:
+        def callback(ctx: Context, param: t.Any, value: t.Any) -> None:
+            if value and not ctx.resilient_parsing:
+                print(ctx.get_help())
+                ctx.exit()
+
+        attrs.setdefault("is_eager", True)
+        attrs.setdefault("expose_value", False)
+        attrs.setdefault("is_flag", True)
+        attrs.setdefault("callback", callback)
+        return option(*param_decls, **attrs)(f)
+
+    return decorator
+
+
+def confirmation_option(
+    *param_decls: str,
+    **attrs: t.Any,
+) -> t.Callable[[FC], FC]:
+    """Add a ``--yes`` option which shows a prompt before continuing if
+    not passed.
+    """
+    if not param_decls:
+        param_decls = ("--yes",)
+
+    def decorator(f: FC) -> FC:
+        def callback(ctx: Context, param: t.Any, value: t.Any) -> None:
+            if not value:
+                ctx.abort()
+
+        attrs.setdefault("is_flag", True)
+        attrs.setdefault("callback", callback)
+        attrs.setdefault("expose_value", False)
+        attrs.setdefault("prompt", "Do you want to continue?")
+        attrs.setdefault("help", "Confirm the action without prompting.")
+        return option(*param_decls, **attrs)(f)
+
+    return decorator
+
+
+def password_option(
+    *param_decls: str,
+    **attrs: t.Any,
+) -> t.Callable[[FC], FC]:
+    """Add a ``--password`` option which prompts for a password, hiding
+    the input and asking for it a second time to confirm.
+    """
+    if not param_decls:
+        param_decls = ("--password",)
+
+    attrs.setdefault("prompt", True)
+    attrs.setdefault("confirmation_prompt", True)
+    attrs.setdefault("hide_input", True)
+    return option(*param_decls, **attrs)
+
+
+def get_current_context(silent: bool = False) -> t.Optional[Context]:
+    from .globals import get_current_context as _get_current_context
+    return _get_current_context(silent=silent)
+*** End Patch
+
+*** Add File: src/click/parser.py
+"""
+A simple option parser for Click.
+"""
+import typing as t
+
+
+class OptionParser:
+    """A simple option parser."""
+
+    def __init__(self, ctx: t.Any) -> None:
+        self.ctx = ctx
+        self._options: t.List[t.Dict[str, t.Any]] = []
+        self._arguments: t.List[t.Dict[str, t.Any]] = []
+
+    def add_option(
+        self,
+        obj: t.Any,
+        dest: t.Optional[str],
+        action: str,
+        opts: t.List[str],
+        nargs: int = 1,
+    ) -> None:
+        self._options.append({
+            "obj": obj,
+            "dest": dest,
+            "action": action,
+            "opts": opts,
+            "nargs": nargs,
+        })
+
+    def add_argument(
+        self,
+        dest: t.Optional[str],
+        nargs: int = 1,
+        obj: t.Any = None,
+    ) -> None:
+        self._arguments.append({
+            "dest": dest,
+            "nargs": nargs,
+            "obj": obj,
+        })
+
+    def parse_args(
+        self, args: t.List[str]
+    ) -> t.Tuple[t.Dict[str, t.Any], t.List[str], t.List[t.Any]]:
+        opts: t.Dict[str, t.Any] = {}
+        remaining: t.List[str] = []
+        order: t.List[t.Any] = []
+
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            matched = False
+
+            for opt_def in self._options:
+                if arg in opt_def["opts"]:
+                    matched = True
+                    order.append(opt_def["obj"])
+                    if opt_def["action"] == "store_true":
+                        opts[opt_def["dest"]] = True
+                    elif opt_def["action"] == "store_false":
+                        opts[opt_def["dest"]] = False
+                    elif opt_def["action"] == "store":
+                        if i + 1 < len(args):
+                            i += 1
+                            opts[opt_def["dest"]] = args[i]
+                        else:
+                            opts[opt_def["dest"]] = None
+                    break
+
+            if not matched:
+                remaining.append(arg)
+
+            i += 1
+
+        # Process positional arguments
+        arg_idx = 0
+        remaining_copy = list(remaining)
+        remaining = []
+
+        for arg_def in self._arguments:
+            if arg_idx < len(remaining_copy):
+                if arg_def["nargs"] == 1:
+                    opts[arg_def["dest"]] = remaining_copy[arg_idx]
+                    order.append(arg_def["obj"])
+                    arg_idx += 1
+                elif arg_def["nargs"] == -1:
+                    opts[arg_def["dest"]] = tuple(remaining_copy[arg_idx:])
+                    order.append(arg_def["obj"])
+                    arg_idx = len(remaining_copy)
+                else:
+                    opts[arg_def["dest"]] = tuple(remaining_copy[arg_idx:arg_idx + arg_def["nargs"]])
+                    order.append(arg_def["obj"])
+                    arg_idx += arg_def["nargs"]
+
+        remaining = remaining_copy[arg_idx:]
+
+        return opts, remaining, order
+*** End Patch
+
+*** Add File: tests/__init__.py
+*** End Patch
+
+*** Add File: tests/test_stderr_flush.py
+"""
+Tests that CliRunner properly captures stderr output even when
+it is not explicitly flushed (e.g., print with flush=False).
+"""
+import sys
+import pytest
+import click
+from click.testing import CliRunner
+
+
+def test_stderr_captured_without_flush():
+    """Test that unflushed stderr writes are captured in the result."""
+
+    @click.command()
+    def cli():
+        # Write to stderr without explicit flush
+        print("error message", file=sys.stderr, flush=False)
+
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli)
+
+    assert result.exit_code == 0
+    assert "error message" in result.stderr, (
+        f"Expected 'error message' in stderr, got: {result.stderr!r}"
+    )
+
+
+def test_stdout_captured_without_flush():
+    """Test that unflushed stdout writes are captured in the result."""
+
+    @click.command()
+    def cli():
+        # Write to stdout without explicit flush
+        print("output message", flush=False)
+
+    runner = CliRunner()
+    result = runner.invoke(cli)
+
+    assert result.exit_code == 0
+    assert "output message" in result.output, (
+        f"Expected 'output message' in output, got: {result.output!r}"
+    )
+
+
+def test_stderr_captured_with_mix_stderr_false():
+    """Test that stderr is separate from stdout when mix_stderr=False."""
+
+    @click.command()
+    def cli():
+        print("stdout message", flush=False)
+        print("stderr message", file=sys.stderr, flush=False)
+
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli)
+
+    assert result.exit_code == 0
+    assert "stdout message" in result.stdout
+    assert "stderr message" in result.stderr
+    # stderr should not be in stdout
+    assert "stderr message" not in result.stdout
+
+
+def test_stderr_captured_with_mix_stderr_true():
+    """Test that stderr is mixed into stdout when mix_stderr=True (default)."""
+
+    @click.command()
+    def cli():
+        print("stdout message", flush=False)
+        print("stderr message", file=sys.stderr, flush=False)
+
+    runner = CliRunner(mix_stderr=True)
+    result = runner.invoke(cli)
+
+    assert result.exit_code == 0
+    assert "stdout message" in result.output
+    assert "stderr message" in result.output
+
+
+def test_multiple_stderr_writes_without_flush():
+    """Test that multiple unflushed stderr writes are all captured."""
+
+    @click.command()
+    def cli():
+        for i in range(5):
+            print(f"error line {i}", file=sys.stderr, flush=False)
+
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli)
+
+    assert result.exit_code == 0
+    for i in range(5):
+        assert f"error line {i}" in result.stderr, (
+            f"Expected 'error line {i}' in stderr, got: {result.stderr!r}"
+        )
+
+
+def test_stderr_write_direct():
+    """Test that direct sys.stderr.write without flush is captured."""
+
+    @click.command()
+    def cli():
+        sys.stderr.write("direct write to stderr\n")
+        # No explicit flush
+
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli)
+
+    assert result.exit_code == 0
+    assert "direct write to stderr" in result.stderr, (
+        f"Expected 'direct write to stderr' in stderr, got: {result.stderr!r}"
+    )
+
+
+def test_stderr_flush_happens_before_result():
+    """
+    This is the core regression test: ensure that data written to stderr
+    without an explicit flush is available in result.stderr after invoke.
+    """
+
+    @click.command()
+    def cli():
+        # Simulate a scenario where stderr is written but not flushed
+        # This is the bug: without proper flushing in CliRunner, this data
+        # would be lost in the TextIOWrapper's internal buffer
+        msg = "unflushed stderr data"
+        sys.stderr.write(msg + "\n")
+        # Deliberately do NOT call sys.stderr.flush()
+
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(cli)
+
+    assert result.exit_code == 0
+    assert "unflushed stderr data" in result.stderr, (
+        f"CliRunner failed to capture unflushed stderr. Got: {result.stderr!r}\n"
+        f"This is the bug described in the issue: unflushed stderr writes "
+        f"are lost when CliRunner.invoke finishes."
+    )
+*** End Patch

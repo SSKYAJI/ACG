@@ -1,0 +1,88 @@
+*** Begin Patch
+*** Add File: packages/zod/src/v4/core/__tests__/merge_refinement_semantics.test.ts
+--- /dev/null
++++ packages/zod/src/v4/core/__tests__/merge_refinement_semantics.test.ts
+@@ -0,0 +1,79 @@
++import { describe, expect, test } from "vitest";
++import * as z from "../../../index.js";
++
++describe("ZodObject.merge refinement preservation - regression tests for pr5856", () => {
++  test("merge preserves .refine() on base object", () => {
++    const base = z
++      .object({ name: z.string() })
++      .refine((d) => d.name.length > 0, { message: "Name required" });
++
++    const merged = base.merge(z.object({ age: z.number() }));
++
++    expect(() => merged.parse({ name: "", age: 1 })).toThrow();
++    expect(merged.parse({ name: "Alice", age: 1 })).toEqual({ name: "Alice", age: 1 });
++  });
++
++  test("merge preserves .superRefine() on base object", () => {
++    const base = z
++      .object({ pw: z.string(), confirm: z.string() })
++      .superRefine((d, ctx) => {
++        if (d.pw !== d.confirm) {
++          ctx.addIssue({ code: "custom", message: "Mismatch" });
++        }
++      });
++
++    const merged = base.merge(z.object({ user: z.string() }));
++
++    expect(() =>
++      merged.parse({ pw: "a", confirm: "b", user: "u" })
++    ).toThrow();
++    expect(
++      merged.parse({ pw: "a", confirm: "a", user: "u" })
++    ).toEqual({ pw: "a", confirm: "a", user: "u" });
++  });
++
++  test("merge and extend behave identically for refinements", () => {
++    const base = z
++      .object({ n: z.number() })
++      .refine((d) => d.n > 0, { message: "Must be positive" });
++
++    const extra = z.object({ label: z.string() });
++
++    const merged = base.merge(extra);
++    const extended = base.extend({ label: z.string() });
++
++    // Both should pass
++    expect(merged.parse({ n: 1, label: "ok" })).toEqual({ n: 1, label: "ok" });
++    expect(extended.parse({ n: 1, label: "ok" })).toEqual({ n: 1, label: "ok" });
++
++    // Both should fail
++    expect(() => merged.parse({ n: -1, label: "ok" })).toThrow();
++    expect(() => extended.parse({ n: -1, label: "ok" })).toThrow();
++  });
++
++  test("merge preserves multiple chained refinements", () => {
++    const base = z
++      .object({ a: z.number(), b: z.number() })
++      .refine((d) => d.a > 0, { message: "a positive" })
++      .refine((d) => d.b > 0, { message: "b positive" });
++
++    const merged = base.merge(z.object({ c: z.string() }));
++
++    expect(() => merged.parse({ a: -1, b: 1, c: "x" })).toThrow();
++    expect(() => merged.parse({ a: 1, b: -1, c: "x" })).toThrow();
++    expect(merged.parse({ a: 1, b: 1, c: "x" })).toEqual({ a: 1, b: 1, c: "x" });
++  });
++
++  test("merge without refinements still works", () => {
++    const a = z.object({ x: z.string() });
++    const b = z.object({ y: z.number() });
++    expect(a.merge(b).parse({ x: "hi", y: 2 })).toEqual({ x: "hi", y: 2 });
++  });
++
++  test("merge does not duplicate refinements", () => {
++    let callCount = 0;
++    const base = z
++      .object({ v: z.number() })
++      .refine((d) => { callCount++; return d.v > 0; });
++    const merged = base.merge(z.object({ w: z.string() }));
++    merged.parse({ v: 1, w: "ok" });
++    expect(callCount).toBe(1);
++  });
++});
+*** End Patch

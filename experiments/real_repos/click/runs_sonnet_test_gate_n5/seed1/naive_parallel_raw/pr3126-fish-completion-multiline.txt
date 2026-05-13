@@ -1,0 +1,103 @@
+Looking at the task, I need to fix fish shell completion to handle multiline help strings. The issue is that when help text contains newlines, it breaks the fish completion script format.
+
+Let me analyze what needs to be done:
+
+1. In `shell_completion.py`, the fish completion generator needs to strip/replace newlines in help text
+2. Add tests for this behavior
+
+*** Begin Patch
+*** Update File: src/click/shell_completion.py
+@@
+ class FishSource(ShellComplete):
+@@
+     def format_completion(self, item: CompletionItem) -> str:
+-        if item.help:
+-            return f"complete {self._base_args()} -n {self._check_cmd()!r} -a {item.value!r} -d {item.help!r}"
+-        return f"complete {self._base_args()} -n {self._check_cmd()!r} -a {item.value!r}"
++        if item.help:
++            help_str = item.help.split("\n")[0]
++            return f"complete {self._base_args()} -n {self._check_cmd()!r} -a {item.value!r} -d {help_str!r}"
++        return f"complete {self._base_args()} -n {self._check_cmd()!r} -a {item.value!r}"
+*** End Patch
+
+Let me look more carefully at the actual source to understand the structure better before making changes.
+
+*** Begin Patch
+*** Update File: src/click/shell_completion.py
+@@
+     def _format_completion(self, item: CompletionItem) -> str:
+-        if item.help:
+-            return (
+-                f"complete {self._base_args()} -n {self._check_cmd()!r}"
+-                f" -a {item.value!r} -d {item.help!r}"
+-            )
+-
+-        return f"complete {self._base_args()} -n {self._check_cmd()!r} -a {item.value!r}"
++        if item.help:
++            help_str = item.help.split("\n")[0]
++            return (
++                f"complete {self._base_args()} -n {self._check_cmd()!r}"
++                f" -a {item.value!r} -d {help_str!r}"
++            )
++
++        return f"complete {self._base_args()} -n {self._check_cmd()!r} -a {item.value!r}"
+*** End Patch
+
+I need to see the actual file content. Let me provide a more targeted patch based on what I know about Click's codebase structure:
+
+*** Begin Patch
+*** Update File: src/click/shell_completion.py
+@@
+ class FishSource(ShellComplete):
+     name = "fish"
+     source_template = _SOURCE_FISH
+@@
+-    def format_completion(self, item: CompletionItem) -> str:
+-        if item.help:
+-            return (
+-                f"complete {self._base_args()} -n {self._check_cmd()!r}"
+-                f" -a {item.value!r} -d {item.help!r}"
+-            )
+-
+-        return (
+-            f"complete {self._base_args()} -n {self._check_cmd()!r} -a {item.value!r}"
+-        )
++    def format_completion(self, item: CompletionItem) -> str:
++        if item.help:
++            help_str = item.help.split("\n")[0]
++            return (
++                f"complete {self._base_args()} -n {self._check_cmd()!r}"
++                f" -a {item.value!r} -d {help_str!r}"
++            )
++
++        return (
++            f"complete {self._base_args()} -n {self._check_cmd()!r} -a {item.value!r}"
++        )
+*** End Patch
+
+*** Begin Patch
+*** Update File: tests/test_shell_completion.py
+@@
+ from click.shell_completion import (
+@@
++def test_fish_multiline_help() -> None:
++    """Fish completion should only use the first line of multiline help text."""
++
++    @click.command()
++    @click.option("--name", help="First line\nSecond line\nThird line")
++    def cli(name: str) -> None:
++        pass
++
++    ctx = click.Context(cli)
++    source = FishSource(cli, ctx, "cli", [])
++    completions = source.get_completions([], "")
++    # Find the --name completion
++    name_completions = [c for c in completions if c.value == "--name"]
++    assert len(name_completions) == 1
++    formatted = source.format_completion(name_completions[0])
++    assert "\n" not in formatted
++    assert "First line" in formatted
++    assert "Second line" not in formatted
++
++
+*** End Patch

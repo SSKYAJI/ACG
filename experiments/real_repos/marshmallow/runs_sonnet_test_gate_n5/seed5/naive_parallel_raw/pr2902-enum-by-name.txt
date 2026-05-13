@@ -1,0 +1,61 @@
+I'll analyze the task and fix the Enum field's by-name lookup to only return actual enum members.
+
+Let me first look at the relevant code to understand the current implementation.
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+     def _deserialize(self, value, attr, data, **kwargs):
+         try:
+             if self.by_value:
+                 return self.enum(value)
+             else:
+-                return self.enum[value]
++                try:
++                    member = self.enum[value]
++                except KeyError:
++                    raise self.make_error("by_value", input=value, value=self.enum)
++                if not isinstance(member, self.enum):
++                    raise self.make_error("by_value", input=value, value=self.enum)
++                return member
+         except (ValueError, KeyError):
+             raise self.make_error("by_value", input=value, value=self.enum)
+*** Update File: tests/test_deserialization.py
+@@
+ class TestEnumField:
+@@
+     def test_enum_field_by_name(self):
+         field = fields.Enum(MyEnum, by_value=False)
+         assert field.deserialize("one") == MyEnum.one
+ 
++    def test_enum_field_by_name_non_member_attribute_raises(self):
++        """Non-member attributes (methods, properties) should not be returned by name lookup."""
++
++        class MyEnumWithMethod(enum.Enum):
++            one = 1
++            two = 2
++
++            def my_method(self):
++                return "hello"
++
++        field = fields.Enum(MyEnumWithMethod, by_value=False)
++        with pytest.raises(ValidationError):
++            field.deserialize("my_method")
++
++    def test_enum_field_by_name_non_member_property_raises(self):
++        """Non-member properties should not be returned by name lookup."""
++
++        class MyEnumWithProperty(enum.Enum):
++            one = 1
++            two = 2
++
++            @property
++            def my_property(self):
++                return "world"
++
++        field = fields.Enum(MyEnumWithProperty, by_value=False)
++        with pytest.raises(ValidationError):
++            field.deserialize("my_property")
++
+     def test_enum_field_by_value(self):
+*** End Patch

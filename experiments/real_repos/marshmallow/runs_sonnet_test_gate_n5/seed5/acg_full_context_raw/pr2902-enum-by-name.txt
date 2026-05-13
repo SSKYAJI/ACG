@@ -1,0 +1,228 @@
+I need to find the Enum field's `_deserialize` method in `fields.py` to understand the by-name lookup issue. Let me look at the relevant section.
+
+The issue is in the `Enum` field's `_deserialize` method. When `by_value=False` (by-name lookup), it likely uses `getattr(self.enum, value)` or similar, which would return non-member attributes. The fix should use `self.enum[value]` (which only returns enum members) or check that the result is actually an enum member.
+
+Let me find the exact code in fields.py for the Enum field:
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+-from enum import Enum as EnumType
++from enum import Enum as EnumType, EnumMeta
+@@
+ class Enum(Field):
+@@
+     def _deserialize(self, value, attr, data, **kwargs):
+         try:
+             if self.by_value:
+                 return self.enum(value)
+             else:
+-                return self.enum[value]
++                # Use self.enum[value] which only looks up enum members by name
++                try:
++                    member = self.enum[value]
++                except KeyError:
++                    raise self.make_error("by_name", input=value, names=[m.name for m in self.enum])
++                return member
+         except (ValueError, KeyError):
+             if self.by_value:
+                 raise self.make_error("by_value", input=value, values=[m.value for m in self.enum])
+             raise self.make_error("by_name", input=value, names=[m.name for m in self.enum])
+*** End Patch
+
+Wait, I need to see the actual current code. Let me look more carefully at what's in the file. The file is truncated. Let me search for the Enum class definition pattern and provide the right fix.
+
+The key issue: `self.enum[value]` in Python's enum already only returns actual members (it raises `KeyError` for non-members). But `getattr(self.enum, value)` would return non-members too. Let me check what the actual code looks like by providing a targeted fix.
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+-from enum import Enum as EnumType
++from enum import Enum as EnumType
+@@
+     def _deserialize(self, value, attr, data, **kwargs):
+         try:
+             if self.by_value:
+                 return self.enum(value)
+             else:
+-                return getattr(self.enum, value)
++                if not isinstance(value, str) or value not in self.enum._member_map_:
++                    raise self.make_error(
++                        "by_name", input=value, names=[m.name for m in self.enum]
++                    )
++                return self.enum[value]
+         except (ValueError, KeyError):
+*** End Patch
+
+I'm not sure of the exact current code. Let me provide a more careful patch that handles the most likely scenario - the code uses `getattr`:
+
+*** Begin Patch
+*** Update File: tests/test_deserialization.py
+@@
+ from tests.base import (
+     ALL_FIELDS,
+     DateEnum,
+     GenderEnum,
+     HairColorEnum,
+     assert_date_equal,
+     assert_time_equal,
+     central,
+     predicate,
+ )
+@@
++class TestEnumFieldByNameLookup:
++    """Regression tests for Enum field by-name lookup."""
++
++    def test_enum_by_name_does_not_return_non_member_attributes(self):
++        """Enum by-name lookup should not return non-member class attributes."""
++        from enum import Enum
++
++        class MyEnum(Enum):
++            A = 1
++            B = 2
++
++            def my_method(self):
++                return "hello"
++
++        field = fields.Enum(MyEnum, by_value=False)
++        # Valid member lookup should work
++        assert field.deserialize("A") == MyEnum.A
++        assert field.deserialize("B") == MyEnum.B
++        # Non-member attribute (method) should raise ValidationError
++        with pytest.raises(ValidationError):
++            field.deserialize("my_method")
++
++    def test_enum_by_name_does_not_return_class_properties(self):
++        """Enum by-name lookup should not return non-member class properties."""
++        from enum import Enum
++
++        class MyEnum(Enum):
++            X = 10
++
++            @property
++            def label(self):
++                return self.name.lower()
++
++        field = fields.Enum(MyEnum, by_value=False)
++        # Valid member lookup should work
++        assert field.deserialize("X") == MyEnum.X
++        # Non-member attribute (property) should raise ValidationError
++        with pytest.raises(ValidationError):
++            field.deserialize("label")
++
++    def test_enum_by_name_invalid_name_raises_validation_error(self):
++        """Enum by-name lookup with invalid name raises ValidationError."""
++        from enum import Enum
++
++        class MyEnum(Enum):
++            FOO = 1
++
++        field = fields.Enum(MyEnum, by_value=False)
++        with pytest.raises(ValidationError):
++            field.deserialize("BAR")
++
++
+*** End File
+*** End Patch
+
+Now let me provide the actual fix to `fields.py`. Since I can't see the exact Enum `_deserialize` implementation, I'll look for the most likely pattern. The `self.enum[value]` syntax in Python's enum module already only returns members (it uses `_member_map_`), so if the code uses `getattr`, that's the bug. Let me provide the fix:
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+-from enum import Enum as EnumType
++from enum import Enum as EnumType
+*** End Patch
+
+I need to actually see the Enum._deserialize code. Since the file is truncated, let me provide a patch that targets the most likely buggy pattern. Based on common implementations, the bug is likely `getattr(self.enum, value)`:
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+-from enum import Enum as EnumType
++from enum import Enum as EnumType
+*** End Patch
+
+*** Begin Patch
+*** Update File: tests/test_deserialization.py
+@@
+ from tests.base import (
+     ALL_FIELDS,
+     DateEnum,
+     GenderEnum,
+     HairColorEnum,
+     assert_date_equal,
+     assert_time_equal,
+     central,
+     predicate,
+ )
++
++
++class TestEnumFieldByNameLookupRegression:
++    """Regression tests for Enum field by-name lookup (non-member attributes)."""
++
++    def test_enum_by_name_does_not_return_method(self):
++        """Enum by-name lookup should not return non-member class attributes like methods."""
++        from enum import Enum
++
++        class MyEnum(Enum):
++            A = 1
++            B = 2
++
++            def my_method(self):
++                return "hello"
++
++        field = fields.Enum(MyEnum, by_value=False)
++        assert field.deserialize("A") == MyEnum.A
++        assert field.deserialize("B") == MyEnum.B
++        with pytest.raises(ValidationError):
++            field.deserialize("my_method")
++
++    def test_enum_by_name_does_not_return_property(self):
++        """Enum by-name lookup should not return non-member class properties."""
++        from enum import Enum
++
++        class MyEnum(Enum):
++            X = 10
++
++            @property
++            def label(self):
++                return self.name.lower()
++
++        field = fields.Enum(MyEnum, by_value=False)
++        assert field.deserialize("X") == MyEnum.X
++        with pytest.raises(ValidationError):
++            field.deserialize("label")
++
++    def test_enum_by_name_invalid_name_raises_validation_error(self):
++        """Enum by-name lookup with invalid name raises ValidationError."""
++        from enum import Enum
++
++        class MyEnum(Enum):
++            FOO = 1
++
++        field = fields.Enum(MyEnum, by_value=False)
++        with pytest.raises(ValidationError):
++            field.deserialize("BAR")
+*** End Patch
+
+Now I need to actually fix the `fields.py`. Since the file is truncated and I can't see the Enum class, I'll provide a patch that replaces `getattr` with `enum[value]` (subscript notation which only returns members). The most likely buggy code is:
+
+```python
+return getattr(self.enum, value)
+```
+
+And the fix is to use `self.enum[value]` which only looks up `_member_map_`.
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+-            else:
+-                return getattr(self.enum, value)
++            else:
++                if value not in self.enum._member_map_:
++                    raise self.make_error(
++                        "by_name", input=value, names=[m.name for m in self.enum]
++                    )
++                return self.enum[value]
+*** End Patch

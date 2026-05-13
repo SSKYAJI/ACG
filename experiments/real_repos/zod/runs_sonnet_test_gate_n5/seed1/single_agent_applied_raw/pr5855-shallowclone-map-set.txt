@@ -1,0 +1,107 @@
+*** Begin Patch
+*** Add File: packages/zod/src/v4/core/__tests__/shallowclone-map-set.test.ts
+*** Content:
+import { describe, expect, it } from "vitest";
+import * as z from "../../index";
+
+describe("shallowClone Map and Set defaults regression", () => {
+  it("should return independent Map copies for defaulted Map fields", () => {
+    const schema = z.object({
+      data: z.map(z.string(), z.number()).default(new Map([["a", 1]])),
+    });
+
+    const result1 = schema.parse({});
+    const result2 = schema.parse({});
+
+    // Mutate result1's map
+    result1.data.set("b", 2);
+
+    // result2 should not be affected
+    expect(result2.data.has("b")).toBe(false);
+    expect(result2.data.size).toBe(1);
+  });
+
+  it("should return independent Set copies for defaulted Set fields", () => {
+    const schema = z.object({
+      data: z.set(z.string()).default(new Set(["a", "b"])),
+    });
+
+    const result1 = schema.parse({});
+    const result2 = schema.parse({});
+
+    // Mutate result1's set
+    result1.data.add("c");
+
+    // result2 should not be affected
+    expect(result2.data.has("c")).toBe(false);
+    expect(result2.data.size).toBe(2);
+  });
+
+  it("should return independent Map copies when using .default() at top level", () => {
+    const schema = z.map(z.string(), z.number()).default(new Map([["x", 10]]));
+
+    const result1 = schema.parse(undefined);
+    const result2 = schema.parse(undefined);
+
+    result1.set("y", 20);
+
+    expect(result2.has("y")).toBe(false);
+    expect(result2.size).toBe(1);
+  });
+
+  it("should return independent Set copies when using .default() at top level", () => {
+    const schema = z.set(z.number()).default(new Set([1, 2, 3]));
+
+    const result1 = schema.parse(undefined);
+    const result2 = schema.parse(undefined);
+
+    result1.add(4);
+
+    expect(result2.has(4)).toBe(false);
+    expect(result2.size).toBe(3);
+  });
+
+  it("Map default should preserve original entries", () => {
+    const defaultMap = new Map([["key", 42]]);
+    const schema = z.map(z.string(), z.number()).default(defaultMap);
+
+    const result = schema.parse(undefined);
+    expect(result.get("key")).toBe(42);
+  });
+
+  it("Set default should preserve original entries", () => {
+    const defaultSet = new Set(["hello", "world"]);
+    const schema = z.set(z.string()).default(defaultSet);
+
+    const result = schema.parse(undefined);
+    expect(result.has("hello")).toBe(true);
+    expect(result.has("world")).toBe(true);
+  });
+
+  it("mutating the original default Map should not affect parsed results", () => {
+    const defaultMap = new Map([["a", 1]]);
+    const schema = z.map(z.string(), z.number()).default(defaultMap);
+
+    const result = schema.parse(undefined);
+
+    // Mutate the original default
+    defaultMap.set("b", 2);
+
+    // The parsed result should not be affected
+    expect(result.has("b")).toBe(false);
+  });
+
+  it("mutating the original default Set should not affect parsed results", () => {
+    const defaultSet = new Set([1, 2]);
+    const schema = z.set(z.number()).default(defaultSet);
+
+    const result = schema.parse(undefined);
+
+    // Mutate the original default
+    defaultSet.add(3);
+
+    // The parsed result should not be affected
+    expect(result.has(3)).toBe(false);
+  });
+});
+*** End Patch

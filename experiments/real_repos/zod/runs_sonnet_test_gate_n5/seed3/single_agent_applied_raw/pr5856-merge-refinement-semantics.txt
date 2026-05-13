@@ -1,0 +1,107 @@
+*** Begin Patch
+*** Add File: packages/zod/src/v4/core/__tests__/regression-merge-refinement.test.ts
++import { describe, expect, it } from "vitest";
++import * as z from "zod/v4";
++
++describe("regression: merge() preserves refinements (pr5856)", () => {
++  it("merge preserves superRefine from base schema", () => {
++    const base = z
++      .object({ name: z.string() })
++      .superRefine((val, ctx) => {
++        if (val.name.length < 3) {
++          ctx.addIssue({
++            code: z.ZodIssueCode.custom,
++            message: "name too short",
++          });
++        }
++      });
++
++    const merged = base.merge(z.object({ age: z.number() }));
++
++    // Should fail due to refinement
++    const fail = merged.safeParse({ name: "ab", age: 25 });
++    expect(fail.success).toBe(false);
++    if (!fail.success) {
++      expect(fail.error.issues.some((i) => i.message === "name too short")).toBe(true);
++    }
++
++    // Should pass
++    const pass = merged.safeParse({ name: "alice", age: 25 });
++    expect(pass.success).toBe(true);
++  });
++
++  it("merge preserves refine from base schema", () => {
++    const base = z
++      .object({ count: z.number() })
++      .refine((val) => val.count >= 0, { message: "count must be non-negative" });
++
++    const merged = base.merge(z.object({ label: z.string() }));
++
++    const fail = merged.safeParse({ count: -5, label: "test" });
++    expect(fail.success).toBe(false);
++    if (!fail.success) {
++      expect(fail.error.issues[0].message).toBe("count must be non-negative");
++    }
++
++    const pass = merged.safeParse({ count: 5, label: "test" });
++    expect(pass.success).toBe(true);
++  });
++
++  it("merge and extend produce same refinement behavior", () => {
++    const makeBase = () =>
++      z
++        .object({ value: z.number() })
++        .refine((v) => v.value !== 0, { message: "value cannot be zero" });
++
++    const extra = { extra: z.string() };
++
++    const merged = makeBase().merge(z.object(extra));
++    const extended = makeBase().extend(extra);
++
++    const testInput = { value: 0, extra: "hello" };
++
++    const mergedResult = merged.safeParse(testInput);
++    const extendedResult = extended.safeParse(testInput);
++
++    // Both should fail
++    expect(mergedResult.success).toBe(false);
++    expect(extendedResult.success).toBe(false);
++
++    if (!mergedResult.success && !extendedResult.success) {
++      expect(mergedResult.error.issues.length).toBe(extendedResult.error.issues.length);
++      expect(mergedResult.error.issues[0].message).toBe(
++        extendedResult.error.issues[0].message
++      );
++    }
++  });
++
++  it("merge without refinements still works", () => {
++    const base = z.object({ a: z.string() });
++    const other = z.object({ b: z.number() });
++    const merged = base.merge(other);
+
++    const result = merged.safeParse({ a: "hello", b: 42 });
++    expect(result.success).toBe(true);
++    if (result.success) {
++      expect(result.data.a).toBe("hello");
++      expect(result.data.b).toBe(42);
++    }
++  });
++
++  it("merge preserves multiple chained refinements", () => {
++    const base = z
++      .object({ x: z.number(), y: z.number() })
++      .refine((v) => v.x > 0, { message: "x must be positive" })
++      .refine((v) => v.y > 0, { message: "y must be positive" });
++
++    const merged = base.merge(z.object({ z: z.number() }));
++
++    const fail = merged.safeParse({ x: -1, y: -1, z: 1 });
++    expect(fail.success).toBe(false);
++    if (!fail.success) {
++      // At least one refinement error should be present
++      expect(fail.error.issues.length).toBeGreaterThan(0);
++    }
++  });
++});
+*** End Patch

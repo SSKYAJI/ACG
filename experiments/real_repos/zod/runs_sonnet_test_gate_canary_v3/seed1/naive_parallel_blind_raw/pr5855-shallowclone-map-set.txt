@@ -1,0 +1,83 @@
+I'll analyze the task and implement the fix for `shallowClone` in the Zod v4 codebase.
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/util.ts
+@@
+ export function shallowClone<T>(value: T): T {
+   if (value === null || typeof value !== "object") return value;
+   if (Array.isArray(value)) return [...value] as unknown as T;
++  if (value instanceof Map) return new Map(value) as unknown as T;
++  if (value instanceof Set) return new Set(value) as unknown as T;
+   return { ...value };
+ }
+*** Update File: packages/zod/src/v4/core/__tests__/shallowclone-map-set.test.ts
+@@
+*** Add File: packages/zod/src/v4/core/__tests__/shallowclone-map-set.test.ts
++ import { expect, test } from "vitest";
++ import * as z from "../../index";
++ 
++ test("defaulted Map field returns independent copy on each parse", () => {
++   const schema = z.object({
++     data: z.map(z.string(), z.number()).default(new Map([["a", 1]])),
++   });
++ 
++   const result1 = schema.parse({});
++   const result2 = schema.parse({});
++ 
++   // Mutate result1's map
++   result1.data.set("b", 2);
++ 
++   // result2 should not be affected
++   expect(result2.data.has("b")).toBe(false);
++   expect(result2.data.size).toBe(1);
++ });
++ 
++ test("defaulted Set field returns independent copy on each parse", () => {
++   const schema = z.object({
++     tags: z.set(z.string()).default(new Set(["x", "y"])),
++   });
++ 
++   const result1 = schema.parse({});
++   const result2 = schema.parse({});
++ 
++   // Mutate result1's set
++   result1.tags.add("z");
++ 
++   // result2 should not be affected
++   expect(result2.tags.has("z")).toBe(false);
++   expect(result2.tags.size).toBe(2);
++ });
++ 
++ test("defaulted Map values are independent across multiple parses", () => {
++   const defaultMap = new Map<string, number>([["key", 42]]);
++   const schema = z.object({
++     m: z.map(z.string(), z.number()).default(defaultMap),
++   });
++ 
++   const r1 = schema.parse({});
++   const r2 = schema.parse({});
++   const r3 = schema.parse({});
++ 
++   r1.m.set("extra", 99);
++ 
++   expect(r2.m.size).toBe(1);
++   expect(r3.m.size).toBe(1);
++   expect(defaultMap.size).toBe(1); // original default not mutated
++ });
++ 
++ test("defaulted Set values are independent across multiple parses", () => {
++   const defaultSet = new Set<number>([1, 2, 3]);
++   const schema = z.object({
++     s: z.set(z.number()).default(defaultSet),
++   });
++ 
++   const r1 = schema.parse({});
++   const r2 = schema.parse({});
++ 
++   r1.s.add(100);
++ 
++   expect(r2.s.has(100)).toBe(false);
++   expect(r2.s.size).toBe(3);
++   expect(defaultSet.size).toBe(3); // original default not mutated
++ });
+*** End Patch

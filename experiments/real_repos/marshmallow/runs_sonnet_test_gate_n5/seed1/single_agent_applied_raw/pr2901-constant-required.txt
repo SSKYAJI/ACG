@@ -1,0 +1,32 @@
+*** Begin Patch
+*** Update File: marshmallow/fields.py
+--- marshmallow/fields.py
++++ marshmallow/fields.py
+@@ -1040,11 +1040,17 @@
+     def __init__(self, constant: typing.Any, **kwargs):
+         # Constant always provides a value, so required=True should not raise an error.
+         # We set load_default and dump_default to the constant value.
+-        super().__init__(**kwargs)
++        # Remove required from kwargs to avoid any validation issues,
++        # since Constant always provides a value regardless.
++        # But we still want to store required for API compatibility.
++        required = kwargs.pop("required", False)
++        super().__init__(**kwargs)
++        # Set required after super().__init__ to avoid any conflicts
++        self.required = required
+         self.constant = constant
+         self.load_default = constant
+         self.dump_default = constant
+ 
+     def _serialize(self, value, attr, obj, **kwargs):
+         return self.constant
+ 
+     def _deserialize(self, value, attr, data, **kwargs):
+         return self.constant
+*** End Patch
+
+Now let me also verify the Enum field fix for pr2902. The issue is that `self.enum[value]` in Python's enum module actually does look up by name and only returns actual members (not methods). Let me verify this is correct - `Color["describe"]` would raise `KeyError` since `describe` is not an enum member. This is the correct behavior.
+
+However, the original buggy code might have used `getattr(self.enum, value)` which would return the method. Our implementation uses `self.enum[value]` which is correct.
+
+Let me also add a test specifically for the `getattr` vs `[]` distinction:

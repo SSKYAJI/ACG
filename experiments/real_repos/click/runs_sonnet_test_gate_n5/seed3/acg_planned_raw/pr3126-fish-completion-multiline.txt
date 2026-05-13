@@ -1,0 +1,120 @@
+*** Begin Patch
+*** Update File: src/click/shell_completion.py
+@@
+     def format_completion(self, item: CompletionItem) -> str:
+         if item.help:
+-            return f"{item.type},{item.value}\t{item.help}"
++            return f"{item.type},{item.value}\t{item.help.splitlines()[0]}"
+ 
+         return f"{item.type},{item.value}"
+*** Update File: tests/test_shell_completion.py
+@@
+ @pytest.mark.parametrize(
+     ("shell", "env", "expect"),
+     [
+         ("bash", {"COMP_WORDS": "", "COMP_CWORD": "0"}, "plain,a\nplain,b\n"),
+         ("bash", {"COMP_WORDS": "a b", "COMP_CWORD": "1"}, "plain,b\n"),
+         ("zsh", {"COMP_WORDS": "", "COMP_CWORD": "0"}, "plain\na\n_\nplain\nb\nbee\n"),
+         ("zsh", {"COMP_WORDS": "a b", "COMP_CWORD": "1"}, "plain\nb\nbee\n"),
+         ("fish", {"COMP_WORDS": "", "COMP_CWORD": ""}, "plain,a\nplain,b\tbee\n"),
+         ("fish", {"COMP_WORDS": "a b", "COMP_CWORD": "b"}, "plain,b\tbee\n"),
+     ],
+ )
+ @pytest.mark.usefixtures("_patch_for_completion")
+ def test_full_complete(runner, shell, env, expect):
+     cli = Group("cli", commands=[Command("a"), Command("b", help="bee")])
+     env["_CLI_COMPLETE"] = f"{shell}_complete"
+     result = runner.invoke(cli, env=env)
+     assert result.output == expect
+@@
+ @pytest.mark.usefixtures("_patch_for_completion")
+ def test_context_settings(runner):
+*** Add File: tests/test_fish_multiline_help.py
++ import pytest
++ 
++ from click.core import Command
++ from click.core import Group
++ from click.core import Option
++ from click.shell_completion import CompletionItem
++ from click.shell_completion import FishComplete
++ 
++ 
++ def _fish_format(item):
++     comp = FishComplete.__new__(FishComplete)
++     return comp.format_completion(item)
++ 
++ 
++ def test_fish_multiline_help_single_line():
++     item = CompletionItem("value", help="short help")
++     assert _fish_format(item) == "plain,value\tshort help"
++ 
++ 
++ def test_fish_multiline_help_multiline():
++     item = CompletionItem("value", help="first line\nsecond line\nthird line")
++     result = _fish_format(item)
++     assert "\n" not in result
++     assert result == "plain,value\tfirst line"
++ 
++ 
++ def test_fish_multiline_help_no_help():
++     item = CompletionItem("value")
++     assert _fish_format(item) == "plain,value"
++ 
++ 
++ def test_fish_multiline_help_windows_line_endings():
++     item = CompletionItem("value", help="first line\r\nsecond line")
++     result = _fish_format(item)
++     # splitlines() handles \r\n correctly
++     assert "\n" not in result
++     assert "\r" not in result
++     assert "first line" in result
++ 
++ 
++ @pytest.fixture()
++ def _patch_for_completion(monkeypatch):
++     monkeypatch.setattr(
++         "click.shell_completion.BashComplete._check_version", lambda self: True
++     )
++ 
++ 
++ @pytest.mark.usefixtures("_patch_for_completion")
++ def test_fish_complete_multiline_command_help(runner):
++     cli = Group(
++         "cli",
++         commands=[
++             Command("cmd", help="First line of help.\nSecond line of help."),
++         ],
++     )
++     env = {
++         "_CLI_COMPLETE": "fish_complete",
++         "COMP_WORDS": "",
++         "COMP_CWORD": "",
++     }
++     result = runner.invoke(cli, env=env)
++     # Output should not contain raw newlines within a completion entry
++     lines = result.output.splitlines()
++     assert len(lines) == 1
++     assert lines[0] == "plain,cmd\tFirst line of help."
++ 
++ 
++ @pytest.mark.usefixtures("_patch_for_completion")
++ def test_fish_complete_multiline_option_help(runner):
++     cli = Command(
++         "cli",
++         params=[
++             Option(["--opt"], help="Line one.\nLine two."),
++         ],
++     )
++     env = {
++         "_CLI_COMPLETE": "fish_complete",
++         "COMP_WORDS": "",
++         "COMP_CWORD": "-",
++     }
++     result = runner.invoke(cli, env=env)
++     for line in result.output.splitlines():
++         # Each output line should not itself contain a newline (guaranteed by splitlines)
++         # but we also check that help text is only the first line
++         if "--opt" in line:
++             assert "Line two" not in line
++             assert "Line one." in line
+*** End Patch

@@ -1,0 +1,198 @@
+I'll look at the current Email validator implementation to understand how it handles IDN domains.
+
+Let me examine the validate.py file for the Email validator:
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+ USER_REGEX = re.compile(
+     r"(^[-!#$%&'*+/=?^`{}|~\w]+(\.[-!#$%&'*+/=?^`{}|~\w]+)*\Z"  # dot-atom
+     r"|^\"([\001-\010\013\014\016-\037!#-\[\]-\177]"
+     r'|\\[\001-\011\013\014\016-\177])*\"\Z)',  # quoted-string
+     re.IGNORECASE | re.UNICODE,
+ )
+ 
+ DOMAIN_REGEX = re.compile(
+     r"(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+"  # domain
+     r"(?:[A-Z]{2,6}|[A-Z0-9-]{2,})\Z",  # tld
+     re.IGNORECASE,
+ )
+@@
+ DOMAIN_WHITELIST = ("localhost",)
+@@
+ class Email(Validator):
+@@
+     def _validate_domain(self, domain: str) -> bool:
+         if domain in DOMAIN_WHITELIST:
+             return True
+ 
+         if not DOMAIN_REGEX.match(domain):
+             # Try for possible IDN domain-part
+             try:
+                 domain_encoded = domain.encode("idna")
+             except (UnicodeError, UnicodeDecodeError):
+                 return False
+-            if not DOMAIN_REGEX.match(domain_encoded.decode("ascii")):
+-                return False
++            domain_ascii = domain_encoded.decode("ascii")
++            if not DOMAIN_REGEX.match(domain_ascii):
++                return False
++            # Check that no label starts or ends with a hyphen
++            for label in domain.split("."):
++                if label.startswith("-") or label.endswith("-"):
++                    return False
+ 
+         return True
+*** Update File: tests/test_validate.py
+@@
+ import pytest
+@@
+     @pytest.mark.parametrize(
+         "valid_email",
+         [
+@@
+         ],
+     )
+     def test_email_valid(self, valid_email):
+         assert Email()(valid_email) == valid_email
+ 
+     @pytest.mark.parametrize(
+         "invalid_email",
+         [
+@@
++            "user@-münchen.de",
++            "user@münchen-.de",
++            "user@-münchen-.de",
++            "user@xn--mnchen-3ya-.de",
++            "user@-xn--mnchen-3ya.de",
+@@
+         ],
+     )
+     def test_email_invalid(self, invalid_email):
+@@
+         with pytest.raises(ValidationError):
+             Email()(invalid_email)
+*** End Patch
+
+Wait, I need to look at the actual test file structure more carefully to place the new test cases correctly. Let me provide a more precise patch:
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+     def _validate_domain(self, domain: str) -> bool:
+         if domain in DOMAIN_WHITELIST:
+             return True
+ 
+         if not DOMAIN_REGEX.match(domain):
+             # Try for possible IDN domain-part
+             try:
+                 domain_encoded = domain.encode("idna")
+             except (UnicodeError, UnicodeDecodeError):
+                 return False
+             if not DOMAIN_REGEX.match(domain_encoded.decode("ascii")):
+                 return False
+ 
+         return True
+@@
+     def _validate_domain(self, domain: str) -> bool:
+         if domain in DOMAIN_WHITELIST:
+             return True
+ 
+         if not DOMAIN_REGEX.match(domain):
+             # Try for possible IDN domain-part
+             try:
+                 domain_encoded = domain.encode("idna")
+             except (UnicodeError, UnicodeDecodeError):
+                 return False
+             if not DOMAIN_REGEX.match(domain_encoded.decode("ascii")):
+                 return False
++            # Check that no label starts or ends with a hyphen
++            for label in domain.split("."):
++                if label.startswith("-") or label.endswith("-"):
++                    return False
+ 
+         return True
+*** Update File: tests/test_validate.py
+@@
+             "user@example.com",
+@@
+         ],
+     )
+     def test_email_valid(self, valid_email):
+         assert Email()(valid_email) == valid_email
+ 
+     @pytest.mark.parametrize(
+         "invalid_email",
+         [
+@@
+             "test@.com",
+@@
+         ],
+     )
+     def test_email_invalid(self, invalid_email):
+@@
+     def test_email_invalid(self, invalid_email):
+         with pytest.raises(ValidationError):
+             Email()(invalid_email)
+*** End Patch
+
+I need to see the actual file contents. Let me provide a clean, unambiguous patch:
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+     def _validate_domain(self, domain: str) -> bool:
+         if domain in DOMAIN_WHITELIST:
+             return True
+ 
+         if not DOMAIN_REGEX.match(domain):
+             # Try for possible IDN domain-part
+             try:
+                 domain_encoded = domain.encode("idna")
+             except (UnicodeError, UnicodeDecodeError):
+                 return False
+             if not DOMAIN_REGEX.match(domain_encoded.decode("ascii")):
+                 return False
+ 
+         return True
+@@
+     def _validate_domain(self, domain: str) -> bool:
+         if domain in DOMAIN_WHITELIST:
+             return True
+ 
+         if not DOMAIN_REGEX.match(domain):
+             # Try for possible IDN domain-part
+             try:
+                 domain_encoded = domain.encode("idna")
+             except (UnicodeError, UnicodeDecodeError):
+                 return False
+             if not DOMAIN_REGEX.match(domain_encoded.decode("ascii")):
+                 return False
++            # Reject labels that start or end with a hyphen
++            for label in domain.split("."):
++                if label.startswith("-") or label.endswith("-"):
++                    return False
+ 
+         return True
+*** Update File: tests/test_validate.py
+@@
+     def test_email_invalid(self, invalid_email):
+         with pytest.raises(ValidationError):
+             Email()(invalid_email)
+@@
+     def test_email_invalid(self, invalid_email):
+         with pytest.raises(ValidationError):
+             Email()(invalid_email)
+ 
++    @pytest.mark.parametrize(
++        "invalid_idn_email",
++        [
++            "user@-münchen.de",
++            "user@münchen-.de",
++            "user@-münchen-.de",
++        ],
++    )
++    def test_email_invalid_idn_hyphen(self, invalid_idn_email):
++        with pytest.raises(ValidationError):
++            Email()(invalid_idn_email)
+*** End Patch

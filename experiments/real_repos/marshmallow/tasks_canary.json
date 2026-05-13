@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr2937-email-idn",
+      "prompt": "The validate.Email validator accepts some internationalized domain name (IDN) email addresses that should be rejected as invalid. Email addresses with domain labels that start or end with a hyphen (e.g. 'user@-münchen.de', 'user@münchen-.de') are not rejected. Fix the validator so it correctly rejects these malformed IDN email addresses, and add regression tests for the invalid IDN cases."
+    }
+  ]
+}

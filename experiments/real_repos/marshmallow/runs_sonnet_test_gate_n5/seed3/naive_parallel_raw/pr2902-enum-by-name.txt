@@ -1,0 +1,190 @@
+I'll analyze the task and fix the Enum field's by-name lookup to only return actual enum members.
+
+Let me first understand the issue: when looking up enum members by name, the current implementation likely uses `getattr` or similar, which would return any class attribute (methods, properties, etc.), not just enum members.
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+     def _deserialize(self, value, attr, data, **kwargs):
+         try:
+             if self.by_value:
+                 return self.enum(value)
+             else:
+-                return self.enum[value]
++                try:
++                    member = self.enum[value]
++                except KeyError:
++                    raise self.make_error("by_value", input=value, value=value)
++                if not isinstance(member, self.enum):
++                    raise self.make_error("by_value", input=value, value=value)
++                return member
+         except (ValueError, KeyError):
+             raise self.make_error("by_value", input=value, value=value)
+*** Update File: tests/test_deserialization.py
+@@
+ import pytest
+@@
+ import enum
+@@
+ class TestEnumField:
+@@
+     def test_enum_field_by_name(self, user):
+@@
++    def test_enum_field_by_name_non_member_attribute(self):
++        """Enum by-name lookup should not return non-member attributes."""
++        import enum
++
++        class MyEnum(enum.Enum):
++            RED = 1
++            GREEN = 2
++
++            def my_method(self):
++                return "method"
++
++        field = fields.Enum(MyEnum, by_value=False)
++        with pytest.raises(ValidationError):
++            field.deserialize("my_method")
++
++    def test_enum_field_by_name_property_attribute(self):
++        """Enum by-name lookup should not return property attributes."""
++        import enum
++
++        class MyEnum(enum.Enum):
++            RED = 1
++            GREEN = 2
++
++            @property
++            def label(self):
++                return self.name.lower()
++
++        field = fields.Enum(MyEnum, by_value=False)
++        with pytest.raises(ValidationError):
++            field.deserialize("label")
++
+*** End Patch
+
+Wait, I need to look more carefully at the actual code structure. Let me reconsider the patch with proper context.
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+     def _deserialize(self, value, attr, data, **kwargs):
+         try:
+             if self.by_value:
+                 return self.enum(value)
+             else:
+                 return self.enum[value]
+         except (ValueError, KeyError):
+             raise self.make_error("by_value", input=value, value=value)
+@@
+     def _deserialize(self, value, attr, data, **kwargs):
+         try:
+             if self.by_value:
+                 return self.enum(value)
+             else:
+                 member = self.enum[value]
+                 if not isinstance(member, self.enum):
+                     raise KeyError(value)
+                 return member
+         except (ValueError, KeyError):
+             raise self.make_error("by_value", input=value, value=value)
+*** Update File: tests/test_deserialization.py
+@@
+ import enum
+@@
+ class TestEnumField:
+@@
+     def test_enum_field_by_name(self, user):
++
++    def test_enum_field_by_name_non_member_attribute(self):
++        """Enum by-name lookup should not return non-member attributes (e.g., methods)."""
++
++        class MyEnum(enum.Enum):
++            RED = 1
++            GREEN = 2
++
++            def my_method(self):
++                return "method"
++
++        field = fields.Enum(MyEnum, by_value=False)
++        with pytest.raises(ValidationError):
++            field.deserialize("my_method")
++
++    def test_enum_field_by_name_property_non_member(self):
++        """Enum by-name lookup should not return property attributes."""
++
++        class MyEnum(enum.Enum):
++            RED = 1
++            GREEN = 2
++
++            @property
++            def label(self):
++                return self.name.lower()
++
++        field = fields.Enum(MyEnum, by_value=False)
++        with pytest.raises(ValidationError):
++            field.deserialize("label")
++
+*** End Patch
+
+I need to see the actual file content to write proper patches. Let me write the patches more carefully with sufficient context:
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+     def _deserialize(self, value, attr, data, **kwargs):
+         try:
+             if self.by_value:
+                 return self.enum(value)
+             else:
+                 return self.enum[value]
+         except (ValueError, KeyError):
+             raise self.make_error("by_value", input=value, value=value)
+@@
+     def _deserialize(self, value, attr, data, **kwargs):
+         try:
+             if self.by_value:
+                 return self.enum(value)
+             else:
+                 member = self.enum[value]
+                 if not isinstance(member, self.enum):
+                     raise KeyError(value)
+                 return member
+         except (ValueError, KeyError):
+             raise self.make_error("by_value", input=value, value=value)
+*** Update File: tests/test_deserialization.py
+@@
+ import enum
+@@
+     def test_enum_field_by_name(self, user):
++
++    def test_enum_field_by_name_non_member_attribute(self):
++        """Enum by-name lookup should not return non-member attributes (e.g., methods)."""
++
++        class MyEnum(enum.Enum):
++            RED = 1
++            GREEN = 2
++
++            def my_method(self):
++                return "method"
++
++        field = fields.Enum(MyEnum, by_value=False)
++        with pytest.raises(ValidationError):
++            field.deserialize("my_method")
++
++    def test_enum_field_by_name_property_non_member(self):
++        """Enum by-name lookup should not return property attributes."""
++
++        class MyEnum(enum.Enum):
++            RED = 1
++            GREEN = 2
++
++            @property
++            def label(self):
++                return self.name.lower()
++
++        field = fields.Enum(MyEnum, by_value=False)
++        with pytest.raises(ValidationError):
++            field.deserialize("label")
++
+*** End Patch

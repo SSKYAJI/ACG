@@ -1,0 +1,81 @@
+*** Begin Patch
+*** Add File: tests/test_clirunner_stderr_flush.py
+--- /dev/null
++++ tests/test_clirunner_stderr_flush.py
+@@ -0,0 +1,60 @@
++"""Tests for CliRunner stderr flush fix."""
++import sys
++import pytest
++
++
++def test_stderr_captured_without_flush():
++    """Verify that stderr written without explicit flush is captured."""
++    try:
++        import click
++        from click.testing import CliRunner
++    except ImportError:
++        pytest.skip("click not available")
++
++    @click.command()
++    def cmd():
++        # Write to stderr without explicit flush
++        print("error message", file=sys.stderr, flush=False)
++
++    runner = CliRunner(mix_stderr=False)
++    result = runner.invoke(cmd)
++    assert "error message" in result.stderr, (
++        f"Expected 'error message' in stderr, got: {result.stderr!r}"
++    )
++
++
++def test_stdout_captured_without_flush():
++    """Verify that stdout written without explicit flush is captured."""
++    try:
++        import click
++        from click.testing import CliRunner
++    except ImportError:
++        pytest.skip("click not available")
+
++
++    @click.command()
++    def cmd():
++        print("output message", flush=False)
++
++    runner = CliRunner()
++    result = runner.invoke(cmd)
++    assert "output message" in result.output
++
++
++def test_stderr_captured_with_flush():
++    """Verify that stderr written with explicit flush is captured."""
++    try:
++        import click
++        from click.testing import CliRunner
++    except ImportError:
++        pytest.skip("click not available")
++
++    @click.command()
++    def cmd():
++        print("error message", file=sys.stderr, flush=True)
++
++    runner = CliRunner(mix_stderr=False)
++    result = runner.invoke(cmd)
++    assert "error message" in result.stderr
++
++
++def test_stderr_mixed_captured():
++    """Verify that mixed stderr is captured in stdout."""
++    try:
++        import click
++        from click.testing import CliRunner
++    except ImportError:
++        pytest.skip("click not available")
++
++    @click.command()
++    def cmd():
++        print("error message", file=sys.stderr, flush=False)
++
++    runner = CliRunner(mix_stderr=True)
++    result = runner.invoke(cmd)
++    assert "error message" in result.output
+*** End Patch

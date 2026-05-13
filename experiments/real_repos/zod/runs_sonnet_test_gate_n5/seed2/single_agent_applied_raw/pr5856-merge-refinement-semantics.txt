@@ -1,0 +1,101 @@
+*** Begin Patch
+*** Add File: packages/zod/src/v4/core/__tests__/merge-refinement-semantics.test.ts
++/**
++ * Regression tests for pr5856
++ *
++ * Bug: ZodObject.merge() silently discards refinements from the base schema,
++ * while extend() preserves them.
++ *
++ * Fix: Update merge() in schemas.ts to call extend() internally (or apply
++ * the same refinement-preserving logic), so refinements are not lost.
++ */
++import { describe, expect, it } from "vitest";
++import * as z from "zod/v4";
++
++describe("ZodObject.merge() preserves refinements (pr5856)", () => {
++  it("merge() preserves refine() from the base object", () => {
++    const base = z
++      .object({ a: z.string() })
++      .refine((val) => val.a.length > 0, { message: "a must not be empty" });
+
++    const merged = base.merge(z.object({ b: z.number() }));
+
++    expect(merged.safeParse({ a: "", b: 1 }).success).toBe(false);
++    expect(merged.parse({ a: "hello", b: 1 })).toEqual({ a: "hello", b: 1 });
++  });
+
++  it("merge() preserves superRefine() from the base object", () => {
++    const base = z.object({ a: z.number() }).superRefine((val, ctx) => {
++      if (val.a < 0) {
++        ctx.addIssue({
++          code: z.ZodIssueCode.custom,
++          message: "a must be non-negative",
++        });
++      }
++    });
+
++    const merged = base.merge(z.object({ b: z.string() }));
+
++    expect(merged.safeParse({ a: -1, b: "test" }).success).toBe(false);
++    expect(merged.parse({ a: 5, b: "test" })).toEqual({ a: 5, b: "test" });
++  });
+
++  it("merge() behavior matches extend() for refine()", () => {
++    const base = z
++      .object({ a: z.string() })
++      .refine((val) => val.a !== "bad", { message: "a cannot be 'bad'" });
+
++    const ext = z.object({ b: z.number() });
++    const merged = base.merge(ext);
++    const extended = base.extend({ b: z.number() });
+
++    const bad = { a: "bad", b: 1 };
++    const good = { a: "good", b: 1 };
+
++    expect(merged.safeParse(bad).success).toBe(false);
++    expect(extended.safeParse(bad).success).toBe(false);
++    expect(merged.parse(good)).toEqual(good);
++    expect(extended.parse(good)).toEqual(good);
++  });
+
++  it("merge() preserves multiple chained refine() calls", () => {
++    const base = z
++      .object({ a: z.number(), b: z.number() })
++      .refine((val) => val.a > 0, { message: "a must be positive" })
++      .refine((val) => val.b > 0, { message: "b must be positive" });
+
++    const merged = base.merge(z.object({ c: z.string() }));
+
++    expect(merged.safeParse({ a: -1, b: 1, c: "x" }).success).toBe(false);
++    expect(merged.safeParse({ a: 1, b: -1, c: "x" }).success).toBe(false);
++    expect(merged.parse({ a: 1, b: 1, c: "x" })).toEqual({
++      a: 1,
++      b: 1,
++      c: "x",
++    });
++  });
+
++  it("merge() does not discard refinements when merging with empty object", () => {
++    const base = z
++      .object({ value: z.number() })
++      .refine((val) => val.value !== 0, { message: "value cannot be zero" });
+
++    const merged = base.merge(z.object({}));
+
++    expect(merged.safeParse({ value: 0 }).success).toBe(false);
++    expect(merged.parse({ value: 5 })).toEqual({ value: 5 });
++  });
+
++  it("merge() preserves refinements from incoming schema", () => {
++    const base = z.object({ a: z.string() });
++    const incoming = z
++      .object({ b: z.number() })
++      .refine((val) => val.b > 0, { message: "b must be positive" });
+
++    const merged = base.merge(incoming);
+
++    expect(merged.safeParse({ a: "hello", b: -1 }).success).toBe(false);
++    expect(merged.parse({ a: "hello", b: 1 })).toEqual({ a: "hello", b: 1 });
++  });
++});
+*** End Patch

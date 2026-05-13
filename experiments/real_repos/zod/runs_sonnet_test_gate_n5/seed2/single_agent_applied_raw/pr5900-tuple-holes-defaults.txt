@@ -1,0 +1,157 @@
+*** Begin Patch
+*** Add File: packages/zod/src/v4/core/__tests__/tuple-holes-defaults.test.ts
++/**
++ * Regression tests for pr5900
++ *
++ * Bug: Tuple schemas with optional elements followed by required elements
++ * with defaults incorrectly accept inputs that have holes (undefined) before
++ * the required default fields.
++ *
++ * Example:
++ *   schema = z.tuple([z.string().optional(), z.number().default(42)])
++ *   schema.parse([undefined]) // BUG: accepted, should be REJECTED
++ *                             // because index 1 is a hole (array.length === 1)
++ *
++ * Fix: In tuple parsing logic, check if the input array has a hole at a
++ * required position (even if that position has a default). A hole means
++ * the array length is less than the index + 1, which is different from
++ * an explicit undefined value.
++ */
++import { describe, expect, it } from "vitest";
++import * as z from "zod/v4";
++
++describe("tuple holes with defaults (pr5900)", () => {
++  describe("valid inputs", () => {
++    it("fully provided tuple parses correctly", () => {
++      const schema = z.tuple([z.string().optional(), z.number().default(42)]);
++      expect(schema.parse(["hello", 5])).toEqual(["hello", 5]);
++    });
+
++    it("default fills in missing trailing element", () => {
++      const schema = z.tuple([z.string(), z.number().default(42)]);
++      expect(schema.parse(["hello"])).toEqual(["hello", 42]);
++    });
+
++    it("empty array uses optional and default", () => {
++      const schema = z.tuple([z.string().optional(), z.number().default(42)]);
++      const result = schema.safeParse([]);
++      expect(result.success).toBe(true);
++      if (result.success) {
++        expect(result.data[1]).toBe(42);
++      }
++    });
+
++    it("all defaults: empty array is valid", () => {
++      const schema = z.tuple([
++        z.string().default("hello"),
++        z.number().default(42),
++      ]);
++      expect(schema.parse([])).toEqual(["hello", 42]);
++    });
+
++    it("optional and default: empty array is valid", () => {
++      const schema = z.tuple([
++        z.string().optional(),
++        z.number().default(99),
++      ]);
++      const result = schema.safeParse([]);
++      expect(result.success).toBe(true);
++      if (result.success) {
++        expect(result.data[0]).toBeUndefined();
++        expect(result.data[1]).toBe(99);
++      }
++    });
+
++    it("multiple defaults fill in correctly", () => {
++      const schema = z.tuple([
++        z.string(),
++        z.number().default(10),
++        z.boolean().default(true),
++      ]);
++      expect(schema.parse(["hello"])).toEqual(["hello", 10, true]);
++      expect(schema.parse(["hello", 7])).toEqual(["hello", 7, true]);
++      expect(schema.parse(["hello", 5, false])).toEqual(["hello", 5, false]);
++    });
++  });
+
++  describe("invalid inputs - holes", () => {
++    it("rejects hole before required element (no default)", () => {
++      const schema = z.tuple([z.string().optional(), z.number()]);
++      expect(schema.safeParse(["hello"]).success).toBe(false);
++    });
+
++    it("rejects explicit undefined for required element (no default)", () => {
++      const schema = z.tuple([z.string().optional(), z.number()]);
++      expect(schema.safeParse([undefined, undefined]).success).toBe(false);
++    });
+
++    it("rejects hole before required-with-default when optional precedes it", () => {
++      // Core regression: [optional, required-with-default]
++      // Input [undefined] has length 1, so index 1 is a hole
++      const schema = z.tuple([
++        z.string().optional(),
++        z.number().default(42),
++      ]);
++      // Array length is 1, index 1 is out of bounds (hole)
++      expect(schema.safeParse([undefined]).success).toBe(false);
++    });
+
++    it("rejects when required element (no default) is missing after multiple optionals", () => {
++      const schema = z.tuple([
++        z.string().optional(),
++        z.string().optional(),
++        z.number(), // required, no default
++      ]);
++      expect(schema.safeParse(["a", "b"]).success).toBe(false);
++      expect(schema.safeParse(["a"]).success).toBe(false);
++      expect(schema.safeParse([]).success).toBe(false);
++    });
+
++    it("rejects hole in middle: optional, required-with-default, required", () => {
++      const schema = z.tuple([
++        z.string().optional(),
++        z.number().default(0),
++        z.string(), // required, no default
++      ]);
++      expect(schema.safeParse(["hello", 1]).success).toBe(false);
++      expect(schema.safeParse(["hello"]).success).toBe(false);
++    });
+
++    it("accepts all provided for: optional, required-with-default, required", () => {
++      const schema = z.tuple([
++        z.string().optional(),
++        z.number().default(0),
++        z.string(),
++      ]);
++      expect(schema.parse(["hello", 1, "world"])).toEqual([
++        "hello",
++        1,
++        "world",
++      ]);
++      expect(schema.parse([undefined, undefined, "world"])).toEqual([
++        undefined,
++        0,
++        "world",
++      ]);
++    });
++  });
+
++  describe("edge cases", () => {
++    it("single required element: empty array is rejected", () => {
++      expect(z.tuple([z.number()]).safeParse([]).success).toBe(false);
++    });
+
++    it("single optional element: empty array is accepted", () => {
++      expect(z.tuple([z.string().optional()]).safeParse([]).success).toBe(true);
++    });
+
++    it("single default element: empty array is accepted", () => {
++      const result = z.tuple([z.number().default(0)]).safeParse([]);
++      expect(result.success).toBe(true);
++      if (result.success) {
++        expect(result.data[0]).toBe(0);
++      }
++    });
++  });
++});
+*** End Patch

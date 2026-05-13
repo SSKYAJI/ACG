@@ -1,0 +1,579 @@
+{
+  "bootstrap_resamples": 1000,
+  "bootstrap_seed": 20260512,
+  "metrics": [
+    "task_completion_rate",
+    "typecheck_pass_count",
+    "tests_ran_count",
+    "first_run_pass_rate",
+    "tokens_prompt_total",
+    "tokens_completion_total",
+    "cost_usd_total",
+    "wall_time_seconds"
+  ],
+  "n": 5,
+  "seeds": [
+    {
+      "metrics": {
+        "acg_planned": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 11577.0,
+          "tokens_prompt_total": 55043.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 166.4999
+        },
+        "acg_planned_full_context": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 7705.0,
+          "tokens_prompt_total": 55043.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 104.2208
+        },
+        "naive_parallel": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 18784.0,
+          "tokens_prompt_total": 1370.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 247.3127
+        },
+        "naive_parallel_blind": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 13615.0,
+          "tokens_prompt_total": 965.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 197.0
+        },
+        "single_agent": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 25494.0,
+          "tokens_prompt_total": 594.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 81.7692
+        }
+      },
+      "path": "experiments/real_repos/zod/runs_sonnet_test_gate_n5/seed1/eval_run_combined.json",
+      "seed": 1
+    },
+    {
+      "metrics": {
+        "acg_planned": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 14896.0,
+          "tokens_prompt_total": 55043.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 157.6993
+        },
+        "acg_planned_full_context": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 15930.0,
+          "tokens_prompt_total": 55043.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 155.9235
+        },
+        "naive_parallel": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 4924.0,
+          "tokens_prompt_total": 1370.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 68.4537
+        },
+        "naive_parallel_blind": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 5646.0,
+          "tokens_prompt_total": 965.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 74.0747
+        },
+        "single_agent": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 80850.0,
+          "tokens_prompt_total": 594.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 238.2292
+        }
+      },
+      "path": "experiments/real_repos/zod/runs_sonnet_test_gate_n5/seed2/eval_run_combined.json",
+      "seed": 2
+    },
+    {
+      "metrics": {
+        "acg_planned": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 6503.0,
+          "tokens_prompt_total": 55043.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 81.9494
+        },
+        "acg_planned_full_context": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 9609.0,
+          "tokens_prompt_total": 55043.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 106.7319
+        },
+        "naive_parallel": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 13812.0,
+          "tokens_prompt_total": 1370.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 154.1179
+        },
+        "naive_parallel_blind": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 5069.0,
+          "tokens_prompt_total": 965.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 61.3838
+        },
+        "single_agent": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 21444.0,
+          "tokens_prompt_total": 594.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 67.9289
+        }
+      },
+      "path": "experiments/real_repos/zod/runs_sonnet_test_gate_n5/seed3/eval_run_combined.json",
+      "seed": 3
+    },
+    {
+      "metrics": {
+        "acg_planned": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 18758.0,
+          "tokens_prompt_total": 55043.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 243.915
+        },
+        "acg_planned_full_context": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 11193.0,
+          "tokens_prompt_total": 55043.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 96.8789
+        },
+        "naive_parallel": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 9792.0,
+          "tokens_prompt_total": 1370.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 104.2965
+        },
+        "naive_parallel_blind": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 7229.0,
+          "tokens_prompt_total": 965.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 86.2666
+        },
+        "single_agent": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 32913.0,
+          "tokens_prompt_total": 594.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 100.7484
+        }
+      },
+      "path": "experiments/real_repos/zod/runs_sonnet_test_gate_n5/seed4/eval_run_combined.json",
+      "seed": 4
+    },
+    {
+      "metrics": {
+        "acg_planned": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 11450.0,
+          "tokens_prompt_total": 55043.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 140.1404
+        },
+        "acg_planned_full_context": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 20553.0,
+          "tokens_prompt_total": 55043.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 252.0457
+        },
+        "naive_parallel": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 4270.0,
+          "tokens_prompt_total": 1370.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 59.2516
+        },
+        "naive_parallel_blind": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 11756.0,
+          "tokens_prompt_total": 965.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 138.3149
+        },
+        "single_agent": {
+          "cost_usd_total": 0.0,
+          "first_run_pass_rate": 0.0,
+          "task_completion_rate": 0.0,
+          "tests_ran_count": 3.0,
+          "tokens_completion_total": 33600.0,
+          "tokens_prompt_total": 594.0,
+          "typecheck_pass_count": 0.0,
+          "wall_time_seconds": 119.6647
+        }
+      },
+      "path": "experiments/real_repos/zod/runs_sonnet_test_gate_n5/seed5/eval_run_combined.json",
+      "seed": 5
+    }
+  ],
+  "strategies": {
+    "acg_planned": {
+      "cost_usd_total": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "first_run_pass_rate": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "task_completion_rate": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tests_ran_count": {
+        "ci95": null,
+        "mean": 3.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tokens_completion_total": {
+        "ci95": {
+          "high": 15885.6,
+          "low": 9171.0
+        },
+        "mean": 12636.8,
+        "stdev": 4547.7534783670935,
+        "variance_treatment": "stochastic"
+      },
+      "tokens_prompt_total": {
+        "ci95": null,
+        "mean": 55043.0,
+        "stdev": 0.0,
+        "variance_treatment": "deterministic"
+      },
+      "typecheck_pass_count": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "wall_time_seconds": {
+        "ci95": {
+          "high": 205.91693999999998,
+          "low": 110.4977
+        },
+        "mean": 158.0408,
+        "stdev": 58.215927148032264,
+        "variance_treatment": "stochastic"
+      }
+    },
+    "acg_planned_full_context": {
+      "cost_usd_total": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "first_run_pass_rate": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "task_completion_rate": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tests_ran_count": {
+        "ci95": null,
+        "mean": 3.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tokens_completion_total": {
+        "ci95": {
+          "high": 17439.6,
+          "low": 9164.2
+        },
+        "mean": 12998.0,
+        "stdev": 5206.5786270832405,
+        "variance_treatment": "stochastic"
+      },
+      "tokens_prompt_total": {
+        "ci95": null,
+        "mean": 55043.0,
+        "stdev": 0.0,
+        "variance_treatment": "deterministic"
+      },
+      "typecheck_pass_count": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "wall_time_seconds": {
+        "ci95": {
+          "high": 203.2688355,
+          "low": 101.78626
+        },
+        "mean": 143.16016,
+        "stdev": 65.20009697092483,
+        "variance_treatment": "stochastic"
+      }
+    },
+    "naive_parallel": {
+      "cost_usd_total": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "first_run_pass_rate": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "task_completion_rate": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tests_ran_count": {
+        "ci95": null,
+        "mean": 3.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tokens_completion_total": {
+        "ci95": {
+          "high": 15187.2,
+          "low": 5636.0
+        },
+        "mean": 10316.4,
+        "stdev": 6120.28175821996,
+        "variance_treatment": "stochastic"
+      },
+      "tokens_prompt_total": {
+        "ci95": null,
+        "mean": 1370.0,
+        "stdev": 0.0,
+        "variance_treatment": "deterministic"
+      },
+      "typecheck_pass_count": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "wall_time_seconds": {
+        "ci95": {
+          "high": 191.06152,
+          "low": 73.78184
+        },
+        "mean": 126.68648,
+        "stdev": 77.0438165368383,
+        "variance_treatment": "stochastic"
+      }
+    },
+    "naive_parallel_blind": {
+      "cost_usd_total": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "first_run_pass_rate": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "task_completion_rate": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tests_ran_count": {
+        "ci95": null,
+        "mean": 3.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tokens_completion_total": {
+        "ci95": {
+          "high": 11594.2,
+          "low": 5731.8
+        },
+        "mean": 8663.0,
+        "stdev": 3813.2805430495146,
+        "variance_treatment": "stochastic"
+      },
+      "tokens_prompt_total": {
+        "ci95": null,
+        "mean": 965.0,
+        "stdev": 0.0,
+        "variance_treatment": "deterministic"
+      },
+      "typecheck_pass_count": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "wall_time_seconds": {
+        "ci95": {
+          "high": 160.67792,
+          "low": 71.43672000000001
+        },
+        "mean": 111.408,
+        "stdev": 56.07641572020273,
+        "variance_treatment": "stochastic"
+      }
+    },
+    "single_agent": {
+      "cost_usd_total": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "first_run_pass_rate": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "task_completion_rate": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tests_ran_count": {
+        "ci95": null,
+        "mean": 3.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "tokens_completion_total": {
+        "ci95": {
+          "high": 61675.2,
+          "low": 24685.2
+        },
+        "mean": 38860.2,
+        "stdev": 24021.66480908432,
+        "variance_treatment": "stochastic"
+      },
+      "tokens_prompt_total": {
+        "ci95": null,
+        "mean": 594.0,
+        "stdev": 0.0,
+        "variance_treatment": "deterministic"
+      },
+      "typecheck_pass_count": {
+        "ci95": null,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "variance_treatment": "zero_variance_observation"
+      },
+      "wall_time_seconds": {
+        "ci95": {
+          "high": 183.3314614999999,
+          "low": 81.04411999999999
+        },
+        "mean": 121.66808,
+        "stdev": 68.0219841865628,
+        "variance_treatment": "stochastic"
+      }
+    }
+  }
+}

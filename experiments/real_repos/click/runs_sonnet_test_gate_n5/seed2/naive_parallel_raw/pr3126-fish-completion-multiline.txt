@@ -1,0 +1,90 @@
+Looking at the task, I need to fix fish shell completion to handle multiline help strings. The issue is that when help text contains newlines, it breaks the fish completion script format.
+
+Let me analyze the problem and implement the fix:
+
+1. In fish completion, help text is used in `complete` commands with `-d` flag
+2. If help text contains newlines, it will break the shell command
+3. The fix should strip/replace newlines in help text for fish completions
+
+*** Begin Patch
+*** Update File: src/click/shell_completion.py
+@@
+ class ShellComplete:
+@@
+     def _get_completion_record(
+         self,
+         ctx: Context,
+         param: t.Optional["Parameter"] = None,
+     ) -> str:
+@@
+ class FishComplete(ShellComplete):
+@@
+     def format_completion(self, item: CompletionItem) -> str:
+-        if item.help:
+-            return f"complete {self._base_completion} -n '__fish_use_subcommand' -a {item.value!r} -d {item.help!r}"
+-        return f"complete {self._base_completion} -n '__fish_use_subcommand' -a {item.value!r}"
+@@
+ class FishComplete(ShellComplete):
+@@
+     def get_completions(
+@@
+ class FishComplete(ShellComplete):
+@@
+     def source(self) -> str:
+*** Update File: src/click/shell_completion.py
+@@
+     def format_completion(self, item: CompletionItem) -> str:
+-        if item.help:
+-            return f"complete {self._base_completion} -n '__fish_use_subcommand' -a {item.value!r} -d {item.help!r}"
+-        return f"complete {self._base_completion} -n '__fish_use_subcommand' -a {item.value!r}"
+
+Let me look at the actual source more carefully and provide a proper patch.
+
+*** Begin Patch
+*** Update File: src/click/shell_completion.py
+@@
+ class FishComplete(ShellComplete):
+     """Shell completion for the `fish` shell."""
+
+     name = "fish"
+     source_template = FISH_SOURCE
+
+     def format_completion(self, item: CompletionItem) -> str:
+-        if item.help:
+-            return f"{self._base_completion} -a {item.value!r} -d {item.help!r}"
+-
+-        return f"{self._base_completion} -a {item.value!r}"
++        if item.help:
++            help_str = item.help.split("\n")[0]
++            return f"{self._base_completion} -a {item.value!r} -d {help_str!r}"
++
++        return f"{self._base_completion} -a {item.value!r}"
+*** Update File: tests/test_shell_completion.py
+@@
+ from click.shell_completion import ShellComplete
+ from click.shell_completion import add_completion_class
+@@
++def test_fish_multiline_help() -> None:
++    """Fish completion should only use the first line of multiline help text."""
++
++    @click.group()
++    def cli() -> None:
++        pass
++
++    @cli.command()
++    @click.help_option()
++    def cmd() -> None:
++        """First line of help.
++
++        Second paragraph.
++        """
++
++    ctx = click.Context(cli)
++    completion = FishComplete(cli, ctx, "cli", [])
++    out = completion.source()
++    # Multiline help should not appear verbatim; only first line used
++    assert "Second paragraph" not in out
++    assert "First line of help" in out
++
++
+*** End Patch

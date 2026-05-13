@@ -1,0 +1,4 @@
+Estimated cost: several USD for 5 seeds × comparison_full × 3 tasks (varies by pricing).
+Default: Claude Sonnet 4.6 via Anthropic-direct (see .env.example). Override via env, e.g.:
+  ACG_LLM_URL=... ACG_LLM_API_KEY=... ACG_LLM_MODEL=claude-sonnet-4-6
+AUTO_YES set (--yes / ACG_AUTO_CONFIRM=1) — proceeding without prompt.

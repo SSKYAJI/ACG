@@ -1,0 +1,78 @@
+Looking at the task, I need to fix the `Option` class initialization in `src/click/core.py` so that when `flag_value` is set to a non-basic type (e.g., an enum), the option's type is automatically set to `UNPROCESSED` instead of raising a `TypeError`.
+
+Let me analyze what needs to be changed. The `Option.__init__` method likely tries to determine the type from `flag_value` and fails when it's not a basic type. The fix should detect non-basic types and fall back to `UNPROCESSED`.
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+         if self.is_flag:
+             if flag_value is None:
+                 flag_value = not self.secondary_opts
+ 
+             if self.default is None:
+                 self.default = False
+ 
+             if flag_value is True:
+                 self.type: types.ParamType = types.BOOL
+             else:
+-                self.type = self.type
++                if isinstance(flag_value, (bool, int, float, str)):
++                    self.type = self.type
++                else:
++                    self.type = types.UNPROCESSED
+ 
+             self.flag_value: t.Any = flag_value
+*** End Patch
+
+Hmm, I need to look more carefully at the actual code. Let me provide a more targeted fix based on what I know about Click's codebase.
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+             if flag_value is True:
+                 self.type: types.ParamType = types.BOOL
+             else:
+                 self.type = self.type
+ 
+             self.flag_value: t.Any = flag_value
+@@
+             if flag_value is True:
+                 self.type: types.ParamType = types.BOOL
+             else:
+                 if not isinstance(flag_value, (bool, int, float, str)):
+                     self.type = types.UNPROCESSED
+                 else:
+                     self.type = self.type
+ 
+             self.flag_value: t.Any = flag_value
+*** Update File: tests/test_options.py
+@@
+ def test_missing_option_string_cast():
+@@
++def test_flag_value_non_basic_type():
++    import enum
++
++    class Color(enum.Enum):
++        RED = 1
++        BLUE = 2
++
++    @click.command()
++    @click.option("--color", flag_value=Color.RED)
++    def cmd(color):
++        if color:
++            click.echo(color.name)
++        else:
++            click.echo("none")
++
++    runner = CliRunner()
++    result = runner.invoke(cmd, ["--color"])
++    assert result.exit_code == 0
++    assert "RED" in result.output
++
++    result = runner.invoke(cmd, [])
++    assert result.exit_code == 0
++    assert "none" in result.output
++
++
+ def test_missing_option_string_cast():
+*** End Patch

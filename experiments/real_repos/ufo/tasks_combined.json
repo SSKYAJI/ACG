@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr335-withoutbase-collapse-leading-slashes",
+      "prompt": "withoutBase should normalize paths with repeated leading slashes the same way it handles ordinary leading slashes. Currently a path with multiple leading slashes is not stripped consistently against its base. Fix the normalization behavior and add regression tests."
+    }
+  ]
+}

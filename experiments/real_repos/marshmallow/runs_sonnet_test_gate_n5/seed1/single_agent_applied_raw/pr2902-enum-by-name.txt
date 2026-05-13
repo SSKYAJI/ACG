@@ -1,0 +1,27 @@
+*** Begin Patch
+*** Update File: tests/test_fields.py
+--- tests/test_fields.py
++++ tests/test_fields.py
+@@ -85,6 +85,16 @@
+         with pytest.raises(ValidationError):
+             field._deserialize("describe", "color", {})
+ 
++    def test_enum_field_by_name_does_not_return_class_attribute(self):
++        """Enum field by-name lookup should not return non-member class attributes."""
++        from marshmallow.fields import Enum
++        field = Enum(Color)
++        # Test various non-member attributes
++        non_members = ["describe", "__class__", "__doc__", "name", "value"]
++        for attr_name in non_members:
++            # Only 'name' and 'value' might be tricky - they are descriptors on enum
++            # but not members themselves
++            if attr_name not in [m.name for m in Color]:
++                with pytest.raises(ValidationError):
++                    field._deserialize(attr_name, "color", {})
++
+     def test_enum_field_by_value(self):
+         """Enum field should deserialize by value when by_value=True."""
+         from marshmallow.fields import Enum
+*** End Patch
+
+Now let me make sure the validate.py file is correct. Let me rewrite it cleanly:

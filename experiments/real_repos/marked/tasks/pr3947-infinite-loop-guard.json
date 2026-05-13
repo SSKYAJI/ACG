@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr3947-infinite-loop-guard",
+      "prompt": "The marked lexer enters an infinite loop when parsing certain indented code blocks that contain blank lines with special characters (e.g., a tab followed by a vertical tab). Add a loop-termination guard so that if the remaining source does not shrink between iterations the parser breaks out cleanly and refactor the existing inline infinite-loop error path to reuse the same guard logic."
+    }
+  ]
+}

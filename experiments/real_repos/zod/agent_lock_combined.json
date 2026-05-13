@@ -1,0 +1,306 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-13T05:11:14.329922Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "claude-sonnet-4-6",
+    "tokens_planner_total": 23192,
+    "tokens_scope_review_total": 1371,
+    "tokens_planner_completion_total": 491,
+    "tokens_planner_method": "provider_usage",
+    "compile_wall_seconds": 9.2772,
+    "compile_cost_usd": null
+  },
+  "repo": {
+    "root": "experiments/real_repos/zod/checkout",
+    "git_url": null,
+    "commit": "b6b1288277e6ca87dab0ad1c7251b92612b7445c",
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr5855-shallowclone-map-set",
+      "prompt": "In v4, Map and Set values returned by defaulted schemas are shared references rather than independent copies. After parsing an object with a defaulted Map or Set field, mutating the returned value affects subsequent parses. Fix shallowClone in packages/zod/src/v4/core/util.ts so each parse returns an independent copy for Map and Set types, and add regression tests.",
+      "predicted_writes": [
+        {
+          "path": "packages/zod/src/v4/core/util.ts",
+          "confidence": 0.95,
+          "reason": "Task explicitly says to fix shallowClone in this file to handle Map and Set types. Signals: bm25, explicit, llm, pagerank, symbol. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "packages/zod/src/v3/types.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #1, top symbol matches: AND<T, AnyZodObject, AnyZodTuple.; BM25 lexical match over path, identifiers, imports, docstrings (score 33.62). Signals: bm25, pagerank, symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/zod/src/v4/classic/tests/default.test.ts",
+          "confidence": 0.85,
+          "reason": "Regression tests for defaulted Map/Set shallow clone fix most likely belong in the existing default tests for classic v4. Signals: llm, testlink. Scope review kept this file at its existing tier."
+        }
+      ],
+      "allowed_paths": [
+        "packages/zod/src/v3/**",
+        "packages/zod/src/v4/classic/tests/**",
+        "packages/zod/src/v4/core/**"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "packages/zod/src/v4/core/util.ts",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "explicit",
+            "llm",
+            "pagerank",
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "Task explicitly says to fix shallowClone in this file to handle Map and Set types. Signals: bm25, explicit, llm, pagerank, symbol. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "packages/zod/src/v3/types.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "pagerank",
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "personalized PageRank rank #1, top symbol matches: AND<T, AnyZodObject, AnyZodTuple.; BM25 lexical match over path, identifiers, imports, docstrings (score 33.62). Signals: bm25, pagerank, symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/zod/src/v4/classic/tests/default.test.ts",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "llm",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Regression tests for defaulted Map/Set shallow clone fix most likely belong in the existing default tests for classic v4. Signals: llm, testlink. Scope review kept this file at its existing tier."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    },
+    {
+      "id": "pr5856-merge-refinement-semantics",
+      "prompt": "In v4, calling .merge() on a ZodObject that has refinements (e.g., .refine(), .superRefine()) silently discards those refinements from the merged result, while .extend() preserves them. Align .merge() to preserve refinements the same way .extend() does by updating packages/zod/src/v4/core/util.ts, and add regression tests.",
+      "predicted_writes": [
+        {
+          "path": "packages/zod/src/v4/core/util.ts",
+          "confidence": 0.95,
+          "reason": "Task explicitly names this file as the one to update for fixing .merge() refinement preservation. Signals: bm25, explicit, llm, pagerank, symbol."
+        },
+        {
+          "path": "packages/zod/src/v3/types.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #1, top symbol matches: AND<T, AnyZodObject, AnyZodTuple. Signals: pagerank, symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/integration/fixtures/ai-sdk/index.ts",
+          "confidence": 0.85,
+          "reason": "Symbol 'result' referenced in prompt; defined in packages/integration/fixtures/ai-sdk/index.ts. Signals: symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/zod/src/v4/classic/tests/object.test.ts",
+          "confidence": 0.85,
+          "reason": "Regression tests for .merge() on ZodObject would most naturally be added to the existing object test file for classic v4. Signals: bm25, llm, testlink. Scope review kept this file at its existing tier."
+        }
+      ],
+      "allowed_paths": [
+        "packages/integration/fixtures/ai-sdk/**",
+        "packages/zod/src/v3/**",
+        "packages/zod/src/v4/classic/tests/**",
+        "packages/zod/src/v4/core/**"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "packages/zod/src/v4/core/util.ts",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "explicit",
+            "llm",
+            "pagerank",
+            "symbol"
+          ],
+          "reason": "Task explicitly names this file as the one to update for fixing .merge() refinement preservation. Signals: bm25, explicit, llm, pagerank, symbol."
+        },
+        {
+          "path": "packages/zod/src/v3/types.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "pagerank",
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "personalized PageRank rank #1, top symbol matches: AND<T, AnyZodObject, AnyZodTuple. Signals: pagerank, symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/integration/fixtures/ai-sdk/index.ts",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "Symbol 'result' referenced in prompt; defined in packages/integration/fixtures/ai-sdk/index.ts. Signals: symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/zod/src/v4/classic/tests/object.test.ts",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "bm25",
+            "llm",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Regression tests for .merge() on ZodObject would most naturally be added to the existing object test file for classic v4. Signals: bm25, llm, testlink. Scope review kept this file at its existing tier."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    },
+    {
+      "id": "pr5900-tuple-holes-defaults",
+      "prompt": "In v4, tuple schemas with optional elements followed by required elements with defaults incorrectly accept inputs that have holes (undefined) before the required default fields, when they should be rejected. Fix the tuple parsing logic in packages/zod/src/v4/core/schemas.ts to reject such inputs and add regression tests.",
+      "predicted_writes": [
+        {
+          "path": "packages/zod/src/v4/core/schemas.ts",
+          "confidence": 0.95,
+          "reason": "Task explicitly names this file as the location of the tuple parsing bug to fix. Signals: explicit, llm, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "packages/zod/src/v3/types.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #1, top symbol matches: AND<T, AnyZodObject, AnyZodTuple. Signals: pagerank, symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/zod/src/v4/classic/tests/tuple.test.ts",
+          "confidence": 0.9,
+          "reason": "Task requires adding regression tests for the tuple holes/defaults bug, and this is the existing tuple test file for v4 classic. Signals: llm, testlink. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "packages/zod/src/v4/core/json-schema-processors.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #7, top symbol matches: RegistryToJSONSchemaParams, ToJSONSchemaParams, ZodStandardJSONSchemaPayload.; BM25 lexical match over path, identifiers, imports, docstrings (score 28.26). Signals: bm25, pagerank. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/zod/src/v4/core/to-json-schema.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #8, top symbol matches:   schemaPath:, RegistryToJSONSchemaParams, ToJSONSchemaContext.; BM25 lexical match over path, identifiers, imports, docstrings (score 34.35). Signals: bm25, pagerank. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/zod/src/v4/core/util.ts",
+          "confidence": 0.85,
+          "reason": "Symbol 'required' referenced in prompt; defined in packages/zod/src/v4/core/util.ts. Signals: symbol. Scope review requested a drop, but protected evidence kept it."
+        }
+      ],
+      "allowed_paths": [
+        "packages/zod/src/v3/**",
+        "packages/zod/src/v4/classic/tests/**",
+        "packages/zod/src/v4/core/**"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "packages/zod/src/v4/core/schemas.ts",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "explicit",
+            "llm",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "Task explicitly names this file as the location of the tuple parsing bug to fix. Signals: explicit, llm, pagerank. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "packages/zod/src/v3/types.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "pagerank",
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "personalized PageRank rank #1, top symbol matches: AND<T, AnyZodObject, AnyZodTuple. Signals: pagerank, symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/zod/src/v4/classic/tests/tuple.test.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "llm",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Task requires adding regression tests for the tuple holes/defaults bug, and this is the existing tuple test file for v4 classic. Signals: llm, testlink. Scope review kept this file at its existing tier."
+        },
+        {
+          "path": "packages/zod/src/v4/core/json-schema-processors.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "personalized PageRank rank #7, top symbol matches: RegistryToJSONSchemaParams, ToJSONSchemaParams, ZodStandardJSONSchemaPayload.; BM25 lexical match over path, identifiers, imports, docstrings (score 28.26). Signals: bm25, pagerank. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/zod/src/v4/core/to-json-schema.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "pagerank",
+            "scope_review"
+          ],
+          "reason": "personalized PageRank rank #8, top symbol matches:   schemaPath:, RegistryToJSONSchemaParams, ToJSONSchemaContext.; BM25 lexical match over path, identifiers, imports, docstrings (score 34.35). Signals: bm25, pagerank. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/zod/src/v4/core/util.ts",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "Symbol 'required' referenced in prompt; defined in packages/zod/src/v4/core/util.ts. Signals: symbol. Scope review requested a drop, but protected evidence kept it."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr5855-shallowclone-map-set",
+          "pr5856-merge-refinement-semantics",
+          "pr5900-tuple-holes-defaults"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

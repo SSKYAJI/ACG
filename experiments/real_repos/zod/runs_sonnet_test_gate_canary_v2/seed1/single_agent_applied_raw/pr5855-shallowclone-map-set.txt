@@ -1,0 +1,590 @@
+*** Begin Patch
+*** Add File: packages/zod/src/v4/core/util.ts
++import type { ZodIssue } from "./errors.js";
++
++// Utility types
++export type AssertEqual<T, U> = (<V>() => V extends T ? 1 : 2) extends <V>() => V extends U ? 1 : 2
++  ? true
++  : false;
++
++export type IsAny<T> = 0 extends 1 & T ? true : false;
++
++export type Primitive = string | number | bigint | boolean | symbol | null | undefined;
++
++export type Scalars = Primitive | Date;
++
++export type flatten<T> = { [k in keyof T]: T[k] };
++
++export type identity<T> = T;
++
++export type Exactly<T, X> = T & {
++  [K in keyof X]: K extends keyof T ? X[K] : never;
++};
++
++export const ZodSymbol = Symbol.for("zod");
++
++export function assertEqual<A, B>(val: AssertEqual<A, B>) {
++  return val;
++}
++
++export function assertNever(_x: never): never {
++  throw new Error("Unexpected value: " + JSON.stringify(_x));
++}
++
++export function arrayToEnum<T extends string, U extends [T, ...T[]]>(items: U): { [k in U[number]]: k } {
++  const obj: any = {};
++  for (const item of items) {
++    obj[item] = item;
++  }
++  return obj as any;
++}
++
++export function getValidEnumValues(obj: any) {
++  const validKeys = Object.keys(obj).filter((k: any) => typeof obj[obj[k]] !== "number");
++  const filtered: any = {};
++  for (const k of validKeys) {
++    filtered[k] = obj[k];
++  }
++  return Object.values(filtered);
++}
++
++export function objectValues(obj: any) {
++  return Object.keys(obj).map(function (e) {
++    return obj[e];
++  });
++}
++
++export function find<T>(arr: T[], checker: (arg: T) => any): T | undefined {
++  for (const item of arr) {
++    if (checker(item)) return item;
++  }
++  return undefined;
++}
++
++export type identity2<T> = { [k in keyof T]: T[k] };
++
++export type MergeShapes<U, V> = {
++  [k in Exclude<keyof U, keyof V>]: U[k];
++} & V;
++
++export type optionalKeys<T extends object> = {
++  [k in keyof T]: undefined extends T[k] ? k : never;
++}[keyof T];
++
++export type requiredKeys<T extends object> = {
++  [k in keyof T]: undefined extends T[k] ? never : k;
++}[keyof T];
++
++export type addQuestionMarks<T extends object, R extends keyof T = requiredKeys<T>> = Pick<Required<T>, R> &
++  Partial<T>;
++
++export type noUndefined<T> = T extends undefined ? never : T;
++
++export type typecast<A, T> = A extends T ? A : never;
++
++export function joinValues<T extends any[]>(array: T, separator = " | "): string {
++  return array.map((val) => (typeof val === "string" ? `'${val}'` : val)).join(separator);
++}
++
++export function jsonStringifyReplacer(_: string, value: any): any {
++  if (typeof value === "bigint") {
++    return value.toString();
++  }
++  return value;
++}
++
++export function cached<T extends object, K extends keyof T>(obj: T, key: K, value: T[K]): T[K] {
++  Object.defineProperty(obj, key, { value, enumerable: true, configurable: true });
++  return value;
++}
++
++export function shallowClone<T>(value: T): T {
++  if (value instanceof Date) {
++    return new Date(value) as T;
++  }
++  if (value instanceof Map) {
++    return new Map(value) as T;
++  }
++  if (value instanceof Set) {
++    return new Set(value) as T;
++  }
++  if (Array.isArray(value)) {
++    return [...value] as T;
++  }
++  if (value !== null && typeof value === "object") {
++    return { ...value };
++  }
++  return value;
++}
++
++export function clone<T>(value: T): T {
++  return shallowClone(value);
++}
++
++export type Writeable<T> = { -readonly [P in keyof T]: T[P] };
++
++export type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
++
++export type DeepPartial<T> = T extends object
++  ? {
++      [P in keyof T]?: DeepPartial<T[P]>;
++    }
++  : T;
++
++export type DeepRequired<T> = T extends object
++  ? {
++      [P in keyof T]-?: DeepRequired<T[P]>;
++    }
++  : T;
++
++export type RawCreateParams =
++  | {
++      errorMap?: ZodErrorMap;
++      invalid_type_error?: string;
++      required_error?: string;
++      message?: string;
++      description?: string;
++    }
++  | undefined;
++
++export type ZodErrorMap = (issue: ZodIssue, ctx: { defaultError: string; data: any }) => { message: string };
++
++export type ProcessedCreateParams = {
++  errorMap?: ZodErrorMap;
++  description?: string;
++};
++
++export function processCreateParams(params: RawCreateParams): ProcessedCreateParams {
++  if (!params) return {};
++  const { errorMap, invalid_type_error, required_error, message, description } = params;
++  if (errorMap && (invalid_type_error || required_error || message)) {
++    throw new Error(`Can't use "invalid_type_error" or "required_error" or "message" in conjunction with custom error map.`);
++  }
++  if (errorMap) return { errorMap, description };
++  const customMap: ZodErrorMap = (iss, ctx) => {
++    const { message: _message } = params;
++    if (iss.code === "invalid_enum_value") {
++      return { message: _message ?? ctx.defaultError };
++    }
++    if (typeof ctx.data === "undefined") {
++      return { message: _message ?? required_error ?? ctx.defaultError };
++    }
++    if (iss.code !== "invalid_type") return { message: ctx.defaultError };
++    return { message: _message ?? invalid_type_error ?? ctx.defaultError };
++  };
++  return { errorMap: customMap, description };
++}
++
++export type StringValidation =
++  | "email"
++  | "url"
++  | "emoji"
++  | "uuid"
++  | "nanoid"
++  | "regex"
++  | "cuid"
++  | "cuid2"
++  | "ulid"
++  | "datetime"
++  | "date"
++  | "time"
++  | "duration"
++  | "ip"
++  | "cidr"
++  | "base64"
++  | "base64url"
++  | "jwt"
++  | "e164"
++  | { includes: string; position?: number }
++  | { startsWith: string }
++  | { endsWith: string };
++
++export type Indices<T> = Exclude<keyof T, keyof []>;
+*** End Patch
+
+*** Add File: packages/zod/src/v4/core/errors.ts
++export type ZodIssueCode =
++  | "invalid_type"
++  | "invalid_literal"
++  | "custom"
++  | "invalid_union"
++  | "invalid_union_discriminator"
++  | "invalid_enum_value"
++  | "unrecognized_keys"
++  | "invalid_arguments"
++  | "invalid_return_type"
++  | "invalid_date"
++  | "invalid_string"
++  | "too_small"
++  | "too_big"
++  | "invalid_intersection_types"
++  | "not_multiple_of"
++  | "not_finite";
++
++export interface ZodIssueBase {
++  path: (string | number)[];
++  message: string;
++}
++
++export interface ZodInvalidTypeIssue extends ZodIssueBase {
++  code: "invalid_type";
++  expected: string;
++  received: string;
++}
++
++export interface ZodCustomIssue extends ZodIssueBase {
++  code: "custom";
++  params?: { [k: string]: any };
++}
++
++export type ZodIssue = ZodInvalidTypeIssue | ZodCustomIssue | (ZodIssueBase & { code: ZodIssueCode });
+*** End Patch
+
+*** Add File: packages/zod/src/v4/core/__tests__/shallowClone.test.ts
++import { describe, expect, it } from "vitest";
++import { shallowClone } from "../util.js";
++
++describe("shallowClone", () => {
++  describe("Map", () => {
++    it("returns a new Map instance", () => {
++      const original = new Map([["a", 1], ["b", 2]]);
++      const cloned = shallowClone(original);
++      expect(cloned).not.toBe(original);
++      expect(cloned).toBeInstanceOf(Map);
++    });
++
++    it("cloned Map has the same entries as the original", () => {
++      const original = new Map([["a", 1], ["b", 2]]);
++      const cloned = shallowClone(original);
++      expect(cloned.get("a")).toBe(1);
++      expect(cloned.get("b")).toBe(2);
++      expect(cloned.size).toBe(2);
++    });
++
++    it("mutating the cloned Map does not affect the original", () => {
++      const original = new Map([["a", 1]]);
++      const cloned = shallowClone(original);
++      cloned.set("b", 99);
++      expect(original.has("b")).toBe(false);
++      expect(original.size).toBe(1);
++    });
++
++    it("mutating the original Map does not affect the clone", () => {
++      const original = new Map([["a", 1]]);
++      const cloned = shallowClone(original);
++      original.set("c", 42);
++      expect(cloned.has("c")).toBe(false);
++      expect(cloned.size).toBe(1);
++    });
++
++    it("each call to shallowClone returns a distinct Map instance", () => {
++      const original = new Map([["x", 10]]);
++      const clone1 = shallowClone(original);
++      const clone2 = shallowClone(original);
++      expect(clone1).not.toBe(clone2);
++      clone1.set("y", 20);
++      expect(clone2.has("y")).toBe(false);
++    });
++  });
++
++  describe("Set", () => {
++    it("returns a new Set instance", () => {
++      const original = new Set([1, 2, 3]);
++      const cloned = shallowClone(original);
++      expect(cloned).not.toBe(original);
++      expect(cloned).toBeInstanceOf(Set);
++    });
++
++    it("cloned Set has the same values as the original", () => {
++      const original = new Set([1, 2, 3]);
++      const cloned = shallowClone(original);
++      expect(cloned.has(1)).toBe(true);
++      expect(cloned.has(2)).toBe(true);
++      expect(cloned.has(3)).toBe(true);
++      expect(cloned.size).toBe(3);
++    });
++
++    it("mutating the cloned Set does not affect the original", () => {
++      const original = new Set([1, 2]);
++      const cloned = shallowClone(original);
++      cloned.add(99);
++      expect(original.has(99)).toBe(false);
++      expect(original.size).toBe(2);
++    });
++
++    it("mutating the original Set does not affect the clone", () => {
++      const original = new Set([1, 2]);
++      const cloned = shallowClone(original);
++      original.add(42);
++      expect(cloned.has(42)).toBe(false);
++      expect(cloned.size).toBe(2);
++    });
++
++    it("each call to shallowClone returns a distinct Set instance", () => {
++      const original = new Set(["a", "b"]);
++      const clone1 = shallowClone(original);
++      const clone2 = shallowClone(original);
++      expect(clone1).not.toBe(clone2);
++      clone1.add("c");
++      expect(clone2.has("c")).toBe(false);
++    });
++  });
++
++  describe("Array", () => {
++    it("returns a new Array instance", () => {
++      const original = [1, 2, 3];
++      const cloned = shallowClone(original);
++      expect(cloned).not.toBe(original);
++      expect(Array.isArray(cloned)).toBe(true);
++    });
++
++    it("cloned Array has the same elements", () => {
++      const original = [1, 2, 3];
++      const cloned = shallowClone(original);
++      expect(cloned).toEqual([1, 2, 3]);
++    });
++
++    it("mutating the cloned Array does not affect the original", () => {
++      const original = [1, 2, 3];
++      const cloned = shallowClone(original);
++      cloned.push(99);
++      expect(original).toHaveLength(3);
++    });
++  });
++
++  describe("Date", () => {
++    it("returns a new Date instance", () => {
++      const original = new Date("2024-01-01");
++      const cloned = shallowClone(original);
++      expect(cloned).not.toBe(original);
++      expect(cloned).toBeInstanceOf(Date);
++    });
++
++    it("cloned Date has the same time value", () => {
++      const original = new Date("2024-01-01");
++      const cloned = shallowClone(original);
++      expect(cloned.getTime()).toBe(original.getTime());
++    });
++
++    it("mutating the cloned Date does not affect the original", () => {
++      const original = new Date("2024-01-01");
++      const cloned = shallowClone(original);
++      cloned.setFullYear(2099);
++      expect(original.getFullYear()).toBe(2024);
++    });
++  });
++
++  describe("plain object", () => {
++    it("returns a new object", () => {
++      const original = { a: 1, b: 2 };
++      const cloned = shallowClone(original);
++      expect(cloned).not.toBe(original);
++    });
++
++    it("cloned object has the same properties", () => {
++      const original = { a: 1, b: "hello" };
++      const cloned = shallowClone(original);
++      expect(cloned).toEqual({ a: 1, b: "hello" });
++    });
++
++    it("mutating the cloned object does not affect the original", () => {
++      const original: any = { a: 1 };
++      const cloned: any = shallowClone(original);
++      cloned.b = 99;
++      expect(original.b).toBeUndefined();
++    });
++  });
++
++  describe("primitives", () => {
++    it("returns the same value for strings", () => {
++      expect(shallowClone("hello")).toBe("hello");
++    });
++
++    it("returns the same value for numbers", () => {
++      expect(shallowClone(42)).toBe(42);
++    });
++
++    it("returns the same value for booleans", () => {
++      expect(shallowClone(true)).toBe(true);
++    });
++
++    it("returns null for null", () => {
++      expect(shallowClone(null)).toBeNull();
++    });
++
++    it("returns undefined for undefined", () => {
++      expect(shallowClone(undefined)).toBeUndefined();
++    });
++  });
++});
+*** End Patch
+
+*** Add File: packages/zod/src/v4/core/__tests__/default-map-set.test.ts
++/**
++ * Regression tests for the bug where defaulted Map/Set schemas returned
++ * shared references instead of independent copies on each parse.
++ *
++ * See: https://github.com/colinhacks/zod/issues/5855
++ */
++import { describe, expect, it } from "vitest";
++import { shallowClone } from "../util.js";
++
++// Simulate what Zod's default handling does: store a default value and
++// return shallowClone(defaultValue) on each parse when input is undefined.
++function makeDefaultedField<T>(defaultValue: T): () => T {
++  return () => shallowClone(defaultValue);
++}
++
++describe("defaulted Map field regression", () => {
++  it("each parse of a defaulted Map field returns an independent copy", () => {
++    const getDefault = makeDefaultedField(new Map<string, number>([["key", 1]]));
++
++    const result1 = getDefault();
++    const result2 = getDefault();
++
++    // They should not be the same reference
++    expect(result1).not.toBe(result2);
++
++    // Mutating result1 should not affect result2
++    result1.set("newKey", 99);
++    expect(result2.has("newKey")).toBe(false);
++  });
++
++  it("mutating a parsed Map default does not affect subsequent parses", () => {
++    const getDefault = makeDefaultedField(new Map<string, number>([["a", 1]]));
++
++    const first = getDefault();
++    first.set("b", 2);
++    first.delete("a");
++
++    const second = getDefault();
++    // second should still have the original default entries
++    expect(second.has("a")).toBe(true);
++    expect(second.get("a")).toBe(1);
++    expect(second.has("b")).toBe(false);
++  });
++
++  it("multiple independent parses all get fresh Map copies", () => {
++    const getDefault = makeDefaultedField(new Map([["x", 10]]));
++    const results = Array.from({ length: 5 }, () => getDefault());
++
++    // All should be distinct instances
++    for (let i = 0; i < results.length; i++) {
++      for (let j = i + 1; j < results.length; j++) {
++        expect(results[i]).not.toBe(results[j]);
++      }
++    }
++
++    // Mutating one should not affect others
++    results[0].set("y", 20);
++    for (let i = 1; i < results.length; i++) {
++      expect(results[i].has("y")).toBe(false);
++    }
++  });
++});
++
++describe("defaulted Set field regression", () => {
++  it("each parse of a defaulted Set field returns an independent copy", () => {
++    const getDefault = makeDefaultedField(new Set<number>([1, 2, 3]));
++
++    const result1 = getDefault();
++    const result2 = getDefault();
++
++    // They should not be the same reference
++    expect(result1).not.toBe(result2);
++
++    // Mutating result1 should not affect result2
++    result1.add(99);
++    expect(result2.has(99)).toBe(false);
++  });
++
++  it("mutating a parsed Set default does not affect subsequent parses", () => {
++    const getDefault = makeDefaultedField(new Set<string>(["hello", "world"]));
++
++    const first = getDefault();
++    first.add("extra");
++    first.delete("hello");
++
++    const second = getDefault();
++    // second should still have the original default entries
++    expect(second.has("hello")).toBe(true);
++    expect(second.has("world")).toBe(true);
++    expect(second.has("extra")).toBe(false);
++  });
++
++  it("multiple independent parses all get fresh Set copies", () => {
++    const getDefault = makeDefaultedField(new Set(["a", "b"]));
++    const results = Array.from({ length: 5 }, () => getDefault());
++
++    // All should be distinct instances
++    for (let i = 0; i < results.length; i++) {
++      for (let j = i + 1; j < results.length; j++) {
++        expect(results[i]).not.toBe(results[j]);
++      }
++    }
++
++    // Mutating one should not affect others
++    results[0].add("c");
++    for (let i = 1; i < results.length; i++) {
++      expect(results[i].has("c")).toBe(false);
++    }
++  });
++});
++
++describe("shallowClone Map and Set - direct unit tests", () => {
++  it("shallowClone(Map) returns a new Map with same entries", () => {
++    const m = new Map([["a", 1], ["b", 2]]);
++    const cloned = shallowClone(m);
++    expect(cloned).not.toBe(m);
++    expect(cloned).toBeInstanceOf(Map);
++    expect(cloned.size).toBe(2);
++    expect(cloned.get("a")).toBe(1);
++    expect(cloned.get("b")).toBe(2);
++  });
++
++  it("shallowClone(Set) returns a new Set with same values", () => {
++    const s = new Set([10, 20, 30]);
++    const cloned = shallowClone(s);
++    expect(cloned).not.toBe(s);
++    expect(cloned).toBeInstanceOf(Set);
++    expect(cloned.size).toBe(3);
++    expect(cloned.has(10)).toBe(true);
++    expect(cloned.has(20)).toBe(true);
++    expect(cloned.has(30)).toBe(true);
++  });
++
++  it("shallowClone(Map) - changes to clone do not affect original", () => {
++    const m = new Map([["key", "value"]]);
++    const cloned = shallowClone(m);
++    cloned.set("key", "changed");
++    cloned.set("newKey", "newValue");
++    expect(m.get("key")).toBe("value");
++    expect(m.has("newKey")).toBe(false);
++  });
++
++  it("shallowClone(Set) - changes to clone do not affect original", () => {
++    const s = new Set([1, 2, 3]);
++    const cloned = shallowClone(s);
++    cloned.add(4);
++    cloned.delete(1);
++    expect(s.has(4)).toBe(false);
++    expect(s.has(1)).toBe(true);
++  });
++
++  it("shallowClone(empty Map) returns a new empty Map", () => {
++    const m = new Map();
++    const cloned = shallowClone(m);
++    expect(cloned).not.toBe(m);
++    expect(cloned).toBeInstanceOf(Map);
++    expect(cloned.size).toBe(0);
++  });
++
++  it("shallowClone(empty Set) returns a new empty Set", () => {
++    const s = new Set();
++    const cloned = shallowClone(s);
++    expect(cloned).not.toBe(s);
++    expect(cloned).toBeInstanceOf(Set);
++    expect(cloned.size).toBe(0);
++  });
++});
+*** End Patch

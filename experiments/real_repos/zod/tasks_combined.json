@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr5855-shallowclone-map-set",
+      "prompt": "In v4, Map and Set values returned by defaulted schemas are shared references rather than independent copies. After parsing an object with a defaulted Map or Set field, mutating the returned value affects subsequent parses. Fix shallowClone in packages/zod/src/v4/core/util.ts so each parse returns an independent copy for Map and Set types, and add regression tests."
+    },
+    {
+      "id": "pr5856-merge-refinement-semantics",
+      "prompt": "In v4, calling .merge() on a ZodObject that has refinements (e.g., .refine(), .superRefine()) silently discards those refinements from the merged result, while .extend() preserves them. Align .merge() to preserve refinements the same way .extend() does by updating packages/zod/src/v4/core/util.ts, and add regression tests."
+    },
+    {
+      "id": "pr5900-tuple-holes-defaults",
+      "prompt": "In v4, tuple schemas with optional elements followed by required elements with defaults incorrectly accept inputs that have holes (undefined) before the required default fields, when they should be rejected. Fix the tuple parsing logic in packages/zod/src/v4/core/schemas.ts to reject such inputs and add regression tests."
+    }
+  ]
+}

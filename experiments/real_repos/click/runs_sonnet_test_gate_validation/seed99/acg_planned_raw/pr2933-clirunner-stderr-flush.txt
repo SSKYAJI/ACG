@@ -1,0 +1,46 @@
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+             if isinstance(a
+- # … [truncated; original file is 18487 bytes]
+*** End Patch
+
+I need to see the full invoke method. Let me provide the actual fix based on what I know about the issue - the stderr (and stdout) TextIOWrapper buffers need to be flushed before reading the captured bytes.
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+         yield (stream_mixer.stdout, stream_mixer.stderr, stream_mixer.output)
+        finally:
+            for key, value in old_env.items():
+@@
+         yield (stream_mixer.stdout, stream_mixer.stderr, stream_mixer.output)
+        finally:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            for key, value in old_env.items():
+*** Update File: tests/test_testing.py
+@@
+ def test_isolation_stderr_errors():
+     """Writing to stderr should escape invalid characters instead of
+     raising a UnicodeEncodeError.
+     """
+     runner = CliRunner()
+ 
+     with runner.isolation() as (_, err, _):
+         click.echo("\udce2", err=True, nl=False)
+ 
+     assert err.getvalue() == b"\\udce2"
++
++
++def test_stderr_unflushed():
++    """Data written to stderr without an explicit flush should be captured."""
++
++    @click.command()
++    def cli():
++        print("to stderr", file=sys.stderr, flush=False)
++
++    runner = CliRunner()
++    result = runner.invoke(cli)
++    assert result.stderr == "to stderr\n"
+*** End Patch

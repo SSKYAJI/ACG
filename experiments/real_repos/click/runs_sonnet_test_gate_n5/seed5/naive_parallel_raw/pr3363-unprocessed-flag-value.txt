@@ -1,0 +1,97 @@
+Looking at the task, I need to fix the `Option` class initialization in `src/click/core.py` so that when `flag_value` is set to a non-basic type (like an enum), the option's type is automatically set to `UNPROCESSED` instead of raising a `TypeError`.
+
+Let me analyze the relevant code. The `Option.__init__` method handles `flag_value` and sets the type. The issue is likely that when a non-basic type is passed as `flag_value`, Click tries to infer the type from the value but fails.
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+         if self.is_flag:
+             if flag_value is None:
+                 flag_value = not self.secondary_opts
+             if is_bool_flag and self.secondary_opts:
+                 if self.type is STRING:
+                     self.type = BOOL
+                 self.type = self.type
+             else:
+                 self.type = convert_type(None, flag_value)
+@@
+         if self.is_flag:
+             if flag_value is None:
+                 flag_value = not self.secondary_opts
+             if is_bool_flag and self.secondary_opts:
+                 if self.type is STRING:
+                     self.type = BOOL
+                 self.type = self.type
+             else:
+                 try:
+                     self.type = convert_type(None, flag_value)
+                 except TypeError:
+                     self.type = UNPROCESSED
+*** Update File: tests/test_options.py
+@@
+ import pytest
+ 
+ import click
+@@
+ import pytest
+ 
+ import click
+ from click.types import UNPROCESSED
+*** End Patch
+
+Wait, I need to look at the actual code more carefully. Let me reconsider what `convert_type` does and where the error occurs.
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+             else:
+                 self.type = convert_type(None, flag_value)
+@@
+             else:
+                 try:
+                     self.type = convert_type(None, flag_value)
+                 except TypeError:
+                     self.type = UNPROCESSED
+*** Update File: tests/test_options.py
+@@
+ import pytest
+ 
+ import click
+@@
+ import pytest
+ import enum
+ 
+ import click
+ from click.types import UNPROCESSED
+@@
+ def test_missing_option_string_cast():
+@@
+ def test_missing_option_string_cast():
+ 
+ 
++def test_flag_value_with_enum_type():
++    """Test that flag_value with a non-basic type (e.g. enum) sets type to UNPROCESSED."""
++    import enum
++
++    class Color(enum.Enum):
++        RED = 1
++        BLUE = 2
++
++    @click.command()
++    @click.option("--red", "color", flag_value=Color.RED)
++    @click.option("--blue", "color", flag_value=Color.BLUE)
++    def cmd(color):
++        click.echo(color)
++
++    # Verify the option type is UNPROCESSED for enum flag values
++    red_opt = cmd.params[0]
++    assert red_opt.type is UNPROCESSED
++
++    from click.testing import CliRunner
++    runner = CliRunner()
++    result = runner.invoke(cmd, ["--red"])
++    assert result.exit_code == 0
++    assert "Color.RED" in result.output
++
++
+*** End Patch

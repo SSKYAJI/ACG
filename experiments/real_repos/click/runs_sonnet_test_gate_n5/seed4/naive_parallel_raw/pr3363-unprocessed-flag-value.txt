@@ -1,0 +1,83 @@
+Looking at the task, I need to fix the `Option` class initialization in `src/click/core.py` so that when `flag_value` is set to a non-basic type (like an enum), the option's type is automatically set to `UNPROCESSED` instead of raising a `TypeError`.
+
+Let me analyze what needs to be changed:
+
+1. In `Option.__init__`, when `flag_value` is set, the code tries to determine the type from the flag value. If the flag value is not a basic type (bool, int, float, str), it should default to `UNPROCESSED`.
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+         if self.is_flag and value_is_set:
+             if self.secondary_opts:
+                 # boolean flags can be specified with --flag/--no-flag
+                 if self.flag_value is None:
+                     self.flag_value = True
+             elif self.flag_value is None:
+                 self.flag_value = True
+ 
+             if self.type is DEFAULT_TYPE:
+                 self.type = self.flag_value.__class__
+@@
+         if self.is_flag and value_is_set:
+             if self.secondary_opts:
+                 # boolean flags can be specified with --flag/--no-flag
+                 if self.flag_value is None:
+                     self.flag_value = True
+             elif self.flag_value is None:
+                 self.flag_value = True
+ 
+             if self.type is DEFAULT_TYPE:
+                 if isinstance(self.flag_value, (bool, int, float, str)):
+                     self.type = self.flag_value.__class__
+                 else:
+                     self.type = UNPROCESSED
+*** Update File: tests/test_options.py
+@@
+ import pytest
+ 
+ import click
+@@
+ import pytest
+ 
+ import click
+ from click.types import UNPROCESSED
+@@
+ def test_missing_option_string_cast():
+     @click.command()
+     @click.option("-s", default=None)
+     def cmd(s):
+         click.echo(s)
+ 
+     result = runner.invoke(cmd, [])
+     assert result.output == "None\n"
+@@
+ def test_missing_option_string_cast():
+     @click.command()
+     @click.option("-s", default=None)
+     def cmd(s):
+         click.echo(s)
+
+     result = runner.invoke(cmd, [])
+     assert result.output == "None\n"
+
+
+ def test_flag_value_non_basic_type():
+     """Test that flag_value with a non-basic type (e.g. enum) sets type to UNPROCESSED."""
+     import enum
+
+     class Color(enum.Enum):
+         RED = 1
+         GREEN = 2
+
+     @click.command()
+     @click.option("--color", "color", flag_value=Color.RED, default=Color.GREEN)
+     def cmd(color):
+         click.echo(color.name)
+
+     result = runner.invoke(cmd, ["--color"])
+     assert result.exit_code == 0, result.output
+     assert result.output == "RED\n"
+
+     result = runner.invoke(cmd, [])
+     assert result.exit_code == 0, result.output
+     assert result.output == "GREEN\n"

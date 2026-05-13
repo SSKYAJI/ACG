@@ -1,0 +1,170 @@
+I'll analyze the issue and fix the CliRunner to properly capture unflushed stderr writes.
+
+The problem is that when `CliRunner.invoke` finishes, it needs to flush the stderr buffer to ensure all written data is captured in the result.
+
+Let me look at the testing.py file structure and make the necessary fixes:
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+ import io
+ import os
+ import shlex
+ import struct
+ import sys
+ import tempfile
+ import typing as t
+ from contextlib import contextmanager
+ from types import TracebackType
+ 
+ import click
+ from click._compat import _default_text_stderr
+ from click._compat import _default_text_stdout
+@@
+ class BytesIOCopy(io.RawIOBase):
+     """A stream that writes to two streams simultaneously."""
+ 
+     def __init__(self, buffers: t.List[io.IOBase]) -> None:
+         self.buffers = buffers
+ 
+     def readable(self) -> bool:
+         return False
+ 
+     def writable(self) -> bool:
+         return True
+ 
+     def write(self, b: bytes) -> int:  # type: ignore[override]
+         for buf in self.buffers:
+             buf.write(b)
+         return len(b)
+@@
+ class _default_text_stderr:
+     pass
+@@
+ class CliRunner:
+@@
+     def invoke(
+         self,
+         cli: "BaseCommand",
+         args: t.Optional[t.Union[str, t.Sequence[str]]] = None,
+         input: t.Optional[t.Union[str, bytes, t.IO]] = None,
+         env: t.Optional[t.Mapping[str, str]] = None,
+         catch_exceptions: bool = True,
+         color: bool = False,
+         **extra: t.Any,
+     ) -> Result:
+@@
+             try:
+                 return_value = cli.main(
+                     args=args or (),
+                     prog_name=self.get_default_prog_name(cli),
+                     standalone_mode=False,
+                     **extra,
+                 )
+             except SystemExit as e:
+                 exc_info = sys.exc_info()
+                 e_code = e.code
+                 if e_code is None:
+                     e_code = 0
+ 
+                 if e_code != 0:
+                     exception = e
+ 
+                 if not isinstance(e_code, int):
+                     sys.stdout.write(str(e_code))
+                     sys.stdout.write("\n")
+                     e_code = 1
+ 
+                 exit_code = e_code
+             except Exception as e:
+                 if not catch_exceptions:
+                     raise
+                 exception = e
+                 exc_info = sys.exc_info()
+             finally:
+                 sys.stdout.flush()
++                sys.stderr.flush()
+                 outstreams[0].flush()
+@@
+ class _default_text_stderr:
+     pass
+*** Update File: tests/test_testing.py
+@@
+ import pytest
+ 
+ import click
+ from click.testing import CliRunner
+@@
++def test_stderr_flush():
++    """Test that unflushed stderr writes are captured in the result."""
++
++    @click.command()
++    def cli():
++        # Write to stderr without explicit flush
++        print("stderr output", file=sys.stderr, flush=False)
++
++    import sys
++
++    runner = CliRunner(mix_stderr=False)
++    result = runner.invoke(cli)
++    assert result.exit_code == 0
++    assert "stderr output" in result.stderr
++
++
+*** End Patch
+
+Wait, I need to look more carefully at the actual structure of the file. Let me reconsider - I don't have the actual file content, so I need to be more careful with context. Let me provide a more targeted patch:
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+                 sys.stdout.flush()
+                 outstreams[0].flush()
++ sys.stderr.flush()
+@@
+*** End Patch
+
+That's not right either. Let me provide the correct patch based on what I know about the Click codebase:
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+             finally:
+                 sys.stdout.flush()
+                 outstreams[0].flush()
++ sys.stderr.flush()
+*** End Patch
+
+Hmm, I need to be more precise. Let me provide the complete correct patch:
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+             finally:
+                 sys.stdout.flush()
+                 outstreams[0].flush()
++                sys.stderr.flush()
+*** Update File: tests/test_testing.py
+@@
+ import sys
+ 
+ import pytest
+ 
+ import click
+ from click.testing import CliRunner
+@@
++def test_stderr_flush_captured():
++    """Unflushed stderr writes must appear in result.stderr."""
++
++    @click.command()
++    def cli():
++        # Write to stderr without explicit flush
++        print("unflushed stderr", file=sys.stderr, flush=False)
++
++    runner = CliRunner(mix_stderr=False)
++    result = runner.invoke(cli)
++    assert result.exit_code == 0
++    assert "unflushed stderr" in result.stderr
++
++
+*** End Patch

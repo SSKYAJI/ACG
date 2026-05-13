@@ -1,0 +1,12 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr3363-unprocessed-flag-value",
+      "prompt": "Fix Option initialization so that when flag_value is set to a non-basic type (e.g. an enum), the option's type is automatically set to UNPROCESSED instead of raising a TypeError or mishandling the value during parsing.",
+      "hints": {
+        "touches": ["core", "Option", "flag_value", "type", "UNPROCESSED"]
+      }
+    }
+  ]
+}

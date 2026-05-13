@@ -1,0 +1,82 @@
+I'll analyze the issue with the `Constant` field and `required=True`. Let me look at the relevant code.
+
+The `Constant` field in marshmallow likely calls `super().__init__()` with some parameters, and when `required=True` is passed, it conflicts with something in the initialization. Let me fix this.
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+ class Constant(Field):
+     """A field that (de)serializes to a preset constant.  If you only want the
+     constant added for serialization or deserialization, you should use
+     ``dump_default`` or ``load_default`` instead.
+ 
+     :param constant: The constant returned for field ``value``. It does not
+         have to be of the same type as ``missing`` or ``default``.
+ 
+     .. versionadded:: 2.0.0
+     """
+ 
+     #: Default error messages.
+     default_error_messages = {"required": "Missing data for required field."}
+ 
+     def __init__(self, constant: typing.Any, **kwargs):
+         super().__init__(**kwargs)
++        # Constant fields always provide a value, so required=True should not
++        # raise a ValueError. We set load_default and dump_default to the
++        # constant value so the field always has a value available.
+         self.constant = constant
+         self.load_default = constant
+         self.dump_default = constant
+@@
+     def _deserialize(self, value, attr, data, **kwargs):
+         return self.constant
+*** End Patch
+
+Wait, I need to actually look at what's causing the ValueError. The issue is likely that when `required=True` is passed alongside `load_default` or `dump_default` being set, marshmallow raises a `ValueError`. Let me check the `Field.__init__` method more carefully.
+
+The typical pattern in marshmallow is that setting `required=True` with a `load_default` raises a `ValueError` because it's contradictory. The `Constant` field sets `load_default = constant` after calling `super().__init__()`, but if `required=True` is passed, the parent `__init__` might validate this combination.
+
+The fix should ensure that when `Constant` is initialized with `required=True`, it doesn't trigger the validation error. Let me provide the proper fix:
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+     def __init__(self, constant: typing.Any, **kwargs):
+-        super().__init__(**kwargs)
++        # Constant fields always provide their value, so required=True is
++        # acceptable even though load_default will be set. We pass
++        # load_default and dump_default here so the parent __init__ sees the
++        # full picture and doesn't raise a ValueError about required+default.
++        kwargs.setdefault("load_default", constant)
++        kwargs.setdefault("dump_default", constant)
++        super().__init__(**kwargs)
+         self.constant = constant
+-        self.load_default = constant
+-        self.dump_default = constant
+*** End Patch
+
+*** Begin Patch
+*** Update File: tests/test_fields.py
+@@
+ class TestConstant:
+@@
++    def test_constant_with_required_true(self):
++        field = fields.Constant("hello", required=True)
++        assert field.constant == "hello"
++        assert field.load_default == "hello"
++        assert field.dump_default == "hello"
++
++    def test_constant_with_required_true_serialization(self):
++        import marshmallow as ma
++
++        class MySchema(ma.Schema):
++            value = fields.Constant(42, required=True)
++
++        schema = MySchema()
++        result = schema.dump({})
++        assert result["value"] == 42
++
++        result = schema.load({})
++        assert result["value"] == 42
++
+*** End Patch

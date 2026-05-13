@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr5856-merge-refinement-semantics",
+      "prompt": "In v4, calling .merge() on a ZodObject that has refinements (e.g., .refine(), .superRefine()) silently discards those refinements from the merged result, while .extend() preserves them. Align .merge() to preserve refinements the same way .extend() does by updating packages/zod/src/v4/core/util.ts, and add regression tests."
+    }
+  ]
+}

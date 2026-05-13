@@ -1,0 +1,197 @@
+Looking at the task, I need to fix `Option` initialization so that when `flag_value` is set to a non-basic type (e.g., an enum), the option's type is automatically set to `UNPROCESSED` instead of raising a `TypeError`.
+
+Let me find the relevant code in `core.py`. The `Option.__init__` method handles `flag_value` and sets the type. I need to find where the type is inferred from `flag_value`.
+
+The key logic is in `Option.__init__` where it tries to guess the type from `flag_value`. When `flag_value` is an enum or other non-basic type, `click.types._default_text_stdin()` or the type-guessing logic raises a `TypeError`.
+
+Let me look at the type-guessing logic. In Click's source, `convert_type` is used to guess the type from a value. If the value doesn't match any known type, it should fall back to `UNPROCESSED`.
+
+The fix should be in the `Option.__init__` where it sets `self.type` based on `flag_value` - if the type can't be determined (non-basic type), use `UNPROCESSED`.
+
+Looking at `types.py`, the `convert_type` function maps Python types to Click types. For unknown types, it returns `STRING`. But the issue is likely that when `flag_value` is an enum, the type inference fails.
+
+The fix: when `flag_value` is provided and the type hasn't been explicitly set, try to convert the type, but if it results in something that can't handle the value (or if the value is not a basic type), use `UNPROCESSED`.
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+         if self.is_flag and flag_value is None:
+             if self.secondary_opts:
+                 self.flag_value: t.Any = False
+             else:
+                 self.flag_value = True
+         else:
+             self.flag_value = flag_value
+ 
+         if self.is_bool_flag and self.secondary_opts and not self.is_flag:
+             self.is_flag = True
+ 
+         if self.is_flag and type is None:
+             self.type = types.BOOL
+         elif self.is_flag and self.flag_value is not None and type is None:
+             self.type = types.convert_type(None, self.flag_value)
+*** Update File: src/click/core.py
+@@
+         if self.is_flag and flag_value is None:
+             if self.secondary_opts:
+                 self.flag_value: t.Any = False
+             else:
+                 self.flag_value = True
+         else:
+             self.flag_value = flag_value
+ 
+         if self.is_bool_flag and self.secondary_opts and not self.is_flag:
+             self.is_flag = True
+ 
+         if self.is_flag and type is None:
+             self.type = types.BOOL
+         elif self.is_flag and self.flag_value is not None and type is None:
+             self.type = types.convert_type(None, self.flag_value)
+*** End Patch
+
+I need to actually see the exact lines. Let me search for the flag_value handling more carefully in the truncated file. Since the file is truncated, I'll need to make my best guess based on Click's known source structure.
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+         if self.is_flag and flag_value is None:
+             if self.secondary_opts:
+                 self.flag_value: t.Any = False
+             else:
+                 self.flag_value = True
+         else:
+             self.flag_value = flag_value
+ 
+         if self.is_bool_flag and self.secondary_opts and not self.is_flag:
+             self.is_flag = True
+ 
+         if self.is_flag and type is None:
+             self.type = types.BOOL
+         elif self.is_flag and self.flag_value is not None and type is None:
+             self.type = types.convert_type(None, self.flag_value)
+- 
++ 
+*** Update File: tests/test_options.py
+@@
+ import os
+ import re
++import enum
+ 
+ import pytest
+@@
+ def test_l
++ 
++def test_flag_value_enum_type(runner):
++    """When flag_value is set to a non-basic type like an enum, the option's
++    type should be automatically set to UNPROCESSED."""
++    import enum
++
++    class Color(enum.Enum):
++        RED = "red"
++        BLUE = "blue"
++
++    opt = click.Option(["--color"], flag_value=Color.RED)
++    assert opt.type is click.UNPROCESSED
++    ctx = click.Context(click.Command("test"))
++    result = runner.invoke(
++        click.Command("test", params=[opt], callback=lambda color: click.echo(color)),
++        ["--color"],
++    )
++    assert result.exit_code == 0
+*** End Patch
+
+I realize I'm not seeing the actual lines clearly. Let me provide a proper patch based on what I know about Click's source structure for the `Option.__init__` method:
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+         if self.is_flag and flag_value is None:
+             if self.secondary_opts:
+                 self.flag_value: t.Any = False
+             else:
+                 self.flag_value = True
+         else:
+             self.flag_value = flag_value
+ 
+         if self.is_bool_flag and self.secondary_opts and not self.is_flag:
+             self.is_flag = True
+ 
+         if self.is_flag and type is None:
+             self.type = types.BOOL
+         elif self.is_flag and self.flag_value is not None and type is None:
+-            self.type = types.convert_type(None, self.flag_value)
++            try:
++                self.type = types.convert_type(None, self.flag_value)
++            except TypeError:
++                self.type = types.UNPROCESSED
+*** Update File: tests/test_options.py
+@@
+ import os
+ import re
++import enum
+ 
+ import pytest
+ 
+ import click
+ from click import Option
+*** End Patch
+
+Wait, I need to look at this more carefully. The `convert_type` function in Click takes a value and tries to map it to a Click type. For non-basic Python types (like enums), it likely returns `STRING` or raises. Let me think about what actually happens.
+
+In Click's `types.py`, `convert_type(ty, default)` - if `ty` is None, it looks at the type of `default`. For an enum instance, `type(Color.RED)` is `Color` (an enum class), which isn't in the mapping, so it returns `STRING`. That means the type would be `STRING`, not `UNPROCESSED`, and parsing would try to convert the enum value to a string, which might work but lose the enum type.
+
+The fix should be: if `flag_value` is not a basic Python type (str, int, float, bool), set type to `UNPROCESSED`.
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+         if self.is_flag and flag_value is None:
+             if self.secondary_opts:
+                 self.flag_value: t.Any = False
+             else:
+                 self.flag_value = True
+         else:
+             self.flag_value = flag_value
+ 
+         if self.is_bool_flag and self.secondary_opts and not self.is_flag:
+             self.is_flag = True
+ 
+         if self.is_flag and type is None:
+             self.type = types.BOOL
+         elif self.is_flag and self.flag_value is not None and type is None:
+-            self.type = types.convert_type(None, self.flag_value)
++            if isinstance(self.flag_value, (bool, str, int, float)):
++                self.type = types.convert_type(None, self.flag_value)
++            else:
++                self.type = types.UNPROCESSED
+*** Update File: tests/test_options.py
+@@
+ import os
+ import re
+ 
+ import pytest
+ 
+ import click
+ from click import Option
++
++
++def test_flag_value_non_basic_type(runner):
++    """When flag_value is a non-basic type like an enum, the option type
++    should be set to UNPROCESSED automatically."""
++
++    class Color(enum.Enum):
++        RED = "red"
++        BLUE = "blue"
++
++    opt = click.Option(["--color"], flag_value=Color.RED)
++    assert opt.type is click.UNPROCESSED
++
++    @click.command()
++    @click.option("--color", flag_value=Color.RED)
++    def cmd(color):
++        click.echo(repr(color))
++
++    result = runner.invoke(cmd, ["--color"])
++    assert result.exit_code == 0
++    assert "RED" in result.output or "red" in result.output
+*** End Patch

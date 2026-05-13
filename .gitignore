@@ -30,6 +30,16 @@ experiments/greenhouse/checkout/
 experiments/greenhouse/agent_lock.json
 # Per-run eval artifacts. Promote individual files into docs/ when worth pinning.
 experiments/greenhouse/runs/
+# Real-repo experiments: each repo's checkout/ is cloned at runtime — never commit.
+# Manifest entries + agent_lock + task definitions + run artifacts ARE tracked;
+# only the upstream source tree (which is huge and not ours) is excluded.
+experiments/real_repos/*/checkout/
+experiments/realworld/checkout/
+# Lock file used by compute_fail_to_pass.py for concurrent manifest writes.
+experiments/real_repos/manifest.json.lock
+experiments/real_repos/manifest.json.tmp
+# .env backups created when reconfiguring LLM endpoint.
+.env.bak.*
 # Microservice benchmark upstream checkouts are cloned at runtime; keep only
 # task definitions, lockfiles, and selected eval artifacts in-repo.
 experiments/microservice/prisma-examples/

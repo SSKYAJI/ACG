@@ -1,0 +1,114 @@
+*** Begin Patch
+*** Add File: packages/zod/src/v4/core/util.ts
++export function shallowClone<T>(value: T): T {
++  if (value === null || value === undefined) {
++    return value;
++  }
++  if (value instanceof Map) {
++    return new Map(value) as unknown as T;
++  }
++  if (value instanceof Set) {
++    return new Set(value) as unknown as T;
++  }
++  if (Array.isArray(value)) {
++    return [...value] as unknown as T;
++  }
++  if (typeof value === "object") {
++    return { ...(value as object) } as T;
++  }
++  return value;
++}
+*** End Patch
+
+*** Begin Patch
+*** Add File: packages/zod/src/v4/core/__tests__/shallowClone.test.ts
++import { describe, expect, it } from "vitest";
++import * as z from "../../index";
++
++describe("shallowClone - Map and Set default isolation", () => {
++  it("should return independent Map copies for each parse", () => {
++    const schema = z.object({
++      data: z.map(z.string(), z.number()).default(new Map([["a", 1]])),
++    });
++
++    const result1 = schema.parse({});
++    const result2 = schema.parse({});
++
++    // Mutate result1's map
++    result1.data.set("b", 2);
++
++    // result2 should not be affected
++    expect(result2.data.has("b")).toBe(false);
++    expect(result2.data.size).toBe(1);
++  });
++
++  it("should return independent Set copies for each parse", () => {
++    const schema = z.object({
++      data: z.set(z.string()).default(new Set(["a", "b"])),
++    });
++
++    const result1 = schema.parse({});
++    const result2 = schema.parse({});
++
++    // Mutate result1's set
++    result1.data.add("c");
++
++    // result2 should not be affected
++    expect(result2.data.has("c")).toBe(false);
++    expect(result2.data.size).toBe(2);
++  });
++
++  it("should return independent Array copies for each parse", () => {
++    const schema = z.object({
++      data: z.array(z.string()).default(["a", "b"]),
++    });
++
++    const result1 = schema.parse({});
++    const result2 = schema.parse({});
++
++    result1.data.push("c");
++
++    expect(result2.data).toHaveLength(2);
++    expect(result2.data).not.toContain("c");
++  });
++
++  it("should return independent object copies for each parse", () => {
++    const schema = z.object({
++      data: z.record(z.string(), z.number()).default({ a: 1 }),
++    });
++
++    const result1 = schema.parse({});
++    const result2 = schema.parse({});
++
++    result1.data["b"] = 2;
++
++    expect(result2.data["b"]).toBeUndefined();
++  });
++
++  it("Map default with function returns independent copies", () => {
++    const schema = z.object({
++      data: z.map(z.string(), z.number()).default(() => new Map([["x", 10]])),
++    });
++
++    const result1 = schema.parse({});
++    const result2 = schema.parse({});
++
++    result1.data.set("y", 20);
++
++    expect(result2.data.has("y")).toBe(false);
++  });
++
++  it("Set default with function returns independent copies", () => {
++    const schema = z.object({
++      data: z.set(z.number()).default(() => new Set([1, 2, 3])),
++    });
++
++    const result1 = schema.parse({});
++    const result2 = schema.parse({});
++
++    result1.data.add(99);
+
++    expect(result2.data.has(99)).toBe(false);
++  });
++});
+*** End Patch

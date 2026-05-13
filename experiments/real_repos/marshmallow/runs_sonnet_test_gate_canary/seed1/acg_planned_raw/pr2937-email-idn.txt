@@ -1,0 +1,56 @@
+Looking at the `DOMAIN_REGEX` in `validate.py`, I can see the issue. The regex allows domain labels that start or end with a hyphen because the character class `[A-Z0-9_UNICODE_LETTERS-]` in the middle part doesn't enforce that labels can't start or end with hyphens.
+
+The current regex for each domain label is:
+```
+[A-Z0-9UNICODE](?:[A-Z0-9UNICODE-]{0,61}[A-Z0-9UNICODE])?
+```
+
+This correctly prevents a label from starting or ending with a hyphen for labels of length >= 2. But wait, let me re-examine...
+
+Actually the regex `[A-Z0-9UNICODE](?:[A-Z0-9UNICODE-]{0,61}[A-Z0-9UNICODE])?` should work for ASCII. The issue is with unicode characters like `münchen` - when the domain is `-münchen.de`, the first character `-` doesn't match `[A-Z0-9UNICODE]` since `-` is not in that class... 
+
+Wait, let me look more carefully. The `_UNICODE_LETTERS` is `\u00a1-\uffff`. The hyphen `-` is `\u002d`, which is NOT in `\u00a1-\uffff`. So `-münchen` should fail... unless the regex has a bug with how the character class is constructed.
+
+Looking at the DOMAIN_REGEX more carefully - the middle part `[A-Z0-9" + _UNICODE_LETTERS + r"-]{0,61}` - the hyphen at the end of this character class is literal. But the first character class `[A-Z0-9" + _UNICODE_LETTERS + r"]` should not match `-`. Let me check if there's an anchoring issue - the regex uses `\Z` at the end but no `^` at the start for the domain part (only for the IP literal part). That's the bug! The domain regex doesn't have `^` at the start, so it can match starting from any position.
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+     DOMAIN_REGEX = re.compile(
+         # domain
+         r"(?:[A-Z0-9" + _UNICODE_LETTERS + r"]"
+         r"(?:[A-Z0-9" + _UNICODE_LETTERS + r"-]{0,61}"
+         r"[A-Z0-9" + _UNICODE_LETTERS + r"])?\.)+"
+         r"(?:[A-Z" + _UNICODE_LETTERS + r"]{2,6}"
+         r"|[A-Z0-9" + _UNICODE_LETTERS + r"-]{2,})\Z"
+         # literal form, ipv4 address (SMTP 4.1.3)
+         r"|^\[(25[0-5]|2[0-4]\d|[0-1]?\d?\d)"
+         r"(\.(25[0-5]|2[0-4]\d|[0-1]?\d?\d)){3}\]\Z",
+         re.IGNORECASE | re.UNICODE,
+     )
+@@
+-     DOMAIN_REGEX = re.compile(
+-         # domain
+-         r"(?:[A-Z0-9" + _UNICODE_LETTERS + r"]"
+-         r"(?:[A-Z0-9" + _UNICODE_LETTERS + r"-]{0,61}"
+-         r"[A-Z0-9" + _UNICODE_LETTERS + r"])?\.)+"
+-         r"(?:[A-Z" + _UNICODE_LETTERS + r"]{2,6}"
+-         r"|[A-Z0-9" + _UNICODE_LETTERS + r"-]{2,})\Z"
+-         # literal form, ipv4 address (SMTP 4.1.3)
+-         r"|^\[(25[0-5]|2[0-4]\d|[0-1]?\d?\d)"
+-         r"(\.(25[0-5]|2[0-4]\d|[0-1]?\d?\d)){3}\]\Z",
+-         re.IGNORECASE | re.UNICODE,
+-     )
++     DOMAIN_REGEX = re.compile(
++         # domain
++         r"^(?:[A-Z0-9" + _UNICODE_LETTERS + r"]"
++         r"(?:[A-Z0-9" + _UNICODE_LETTERS + r"-]{0,61}"
++         r"[A-Z0-9" + _UNICODE_LETTERS + r"])?\.)+"
++         r"(?:[A-Z" + _UNICODE_LETTERS + r"]{2,6}"
++         r"|[A-Z0-9" + _UNICODE_LETTERS + r"-]{2,})\Z"
++         # literal form, ipv4 address (SMTP 4.1.3)
++         r"|^\[(25[0-5]|2[0-4]\d|[0-1]?\d?\d)"
++         r"(\.(25[0-5]|2[0-4]\d|[0-1]?\d?\d)){3}\]\Z",
++         re.IGNORECASE | re.UNICODE,
++     )
+*** End Patch

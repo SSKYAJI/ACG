@@ -1,0 +1,122 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-13T05:11:31.689044Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "claude-sonnet-4-6",
+    "tokens_planner_total": 22998,
+    "tokens_scope_review_total": 1577,
+    "tokens_planner_completion_total": 562,
+    "tokens_planner_method": "provider_usage",
+    "compile_wall_seconds": 11.7405,
+    "compile_cost_usd": null
+  },
+  "repo": {
+    "root": "experiments/real_repos/zod/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr5856-merge-refinement-semantics",
+      "prompt": "In v4, calling .merge() on a ZodObject that has refinements (e.g., .refine(), .superRefine()) silently discards those refinements from the merged result, while .extend() preserves them. Align .merge() to preserve refinements the same way .extend() does by updating packages/zod/src/v4/core/util.ts, and add regression tests.",
+      "predicted_writes": [
+        {
+          "path": "packages/zod/src/v4/core/util.ts",
+          "confidence": 0.95,
+          "reason": "Task explicitly names this file as the one to update for fixing .merge() refinement preservation. Signals: bm25, explicit, llm, pagerank, symbol."
+        },
+        {
+          "path": "packages/zod/src/v3/types.ts",
+          "confidence": 0.9,
+          "reason": "personalized PageRank rank #1, top symbol matches: AND<T, AnyZodObject, AnyZodTuple. Signals: pagerank, symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/integration/fixtures/ai-sdk/index.ts",
+          "confidence": 0.85,
+          "reason": "Symbol 'result' referenced in prompt; defined in packages/integration/fixtures/ai-sdk/index.ts. Signals: symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/zod/src/v4/classic/tests/object.test.ts",
+          "confidence": 0.85,
+          "reason": "Regression tests for .merge() on ZodObject would most naturally be added to the existing object test file for classic v4. Signals: bm25, llm, testlink. Scope review kept this file at its existing tier."
+        }
+      ],
+      "allowed_paths": [
+        "packages/integration/fixtures/ai-sdk/**",
+        "packages/zod/src/v3/**",
+        "packages/zod/src/v4/classic/tests/**",
+        "packages/zod/src/v4/core/**"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "packages/zod/src/v4/core/util.ts",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "explicit",
+            "llm",
+            "pagerank",
+            "symbol"
+          ],
+          "reason": "Task explicitly names this file as the one to update for fixing .merge() refinement preservation. Signals: bm25, explicit, llm, pagerank, symbol."
+        },
+        {
+          "path": "packages/zod/src/v3/types.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "pagerank",
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "personalized PageRank rank #1, top symbol matches: AND<T, AnyZodObject, AnyZodTuple. Signals: pagerank, symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/integration/fixtures/ai-sdk/index.ts",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "Symbol 'result' referenced in prompt; defined in packages/integration/fixtures/ai-sdk/index.ts. Signals: symbol. Scope review requested a drop, but protected evidence kept it."
+        },
+        {
+          "path": "packages/zod/src/v4/classic/tests/object.test.ts",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "bm25",
+            "llm",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Regression tests for .merge() on ZodObject would most naturally be added to the existing object test file for classic v4. Signals: bm25, llm, testlink. Scope review kept this file at its existing tier."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr5856-merge-refinement-semantics"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

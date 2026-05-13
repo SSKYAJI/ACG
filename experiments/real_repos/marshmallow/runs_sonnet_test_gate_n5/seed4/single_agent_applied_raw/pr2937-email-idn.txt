@@ -1,0 +1,69 @@
+*** Begin Patch
+*** Add File: tests/test_email_idn.py
+--- /dev/null
++++ tests/test_email_idn.py
+@@ -0,0 +1,60 @@
++"""Regression tests for IDN email validation (pr2937)."""
++import pytest
++from marshmallow.validate import Email
++from marshmallow.exceptions import ValidationError
++
++
++@pytest.fixture
++def validator():
++    return Email()
++
++
++class TestEmailIDNValidation:
++    """Tests for internationalized domain name (IDN) email validation."""
++
++    def test_valid_idn_email(self, validator):
++        """Valid IDN email addresses should be accepted."""
++        assert validator("user@münchen.de") == "user@münchen.de"
++
++    def test_valid_idn_email_multiple_labels(self, validator):
++        """Valid IDN email with multiple labels should be accepted."""
++        assert validator("user@sub.münchen.de") == "user@sub.münchen.de"
++
++    def test_domain_label_starts_with_hyphen(self, validator):
++        """Email with domain label starting with hyphen should be rejected."""
++        with pytest.raises(ValidationError):
++            validator("user@-münchen.de")
++
++    def test_domain_label_ends_with_hyphen(self, validator):
++        """Email with domain label ending with hyphen should be rejected."""
++        with pytest.raises(ValidationError):
++            validator("user@münchen-.de")
++
++    def test_subdomain_label_starts_with_hyphen(self, validator):
++        """Email with subdomain label starting with hyphen should be rejected."""
++        with pytest.raises(ValidationError):
++            validator("user@-sub.münchen.de")
++
++    def test_subdomain_label_ends_with_hyphen(self, validator):
++        """Email with subdomain label ending with hyphen should be rejected."""
++        with pytest.raises(ValidationError):
++            validator("user@sub-.münchen.de")
++
++    def test_ascii_domain_label_starts_with_hyphen(self, validator):
++        """Email with ASCII domain label starting with hyphen should be rejected."""
++        with pytest.raises(ValidationError):
++            validator("user@-example.com")
++
++    def test_ascii_domain_label_ends_with_hyphen(self, validator):
++        """Email with ASCII domain label ending with hyphen should be rejected."""
++        with pytest.raises(ValidationError):
++            validator("user@example-.com")
++
++    def test_valid_regular_email(self, validator):
++        """Regular valid email addresses should still be accepted."""
++        assert validator("user@example.com") == "user@example.com"
++
++    def test_valid_email_with_hyphen_in_middle(self, validator):
++        """Email with hyphen in the middle of domain label should be accepted."""
++        assert validator("user@my-domain.com") == "user@my-domain.com"
++
++    def test_idn_email_with_hyphen_in_middle(self, validator):
++        """IDN email with hyphen in the middle of a label should be accepted."""
++        assert validator("user@my-münchen.de") == "user@my-münchen.de"
+*** End Patch

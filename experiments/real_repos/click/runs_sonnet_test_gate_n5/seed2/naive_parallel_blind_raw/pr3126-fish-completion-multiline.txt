@@ -1,0 +1,306 @@
+I need to create a fix for fish shell completion handling of multiline help strings. Let me create the necessary files.
+
+*** Begin Patch
+*** Add File: fish_completion.go
++ package main
++ 
++ import (
++ 	"fmt"
++ 	"strings"
++ )
++ 
++ // sanitizeForFish removes or replaces characters that would break fish completion scripts.
++ // In particular, newlines in help text must be collapsed to spaces.
++ func sanitizeForFish(s string) string {
++ 	// Replace all newline variants with a space
++ 	s = strings.ReplaceAll(s, "\r\n", " ")
++ 	s = strings.ReplaceAll(s, "\r", " ")
++ 	s = strings.ReplaceAll(s, "\n", " ")
++ 	// Replace single quotes with escaped version safe for fish
++ 	s = strings.ReplaceAll(s, "'", "\\'")
++ 	// Collapse multiple spaces into one
++ 	for strings.Contains(s, "  ") {
++ 		s = strings.ReplaceAll(s, "  ", " ")
++ 	}
++ 	return strings.TrimSpace(s)
++ }
++ 
++ // fishCompletionEntry represents a single fish completion line.
++ type fishCompletionEntry struct {
++ 	Command     string
++ 	Short       string
++ 	Long        string
++ 	Description string
++ 	IsCommand   bool // true if this is a subcommand, false if it's a flag/option
++ }
++ 
++ // render produces the fish complete command string for this entry.
++ func (e fishCompletionEntry) render() string {
++ 	desc := sanitizeForFish(e.Description)
++ 	var sb strings.Builder
++ 	sb.WriteString("complete -c ")
++ 	sb.WriteString(e.Command)
++ 	if e.IsCommand {
++ 		sb.WriteString(" -f -n '__fish_use_subcommand'")
++ 		sb.WriteString(" -a '")
++ 		sb.WriteString(e.Long)
++ 		sb.WriteString("'")
++ 	} else {
++ 		if e.Short != "" {
++ 			sb.WriteString(" -s ")
++ 			sb.WriteString(e.Short)
++ 		}
++ 		if e.Long != "" {
++ 			sb.WriteString(" -l ")
++ 			sb.WriteString(e.Long)
++ 		}
++ 	}
++ 	if desc != "" {
++ 		sb.WriteString(" -d '")
++ 		sb.WriteString(desc)
++ 		sb.WriteString("'")
++ 	}
++ 	return sb.String()
++ }
++ 
++ // GenerateFishCompletions generates fish shell completion script lines
++ // for the given command entries.
++ func GenerateFishCompletions(entries []fishCompletionEntry) string {
++ 	var lines []string
++ 	for _, e := range entries {
++ 		lines = append(lines, e.render())
++ 	}
++ 	return strings.Join(lines, "\n")
++ }
++ 
++ func main() {
++ 	// Example demonstrating multiline help text handling
++ 	entries := []fishCompletionEntry{
++ 		{
++ 			Command:     "mytool",
++ 			Long:        "help",
++ 			Description: "Show help\nfor the command\r\nand more details",
++ 			IsCommand:   true,
++ 		},
++ 		{
++ 			Command:     "mytool",
++ 			Short:       "v",
++ 			Long:        "verbose",
++ 			Description: "Enable verbose\noutput",
++ 			IsCommand:   false,
++ 		},
++ 		{
++ 			Command:     "mytool",
++ 			Short:       "o",
++ 			Long:        "output",
++ 			Description: "Output file\npath",
++ 			IsCommand:   false,
++ 		},
++ 	}
++ 
++ 	fmt.Println(GenerateFishCompletions(entries))
++ }
+*** Add File: fish_completion_test.go
++ package main
++ 
++ import (
++ 	"strings"
++ 	"testing"
++ )
++ 
++ func TestSanitizeForFish_Newlines(t *testing.T) {
++ 	tests := []struct {
++ 		name     string
++ 		input    string
++ 		expected string
++ 	}{
++ 		{
++ 			name:     "no newlines",
++ 			input:    "simple description",
++ 			expected: "simple description",
++ 		},
++ 		{
++ 			name:     "unix newline",
++ 			input:    "line one\nline two",
++ 			expected: "line one line two",
++ 		},
++ 		{
++ 			name:     "windows newline",
++ 			input:    "line one\r\nline two",
++ 			expected: "line one line two",
++ 		},
++ 		{
++ 			name:     "carriage return only",
++ 			input:    "line one\rline two",
++ 			expected: "line one line two",
++ 		},
++ 		{
++ 			name:     "multiple newlines",
++ 			input:    "line one\nline two\nline three",
++ 			expected: "line one line two line three",
++ 		},
++ 		{
++ 			name:     "leading and trailing whitespace",
++ 			input:    "  description  ",
++ 			expected: "description",
++ 		},
++ 		{
++ 			name:     "newline at start",
++ 			input:    "\ndescription",
++ 			expected: "description",
++ 		},
++ 		{
++ 			name:     "newline at end",
++ 			input:    "description\n",
++ 			expected: "description",
++ 		},
++ 		{
++ 			name:     "only newlines",
++ 			input:    "\n\n\n",
++ 			expected: "",
++ 		},
++ 		{
++ 			name:     "single quote escaping",
++ 			input:    "it's a test",
++ 			expected: "it\\'s a test",
++ 		},
++ 		{
++ 			name:     "newline and single quote combined",
++ 			input:    "it's\na test",
++ 			expected: "it\\'s a test",
++ 		},
++ 		{
++ 			name:     "multiple spaces collapsed",
++ 			input:    "word1  word2   word3",
++ 			expected: "word1 word2 word3",
++ 		},
++ 	}
++ 
++ 	for _, tt := range tests {
++ 		t.Run(tt.name, func(t *testing.T) {
++ 			got := sanitizeForFish(tt.input)
++ 			if got != tt.expected {
++ 				t.Errorf("sanitizeForFish(%q) = %q, want %q", tt.input, got, tt.expected)
++ 			}
++ 		})
++ 	}
++ }
++ 
++ func TestFishCompletionEntry_Render_MultilineDescription(t *testing.T) {
++ 	entry := fishCompletionEntry{
++ 		Command:     "mytool",
++ 		Short:       "v",
++ 		Long:        "verbose",
++ 		Description: "Enable verbose\noutput mode\nfor debugging",
++ 		IsCommand:   false,
++ 	}
++ 	result := entry.render()
++ 
++ 	// The result must not contain literal newlines
++ 	if strings.Contains(result, "\n") {
++ 		t.Errorf("render() output contains newline: %q", result)
++ 	}
++ 	// The description should be collapsed
++ 	if !strings.Contains(result, "Enable verbose output mode for debugging") {
++ 		t.Errorf("render() output missing collapsed description: %q", result)
++ 	}
++ }
++ 
++ func TestFishCompletionEntry_Render_SubcommandMultiline(t *testing.T) {
++ 	entry := fishCompletionEntry{
++ 		Command:     "mytool",
++ 		Long:        "serve",
++ 		Description: "Start the server\nwith default settings",
++ 		IsCommand:   true,
++ 	}
++ 	result := entry.render()
++ 
++ 	if strings.Contains(result, "\n") {
++ 		t.Errorf("render() output contains newline: %q", result)
++ 	}
++ 	if !strings.Contains(result, "Start the server with default settings") {
++ 		t.Errorf("render() output missing collapsed description: %q", result)
++ 	}
++ }
++ 
++ func TestFishCompletionEntry_Render_NoDescription(t *testing.T) {
++ 	entry := fishCompletionEntry{
++ 		Command:   "mytool",
++ 		Short:     "q",
++ 		Long:      "quiet",
++ 		IsCommand: false,
++ 	}
++ 	result := entry.render()
++ 	if strings.Contains(result, "-d") {
++ 		t.Errorf("render() should not include -d flag when description is empty: %q", result)
++ 	}
++ }
++ 
++ func TestFishCompletionEntry_Render_ShortOnly(t *testing.T) {
++ 	entry := fishCompletionEntry{
++ 		Command:     "mytool",
++ 		Short:       "x",
++ 		Description: "Some flag",
++ 		IsCommand:   false,
++ 	}
++ 	result := entry.render()
++ 	if !strings.Contains(result, "-s x") {
++ 		t.Errorf("render() missing short flag: %q", result)
++ 	}
++ 	if strings.Contains(result, "-l ") {
++ 		t.Errorf("render() should not include -l when Long is empty: %q", result)
++ 	}
++ }
++ 
++ func TestFishCompletionEntry_Render_LongOnly(t *testing.T) {
++ 	entry := fishCompletionEntry{
++ 		Command:     "mytool",
++ 		Long:        "output",
++ 		Description: "Output file",
++ 		IsCommand:   false,
++ 	}
++ 	result := entry.render()
++ 	if strings.Contains(result, "-s ") {
++ 		t.Errorf("render() should not include -s when Short is empty: %q", result)
++ 	}
++ 	if !strings.Contains(result, "-l output") {
++ 		t.Errorf("render() missing long flag: %q", result)
++ 	}
++ }
++ 
++ func TestGenerateFishCompletions_MultipleEntries(t *testing.T) {
++ 	entries := []fishCompletionEntry{
++ 		{
++ 			Command:     "mytool",
++ 			Long:        "help",
++ 			Description: "Show help\nfor the command",
++ 			IsCommand:   true,
++ 		},
++ 		{
++ 			Command:     "mytool",
++ 			Short:       "v",
++ 			Long:        "verbose",
++ 			Description: "Enable verbose\noutput",
++ 			IsCommand:   false,
++ 		},
++ 	}
++ 
++ 	result := GenerateFishCompletions(entries)
++ 	lines := strings.Split(result, "\n")
++ 	if len(lines) != 2 {
++ 		t.Errorf("expected 2 lines, got %d: %q", len(lines), result)
++ 	}
++ 	for i, line := range lines {
++ 		if !strings.HasPrefix(line, "complete -c mytool") {
++ 			t.Errorf("line %d does not start with 'complete -c mytool': %q", i, line)
++ 		}
++ 	}
++ }
++ 
++ func TestGenerateFishCompletions_Empty(t *testing.T) {
++ 	result := GenerateFishCompletions(nil)
++ 	if result != "" {
++ 		t.Errorf("expected empty string for nil entries, got %q", result)
++ 	}
++ }
+*** End Patch

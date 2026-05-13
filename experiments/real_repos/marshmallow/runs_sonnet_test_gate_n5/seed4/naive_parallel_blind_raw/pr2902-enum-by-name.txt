@@ -1,0 +1,100 @@
+I'll analyze the task and implement the fix for the Enum field's by-name lookup issue.
+
+Let me first understand the typical structure of marshmallow's Enum field, then create the fix.
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+ class Enum(Field):
+@@
+     def _serialize(self, value, attr, obj, **kwargs):
+         if value is None:
+             return None
+         self._check_valid_enum_member(value)
+         if self.by_value:
+             return value.value
+         return value.name
+ 
+     def _deserialize(self, value, attr, data, **kwargs):
+         if self.by_value:
+             return self._deserialize_by_value(value, attr, data)
+         return self._deserialize_by_name(value, attr, data)
+ 
+     def _deserialize_by_name(self, value, attr, data, **kwargs):
+         try:
+-            return self.enum[value]
++            try:
++                member = self.enum[value]
++            except KeyError:
++                raise self.make_error("by_name", input=value, name=self.enum.__name__)
++            if not isinstance(member, self.enum):
++                raise self.make_error("by_name", input=value, name=self.enum.__name__)
++            return member
+         except KeyError:
+             raise self.make_error("by_name", input=value, name=self.enum.__name__)
+*** Add File: tests/test_enum_by_name.py
++ """Regression tests for Enum field by-name lookup."""
++ import enum
++ 
++ import pytest
++ 
++ import marshmallow.fields as fields
++ from marshmallow import ValidationError
++ 
++ 
++ class Color(enum.Enum):
++     RED = 1
++     GREEN = 2
++     BLUE = 3
++ 
++     def describe(self):
++         return f"I am {self.name}"
++ 
++     @property
++     def label(self):
++         return self.name.lower()
++ 
++     @classmethod
++     def default(cls):
++         return cls.RED
++ 
++ 
++ class TestEnumByNameLookup:
++     def setup_method(self):
++         self.field = fields.Enum(Color)
++ 
++     def test_valid_member_by_name(self):
++         assert self.field._deserialize("RED", None, None) == Color.RED
++         assert self.field._deserialize("GREEN", None, None) == Color.GREEN
++         assert self.field._deserialize("BLUE", None, None) == Color.BLUE
++ 
++     def test_invalid_name_raises_validation_error(self):
++         with pytest.raises(ValidationError):
++             self.field._deserialize("PURPLE", None, None)
++ 
++     def test_method_name_raises_validation_error(self):
++         """Accessing a method name should not return the method."""
++         with pytest.raises(ValidationError):
++             self.field._deserialize("describe", None, None)
++ 
++     def test_property_name_raises_validation_error(self):
++         """Accessing a property name should not return the property."""
++         with pytest.raises(ValidationError):
++             self.field._deserialize("label", None, None)
++ 
++     def test_classmethod_name_raises_validation_error(self):
++         """Accessing a classmethod name should not return the classmethod."""
++         with pytest.raises(ValidationError):
++             self.field._deserialize("default", None, None)
++ 
++     def test_dunder_attribute_raises_validation_error(self):
++         """Accessing dunder attributes should not return them."""
++         with pytest.raises(ValidationError):
++             self.field._deserialize("__class__", None, None)
++ 
++     def test_serialize_valid_member(self):
++         assert self.field._serialize(Color.RED, None, None) == "RED"
++ 
++     def test_serialize_none(self):
++         assert self.field._serialize(None, None, None) is None
+*** End Patch

@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr5900-tuple-holes-defaults",
+      "prompt": "In v4, tuple schemas with optional elements followed by required elements with defaults incorrectly accept inputs that have holes (undefined) before the required default fields, when they should be rejected. Fix the tuple parsing logic in packages/zod/src/v4/core/schemas.ts to reject such inputs and add regression tests."
+    }
+  ]
+}

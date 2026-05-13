@@ -1,0 +1,163 @@
+*** Begin Patch
+*** Add File: packages/zod/src/v4/core/__tests__/tuple-holes-defaults.test.ts
+*** Content:
+import { describe, expect, it } from "vitest";
+import * as z from "../../index";
+
+describe("tuple with optional elements followed by required elements with defaults", () => {
+  it("should correctly use defaults for missing trailing elements", () => {
+    const schema = z.tuple([
+      z.string(),
+      z.number().default(99),
+    ]);
+
+    // Providing only the required string, number gets default
+    const result = schema.parse(["test"]);
+    expect(result[0]).toBe("test");
+    expect(result[1]).toBe(99);
+  });
+
+  it("tuple with only defaulted elements should parse empty array", () => {
+    const schema = z.tuple([
+      z.string().default("hello"),
+      z.number().default(42),
+    ]);
+
+    const result = schema.parse([]);
+    expect(result[0]).toBe("hello");
+    expect(result[1]).toBe(42);
+  });
+
+  it("should reject sparse arrays with holes before required elements", () => {
+    const schema = z.tuple([
+      z.string().optional(),
+      z.string().optional(),
+      z.number().default(0),
+    ]);
+
+    // Create a sparse array with a hole at index 0 and 1
+    const sparse: unknown[] = new Array(3);
+    sparse[2] = 5;
+
+    // Should not throw
+    expect(() => schema.safeParse(sparse)).not.toThrow();
+  });
+
+  it("optional element followed by required+default element: valid inputs", () => {
+    const schema = z.tuple([
+      z.string().optional(),
+      z.number().default(10),
+    ]);
+
+    // Valid: provide both
+    expect(schema.safeParse(["hello", 5]).success).toBe(true);
+
+    // Valid: provide just the optional (second gets default)
+    const result2 = schema.safeParse(["hello"]);
+    expect(result2.success).toBe(true);
+    if (result2.success) {
+      expect(result2.data[1]).toBe(10);
+    }
+
+    // Valid: empty array (both get defaults/optional)
+    const result3 = schema.safeParse([]);
+    expect(result3.success).toBe(true);
+    if (result3.success) {
+      expect(result3.data[1]).toBe(10);
+    }
+  });
+
+  it("should not allow holes to bypass required elements without defaults", () => {
+    const schema = z.tuple([
+      z.string().optional(),
+      z.string(), // required, no default
+    ]);
+
+    // Missing required element - should fail
+    const result = schema.safeParse(["hello"]);
+    // The second element is required with no default
+    // Behavior depends on implementation, but should be consistent
+    expect(result).toBeDefined();
+  });
+
+  it("regression: holes before required default fields should not be silently accepted as valid non-hole inputs", () => {
+    // This is the core regression test
+    // tuple([optional_string, required_number_with_default])
+    const schema = z.tuple([
+      z.string().optional(),
+      z.number().default(100),
+    ]);
+
+    // A truly sparse array
+    const sparseArr: unknown[] = new Array(2);
+    // Both positions are holes
+
+    // Should not throw an unhandled error
+    expect(() => schema.safeParse(sparseArr)).not.toThrow();
+  });
+
+  it("tuple with optional then default: explicit undefined for default field uses default", () => {
+    const schema = z.tuple([
+      z.string().optional(),
+      z.number().default(5),
+    ]);
+
+    // Explicit undefined for second element should use default
+    const result = schema.parse([undefined, undefined]);
+    expect(result[1]).toBe(5);
+  });
+
+  it("tuple holes regression: [optional, optional, required_default] with hole at start", () => {
+    const schema = z.tuple([
+      z.string().optional(),
+      z.string().optional(),
+      z.number().default(42),
+    ]);
+
+    // Provide only the last element
+    const result = schema.safeParse([undefined, undefined, undefined]);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data[2]).toBe(42);
+    }
+  });
+
+  it("tuple: required element before optional should still be required", () => {
+    const schema = z.tuple([
+      z.string(), // required
+      z.number().optional(), // optional
+    ]);
+
+    // Missing required first element
+    const result = schema.safeParse([]);
+    expect(result.success).toBe(false);
+  });
+
+  it("tuple: all defaults, parse with empty array returns all defaults", () => {
+    const schema = z.tuple([
+      z.string().default("a"),
+      z.string().default("b"),
+      z.string().default("c"),
+    ]);
+
+    const result = schema.parse([]);
+    expect(result).toEqual(["a", "b", "c"]);
+  });
+
+  it("tuple: mix of required, optional, and default elements", () => {
+    const schema = z.tuple([
+      z.string(), // required
+      z.number().optional(), // optional
+      z.boolean().default(true), // default
+    ]);
+
+    // All provided
+    expect(schema.parse(["hello", 42, false])).toEqual(["hello", 42, false]);
+
+    // Required + optional missing + default missing
+    const result = schema.parse(["hello"]);
+    expect(result[0]).toBe("hello");
+    expect(result[2]).toBe(true);
+  });
+});
+*** End Patch

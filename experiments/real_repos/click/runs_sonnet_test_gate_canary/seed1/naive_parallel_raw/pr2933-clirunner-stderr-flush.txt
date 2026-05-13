@@ -1,0 +1,119 @@
+Looking at the task, I need to fix CliRunner so that unflushed stderr writes are properly captured. Let me analyze the testing.py file to understand the current implementation.
+
+The issue is likely that when `CliRunner.invoke` finishes, the stderr buffer isn't being flushed before reading its contents. I need to add a flush call for stderr similar to how stdout is handled.
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+ import io
+ import os
+ import shlex
+ import sys
+ import tempfile
+ import typing as t
+ from contextlib import contextmanager
+@@
+     def __init__(
+         self,
+         input: t.Optional[t.Union[str, bytes, t.IO]] = None,
+         env: t.Optional[t.Mapping[str, str]] = None,
+         catch_exceptions: bool = True,
+         color: bool = False,
+         mix_stderr: bool = True,
+     ) -> None:
+@@
+         outstreams = [bytes_output]
+ 
+         if self.mix_stderr:
+             bytes_error = None
+             error_output: t.Optional[BytesIOCopy] = None
+         else:
+             bytes_error = io.BytesIO()
+             error_output = BytesIOCopy(bytes_error, outstreams)
+ 
+         input_stream = _default_text_stdin(input)
+         input_stream.seek(0)
+ 
+         env = self.get_default_color_opts()
+         env.update(extra_env)
+ 
+         with self.isolated_filesystem():
+             return_value = None
+             exception = None
+             exit_code = 0
+ 
+             with self.isolation(input=input_stream, env=env, color=color) as outstreams:
+                 if catch_exceptions:
+                     try:
+                         return_value = cli.main(
+                             args=args or (),
+                             prog_name=self.get_default_prog_name(cli),
+                             standalone_mode=False,
+                             **extra,
+                         )
+                     except SystemExit as e:
+                         exc_info = sys.exc_info()
+                         e_code = e.code
+                         if e_code is None:
+                             e_code = 0
+ 
+                         if e_code != 0:
+                             exception = e
+ 
+                         if not isinstance(e_code, int):
+                             sys.stdout.write(str(e_code))
+                             sys.stdout.write("\n")
+                             e_code = 1
+ 
+                         exit_code = e_code
+                     except Exception as e:
+                         if not catch_exceptions:
+                             raise
+                         exception = e
+                         exc_info = sys.exc_info()
+                         exit_code = 1
+                 else:
+                     return_value = cli.main(
+                         args=args or (),
+                         prog_name=self.get_default_prog_name(cli),
+                         standalone_mode=False,
+                         **extra,
+                     )
+ 
+             output = outstreams[0].getvalue()
+ 
+             if self.mix_stderr:
+                 return Result(
+                     runner=self,
+                     stdout_bytes=output,
+                     stderr_bytes=b"",
+                     return_value=return_value,
+                     exit_code=exit_code,
+                     exception=exception,
+                     exc_info=exc_info,  # type: ignore[arg-type]
+                 )
+             else:
+                 return Result(
+                     runner=self,
+                     stdout_bytes=output,
+                     stderr_bytes=outstreams[1].getvalue(),
+                     return_value=return_value,
+                     exit_code=exit_code,
+                     exception=exception,
+                     exc_info=exc_info,  # type: ignore[arg-type]
+                 )
+@@
+-             output = outstreams[0].getvalue()
++             sys.stdout.flush()
++             sys.stderr.flush()
++             output = outstreams[0].getvalue()
+*** Update File: CHANGES.rst
+@@
+ Changelog
+ =========
++
++.. unreleased
++
++-   Fix ``CliRunner`` so that data written to ``stderr`` without an explicit
++    flush is properly captured in the test result. :issue:`2933`
+*** End Patch

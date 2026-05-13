@@ -1,0 +1,198 @@
+I need to find the Enum field's `_deserialize` method in `fields.py` to understand the by-name lookup issue. Let me look at the relevant section.
+
+The issue is in the Enum field's by-name lookup. When looking up enum members by name, it uses `getattr(self.enum, value)` or similar, which would return any attribute of the enum class, not just members. I need to find the exact code.
+
+Let me search for the Enum field implementation. Since the file is truncated, I'll look for the key pattern. The fix should use `self.enum[value]` (which only returns members) instead of `getattr(self.enum, value)`.
+
+The standard way to look up enum members by name is `EnumClass[name]` which raises `KeyError` for non-members, whereas `getattr(EnumClass, name)` would return any attribute.
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+-        if self.by_name:
+-            try:
+-                return self.enum[value]
+-            except (KeyError, TypeError):
+-                raise self.make_error("by_name", input=value, names=self.enum._member_names_)
++        if self.by_name:
++            if not isinstance(value, str) or value not in self.enum._member_names_:
++                raise self.make_error(
++                    "by_name", input=value, names=self.enum._member_names_
++                )
++            return self.enum[value]
+*** End Patch
+
+Wait, I need to see the actual code. Let me look more carefully at what's in the file. The file is truncated. Let me search for the Enum class definition pattern.
+
+Since I can't see the full file, let me look for the Enum field's `_deserialize` method by searching for common patterns. The issue description says by-name lookup incorrectly returns non-member attributes. The fix is to ensure only actual enum members are returned.
+
+Let me provide a patch that handles the case where `getattr` might be used instead of `[]` notation:
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+     def _deserialize(self, value, attr, data, **kwargs):
+         try:
+             if self.by_name:
+-                return getattr(self.enum, value)
++                if not isinstance(value, str) or value not in self.enum._member_names_:
++                    raise KeyError(value)
++                return self.enum[value]
+             return self.enum(value)
+         except (ValueError, KeyError):
+             raise self.make_error(
+*** End Patch
+
+Hmm, but I'm guessing at the code shape. Let me think about what the actual code likely looks like based on the marshmallow codebase.
+
+Looking at the marshmallow source, the Enum field's `_deserialize` with `by_name=True` typically does `self.enum[value]` which already only returns members. But the bug might be that it falls back to `getattr` somewhere, or the `_serialize` method uses `getattr`.
+
+Actually, re-reading the task: "by-name lookup incorrectly returns non-member attributes". This suggests the current code uses `getattr(self.enum, value)` for by-name lookup. The fix is to use `self.enum._member_map_[value]` or check `value in self.enum._member_names_`.
+
+Since I need to provide a valid patch with exact context, let me look at what I know about the marshmallow Enum field and provide the most likely correct patch:
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+-                return getattr(self.enum, value)
++                if value not in self.enum._member_names_:
++                    raise ValueError(value)
++                return self.enum[value]
+*** End Patch
+
+This is too risky without seeing the actual code. Let me try a different approach - search for the string "by_name" in the context I have.
+
+Since the file is truncated at 72791 bytes and I can only see the beginning, I need to make my best guess. Let me provide a comprehensive patch that covers the most likely implementation:
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+-                return getattr(self.enum, value)
++                if not isinstance(value, str) or value not in self.enum._member_names_:
++                    raise ValueError(value)
++                return self.enum[value]
+*** End File
+*** End Patch
+
+I realize I keep making invalid patches. Let me provide a proper patch with the test additions which I can be more confident about, and for the fields.py change I'll use the most minimal context possible.
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+-                return getattr(self.enum, value)
++                if not isinstance(value, str) or value not in self.enum._member_names_:
++                    raise ValueError(value)
++                return self.enum[value]
+*** Update File: tests/test_deserialization.py
+@@
+ from tests.base import (
+     ALL_FIELDS,
+     DateEnum,
+     GenderEnum,
+     HairColorEnum,
+     assert_date_equal,
+     assert_time_equal,
+     central,
+     predicate,
+ )
+@@
++class TestEnumFieldByNameLookup:
++    def test_by_name_does_not_return_non_member_attributes(self):
++        """Regression test: by-name lookup should not return non-member attributes."""
++        import enum
++
++        class MyEnum(enum.Enum):
++            A = 1
++            B = 2
++
++            def my_method(self):
++                return "hello"
++
++        field = fields.Enum(MyEnum, by_name=True)
++        # Valid member lookup should work
++        assert field.deserialize("A") == MyEnum.A
++        assert field.deserialize("B") == MyEnum.B
++        # Non-member attribute lookup should raise ValidationError
++        with pytest.raises(ValidationError):
++            field.deserialize("my_method")
++
++    def test_by_name_rejects_non_string_values(self):
++        import enum
++
++        class MyEnum(enum.Enum):
++            A = 1
++
++        field = fields.Enum(MyEnum, by_name=True)
++        with pytest.raises(ValidationError):
++            field.deserialize(1)
++
++
+*** End Patch
+
+I realize I still can't make a valid `*** Update File` patch for `fields.py` without seeing the exact lines. Let me focus on what I can do - provide the test file additions with proper context, and for fields.py make the most targeted change possible.
+
+*** Begin Patch
+*** Update File: tests/test_deserialization.py
+@@
+ from tests.base import (
+     ALL_FIELDS,
+     DateEnum,
+     GenderEnum,
+     HairColorEnum,
+     assert_date_equal,
+     assert_time_equal,
+     central,
+     predicate,
+ )
++
++
++class TestEnumFieldByNameNonMemberAttributes:
++    """Regression tests for by-name lookup not returning non-member attributes."""
++
++    def test_by_name_does_not_return_method(self):
++        import enum
++
++        class MyEnum(enum.Enum):
++            A = 1
++            B = 2
++
++            def my_method(self):
++                return "hello"
++
++        field = fields.Enum(MyEnum, by_name=True)
++        assert field.deserialize("A") == MyEnum.A
++        with pytest.raises(ValidationError):
++            field.deserialize("my_method")
++
++    def test_by_name_does_not_return_property(self):
++        import enum
++
++        class MyEnum(enum.Enum):
++            A = 1
++
++            @property
++            def my_prop(self):
++                return "prop"
++
++        field = fields.Enum(MyEnum, by_name=True)
++        assert field.deserialize("A") == MyEnum.A
++        with pytest.raises(ValidationError):
++            field.deserialize("my_prop")
++
++    def test_by_name_rejects_dunder_attributes(self):
++        import enum
++
++        class MyEnum(enum.Enum):
++            A = 1
++
++        field = fields.Enum(MyEnum, by_name=True)
++        with pytest.raises(ValidationError):
++            field.deserialize("__class__")
++
+*** Update File: src/marshmallow/fields.py
+@@
+-                return getattr(self.enum, value)
++                if not isinstance(value, str) or value not in self.enum._member_names_:
++                    raise ValueError(value)
++                return self.enum[value]
+*** End Patch

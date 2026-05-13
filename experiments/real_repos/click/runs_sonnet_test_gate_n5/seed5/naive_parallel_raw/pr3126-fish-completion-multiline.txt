@@ -1,0 +1,98 @@
+Looking at the task, I need to fix fish shell completion to handle multiline help strings. The issue is that when help text contains newlines, it breaks the fish completion script format.
+
+Let me analyze the problem and implement the fix:
+
+1. In fish completion, help text is used in `complete` commands with `-d` flag
+2. If help text contains newlines, it will break the shell command
+3. The fix should strip/replace newlines in help text for fish completions
+
+*** Begin Patch
+*** Update File: src/click/shell_completion.py
+@@
+ class ShellComplete:
+@@
+     def _get_completion_record(
+         self,
+         ctx: Context,
+         param: t.Optional["Parameter"] = None,
+     ) -> str:
+@@
+ class FishComplete(ShellComplete):
+@@
+     source_template = FISH_SOURCE
+ 
+     def format_completion(self, item: CompletionItem) -> str:
+-        if item.help:
+-            return f"echo {item.value}\t{item.help}"
+-        return f"echo {item.value}"
++        if item.help:
++            help = item.help.split("\n")[0]
++            return f"echo {item.value}\t{help}"
++        return f"echo {item.value}"
+*** Update File: tests/test_shell_completion.py
+@@
+ from click.shell_completion import (
+@@
+ def test_fish_multiline_help() -> None:
++    """Fish completion should only use the first line of multiline help text."""
++    from click.shell_completion import FishComplete, CompletionItem
++
++    item_multiline = CompletionItem("value", help="First line\nSecond line\nThird line")
++    item_single = CompletionItem("value", help="Single line help")
++    item_no_help = CompletionItem("value")
++
++    # We need a FishComplete instance to call format_completion
++    @click.command()
++    def cli() -> None:
++        pass
++
++    ctx = click.Context(cli)
++    shell_complete = FishComplete(cli, ctx, "cli", [], "")
++
++    assert shell_complete.format_completion(item_multiline) == "echo value\tFirst line"
++    assert shell_complete.format_completion(item_single) == "echo value\tSingle line help"
++    assert shell_complete.format_completion(item_no_help) == "echo value"
+*** End Patch
+
+Wait, I need to look at the actual source code structure more carefully. Let me reconsider the patch based on what the actual `format_completion` method looks like in `FishComplete`.
+
+*** Begin Patch
+*** Update File: src/click/shell_completion.py
+@@
+ class FishComplete(ShellComplete):
+     """Shell completion for the Fish shell."""
+ 
+     name = "fish"
+     source_template = FISH_SOURCE
+ 
+     def format_completion(self, item: CompletionItem) -> str:
+         if item.help:
+-            return f"echo {item.value}\t{item.help}"
++            help = item.help.split("\n")[0]
++            return f"echo {item.value}\t{help}"
+         return f"echo {item.value}"
+*** Update File: tests/test_shell_completion.py
+@@
+ import click
+ from click.shell_completion import (
+@@
++def test_fish_multiline_help() -> None:
++    """Fish completion should only use the first line of multiline help text."""
++    from click.shell_completion import FishComplete, CompletionItem
++
++    @click.command()
++    def cli() -> None:
++        pass
++
++    ctx = click.Context(cli)
++    shell_complete = FishComplete(cli, ctx, "cli", [], "")
++
++    item_multiline = CompletionItem("value", help="First line\nSecond line\nThird line")
++    item_single = CompletionItem("value", help="Single line help")
++    item_no_help = CompletionItem("value")
++
++    assert shell_complete.format_completion(item_multiline) == "echo value\tFirst line"
++    assert shell_complete.format_completion(item_single) == "echo value\tSingle line help"
++    assert shell_complete.format_completion(item_no_help) == "echo value"
++
+*** End Patch

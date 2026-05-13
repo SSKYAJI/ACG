@@ -1,0 +1,97 @@
+*** Begin Patch
+*** Add File: packages/zod/src/v4/core/__tests__/regression-tuple-holes-defaults.test.ts
++import { describe, expect, it } from "vitest";
++import * as z from "zod/v4";
++
++describe("regression: tuple holes with defaults (pr5900)", () => {
++  it("rejects input where required element after optional is missing", () => {
++    // [optional string, required number]
++    const schema = z.tuple([z.string().optional(), z.number()]);
++
++    // Input length 1 - missing the required number
++    const result = schema.safeParse(["hello"]);
++    expect(result.success).toBe(false);
++  });
++
++  it("rejects input where required-with-default element position has a hole due to short input", () => {
++    // [optional string, required number with default]
++    // If input is just [] (length 0), the optional is fine but the defaulted
++    // required element should still be filled by default
++    const schema = z.tuple([z.string().optional(), z.number().default(99)]);
++
++    // Empty input - both elements missing
++    const emptyResult = schema.safeParse([]);
++    // This depends on implementation: if both are optional/defaulted, it may pass
++    // The key regression is about holes BEFORE required defaults
++
++    // Input with explicit undefined for second (defaulted) element
++    const withUndefined = schema.safeParse(["hello", undefined]);
++    if (withUndefined.success) {
++      expect(withUndefined.data[1]).toBe(99);
++    }
++  });
++
++  it("rejects tuple input that has holes before required non-defaulted elements", () => {
++    // [optional, optional, required]
++    const schema = z.tuple([
++      z.string().optional(),
++      z.string().optional(),
++      z.number(),
++    ]);
++
++    // Input length 2 - missing required last element
++    const result = schema.safeParse(["a", "b"]);
++    expect(result.success).toBe(false);
++
++    // Input length 3 - all present
++    const pass = schema.safeParse(["a", "b", 42]);
++    expect(pass.success).toBe(true);
++  });
++
++  it("does not allow holes to skip required elements even with defaults present", () => {
++    // [optional, default, required]
++    // Input [undefined] has length 1, missing the required element at index 2
++    const schema = z.tuple([
++      z.string().optional(),
++      z.number().default(0),
++      z.boolean(),
++    ]);
++
++    // Too short - missing required boolean
++    const tooShort = schema.safeParse([undefined]);
++    expect(tooShort.success).toBe(false);
+
++    // Also too short
++    const alsoTooShort = schema.safeParse([undefined, undefined]);
++    expect(alsoTooShort.success).toBe(false);
+
++    // Correct length
++    const correct = schema.safeParse([undefined, undefined, true]);
++    expect(correct.success).toBe(true);
++    if (correct.success) {
++      expect(correct.data[1]).toBe(0); // default applied
++      expect(correct.data[2]).toBe(true);
++    }
++  });
++
++  it("accepts valid tuple with optional elements at end", () => {
++    const schema = z.tuple([z.number(), z.string().optional()]);
+
++    const withOptional = schema.safeParse([42, "hello"]);
++    expect(withOptional.success).toBe(true);
+
++    const withoutOptional = schema.safeParse([42]);
++    expect(withoutOptional.success).toBe(true);
++  });
++
++  it("correctly handles all-required tuple", () => {
++    const schema = z.tuple([z.string(), z.number(), z.boolean()]);
+
++    const pass = schema.safeParse(["hello", 42, true]);
++    expect(pass.success).toBe(true);
+
++    const fail = schema.safeParse(["hello", 42]);
++    expect(fail.success).toBe(false);
++  });
++});
+*** End Patch

@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr3126-fish-completion-multiline",
+      "prompt": "Fix fish shell completion so that commands and options with multiline help strings are handled correctly. Currently, multiline help text causes broken or malformed fish completion scripts.",
+      "hints": {
+        "touches": ["fish", "shell_completion", "completion", "multiline", "help"]
+      }
+    },
+    {
+      "id": "pr2933-clirunner-stderr-flush",
+      "prompt": "Fix CliRunner so that data written to stderr without an explicit flush (e.g. using print with flush=False) is properly captured in the test result. Currently, unflushed stderr writes are lost when CliRunner.invoke finishes.",
+      "hints": {
+        "touches": ["testing", "CliRunner", "stderr", "flush"]
+      }
+    },
+    {
+      "id": "pr3363-unprocessed-flag-value",
+      "prompt": "Fix Option initialization so that when flag_value is set to a non-basic type (e.g. an enum), the option's type is automatically set to UNPROCESSED instead of raising a TypeError or mishandling the value during parsing.",
+      "hints": {
+        "touches": ["core", "Option", "flag_value", "type", "UNPROCESSED"]
+      }
+    }
+  ]
+}

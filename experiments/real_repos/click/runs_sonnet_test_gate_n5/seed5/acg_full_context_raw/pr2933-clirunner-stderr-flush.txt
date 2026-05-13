@@ -1,0 +1,160 @@
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+             if isinstance(a
++# … [truncated; original file is 18487 bytes]
+*** End Patch
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+         with self.isolation(input=input, env=env, color=color) as outstreams:
+             return_value = None
+             exception: BaseException | None = None
+             exit_code = 0
+
+             if isinstance(a
+@@
+-             if isinstance(a
++            if isinstance(args, str):
++                args = shlex.split(args)
++
++            try:
++                return_value = cli.main(
++                    args=args or (),
++                    prog_name=self.get_default_prog_name(cli),
++                    standalone_mode=False,
++                    **extra,
++                )
++            except SystemExit as e:
++                exc_info = sys.exc_info()
++                e_code = e.code
++                if e_code is None:
++                    e_code = 0
++                if e_code != 0:
++                    exception = e
++                if not isinstance(e_code, int):
++                    sys.stdout.write(str(e_code))
++                    sys.stdout.write("\n")
++                    e_code = 1
++                exit_code = e_code
++            except Exception as e:
++                if not catch_exceptions:
++                    raise
++                exception = e
++                exc_info = sys.exc_info()
++                exit_code = 1
++            finally:
++                sys.stdout.flush()
++                sys.stderr.flush()
++
++        return Result(
++            runner=self,
++            stdout_bytes=outstreams[0].getvalue(),
++            stderr_bytes=outstreams[1].getvalue(),
++            output_bytes=outstreams[2].getvalue(),
++            return_value=return_value,
++            exit_code=exit_code,
++            exception=exception,
++            exc_info=exc_info,  # type: ignore[arg-type]
++        )
+*** End Patch
+
+Let me look at the actual truncated portion more carefully and provide a proper patch.
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+        with self.isolation(input=input, env=env, color=color) as outstreams:
+            return_value = None
+            exception: BaseException | None = None
+            exit_code = 0
+
+            if isinstance(a
+*** End Patch
+
+I need to see the full file. Let me reconstruct the patch based on what I know:
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+ class StreamMixer:
+     """Mixes `<stdout>` and `<stderr>` streams.
+ 
+     The result is available in the ``output`` attribute.
+ 
+     .. versionadded:: 8.2
+     """
+ 
+     def __init__(self) -> None:
+         self.output: io.BytesIO = io.BytesIO()
+         self.stdout: io.BytesIO = BytesIOCopy(copy_to=self.output)
+         self.stderr: io.BytesIO = BytesIOCopy(copy_to=self.output)
+@@
++    def flush_all(self) -> None:
++        """Flush all underlying streams so buffered data is captured."""
++        self.stdout.flush()
++        self.stderr.flush()
++        self.output.flush()
++
+*** End Patch
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+             for key, value in old_env.items():
+                 if value is None:
+                     try:
+                         del os.environ[key]
+                     except Exception:
+                         pass
+                 else:
+                     os.environ[key] = value
+             sys.stdout = old_stdout
+             sys.stderr = old_stderr
+             sys.stdin = old_stdin
+@@
++            sys.stdout.flush()
++            sys.stderr.flush()
+             sys.stdout = old_stdout
+             sys.stderr = old_stderr
+             sys.stdin = old_stdin
+*** End Patch
+
+*** Begin Patch
+*** Update File: tests/test_testing.py
+@@
+ def test_isolation_stderr_errors():
+     """Writing to stderr should escape invalid characters instead of
+     raising a UnicodeEncodeError.
+     """
+     runner = CliRunner()
+ 
+     with runner.isolation() as (_, err, _):
+         click.echo("\udce2", err=True, nl=False)
+ 
+     assert err.getvalue() == b"\\udce2"
+@@
+ def test_isolation_stderr_errors():
+     """Writing to stderr should escape invalid characters instead of
+     raising a UnicodeEncodeError.
+     """
+     runner = CliRunner()
+ 
+     with runner.isolation() as (_, err, _):
+         click.echo("\udce2", err=True, nl=False)
+ 
+     assert err.getvalue() == b"\\udce2"
++
++
++def test_stderr_unflushed():
++    """Data written to stderr without an explicit flush should be captured."""
++
++    @click.command()
++    def cli():
++        print("to stderr", file=sys.stderr, flush=False)
++
++    runner = CliRunner()
++    result = runner.invoke(cli)
++    assert result.stderr == "to stderr\n"
+*** End Patch

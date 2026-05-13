@@ -1,0 +1,155 @@
+I'll analyze the task and fix the descriptor access issue in `_cachedmethod.py`.
+
+Let me first understand the issue: when a cached method is accessed at the class level (e.g., `MyClass.method`), the descriptor's `__get__` method is called with `obj=None`. The current implementation likely fails in this case.
+
+*** Begin Patch
+*** Update File: src/cachetools/_cachedmethod.py
+@@
+ class cachedmethod:
+     """Decorator to wrap a class or instance method with a memoizing
+     callable that saves results in a cache.
+     """
+ 
+     def __init__(self, cache, key=keys.hashkey, lock=None):
+         self.__cache = cache
+         self.__key = key
+         self.__lock = lock
+ 
+     def __call__(self, method):
+         return _cachedmethod(self.__cache, self.__key, self.__lock, method)
+ 
+ 
+ class _cachedmethod:
+     def __init__(self, cache, key, lock, method):
+         self.__cache = cache
+         self.__key = key
+         self.__lock = lock
+         self.__method = method
+         functools.update_wrapper(self, method)
+ 
+     def __get__(self, obj, objtype=None):
++        if obj is None:
++            return self
+         return _cachedmethod_wrapper(
+             self.__cache,
+             self.__key,
+             self.__lock,
+             self.__method,
+             obj,
+         )
+*** Update File: tests/test_cachedmethod.py
+@@
+ import unittest
+ 
+ import cachetools
+ 
+ 
++class ClassLevelInspectionTest(unittest.TestCase):
++    """Regression tests for class-level inspection of cached methods."""
++
++    def test_class_level_access_returns_descriptor(self):
++        """Accessing a cached method on the class should return the descriptor."""
++
++        class MyClass:
++            def __init__(self):
++                self.cache = {}
++
++            @cachetools.cachedmethod(lambda self: self.cache)
++            def method(self, x):
++                return x * 2
++
++        # Accessing via the class should not raise and should return the descriptor
++        descriptor = MyClass.method
++        self.assertIsNotNone(descriptor)
++
++    def test_class_level_access_is_callable(self):
++        """The descriptor returned from class-level access should be callable."""
++
++        class MyClass:
++            def __init__(self):
++                self.cache = {}
++
++            @cachetools.cachedmethod(lambda self: self.cache)
++            def method(self, x):
++                return x * 2
++
++        descriptor = MyClass.method
++        self.assertTrue(callable(descriptor))
++
++    def test_class_level_access_preserves_wrapped_attributes(self):
++        """The descriptor should preserve __name__, __doc__, etc. from the wrapped method."""
++
++        class MyClass:
++            def __init__(self):
++                self.cache = {}
++
++            @cachetools.cachedmethod(lambda self: self.cache)
++            def my_method(self, x):
++                """My method docstring."""
++                return x * 2
++
++        descriptor = MyClass.my_method
++        self.assertEqual(descriptor.__name__, "my_method")
++        self.assertEqual(descriptor.__doc__, "My method docstring.")
++
++    def test_instance_access_still_works_after_class_access(self):
++        """Instance-level access should still work correctly after class-level access."""
++
++        class MyClass:
++            def __init__(self):
++                self.cache = {}
++
++            @cachetools.cachedmethod(lambda self: self.cache)
++            def method(self, x):
++                return x * 2
++
++        # Access at class level first
++        _ = MyClass.method
++
++        # Then access at instance level should still work
++        obj = MyClass()
++        result = obj.method(5)
++        self.assertEqual(result, 10)
++
++    def test_class_level_access_with_lock(self):
++        """Class-level access should work when a lock is provided."""
++        import threading
++
++        class MyClass:
++            def __init__(self):
++                self.cache = {}
++                self.lock = threading.Lock()
++
++            @cachetools.cachedmethod(lambda self: self.cache, lock=lambda self: self.lock)
++            def method(self, x):
++                return x * 2
++
++        # Should not raise
++        descriptor = MyClass.method
++        self.assertIsNotNone(descriptor)
++
++        # Instance access should still work
++        obj = MyClass()
++        result = obj.method(3)
++        self.assertEqual(result, 6)
++
++    def test_inspect_cached_method_on_class(self):
++        """inspect module should be able to inspect cached methods on the class."""
++        import inspect
++
++        class MyClass:
++            def __init__(self):
++                self.cache = {}
++
++            @cachetools.cachedmethod(lambda self: self.cache)
++            def method(self, x, y=10):
++                return x + y
++
++        # Should not raise AttributeError or similar
++        descriptor = MyClass.method
++        self.assertIsNotNone(descriptor)
++        # The wrapped method should be accessible
++        self.assertTrue(hasattr(descriptor, "__wrapped__"))
++
++
+*** End Patch

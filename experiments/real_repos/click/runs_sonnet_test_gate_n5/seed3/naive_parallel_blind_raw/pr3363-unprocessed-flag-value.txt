@@ -1,0 +1,290 @@
+I need to create a solution for fixing Option initialization when `flag_value` is set to a non-basic type. Let me create the necessary files.
+
+*** Begin Patch
+*** Add File: option.py
++ """Option class with proper handling of non-basic flag_value types."""
++ 
++ import enum
++ 
++ # Basic types that can be handled directly
++ BASIC_TYPES = (bool, int, float, str, bytes, type(None))
++ 
++ 
++ class OptionType(enum.Enum):
++     UNPROCESSED = "unprocessed"
++     STRING = "string"
++     INT = "int"
++     FLOAT = "float"
++     BOOL = "bool"
++     BYTES = "bytes"
++ 
++ 
++ # Mapping from basic Python types to OptionType
++ _TYPE_MAP = {
++     str: OptionType.STRING,
++     int: OptionType.INT,
++     float: OptionType.FLOAT,
++     bool: OptionType.BOOL,
++     bytes: OptionType.BYTES,
++ }
++ 
++ 
++ class Option:
++     """Represents a command-line option.
++ 
++     When flag_value is set to a non-basic type (e.g. an enum value),
++     the option's type is automatically set to UNPROCESSED instead of
++     raising a TypeError or mishandling the value during parsing.
++     """
++ 
++     def __init__(self, name, flag_value=None, option_type=None, default=None,
++                  help=None, metavar=None, multiple=False):
++         """Initialize an Option.
++ 
++         Args:
++             name: The name of the option (e.g. '--verbose').
++             flag_value: The value to use when the flag is present without
++                         an explicit value. If this is a non-basic type,
++                         option_type is automatically set to UNPROCESSED.
++             option_type: The OptionType for this option. If None, it is
++                          inferred from flag_value or defaults to STRING.
++             default: The default value when the option is not present.
++             help: Help text for the option.
++             metavar: Metavar string for usage display.
++             multiple: Whether the option can be specified multiple times.
++         """
++         self.name = name
++         self.flag_value = flag_value
++         self.default = default
++         self.help = help
++         self.metavar = metavar
++         self.multiple = multiple
++ 
++         if option_type is not None:
++             # Explicit type provided — use it directly
++             self.option_type = option_type
++         elif flag_value is not None:
++             # Infer type from flag_value
++             fv_type = type(flag_value)
++             if fv_type in _TYPE_MAP:
++                 self.option_type = _TYPE_MAP[fv_type]
++             else:
++                 # Non-basic type: use UNPROCESSED instead of raising TypeError
++                 self.option_type = OptionType.UNPROCESSED
++         else:
++             self.option_type = OptionType.STRING
++ 
++     def parse(self, value):
++         """Parse a string value according to this option's type.
++ 
++         Args:
++             value: The raw string value from the command line, or None
++                    if the flag was given without a value (in which case
++                    flag_value is returned).
++ 
++         Returns:
++             The parsed value.
++         """
++         if value is None:
++             return self.flag_value
++ 
++         if self.option_type == OptionType.UNPROCESSED:
++             # Return the raw value without conversion
++             return value
++         elif self.option_type == OptionType.STRING:
++             return str(value)
++         elif self.option_type == OptionType.INT:
++             return int(value)
++         elif self.option_type == OptionType.FLOAT:
++             return float(value)
++         elif self.option_type == OptionType.BOOL:
++             if isinstance(value, bool):
++                 return value
++             if isinstance(value, str):
++                 lower = value.lower()
++                 if lower in ('true', '1', 'yes'):
++                     return True
++                 if lower in ('false', '0', 'no'):
++                     return False
++             raise ValueError(f"Cannot convert {value!r} to bool")
++         elif self.option_type == OptionType.BYTES:
++             if isinstance(value, bytes):
++                 return value
++             return value.encode('utf-8')
++         else:
++             return value
++ 
++     def __repr__(self):
++         return (
++             f"Option(name={self.name!r}, option_type={self.option_type!r}, "
++             f"flag_value={self.flag_value!r}, default={self.default!r})"
++         )
+*** Add File: test_option.py
++ """Tests for Option initialization and flag_value handling."""
++ 
++ import enum
++ import pytest
++ 
++ from option import Option, OptionType
++ 
++ 
++ class Color(enum.Enum):
++     RED = 1
++     GREEN = 2
++     BLUE = 3
++ 
++ 
++ class Priority(enum.IntEnum):
++     LOW = 0
++     MEDIUM = 1
++     HIGH = 2
++ 
++ 
++ # ---------------------------------------------------------------------------
++ # Tests: option_type inference from flag_value
++ # ---------------------------------------------------------------------------
++ 
++ class TestOptionTypeInference:
++     def test_no_flag_value_defaults_to_string(self):
++         opt = Option('--name')
++         assert opt.option_type == OptionType.STRING
++ 
++     def test_bool_flag_value(self):
++         opt = Option('--verbose', flag_value=True)
++         assert opt.option_type == OptionType.BOOL
++ 
++     def test_int_flag_value(self):
++         opt = Option('--count', flag_value=1)
++         assert opt.option_type == OptionType.INT
++ 
++     def test_float_flag_value(self):
++         opt = Option('--ratio', flag_value=1.0)
++         assert opt.option_type == OptionType.FLOAT
++ 
++     def test_str_flag_value(self):
++         opt = Option('--mode', flag_value='fast')
++         assert opt.option_type == OptionType.STRING
++ 
++     def test_bytes_flag_value(self):
++         opt = Option('--data', flag_value=b'raw')
++         assert opt.option_type == OptionType.BYTES
++ 
++     def test_none_flag_value_defaults_to_string(self):
++         opt = Option('--output', flag_value=None)
++         assert opt.option_type == OptionType.STRING
++ 
++ 
++ # ---------------------------------------------------------------------------
++ # Tests: non-basic flag_value → UNPROCESSED (the main bug fix)
++ # ---------------------------------------------------------------------------
++ 
++ class TestNonBasicFlagValueBecomesUnprocessed:
++     def test_enum_flag_value_gives_unprocessed(self):
++         """Core regression: enum flag_value must not raise TypeError."""
++         opt = Option('--color', flag_value=Color.RED)
++         assert opt.option_type == OptionType.UNPROCESSED
++ 
++     def test_int_enum_flag_value_gives_unprocessed(self):
++         opt = Option('--priority', flag_value=Priority.HIGH)
++         assert opt.option_type == OptionType.UNPROCESSED
++ 
++     def test_list_flag_value_gives_unprocessed(self):
++         opt = Option('--items', flag_value=[1, 2, 3])
++         assert opt.option_type == OptionType.UNPROCESSED
++ 
++     def test_dict_flag_value_gives_unprocessed(self):
++         opt = Option('--config', flag_value={'key': 'val'})
++         assert opt.option_type == OptionType.UNPROCESSED
++ 
++     def test_custom_object_flag_value_gives_unprocessed(self):
++         class MyObj:
++             pass
++         opt = Option('--obj', flag_value=MyObj())
++         assert opt.option_type == OptionType.UNPROCESSED
++ 
++     def test_flag_value_is_preserved(self):
++         """The original flag_value object must be stored unchanged."""
++         opt = Option('--color', flag_value=Color.GREEN)
++         assert opt.flag_value is Color.GREEN
++ 
++     def test_explicit_option_type_overrides_inference(self):
++         """Explicit option_type must win even for non-basic flag_value."""
++         opt = Option('--color', flag_value=Color.RED,
++                      option_type=OptionType.STRING)
++         assert opt.option_type == OptionType.STRING
++ 
++ 
++ # ---------------------------------------------------------------------------
++ # Tests: parse() behaviour
++ # ---------------------------------------------------------------------------
++ 
++ class TestParse:
++     def test_parse_none_returns_flag_value(self):
++         opt = Option('--color', flag_value=Color.BLUE)
++         assert opt.parse(None) is Color.BLUE
++ 
++     def test_parse_string_unprocessed_returns_raw(self):
++         opt = Option('--color', flag_value=Color.RED)
++         assert opt.parse('anything') == 'anything'
++ 
++     def test_parse_string_type(self):
++         opt = Option('--name')
++         assert opt.parse('hello') == 'hello'
++ 
++     def test_parse_int_type(self):
++         opt = Option('--count', flag_value=0)
++         assert opt.parse('42') == 42
++ 
++     def test_parse_float_type(self):
++         opt = Option('--ratio', flag_value=0.0)
++         assert opt.parse('3.14') == pytest.approx(3.14)
++ 
++     def test_parse_bool_true_strings(self):
++         opt = Option('--verbose', flag_value=True)
++         for s in ('true', 'True', 'TRUE', '1', 'yes'):
++             assert opt.parse(s) is True
++ 
++     def test_parse_bool_false_strings(self):
++         opt = Option('--verbose', flag_value=True)
++         for s in ('false', 'False', 'FALSE', '0', 'no'):
++             assert opt.parse(s) is False
++ 
++     def test_parse_bytes_type(self):
++         opt = Option('--data', flag_value=b'')
++         result = opt.parse('hello')
++         assert result == b'hello'
++ 
++ 
++ # ---------------------------------------------------------------------------
++ # Tests: other Option attributes
++ # ---------------------------------------------------------------------------
++ 
++ class TestOptionAttributes:
++     def test_name_stored(self):
++         opt = Option('--verbose')
++         assert opt.name == '--verbose'
++ 
++     def test_default_stored(self):
++         opt = Option('--level', default=0)
++         assert opt.default == 0
++ 
++     def test_help_stored(self):
++         opt = Option('--help', help='Show help')
++         assert opt.help == 'Show help'
++ 
++     def test_metavar_stored(self):
++         opt = Option('--file', metavar='FILE')
++         assert opt.metavar == 'FILE'
++ 
++     def test_multiple_default_false(self):
++         opt = Option('--tag')
++         assert opt.multiple is False
++ 
++     def test_multiple_true(self):
++         opt = Option('--tag', multiple=True)
++         assert opt.multiple is True
++ 
++     def test_repr_contains_name(self):
++         opt = Option('--color', flag_value=Color.RED)
++         assert '--color' in repr(opt)
+*** End Patch

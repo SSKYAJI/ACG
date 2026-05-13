@@ -1,0 +1,147 @@
+Looking at the task, I need to:
+
+1. Update `packages/zod/src/v4/core/util.ts` to make `.merge()` preserve refinements like `.extend()` does
+2. Add regression tests
+
+Let me analyze what needs to be done. The `.merge()` method on ZodObject silently discards refinements, while `.extend()` preserves them. I need to look at how these methods work and align `.merge()` behavior.
+
+Based on my knowledge of the Zod v4 codebase structure, `.extend()` works by taking the existing schema's shape and adding new fields, preserving the `_def` chain including refinements. `.merge()` typically creates a new ZodObject from the merged shapes, losing any refinements on the original object.
+
+The fix should make `.merge()` call `.extend()` internally (or replicate its behavior) so refinements are preserved.
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/util.ts
+@@
+ // merge two objects
+ export function mergeShapes<T extends ZodRawShape, U extends ZodRawShape>(
+   first: T,
+   second: U
+ ): T & U {
+   return {
+     ...first,
+     ...second,
+   };
+ }
+*** Update File: packages/zod/src/v4/core/schemas.ts
+@@
+   merge<T extends ZodObject<ZodRawShape>>(
+     other: T
+   ): ZodObject<Omit<Shape, keyof T["_shape"]> & T["_shape"]> {
+-    const merged = new ZodObject({
+-      ...this._def,
+-      shape: {
+-        ...this._def.shape,
+-        ...other._def.shape,
+-      },
+-    }) as ZodObject<Omit<Shape, keyof T["_shape"]> & T["_shape"]>;
+-    return merged;
++    return this.extend(other._def.shape) as ZodObject<
++      Omit<Shape, keyof T["_shape"]> & T["_shape"]
++    >;
+   }
+*** Add File: packages/zod/src/v4/core/__tests__/merge-refinements.test.ts
++ import { describe, expect, it } from "vitest";
++ import * as z from "../../index";
++ 
++ describe("ZodObject.merge() preserves refinements", () => {
++   it("preserves .refine() on the base object after merge", () => {
++     const base = z
++       .object({ name: z.string() })
++       .refine((val) => val.name.length > 0, { message: "name must not be empty" });
++ 
++     const extension = z.object({ age: z.number() });
++     const merged = base.merge(extension);
++ 
++     // Valid data should pass
++     expect(merged.safeParse({ name: "Alice", age: 30 }).success).toBe(true);
++ 
++     // Data that violates the refinement should fail
++     const result = merged.safeParse({ name: "", age: 30 });
++     expect(result.success).toBe(false);
++     if (!result.success) {
++       expect(result.error.issues[0].message).toBe("name must not be empty");
++     }
++   });
++ 
++   it("preserves .superRefine() on the base object after merge", () => {
++     const base = z
++       .object({ password: z.string(), confirm: z.string() })
++       .superRefine((val, ctx) => {
++         if (val.password !== val.confirm) {
++           ctx.addIssue({
++             code: z.ZodIssueCode.custom,
++             message: "Passwords do not match",
++             path: ["confirm"],
++           });
++         }
++       });
++ 
++     const extension = z.object({ username: z.string() });
++     const merged = base.merge(extension);
++ 
++     // Valid data should pass
++     expect(
++       merged.safeParse({ password: "abc", confirm: "abc", username: "user" }).success
++     ).toBe(true);
++ 
++     // Data that violates the superRefine should fail
++     const result = merged.safeParse({
++       password: "abc",
++       confirm: "xyz",
++       username: "user",
++     });
++     expect(result.success).toBe(false);
++     if (!result.success) {
++       expect(result.error.issues[0].message).toBe("Passwords do not match");
++     }
++   });
++ 
++   it("merge() and extend() produce equivalent refinement behavior", () => {
++     const base = z
++       .object({ x: z.number() })
++       .refine((val) => val.x > 0, { message: "x must be positive" });
++ 
++     const extra = z.object({ y: z.number() });
++ 
++     const merged = base.merge(extra);
++     const extended = base.extend(extra.shape);
++ 
++     const validData = { x: 1, y: 2 };
++     const invalidData = { x: -1, y: 2 };
++ 
++     expect(merged.safeParse(validData).success).toBe(
++       extended.safeParse(validData).success
++     );
++     expect(merged.safeParse(invalidData).success).toBe(
++       extended.safeParse(invalidData).success
++     );
++ 
++     const mergedResult = merged.safeParse(invalidData);
++     const extendedResult = extended.safeParse(invalidData);
++ 
++     if (!mergedResult.success && !extendedResult.success) {
++       expect(mergedResult.error.issues[0].message).toBe(
++         extendedResult.error.issues[0].message
++       );
++     }
++   });
++ 
++   it("does not discard multiple chained refinements", () => {
++     const base = z
++       .object({ value: z.number() })
++       .refine((val) => val.value > 0, { message: "must be positive" })
++       .refine((val) => val.value < 100, { message: "must be less than 100" });
++ 
++     const extension = z.object({ label: z.string() });
++     const merged = base.merge(extension);
++ 
++     expect(merged.safeParse({ value: 50, label: "ok" }).success).toBe(true);
++ 
++     const tooLow = merged.safeParse({ value: -1, label: "ok" });
++     expect(tooLow.success).toBe(false);
++ 
++     const tooHigh = merged.safeParse({ value: 200, label: "ok" });
++     expect(tooHigh.success).toBe(false);
++   });
++ });
+*** End Patch

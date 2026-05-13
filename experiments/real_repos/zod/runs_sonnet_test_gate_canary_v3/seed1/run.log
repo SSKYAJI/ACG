@@ -1,0 +1,28 @@
+ starting (group 0)
+ proposed 3 writes (9.91s, 985 tokens)
+   ALLOWED pr5855-shallowclone-map-set → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5855-shallowclone-map-set → 
+packages/zod/src/v4/core/__tests__/shallowclone-map-set.test.ts
+   ALLOWED pr5855-shallowclone-map-set → 
+packages/zod/src/v4/core/__tests__/shallowclone-map-set.test.ts
+[naive_parallel_blind/local] wrote experiments/real_repos/zod/runs_sonnet_test_gate_canary_v3/seed1/eval_run_naive_parallel_blind.json — completed=0/1, evidence=naive_parallel_blind_applied_diff, overlaps=0, oob=0, blocked=0, wall=26.582s
+ starting (group 0)
+ proposed 2 writes (6.27s, 586 tokens)
+   ALLOWED pr5855-shallowclone-map-set → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5855-shallowclone-map-set → 
+packages/zod/src/v4/classic/tests/default.test.ts
+[naive_parallel/local] wrote experiments/real_repos/zod/runs_sonnet_test_gate_canary_v3/seed1/eval_run_naive.json — completed=0/1, evidence=applied_diff, overlaps=0, oob=0, blocked=0, wall=17.535s
+ starting (group 1)
+ proposed 2 writes (6.20s, 503 tokens)
+   ALLOWED pr5855-shallowclone-map-set → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5855-shallowclone-map-set → 
+packages/zod/src/v4/classic/tests/default.test.ts
+[acg_planned_full_context/local] wrote experiments/real_repos/zod/runs_sonnet_test_gate_canary_v3/seed1/eval_run_acg_full_context.json — completed=0/1, evidence=applied_diff, overlaps=0, oob=0, blocked=0, wall=19.363s
+ starting (group 1)
+ proposed 2 writes (5.77s, 503 tokens)
+   ALLOWED pr5855-shallowclone-map-set → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5855-shallowclone-map-set → 
+packages/zod/src/v4/classic/tests/default.test.ts
+[acg_planned/local] wrote experiments/real_repos/zod/runs_sonnet_test_gate_canary_v3/seed1/eval_run_acg.json — completed=0/1, evidence=applied_diff, overlaps=0, oob=0, blocked=0, wall=18.313s
+[single_agent/local] wrote experiments/real_repos/zod/runs_sonnet_test_gate_canary_v3/seed1/eval_run_single_agent.json — completed=0/1, evidence=suite_applied_diff, overlaps=0, oob=0, blocked=0, wall=11.001s
+[combined] wrote experiments/real_repos/zod/runs_sonnet_test_gate_canary_v3/seed1/eval_run_combined.json

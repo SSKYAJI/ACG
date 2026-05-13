@@ -1,0 +1,88 @@
+*** Begin Patch
+*** Add File: packages/zod/src/v4/core/__tests__/tuple_holes_defaults.test.ts
+--- /dev/null
++++ packages/zod/src/v4/core/__tests__/tuple_holes_defaults.test.ts
+@@ -0,0 +1,75 @@
++import { describe, expect, test } from "vitest";
++import * as z from "../../../index.js";
++
++describe("tuple holes with defaults - regression tests for pr5900", () => {
++  test("tuple with optional then required-with-default: hole before default is rejected", () => {
++    // [optional string, required number with default]
++    // Input [undefined] creates a hole at position 0 (optional) but position 1 (required default) is missing
++    // The required element with default should still be applied, not cause a hole error
++    const schema = z.tuple([
++      z.string().optional(),
++      z.number().default(42),
++    ]);
+
++    // [undefined] - first is optional undefined, second gets default 42
++    const result = schema.parse([undefined]);
++    expect(result[1]).toBe(42);
++  });
++
++  test("tuple rejects input shorter than required non-default elements", () => {
++    const schema = z.tuple([
++      z.string().optional(),
++      z.number(), // required, no default
++    ]);
++
++    expect(() => schema.parse([])).toThrow();
++    expect(() => schema.parse(["hello"])).toThrow();
++    expect(schema.parse(["hello", 5])).toEqual(["hello", 5]);
++  });
++
++  test("tuple with all defaults accepts empty array", () => {
++    const schema = z.tuple([
++      z.string().default("a"),
++      z.number().default(1),
++    ]);
++
++    expect(schema.parse([])).toEqual(["a", 1]);
++  });
++
++  test("tuple with optional followed by required-with-default: hole scenario is rejected", () => {
++    // The bug: optional elem at index 0, required-with-default at index 1
++    // Input has a hole (undefined) at index 0 but index 1 is also missing
++    // This should NOT silently accept - the required element must be present or get its default
++    const schema = z.tuple([
++      z.string().optional(),
++      z.number().default(10),
++      z.boolean(), // required, no default
++    ]);
++
++    // Valid: all provided
++    expect(schema.parse(["hi", 5, true])).toEqual(["hi", 5, true]);
++
++    // Invalid: missing required boolean
++    expect(() => schema.parse(["hi", 5])).toThrow();
++    expect(() => schema.parse(["hi"])).toThrow();
++    expect(() => schema.parse([])).toThrow();
++  });
++
++  test("tuple hole before required default: undefined input for optional does not skip required", () => {
++    // Specifically: [optional, required_with_default]
++    // Input: [] - both positions missing
++    // optional gets undefined, required gets default
++    const schema = z.tuple([
++      z.string().optional(),
++      z.number().default(99),
++    ]);
++
++    const result = schema.parse([]);
++    expect(result[0]).toBeUndefined();
++    expect(result[1]).toBe(99);
++  });
++
++  test("tuple with holes before required default fields should be rejected", () => {
++    // Input that has undefined holes before required default fields
++    const schema = z.tuple([z.number().default(1), z.number().default(2), z.number().default(3)]);
++
++    // All defaults should be applied when input is empty
++    expect(schema.parse([])).toEqual([1, 2, 3]);
++    expect(schema.parse([10])).toEqual([10, 2, 3]);
++    expect(schema.parse([10, 20])).toEqual([10, 20, 3]);
++    expect(schema.parse([10, 20, 30])).toEqual([10, 20, 30]);
++  });
++});
+*** End Patch

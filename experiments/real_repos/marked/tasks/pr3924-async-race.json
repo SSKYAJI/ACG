@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr3924-async-race",
+      "prompt": "When marked is used with async hooks and multiple parallel parse calls share the same Marked instance, they can interfere with each other's state, causing race conditions and incorrect output. Fix the async parallel parse and parseInline paths so each invocation operates on isolated state, and add regression tests for concurrent async hook usage."
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr2933-clirunner-stderr-flush",
+      "prompt": "Fix CliRunner so that data written to stderr without an explicit flush (e.g. using print with flush=False) is properly captured in the test result. Currently, unflushed stderr writes are lost when CliRunner.invoke finishes.",
+      "hints": {
+        "touches": ["testing", "CliRunner", "stderr", "flush"]
+      }
+    }
+  ]
+}

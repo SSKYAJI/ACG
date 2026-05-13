@@ -1,0 +1,27 @@
+Looking at the task, I need to:
+
+1. Find the `validate.Email` validator in `src/marshmallow/validate.py`
+2. Fix it to reject IDN email addresses where domain labels start or end with a hyphen
+3. Add regression tests
+
+Let me analyze the code structure first, then provide the fixes.
+
+```json
+{
+  "tasks": [
+    {
+      "task_id": "pr2937-email-idn",
+      "writes": [
+        {
+          "file": "src/marshmallow/validate.py",
+          "description": "In the Email validator, after converting IDN domain labels via encodings (punycode/IDNA), add a check that rejects domain labels that start or end with a hyphen. Specifically, in the section where the domain part is validated, after splitting the domain into labels, check each label (both the original unicode label and/or the ACE-encoded label) to ensure none start or end with a hyphen. If any label starts or ends with a hyphen, the email should be considered invalid.\n\nLocate the `Email` class and its validation logic. The domain validation likely splits the domain by '.' and processes each label. Add a check: for each label in the domain part (after splitting on '.'), if the label starts with '-' or ends with '-', raise a `ValidationError` (or return the invalid result). This should be done before or after the IDNA encoding step.\n\nHere is the specific change: in the `_validate_domain` method or equivalent domain-checking code within the `Email` validator, after splitting the domain into labels, add:\n```python\nfor label in domain.split('.'):\n    if label.startswith('-') or label.endswith('-'):\n        raise ValidationError(self.error)\n```\nor equivalent logic that causes the email to be marked invalid.\n\nIf the code uses a try/except around `encodings.idna.ToASCII` or similar, note that some implementations of IDNA encoding do NOT raise errors for labels starting/ending with hyphens (they may encode them without complaint), so an explicit check is needed.\n\nSearch for the Email class validation method and add the hyphen-start/end check for each domain label."
+        },
+        {
+          "file": "tests/test_deserialization.py",
+          "description": "Add regression tests for the Email validator rejecting IDN email addresses with domain labels that start or end with a hyphen.\n\nFind the existing Email validator test class (likely `TestEmailValidation` or similar) and add test cases for invalid IDN emails. Add a test method or extend the existing invalid email parametrize list with these cases:\n- 'user@-münchen.de'  (label starts with hyphen)\n- 'user@münchen-.de'  (label ends with hyphen)\n- 'user@-example.com' (ASCII label starts with hyphen, if not already tested)\n- 'user@example-.com' (ASCII label ends with hyphen, if not already tested)\n\nThe tests should assert that these email addresses are rejected as invalid by `validate.Email()`.\n\nLook for the existing parametrized invalid email test list and add these entries, or add a new test method like:\n```python\n@pytest.mark.parametrize('invalid_idn_email', [\n    'user@-münchen.de',\n    'user@münchen-.de',\n])\ndef test_email_invalid_idn_hyphen(invalid_idn_email):\n    validator = validate.Email()\n    with pytest.raises(ValidationError):\n        validator(invalid_idn_email)\n```"
+        }
+      ]
+    }
+  ]
+}
+```

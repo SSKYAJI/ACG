@@ -1,0 +1,120 @@
+Looking at the task, I need to fix `Option` initialization so that when `flag_value` is set to a non-basic type (e.g., an enum), the option's type is automatically set to `UNPROCESSED` instead of raising a `TypeError`.
+
+Let me find the relevant code in `core.py`. The `Option.__init__` method handles `flag_value` and sets the type. I need to find where the type is inferred from `flag_value`.
+
+Looking at the truncated `core.py`, I need to find the `Option` class initialization. The key logic would be something like: when `flag_value` is provided and `type` is not explicitly set, it tries to guess the type from the value, which fails for non-basic types.
+
+The fix should be: when `flag_value` is set and the type cannot be determined from basic types, fall back to `UNPROCESSED`.
+
+Let me look at the `_default_text_stdout` and related type-guessing logic. The `convert_type` function in `types.py` is likely used to guess the type from a value. When it can't handle the type, it should return `UNPROCESSED`.
+
+Looking at `types.py` context, the `convert_type` function likely handles basic Python types. For non-basic types (like enums), it would raise a `TypeError`.
+
+The fix in `core.py` should be in the `Option.__init__` where it sets `self.type` based on `flag_value`. I need to wrap the type guessing in a try/except or add a check.
+
+Since I can only see truncated files, I'll need to make educated guesses about the exact lines. Let me construct the patch based on typical Click source code patterns.
+
+The typical pattern in Click's `Option.__init__` for flag_value type inference is:
+```python
+if self.type is DEFAULT_TYPE:
+    self.type = convert_type(None, flag_value)
+```
+
+The fix should catch `TypeError` and fall back to `UNPROCESSED`, or check if the value is a basic type first.
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+-            if self.type is types.STRING:
+-                self.type = types.convert_type(None, self.flag_value)
++            if self.type is types.STRING:
++                try:
++                    self.type = types.convert_type(None, self.flag_value)
++                except TypeError:
++                    self.type = types.UNPROCESSED
+*** Update File: tests/test_options.py
+@@
+ def test_prefixes(runner):
+@@
++import enum
++
++
+ import os
+*** Update File: tests/test_options.py
+@@
+ import os
+ import re
+ 
+ import pytest
+ 
+ import click
+ from click import Option
++
++
++def test_flag_value_enum_type(runner):
++    """When flag_value is a non-basic type like an enum, the option type
++    should be set to UNPROCESSED instead of raising a TypeError."""
++
++    class Color(enum.Enum):
++        RED = "red"
++        BLUE = "blue"
++
++    @click.command()
++    @click.option("--color", flag_value=Color.RED)
++    def cmd(color):
++        click.echo(repr(color))
++
++    # Should not raise TypeError during option creation
++    opt = click.Option(["--color"], flag_value=Color.RED)
++    assert opt.type is click.UNPROCESSED
++
++    result = runner.invoke(cmd, ["--color"])
++    assert result.exit_code == 0
++    assert "RED" in result.output
+*** End Patch
+
+Wait, I need to look more carefully at the actual source. The `convert_type` function is in `types.py` and the Option init code needs to be found precisely. Let me reconsider - the truncated file doesn't show the Option class. Let me provide a more targeted patch based on what I know about Click's source.
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+-            if self.type is types.STRING:
+-                self.type = types.convert_type(None, self.flag_value)
++            if self.type is types.STRING:
++                try:
++                    self.type = types.convert_type(None, self.flag_value)
++                except TypeError:
++                    self.type = types.UNPROCESSED
+*** Update File: tests/test_options.py
+@@
+ import os
+ import re
+ 
+ import pytest
+ 
+ import click
+ from click import Option
++
++
++def test_flag_value_enum_type(runner):
++    """When flag_value is a non-basic type like an enum, the option type
++    should be set to UNPROCESSED instead of raising a TypeError."""
++    import enum
++
++    class Color(enum.Enum):
++        RED = "red"
++        BLUE = "blue"
++
++    # Should not raise TypeError during option creation
++    opt = click.Option(["--color"], flag_value=Color.RED)
++    assert opt.type is click.UNPROCESSED
++
++    @click.command()
++    @click.option("--color", flag_value=Color.RED)
++    def cmd(color):
++        click.echo(repr(color))
++
++    result = runner.invoke(cmd, ["--color"])
++    assert result.exit_code == 0
++    assert "RED" in result.output
+*** End Patch

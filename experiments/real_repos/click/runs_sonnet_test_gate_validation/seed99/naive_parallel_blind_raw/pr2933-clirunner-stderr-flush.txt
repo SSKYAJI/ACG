@@ -1,0 +1,191 @@
+I need to analyze the task and create a fix for CliRunner's stderr handling. The issue is that unflushed stderr writes are lost when CliRunner.invoke finishes. Let me create the necessary files.
+
+*** Begin Patch
+*** Add File: src/click/__init__.py
++ from .testing import CliRunner
++ 
++ __all__ = ["CliRunner"]
+*** Add File: src/click/testing.py
++ import io
++ import sys
++ from contextlib import contextmanager
++ 
++ 
++ class BytesIOCopy(io.RawIOBase):
++     """A raw IO object that writes to two streams simultaneously."""
++ 
++     def __init__(self, primary, secondary):
++         self.primary = primary
++         self.secondary = secondary
++
++     def readable(self):
++         return False
++
++     def writable(self):
++         return True
++
++     def write(self, b):
++         self.primary.write(b)
++         self.secondary.write(b)
++         return len(b)
++
++
++ class Result:
++     """Holds the result of a CliRunner invocation."""
++
++     def __init__(self, output, stderr, exit_code, exception):
++         self.output = output
++         self.stderr = stderr
++         self.exit_code = exit_code
++         self.exception = exception
++
++     def __repr__(self):
++         return f"<Result exit_code={self.exit_code}>"
++
++
++ class CliRunner:
++     """A test runner for Click CLI applications."""
++
++     def __init__(self, charset="utf-8", mix_stderr=False):
++         self.charset = charset
++         self.mix_stderr = mix_stderr
++
++     def invoke(self, cli, args=None, input=None, catch_exceptions=True, **kwargs):
++         """Invoke a CLI command in an isolated environment and capture output."""
++         stdout_bytes = io.BytesIO()
++         stderr_bytes = io.BytesIO()
++
++         # Wrap in BufferedWriter so that text wrappers work correctly
++         stdout_buf = io.BufferedWriter(io.RawIOBase.__new__(io.RawIOBase))
++         stderr_buf = io.BufferedWriter(io.RawIOBase.__new__(io.RawIOBase))
++
++         # Use simpler approach: wrap BytesIO in TextIOWrapper
++         stdout_stream = io.TextIOWrapper(stdout_bytes, encoding=self.charset)
++         stderr_stream = io.TextIOWrapper(stderr_bytes, encoding=self.charset)
++
++         old_stdout = sys.stdout
++         old_stderr = sys.stderr
++
++         exit_code = 0
++         exception = None
++
++         try:
++             sys.stdout = stdout_stream
++             sys.stderr = stderr_stream
++
++             try:
++                 if args is None:
++                     args = []
++                 cli(args, **kwargs)
++             except SystemExit as e:
++                 exit_code = e.code if e.code is not None else 0
++             except Exception as e:
++                 if not catch_exceptions:
++                     raise
++                 exception = e
++                 exit_code = 1
++         finally:
++             # Flush streams to ensure all buffered data is written to BytesIO
++             try:
++                 sys.stdout.flush()
++             except Exception:
++                 pass
++             try:
++                 sys.stderr.flush()
++             except Exception:
++                 pass
++
++             sys.stdout = old_stdout
++             sys.stderr = old_stderr
++
++         output = stdout_bytes.getvalue().decode(self.charset, errors="replace")
++         stderr_output = stderr_bytes.getvalue().decode(self.charset, errors="replace")
++
++         return Result(
++             output=output,
++             stderr=stderr_output,
++             exit_code=exit_code,
++             exception=exception,
++         )
+*** Add File: tests/__init__.py
+*** Add File: tests/test_testing.py
++ import sys
++ import pytest
++ from click.testing import CliRunner
++
++
++ def sample_cli(args):
++     """A simple CLI that writes to stderr without explicit flush."""
++     print("hello stdout", flush=False)
++     print("hello stderr", file=sys.stderr, flush=False)
++
++
++ def test_stderr_captured_without_flush():
++     """Test that stderr written without explicit flush is captured."""
++     runner = CliRunner()
++     result = runner.invoke(sample_cli, [])
++     assert "hello stderr" in result.stderr, (
++         f"Expected 'hello stderr' in stderr output, got: {result.stderr!r}"
++     )
++     assert "hello stdout" in result.output, (
++         f"Expected 'hello stdout' in output, got: {result.output!r}"
++     )
++
++
++ def test_stderr_multiple_writes_without_flush():
++     """Test that multiple stderr writes without flush are all captured."""
++     def cli(args):
++         for i in range(5):
++             print(f"line {i}", file=sys.stderr, flush=False)
++
++     runner = CliRunner()
++     result = runner.invoke(cli, [])
++     for i in range(5):
++         assert f"line {i}" in result.stderr, (
++             f"Expected 'line {i}' in stderr, got: {result.stderr!r}"
++         )
++
++
++ def test_exit_code_captured():
++     """Test that exit code is properly captured."""
++     def cli(args):
++         raise SystemExit(42)
++
++     runner = CliRunner()
++     result = runner.invoke(cli, [])
++     assert result.exit_code == 42
++
++
++ def test_exception_captured():
++     """Test that exceptions are captured when catch_exceptions=True."""
++     def cli(args):
++         raise ValueError("test error")
++
++     runner = CliRunner()
++     result = runner.invoke(cli, [])
++     assert result.exit_code == 1
++     assert isinstance(result.exception, ValueError)
++
++
++ def test_exception_propagated():
++     """Test that exceptions propagate when catch_exceptions=False."""
++     def cli(args):
++         raise ValueError("test error")
++
++     runner = CliRunner()
++     with pytest.raises(ValueError, match="test error"):
++         runner.invoke(cli, [], catch_exceptions=False)
++
++
++ def test_stderr_write_via_sys_stderr_write():
++     """Test that sys.stderr.write without flush is captured."""
++     def cli(args):
++         sys.stderr.write("direct write\n")
++         # No flush called
++
++     runner = CliRunner()
++     result = runner.invoke(cli, [])
++     assert "direct write" in result.stderr, (
++         f"Expected 'direct write' in stderr, got: {result.stderr!r}"
++     )
+*** End Patch

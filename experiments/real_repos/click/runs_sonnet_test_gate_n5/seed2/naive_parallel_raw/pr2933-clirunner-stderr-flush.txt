@@ -1,0 +1,292 @@
+I'll analyze the issue and fix the `CliRunner` to properly capture unflushed stderr writes.
+
+The problem is that when `CliRunner.invoke` finishes, it needs to flush the stderr buffer to ensure all written data is captured in the result.
+
+Let me look at the testing.py file structure and make the necessary fixes:
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+ import io
+ import os
+ import shlex
+ import sys
+ import tempfile
+ import typing as t
+ from contextlib import contextmanager
+ from types import TracebackType
+ 
+ import click
+ from click._compat import _default_text_stderr
+ from click._compat import _default_text_stdout
+ 
+ 
+ if t.TYPE_CHECKING:
+     from click import BaseCommand
+ 
+ 
+ class BytesIOCopy(io.RawIOBase):
+     """A stream that writes to two streams simultaneously."""
+ 
+     def __init__(self, buffers: t.List[io.IOBase]) -> None:
+         self.buffers = buffers
+ 
+     def readable(self) -> bool:
+         return False
+ 
+     def writable(self) -> bool:
+         return True
+ 
+     def write(self, b: bytes) -> int:  # type: ignore[override]
+         for buf in self.buffers:
+             buf.write(b)
+         return len(b)
+ 
+ 
+ class _default_text_stderr_wrapper:
+     """Wrapper around _default_text_stderr to allow it to be used as a
+     context manager."""
+ 
+     def __enter__(self) -> t.TextIO:
+         return _default_text_stderr()
+ 
+     def __exit__(self, *args: t.Any) -> None:
+         pass
+@@
+ class BytesIOCopy(io.RawIOBase):
+-    """A stream that writes to two streams simultaneously."""
++    """A raw stream that writes to two byte buffers simultaneously."""
+ 
+     def __init__(self, buffers: t.List[io.IOBase]) -> None:
+         self.buffers = buffers
+@@
+ class _default_text_stderr_wrapper:
+-    """Wrapper around _default_text_stderr to allow it to be used as a
+-    context manager."""
+-
+-    def __enter__(self) -> t.TextIO:
+-        return _default_text_stderr()
+-
+-    def __exit__(self, *args: t.Any) -> None:
+-        pass
+@@
+ import io
+ import os
+ import shlex
+ import sys
+ import tempfile
+ import typing as t
+ from contextlib import contextmanager
+ from types import TracebackType
+@@
+-import io
+-import os
+-import shlex
+-import sys
+-import tempfile
+-import typing as t
+-from contextlib import contextmanager
+-from types import TracebackType
+-
+-import click
+-from click._compat import _default_text_stderr
+-from click._compat import _default_text_stdout
+-
+-
+-if t.TYPE_CHECKING:
+-    from click import BaseCommand
+-
+-
+-class BytesIOCopy(io.RawIOBase):
+-    """A raw stream that writes to two byte buffers simultaneously."""
+-
+-    def __init__(self, buffers: t.List[io.IOBase]) -> None:
+-        self.buffers = buffers
+-
+-    def readable(self) -> bool:
+-        return False
+-
+-    def writable(self) -> bool:
+-        return True
+-
+-    def write(self, b: bytes) -> int:  # type: ignore[override]
+-        for buf in self.buffers:
+-            buf.write(b)
+-        return len(b)
+-
+-
+-class _default_text_stderr_wrapper:
+-    """Wrapper around _default_text_stderr to allow it to be used as a
+-    context manager."""
+-
+-    def __enter__(self) -> t.TextIO:
+-        return _default_text_stderr()
+-
+-    def __exit__(self, *args: t.Any) -> None:
+-        pass
++import io
++import os
++import shlex
++import sys
++import tempfile
++import typing as t
++from contextlib import contextmanager
++from types import TracebackType
++
++import click
++from click._compat import _default_text_stderr
++from click._compat import _default_text_stdout
++
++
++if t.TYPE_CHECKING:
++    from click import BaseCommand
+
+Let me take a fresh approach and look at the actual file content more carefully:
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+ import io
+ import os
+ import shlex
+ import sys
+ import tempfile
+ import typing as t
+ from contextlib import contextmanager
+ from types import TracebackType
+@@
+ class Result:
+     """Holds the captured result of an invoked CLI script.
+ 
+     :param runner: The runner that created the result
+     :param stdout_bytes: The output as bytes.
+     :param stderr_bytes: The error output as bytes.
+     :param exit_code: The exit code as integer.
+     :param exception: The unhandled exception instance if one occurred.
+     :param exc_info: The traceback if an exception occurred.
+     :param return_value: The value returned from the invoked command.
+     """
+@@
+     def invoke(
+         self,
+         cli: "BaseCommand",
+         args: t.Optional[t.Union[str, t.Sequence[str]]] = None,
+         input: t.Optional[t.Union[str, bytes, t.IO]] = None,
+         env: t.Optional[t.Mapping[str, str]] = None,
+         catch_exceptions: bool = True,
+         color: bool = False,
+         **extra: t.Any,
+     ) -> Result:
+@@
+             try:
+                 return_value = cli.main(
+                     args=args or (),
+                     prog_name=self.get_default_prog_name(cli),
+                     standalone_mode=False,
+                     **extra,
+                 )
+             except SystemExit as e:
+                 exc_info = sys.exc_info()
+                 e_code = e.code
+                 if e_code is None:
+                     e_code = 0
+ 
+                 if e_code != 0:
+                     exception = e
+ 
+                 if not isinstance(e_code, int):
+                     sys.stdout.write(str(e_code))
+                     sys.stdout.write("\n")
+                     sys.stdout.flush()
+                     e_code = 1
+ 
+                 exit_code = e_code
+             except Exception as e:
+                 if not catch_exceptions:
+                     raise
+                 exception = e
+                 exc_info = sys.exc_info()
+             finally:
+                 sys.stdout.flush()
++                sys.stderr.flush()
+                 outstreams[0].flush()
+@@
+ import io
+ import os
+ import shlex
+ import sys
+ import tempfile
+ import typing as t
+ from contextlib import contextmanager
+ from types import TracebackType
+*** Update File: tests/test_testing.py
+@@
+ import pytest
+ 
+ import click
+ import click.testing
+ from click.testing import CliRunner
+@@
++def test_stderr_not_flushed_is_captured() -> None:
++    """Unflushed stderr writes should still be captured in the result."""
++
++    @click.command()
++    def cli() -> None:
++        # Write to stderr without explicit flush
++        print("error output", file=sys.stderr, flush=False)
++
++    runner = CliRunner(mix_stderr=False)
++    result = runner.invoke(cli)
++    assert result.exit_code == 0
++    assert result.stderr == "error output\n"
++
++
+*** End Patch
+
+Wait, I need to look at the actual file more carefully. Let me provide a cleaner patch:
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+             finally:
+                 sys.stdout.flush()
+                 outstreams[0].flush()
+*** Update File: src/click/testing.py
+@@
+             finally:
+                 sys.stdout.flush()
++                sys.stderr.flush()
+                 outstreams[0].flush()
+*** End Patch
+
+That's not right either. Let me provide the complete correct patch:
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+             finally:
+                 sys.stdout.flush()
+                 outstreams[0].flush()
++                sys.stderr.flush()
+*** Update File: tests/test_testing.py
+@@
+ import sys
+ 
+ import pytest
+ 
+ import click
+ import click.testing
+ from click.testing import CliRunner
+@@
++def test_stderr_unflushed_captured() -> None:
++    """Unflushed stderr writes should still be captured in the result."""
++
++    @click.command()
++    def cli() -> None:
++        # Write to stderr without explicit flush
++        print("error output", file=sys.stderr, flush=False)
++
++    runner = CliRunner(mix_stderr=False)
++    result = runner.invoke(cli)
++    assert result.exit_code == 0
++    assert result.stderr == "error output\n"
++
++
+*** End Patch

@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr5855-shallowclone-map-set",
+      "prompt": "In v4, Map and Set values returned by defaulted schemas are shared references rather than independent copies. After parsing an object with a defaulted Map or Set field, mutating the returned value affects subsequent parses. Fix shallowClone in packages/zod/src/v4/core/util.ts so each parse returns an independent copy for Map and Set types, and add regression tests."
+    }
+  ]
+}

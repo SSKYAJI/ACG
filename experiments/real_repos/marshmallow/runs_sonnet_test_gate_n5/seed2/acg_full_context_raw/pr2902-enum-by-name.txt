@@ -1,0 +1,175 @@
+I need to find the Enum field's `_deserialize` method in `fields.py` to fix the by-name lookup. Let me look at the relevant section.
+
+The Enum field's by-name lookup likely uses `getattr` or similar on the enum class, which would return non-member attributes. I need to find the exact code and fix it to only return actual enum members.
+
+Let me search for the Enum field implementation. Since the file is truncated, I'll look for the pattern based on what I know about marshmallow's Enum field - it typically does something like `self.enum[value]` for by-name lookup (which is correct) or `getattr(self.enum, value)` (which is incorrect).
+
+The fix should use `self.enum[value]` (subscript notation) for by-name lookup, which only returns enum members, rather than `getattr(self.enum, value)` which returns any class attribute.
+
+Now let me also add regression tests. First, let me construct the patch:
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+-from enum import Enum as EnumType
++from enum import Enum as EnumType, EnumMeta
+*** Update File: tests/test_deserialization.py
+@@
+ from tests.base import (
+     ALL_FIELDS,
+     DateEnum,
+     GenderEnum,
+     HairColorEnum,
+     assert_date_equal,
+     assert_time_equal,
+     central,
+     predicate,
+ )
++
++
++class MethodEnum(GenderEnum):
++    """Enum subclass with a non-member method for regression testing."""
++
++    @classmethod
++    def some_class_method(cls):
++        return "not a member"
++
++    def some_instance_method(self):
++        return "also not a member"
+*** End Patch
+
+Wait, I need to actually find the Enum field's `_deserialize` method. Let me look more carefully at what's available and construct the right fix. Since the file is truncated, I need to find the Enum field section. Let me search for it by looking at what I know about marshmallow's codebase.
+
+The typical marshmallow Enum field by-name lookup uses `getattr(self.enum, value)` which is the bug. The fix is to use `self.enum[value]` instead.
+
+Let me provide the complete patch:
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+-from enum import Enum as EnumType
++from enum import Enum as EnumType
+*** End Patch
+
+I need to see the actual Enum field code. Since the file is truncated, let me provide the patch based on the known pattern in marshmallow's source:
+
+*** Begin Patch
+*** Update File: tests/test_deserialization.py
+@@
+ from tests.base import (
+     ALL_FIELDS,
+     DateEnum,
+     GenderEnum,
+     HairColorEnum,
+     assert_date_equal,
+     assert_time_equal,
+     central,
+     predicate,
+ )
++
++
++class _EnumWithMethod(GenderEnum):
++    pass
+*** End Patch
+
+I realize I'm going in circles without seeing the actual Enum field code. Let me provide the most targeted patch I can based on the known marshmallow source pattern:
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+-        if self.by_value:
++        if self.by_value is True:
+@@
+-            try:
+-                return self.enum(value)
+-            except ValueError:
+-                raise self.make_error("by_value", input=value, value=value)
+-        try:
+-            return getattr(self.enum, value)
+-        except AttributeError:
+-            raise self.make_error("by_name", input=value, name=value)
++            try:
++                return self.enum(value)
++            except ValueError:
++                raise self.make_error("by_value", input=value, value=value)
++        try:
++            return self.enum[value]
++        except KeyError:
++            raise self.make_error("by_name", input=value, name=value)
+*** Update File: tests/test_deserialization.py
+@@
+ from tests.base import (
+     ALL_FIELDS,
+     DateEnum,
+     GenderEnum,
+     HairColorEnum,
+     assert_date_equal,
+     assert_time_equal,
+     central,
+     predicate,
+ )
+@@
+ class TestEnumField:
+@@
+-    def test_enum_field_by_name(self):
++    def test_enum_field_by_name_non_member_attribute_raises_error(self):
++        import enum
++
++        class MyEnum(enum.Enum):
++            A = 1
++            B = 2
++
++            @classmethod
++            def class_method(cls):
++                return "not a member"
++
++        field = fields.Enum(MyEnum, by_value=False)
++        # Actual members should work
++        assert field.deserialize("A") == MyEnum.A
++        assert field.deserialize("B") == MyEnum.B
++        # Non-member attributes should raise ValidationError
++        with pytest.raises(ValidationError):
++            field.deserialize("class_method")
++        with pytest.raises(ValidationError):
++            field.deserialize("_generate_next_value_")
++        with pytest.raises(ValidationError):
++            field.deserialize("_missing_")
++
++    def test_enum_field_by_name(self):
+*** End Patch
+
+I'm making too many guesses. Let me provide a clean, targeted patch based on the actual known marshmallow source code pattern:
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+-            try:
+-                return getattr(self.enum, value)
+-            except AttributeError:
+-                raise self.make_error("by_name", input=value, name=value)
++            try:
++                return self.enum[value]
++            except KeyError:
++                raise self.make_error("by_name", input=value, name=value)
+*** Update File: tests/test_deserialization.py
+@@
+ class TestEnumField:
+@@
++    def test_enum_field_by_name_non_member_attribute_raises_error(self):
++        import enum
++
++        class MyEnum(enum.Enum):
++            A = 1
++            B = 2
++
++            @classmethod
++            def class_method(cls):
++                return "not a member"
++
++        field = fields.Enum(MyEnum, by_value=False)
++        assert field.deserialize("A") == MyEnum.A
++        assert field.deserialize("B") == MyEnum.B
++        with pytest.raises(ValidationError):
++            field.deserialize("class_method")
++
+*** End Patch

@@ -1,0 +1,410 @@
+Looking at the code, I need to understand the issue. When an IDN email address like `user@-münchen.de` is processed, the domain part `-münchen.de` gets encoded via `encode("idna")` to something like `-xn--mnchen-3ya.de`, which then passes the DOMAIN_REGEX because the regex only checks the ASCII-encoded form. But `-xn--mnchen-3ya.de` starts with a hyphen, which should be invalid.
+
+The fix should validate that after IDNA encoding, each label doesn't start or end with a hyphen. Let me look at the relevant code section:
+
+```python
+if not self.DOMAIN_REGEX.match(domain_part):
+    try:
+        domain_part = domain_part.encode("idna").decode("ascii")
+    except UnicodeError:
+        pass
+    else:
+        if self.DOMAIN_REGEX.match(domain_part):
+            return value
+    raise ValidationError(message)
+```
+
+The issue is that `münchen-.de` encodes to `xn--mnchen-3ya-.de` (label ending with hyphen) and `-münchen.de` encodes to `-xn--mnchen-3ya.de` (label starting with hyphen). Wait, actually `encode("idna")` might raise an error for these... let me think more carefully.
+
+Actually, Python's `encodings.idna` may or may not raise errors for labels starting/ending with hyphens. The fix should check each label of the encoded domain to ensure none start or end with a hyphen.
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+                 raise ValidationError(message)
+ 
+         return value
++ 
++     @staticmethod
++     def _domain_labels_valid(domain: str) -> bool:
++         """Return True if no label in the domain starts or ends with a hyphen."""
++         return all(
++             label and not label.startswith("-") and not label.endswith("-")
++             for label in domain.split(".")
++         )
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+                 raise ValidationError(message)
+ 
+         return value
+@@
+-         if domain_part not in self.DOMAIN_WHITELIST:
+-             if not self.DOMAIN_REGEX.match(domain_part):
+-                 try:
+-                     domain_part = domain_part.encode("idna").decode("ascii")
+-                 except UnicodeError:
+-                     pass
+-                 else:
+-                     if self.DOMAIN_REGEX.match(domain_part):
+-                         return value
+-                 raise ValidationError(message)
+-
+-         return value
++         if domain_part not in self.DOMAIN_WHITELIST:
++             if not self.DOMAIN_REGEX.match(domain_part):
++                 try:
++                     domain_part = domain_part.encode("idna").decode("ascii")
++                 except UnicodeError:
++                     pass
++                 else:
++                     if self.DOMAIN_REGEX.match(domain_part) and self._domain_labels_valid(
++                         domain_part
++                     ):
++                         return value
++                 raise ValidationError(message)
++             elif not self._domain_labels_valid(domain_part):
++                 raise ValidationError(message)
++
++         return value
++
++     @staticmethod
++     def _domain_labels_valid(domain: str) -> bool:
++         """Return True if no label in the domain starts or ends with a hyphen."""
++         return all(
++             label and not label.startswith("-") and not label.endswith("-")
++             for label in domain.split(".")
++         )
+*** End Patch
+
+Wait, I made a mistake - I can't have two updates that conflict. Let me redo this properly with a single update hunk.
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+                 raise ValidationError(message)
+ 
+         return value
+-
+-
+-class Range(Validator):
++
++    @staticmethod
++    def _domain_labels_valid(domain: str) -> bool:
++        """Return True if no label in the domain starts or ends with a hyphen."""
++        return all(
++            label and not label.startswith("-") and not label.endswith("-")
++            for label in domain.split(".")
++        )
++
++
++class Range(Validator):
+*** End Patch
+
+That's still wrong because I'm not fixing the actual validation logic. Let me do this carefully with one clean hunk:
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+                 raise ValidationError(message)
+ 
+         return value
+*** Update File: tests/test_validate.py
+@@
+     "δοκ.ιμή@παράδειγμα.δοκιμή",
+     ],
+ )
+ def test_email_valid(valid_email):
+@@
+     "niceandsimple@localhost",
+     "josé@blah.com",
+     "δοκ.ιμή@παράδειγμα.δοκιμή",
++    "user@münchen.de",
++    "user@xn--mnchen-3ya.de",
+ ]
+ )
+ def test_email_valid(valid_email):
+*** End Patch
+
+I keep making mistakes. Let me write one clean, correct patch:
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+                 raise ValidationError(message)
+ 
+         return value
++
++    @staticmethod
++    def _domain_labels_valid(domain: str) -> bool:
++        """Return True if no label in the domain starts or ends with a hyphen."""
++        return all(
++            label and not label.startswith("-") and not label.endswith("-")
++            for label in domain.split(".")
++        )
+*** Update File: tests/test_validate.py
+@@
+     "niceandsimple@localhost",
+     "josé@blah.com",
+     "δοκ.ιμή@παράδειγμα.δοκιμή",
++    "user@münchen.de",
+ ]
+ )
+ def test_email_valid(valid_email):
+@@
+     "user@example",
+     "@nouser.com",
+     "example.com",
+     "user",
+     "",
+     None,
+ ]
+ )
+ def test_email_invalid(invalid_email):
++
++
++@pytest.mark.parametrize(
++    "invalid_email",
++    [
++        "user@-münchen.de",
++        "user@münchen-.de",
++        "user@-example.com",
++        "user@example-.com",
++    ],
++)
++def test_email_invalid_idn_hyphen(invalid_email):
++    validator = validate.Email()
++    with pytest.raises(ValidationError):
++        validator(invalid_email)
+*** End Patch
+
+I keep producing malformed patches. Let me write one final, careful patch:
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+                 raise ValidationError(message)
+ 
+         return value
++
++    @staticmethod
++    def _domain_labels_valid(domain: str) -> bool:
++        """Return True if no label in the domain starts or ends with a hyphen."""
++        return all(
++            label and not label.startswith("-") and not label.endswith("-")
++            for label in domain.split(".")
++        )
+*** Update File: src/marshmallow/validate.py
+@@
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+*** End Patch
+
+I keep making errors. Let me write the complete correct patch in one shot:
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+-                     if self.DOMAIN_REGEX.match(domain_part):
++                     if self.DOMAIN_REGEX.match(domain_part) and self._domain_labels_valid(domain_part):
+                         return value
+                 raise ValidationError(message)
++            elif not self._domain_labels_valid(domain_part):
++                raise ValidationError(message)
+ 
+         return value
+ 
+ 
+ class Range(Validator):
+*** Update File: src/marshmallow/validate.py
+@@
+         return value
+ 
+ 
+ class Range(Validator):
++
++
++Email._domain_labels_valid = staticmethod(
++    lambda domain: all(
++        label and not label.startswith("-") and not label.endswith("-")
++        for label in domain.split(".")
++    )
++)
+*** End Patch
+
+This is getting messy. Let me write one clean, complete patch:
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+-                     if self.DOMAIN_REGEX.match(domain_part):
++                     if self.DOMAIN_REGEX.match(domain_part) and self._domain_labels_valid(domain_part):
+                         return value
+                 raise ValidationError(message)
++            elif not self._domain_labels_valid(domain_part):
++                raise ValidationError(message)
+ 
+         return value
+ 
+ 
++    @staticmethod
++    def _domain_labels_valid(domain: str) -> bool:
++        """Return True if no label in the domain starts or ends with a hyphen."""
++        return all(
++            label and not label.startswith("-") and not label.endswith("-")
++            for label in domain.split(".")
++        )
++
++
+ class Range(Validator):
+*** Update File: tests/test_validate.py
+@@
+     "niceandsimple@localhost",
+     "josé@blah.com",
+     "δοκ.ιμή@παράδειγμα.δοκιμή",
+-    ],
+-)
++    "user@münchen.de",
++],
++)
+ def test_email_valid(valid_email):
+*** End Patch
+
+I keep making formatting errors. Let me be very precise about the exact lines in the file and write one final correct patch:
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+-                    if self.DOMAIN_REGEX.match(domain_part):
++                    if self.DOMAIN_REGEX.match(domain_part) and self._domain_labels_valid(domain_part):
+                         return value
+                 raise ValidationError(message)
++            elif not self._domain_labels_valid(domain_part):
++                raise ValidationError(message)
+ 
+         return value
+ 
+ 
++    @staticmethod
++    def _domain_labels_valid(domain: str) -> bool:
++        """Return True if no label in the domain starts or ends with a hyphen."""
++        return all(
++            label and not label.startswith("-") and not label.endswith("-")
++            for label in domain.split(".")
++        )
++
++
+ class Range(Validator):
+*** Update File: tests/test_validate.py
+@@
+     "niceandsimple@localhost",
+     "josé@blah.com",
+     "δοκ.ιμή@παράδειγμα.δοκιμή",
++    "user@münchen.de",
+     ],
+ )
+ def test_email_valid(valid_email):
+@@
+     "user@example",
+     "@nouser.com",
+     "example.com",
+     "user",
+     "",
+     None,
+     ],
+ )
+ def test_email_invalid(invalid_email):
+     validator = validate.Email()
+     with pytest.raises(ValidationError):
+         validator(invalid_email)
++
++
++@pytest.mark.parametrize(
++    "invalid_email",
++    [
++        "user@-münchen.de",
++        "user@münchen-.de",
++        "user@-example.com",
++        "user@example-.com",
++    ],
++)
++def test_email_invalid_idn_hyphen(invalid_email):
++    validator = validate.Email()
++    with pytest.raises(ValidationError):
++        validator(invalid_email)
+*** End Patch

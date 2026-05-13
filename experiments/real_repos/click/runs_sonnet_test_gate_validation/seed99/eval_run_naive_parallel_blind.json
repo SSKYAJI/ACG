@@ -1,0 +1,193 @@
+{
+  "backend": "local",
+  "created_at": "2026-05-13T07:31:09Z",
+  "evidence_kind": "naive_parallel_blind_applied_diff",
+  "execution_mode": "applied_diff_live",
+  "lockfile": "experiments/real_repos/click/agent_lock_pr-2933.json",
+  "model": {
+    "model": "claude-sonnet-4-6",
+    "provider": "openai-compatible",
+    "url": "https://api.anthropic.com/v1"
+  },
+  "repo": {
+    "commit": "b7cf06970e40a3144eb963ff34ed7c38934afb40",
+    "local_path": "/private/var/folders/lg/_wh4n5yj1s92mr3w_n6_l5nm0000gn/T/acg-click-validation-m4zghiin/experiments/real_repos/click/checkout",
+    "url": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/click/checkout"
+  },
+  "run_id": "greenhouse-local-naive_parallel_blind-20260513-073109",
+  "strategy": "naive_parallel_blind",
+  "suite_name": "click-validation",
+  "summary_metrics": {
+    "acus_consumed_total": null,
+    "applied_changed_files_total": 0,
+    "blocked_invalid_write_count": 2,
+    "compile_cost_usd": null,
+    "compile_wall_seconds": null,
+    "cost_method": null,
+    "cost_per_completed_task": null,
+    "cost_source": null,
+    "cost_usd_total": null,
+    "cupp_rate": 0.0,
+    "first_run_pass_rate": 0.0,
+    "human_interventions": 0,
+    "integration_burden": {
+      "blocked_events_total": 2,
+      "changed_file_mentions_total": 4,
+      "changed_lines_added": null,
+      "changed_lines_deleted": null,
+      "changed_lines_total": null,
+      "diff_stats_kind": null,
+      "duplicate_file_touches": 0,
+      "out_of_bounds_files_total": 2,
+      "overlapping_files": [],
+      "overlapping_task_pairs": 0,
+      "review_file_mentions_total": 6,
+      "review_unique_files_total": 4,
+      "unique_changed_files": 4
+    },
+    "merge_conflicts": 0,
+    "model_silence_count": 0,
+    "oob_files_per_task_mean": 2.0,
+    "out_of_bounds_write_count": 2,
+    "overlapping_write_pairs": 0,
+    "patch_na_count": 0,
+    "proposal_completion_rate": 1.0,
+    "proposal_status_counts": {
+      "declined": 0,
+      "ok": 1,
+      "transport_error": 0,
+      "truncated": 0,
+      "unparseable": 0
+    },
+    "replan_rescued_count": 0,
+    "resolved_unsafe_rate": 0.0,
+    "successful_parallel_speedup": null,
+    "task_completion_rate": 0.0,
+    "tasks_completed": 0,
+    "tasks_completed_per_hour": 0.0,
+    "tasks_total": 1,
+    "tested_completion_rate": 0.0,
+    "tested_tasks_completed": 0,
+    "tests_ran_count": 1,
+    "tests_total_run": 0,
+    "tokens_all_in": 294,
+    "tokens_completion_method": "provider_usage_completion_tokens",
+    "tokens_completion_total": 1803,
+    "tokens_orchestrator_overhead": null,
+    "tokens_per_cupp": null,
+    "tokens_planner_completion_total": null,
+    "tokens_planner_method": null,
+    "tokens_planner_total": null,
+    "tokens_prompt_method": "provider_usage_prompt_tokens",
+    "tokens_prompt_total": 294,
+    "tokens_scope_review_total": null,
+    "tokens_total_per_task_mean": 2097.0,
+    "tokens_worker_prompt_total": 294,
+    "total_cost_usd_with_compile": null,
+    "total_wall_seconds_with_compile": 23.0107,
+    "typecheck_fail_count": 0,
+    "typecheck_pass_count": 0,
+    "typecheck_skipped_count": 1,
+    "unresolved_safe_rate": 0.0,
+    "unresolved_unsafe_rate": 1.0,
+    "wall_time_seconds": 23.0107
+  },
+  "tasks": [
+    {
+      "actual_changed_files": [
+        "src/click/__init__.py",
+        "src/click/testing.py",
+        "tests/__init__.py",
+        "tests/test_testing.py"
+      ],
+      "actual_changed_files_kind": "naive_parallel_blind_applied_diff",
+      "allowed_write_globs": [
+        "src/click/testing.py",
+        "tests/test_testing.py"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "raw_reply": null,
+        "session_id": null
+      },
+      "blocked_write_events": [
+        {
+          "description": "Add",
+          "file": "src/click/__init__.py",
+          "reason": "path 'src/click/__init__.py' is outside task 'pr2933-clirunner-stderr-flush''s allowed_paths (src/click/testing.py, tests/test_testing.py)"
+        },
+        {
+          "description": "Add",
+          "file": "tests/__init__.py",
+          "reason": "path 'tests/__init__.py' is outside task 'pr2933-clirunner-stderr-flush''s allowed_paths (src/click/testing.py, tests/test_testing.py)"
+        }
+      ],
+      "fail_to_pass_passed": 0,
+      "fail_to_pass_total": 1,
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": null,
+        "cost_usd": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "patch_applies": true,
+        "tokens_completion": 1803,
+        "tokens_prompt": 294,
+        "typecheck_diagnostic_count": null,
+        "typecheck_exit_code": null,
+        "typecheck_ran": false,
+        "typecheck_wall_seconds": null,
+        "wall_time_seconds": 22.5445
+      },
+      "out_of_bounds_files": [
+        "src/click/__init__.py",
+        "tests/__init__.py"
+      ],
+      "overlaps_with": [],
+      "overlay_applied": true,
+      "overlay_skip_reason": "",
+      "pass_to_pass_passed": 0,
+      "pass_to_pass_total": 23,
+      "patch_na_reason": null,
+      "predicted_write_files": [
+        "src/click/testing.py",
+        "tests/test_testing.py"
+      ],
+      "prompt": "Fix CliRunner so that data written to stderr without an explicit flush (e.g. using print with flush=False) is properly captured in the test result. Currently, unflushed stderr writes are lost when CliRunner.invoke finishes.",
+      "proposal_status": "ok",
+      "proposal_write_count": 4,
+      "session_id": null,
+      "status": "completed_unsafe",
+      "task_id": "pr2933-clirunner-stderr-flush",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "tests_collection_error": true,
+      "tests_exit_code": 4,
+      "tests_failed_count": null,
+      "tests_passed_count": null,
+      "tests_ran": true,
+      "tests_skip_reason": "",
+      "tests_total_count": null,
+      "timestamps": {
+        "finished_at": "2026-05-13T07:31:09Z",
+        "started_at": "2026-05-13T07:30:46Z"
+      }
+    }
+  ],
+  "version": "0.1"
+}

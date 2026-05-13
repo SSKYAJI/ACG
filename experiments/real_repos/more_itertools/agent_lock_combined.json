@@ -1,0 +1,91 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-13T06:26:39.198463Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "mock-llm-canned",
+    "tokens_planner_total": 1225,
+    "tokens_scope_review_total": 1076,
+    "tokens_planner_completion_total": null,
+    "tokens_planner_method": "estimate_chars_div_4",
+    "compile_wall_seconds": 0.1575,
+    "compile_cost_usd": null
+  },
+  "repo": {
+    "root": "experiments/real_repos/more_itertools/checkout",
+    "git_url": null,
+    "commit": "247e15b3a489d5805375c95dfa79486c9bd0eb1b",
+    "languages": [
+      "python"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr1153-numeric-range-reversed-empty",
+      "prompt": "numeric_range currently mishandles reversing empty ranges: calling reversed() on an empty numeric_range should produce no values, but some empty ranges yield unexpected output. Fix the reversed iteration behavior and add regression tests.",
+      "predicted_writes": [
+        {
+          "path": "more_itertools/more.py",
+          "confidence": 0.95,
+          "reason": "PR #1153 fixes numeric_range.__reversed__, which is implemented in more_itertools/more.py. Patched from manifest ground_truth_files after acg compile returned empty allowed paths."
+        },
+        {
+          "path": "tests/test_more.py",
+          "confidence": 0.9,
+          "reason": "PR #1153 adds regression coverage for numeric_range reverse behavior in the existing tests/test_more.py test module. Patched from manifest ground_truth_files after acg compile returned empty allowed paths."
+        }
+      ],
+      "allowed_paths": [
+        "more_itertools/more.py",
+        "tests/test_more.py"
+      ],
+      "candidate_context_paths": [
+        "tests/test_more.py",
+        "tests/test_recipes.py"
+      ],
+      "file_scopes": [
+        {
+          "path": "tests/test_more.py",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "hint",
+            "pagerank",
+            "testlink"
+          ],
+          "reason": "personalized PageRank rank #2, top symbol matches: AdjacentTests, AllUniqueTests, AlwaysReversibleTests.; BM25 lexical match over path, identifiers, imports, docstrings (score 23.04). Candidate context only; requires replan before write. Signals: bm25, hint, pagerank, testlink."
+        },
+        {
+          "path": "tests/test_recipes.py",
+          "tier": "candidate_context",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "hint",
+            "pagerank",
+            "testlink"
+          ],
+          "reason": "personalized PageRank rank #3, top symbol matches: AllEqualTests, BatchedTests, BeforeAndAfterTests.; BM25 lexical match over path, identifiers, imports, docstrings (score 6.00). Candidate context only; requires replan before write. Signals: bm25, hint, pagerank, testlink."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr1153-numeric-range-reversed-empty"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

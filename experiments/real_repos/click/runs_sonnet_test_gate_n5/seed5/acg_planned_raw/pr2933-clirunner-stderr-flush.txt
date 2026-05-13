@@ -1,0 +1,60 @@
+Looking at the code, I need to understand the issue. When `CliRunner.invoke` finishes, the `sys.stdout` and `sys.stderr` (which are `_NamedTextIOWrapper` instances wrapping `BytesIOCopy` streams) may have unflushed data in their internal buffers. The fix is to flush these streams before reading their values.
+
+Let me look at the truncated part of `invoke` to understand the full flow, and then add flushes before capturing the output.
+
+The fix should flush `sys.stdout` and `sys.stderr` (the text wrappers) before the isolation context exits, so that any buffered data gets written to the underlying `BytesIO` streams.
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+             for key, value in old_env.items():
+                 if value is None:
+                     try:
+                         del os.environ[key]
+                     except Exception:
+                         pass
+                 else:
+                     os.environ[key] = value
+             sys.stdout = old_stdout
+             sys.stderr = old_stderr
+             sys.stdin = old_stdin
+*** Update File: src/click/testing.py
+@@
+             for key, value in old_env.items():
+                 if value is None:
+                     try:
+                         del os.environ[key]
+                     except Exception:
+                         pass
+                 else:
+                     os.environ[key] = value
++            sys.stdout.flush()
++            sys.stderr.flush()
+             sys.stdout = old_stdout
+             sys.stderr = old_stderr
+             sys.stdin = old_stdin
+*** Update File: tests/test_testing.py
+@@
+ def test_isolation_stderr_errors():
+     """Writing to stderr should escape invalid characters instead of
+     raising a UnicodeEncodeError.
+     """
+     runner = CliRunner()
+
+     with runner.isolation() as (_, err, _):
+         click.echo("\udce2", err=True, nl=False)
+
+     assert err.getvalue() == b"\\udce2"
++
++
++def test_stderr_unflushed():
++    """Data written to stderr without an explicit flush should be captured."""
++
++    @click.command()
++    def cli():
++        print("error message", file=sys.stderr, flush=False)
++
++    runner = CliRunner()
++    result = runner.invoke(cli)
++    assert result.stderr == "error message\n"
+*** End Patch

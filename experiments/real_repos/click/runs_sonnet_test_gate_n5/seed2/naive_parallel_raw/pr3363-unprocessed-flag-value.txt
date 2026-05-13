@@ -1,0 +1,93 @@
+Looking at the task, I need to fix the `Option` class initialization in `src/click/core.py` so that when `flag_value` is set to a non-basic type (e.g., an enum), the option's type is automatically set to `UNPROCESSED` instead of raising a `TypeError`.
+
+Let me analyze the relevant code. The `Option.__init__` method handles `flag_value` and sets the type. The issue is likely in how the type is inferred from `flag_value` when it's not a basic type (bool, int, float, str).
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+         if self.is_flag and value_is_set:
+             if self.secondary:
+                 self.type = self.type.from_param_decls(self.secondary)
+             else:
+-                self.type = STRING
++                try:
++                    self.type = self.type.from_param_decls([self.flag_value])
++                except (TypeError, AttributeError):
++                    self.type = UNPROCESSED
+*** Update File: src/click/core.py
+@@
+         if self.is_flag:
+             if flag_value is _default_text_stderr:
+                 flag_value = True
+ 
+             self.flag_value: t.Any = flag_value
+             self.is_bool_flag = self.flag_value in {True, False}
+ 
+             # Flags default to being enabled/disabled.
+             if self.is_bool_flag and self.secondary is None:
+                 self.secondary = not self.flag_value
+         else:
+             self.flag_value = True
+             self.is_bool_flag = True
+             self.secondary = False
+ 
+         # Flags default to not being required.
+         if self.is_flag and self.required is None:
+             self.required = False
+ 
+         if self.type is DEFAULT_TYPE:
+             if self.is_flag and self.is_bool_flag:
+                 self.type = BOOL
+             elif self.is_flag and not self.is_bool_flag:
+-                self.type = STRING
++                if isinstance(self.flag_value, (bool, int, float, str, bytes)):
++                    self.type = STRING
++                else:
++                    self.type = UNPROCESSED
+*** Update File: tests/test_options.py
+@@
+ import pytest
+ 
+ import click
++import enum
+ 
+ 
+ def test_prefixes(runner):
+*** Update File: tests/test_options.py
+@@
+ def test_aliases(runner):
+     @click.command()
+     @click.option("--name", "-n", default="world")
+     def cmd(name):
+         click.echo(f"Hello {name}!")
+ 
+     result = runner.invoke(cmd, ["-n", "foo"])
+     assert result.exit_code == 0
+     assert result.output == "Hello foo!\n"
++
++
++def test_flag_value_enum(runner):
++    """Test that flag_value with a non-basic type (enum) sets type to UNPROCESSED."""
++
++    class Color(enum.Enum):
++        RED = 1
++        BLUE = 2
++
++    @click.command()
++    @click.option("--red", "color", flag_value=Color.RED, default=Color.BLUE)
++    @click.option("--blue", "color", flag_value=Color.BLUE)
++    def cmd(color):
++        click.echo(color.name)
++
++    result = runner.invoke(cmd, ["--red"])
++    assert result.exit_code == 0, result.output
++    assert result.output.strip() == "RED"
++
++    result = runner.invoke(cmd, ["--blue"])
++    assert result.exit_code == 0, result.output
++    assert result.output.strip() == "BLUE"
++
++    result = runner.invoke(cmd, [])
++    assert result.exit_code == 0, result.output
++    assert result.output.strip() == "BLUE"
+*** End Patch

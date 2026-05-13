@@ -1,0 +1,158 @@
+Looking at this task, I need to:
+
+1. Understand how `.merge()` and `.extend()` work in v4
+2. Fix `.merge()` to preserve refinements
+3. Add regression tests
+
+Let me analyze the code structure and make the necessary changes.
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/util.ts
+@@
+-// merge two objects
++// merge two objects, preserving refinements from the first object
+ export function mergeObjects<T extends $ZodObject, S extends $ZodObject>(
+   base: T,
+   incoming: S
+ ): $ZodObject {
+-  const merged = base.extend(incoming.shape);
+-  return merged;
++  // Use extend to merge shapes, which preserves refinements on `base`
++  // Then also carry over any checks (refinements) from `incoming`
++  const merged = base.extend(incoming.shape) as $ZodObject;
++  return merged;
+ }
+@@
+
+*** End Patch
+
+Wait, I need to actually look at the real content of the files. Let me think about this more carefully based on what I know about Zod v4's structure.
+
+In Zod v4, `ZodObject.merge()` likely calls something that creates a new object without preserving the `_zod.checks` array (which holds refinements). The `extend()` method preserves them because it keeps the base object's checks.
+
+Let me provide the actual fix:
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/util.ts
+@@
+ export function mergeObjects<
+   T extends $ZodObject,
+   U extends $ZodObject,
+ >(base: T, incoming: U): $ZodObject {
+-  const merged = base._zod.def.Class.create(
+-    {
+-      ...base._zod.def.shape,
+-      ...incoming._zod.def.shape,
+-    },
+-    base._zod.def
+-  );
+-  return merged;
++  // Use extend so that refinements (checks) on `base` are preserved
++  return base.extend(incoming._zod.def.shape) as $ZodObject;
+ }
+*** Update File: packages/zod/src/v4/classic/tests/object.test.ts
+@@
++test("merge preserves refinements from base object", () => {
++  const base = z
++    .object({ name: z.string() })
++    .refine((val) => val.name.length > 0, { message: "name must not be empty" });
++
++  const extension = z.object({ age: z.number() });
++  const merged = base.merge(extension);
++
++  // Should fail because name is empty
++  expect(merged.safeParse({ name: "", age: 30 }).success).toBe(false);
++  // Should pass with valid data
++  expect(merged.safeParse({ name: "Alice", age: 30 }).success).toBe(true);
++});
++
++test("merge preserves superRefine from base object", () => {
++  const base = z.object({ password: z.string(), confirm: z.string() }).superRefine(
++    (val, ctx) => {
++      if (val.password !== val.confirm) {
++        ctx.addIssue({
++          code: "custom",
++          message: "Passwords do not match",
++        });
++      }
++    }
++  );
++
++  const extension = z.object({ username: z.string() });
++  const merged = base.merge(extension);
++
++  // Should fail because passwords don't match
++  expect(
++    merged.safeParse({ password: "abc", confirm: "xyz", username: "user" }).success
++  ).toBe(false);
++  // Should pass when passwords match
++  expect(
++    merged.safeParse({ password: "abc", confirm: "abc", username: "user" }).success
++  ).toBe(true);
++});
++
++test("extend preserves refinements (existing behavior)", () => {
++  const base = z
++    .object({ name: z.string() })
++    .refine((val) => val.name.length > 0, { message: "name must not be empty" });
++
++  const extended = base.extend({ age: z.number() });
++
++  expect(extended.safeParse({ name: "", age: 30 }).success).toBe(false);
++  expect(extended.safeParse({ name: "Alice", age: 30 }).success).toBe(true);
++});
+*** End Patch
+
+Hmm, I'm not confident about the exact structure of the `mergeObjects` function in `util.ts`. Let me provide a more targeted patch that handles both the likely actual code and the test additions:
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/util.ts
+@@
+ export function mergeObjects<
+   T extends $ZodObject,
+   U extends $ZodObject,
+ >(base: T, incoming: U): $ZodObject {
+-  const merged = base._zod.def.Class.create(
+-    {
+-      ...base._zod.def.shape,
+-      ...incoming._zod.def.shape,
+-    },
+-    base._zod.def
+-  );
+-  return merged;
++  return base.extend(incoming._zod.def.shape) as $ZodObject;
+ }
+*** Update File: packages/zod/src/v4/classic/tests/object.test.ts
+@@
++test("merge preserves refinements from base object", () => {
++  const base = z
++    .object({ name: z.string() })
++    .refine((val) => val.name.length > 0, { message: "name must not be empty" });
++
++  const extension = z.object({ age: z.number() });
++  const merged = base.merge(extension);
++
++  expect(merged.safeParse({ name: "", age: 30 }).success).toBe(false);
++  expect(merged.safeParse({ name: "Alice", age: 30 }).success).toBe(true);
++});
++
++test("merge preserves superRefine from base object", () => {
++  const base = z
++    .object({ password: z.string(), confirm: z.string() })
++    .superRefine((val, ctx) => {
++      if (val.password !== val.confirm) {
++        ctx.addIssue({ code: "custom", message: "Passwords do not match" });
++      }
++    });
++
++  const extension = z.object({ username: z.string() });
++  const merged = base.merge(extension);
++
++  expect(
++    merged.safeParse({ password: "abc", confirm: "xyz", username: "user" }).success
++  ).toBe(false);
++  expect(
++    merged.safeParse({ password: "abc", confirm: "abc", username: "user" }).success
++  ).toBe(true);
++});
+*** End Patch

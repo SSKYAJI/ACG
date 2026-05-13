@@ -1,0 +1,101 @@
+*** Begin Patch
+*** Add File: packages/zod/src/v4/core/__tests__/shallowClone-map-set.test.ts
++/**
++ * Regression tests for pr5855
++ *
++ * Bug: shallowClone in util.ts does not handle Map and Set types,
++ * causing defaulted Map/Set fields to return shared references across parses.
++ *
++ * Fix: Add Map and Set cases to shallowClone:
++ *   if (value instanceof Map) return new Map(value)
++ *   if (value instanceof Set) return new Set(value)
++ */
++import { describe, expect, it } from "vitest";
++import * as z from "zod/v4";
++
++describe("shallowClone Map and Set defaults (pr5855)", () => {
++  it("Map default: each parse returns an independent copy", () => {
++    const schema = z.object({
++      data: z.map(z.string(), z.number()).default(new Map([["a", 1]])),
++    });
++
++    const r1 = schema.parse({});
++    const r2 = schema.parse({});
++
++    r1.data.set("b", 2);
++
++    expect(r2.data.has("b")).toBe(false);
++    expect(r2.data.size).toBe(1);
++  });
++
++  it("Set default: each parse returns an independent copy", () => {
++    const schema = z.object({
++      data: z.set(z.string()).default(new Set(["a", "b"])),
++    });
++
++    const r1 = schema.parse({});
++    const r2 = schema.parse({});
+
++    r1.data.add("c");
+
++    expect(r2.data.has("c")).toBe(false);
++    expect(r2.data.size).toBe(2);
++  });
+
++  it("Map default: parsed result does not share reference with original default", () => {
++    const defaultMap = new Map([["x", 10]]);
++    const schema = z.object({
++      data: z.map(z.string(), z.number()).default(defaultMap),
++    });
+
++    const result = schema.parse({});
++    result.data.set("y", 20);
+
++    expect(defaultMap.has("y")).toBe(false);
++    expect(defaultMap.size).toBe(1);
++  });
+
++  it("Set default: parsed result does not share reference with original default", () => {
++    const defaultSet = new Set(["hello"]);
++    const schema = z.object({
++      data: z.set(z.string()).default(defaultSet),
++    });
+
++    const result = schema.parse({});
++    result.data.add("world");
+
++    expect(defaultSet.has("world")).toBe(false);
++    expect(defaultSet.size).toBe(1);
++  });
+
++  it("Map default: three independent parses do not share state", () => {
++    const schema = z.map(z.string(), z.number()).default(new Map([["k", 1]]));
+
++    const r1 = schema.parse(undefined);
++    const r2 = schema.parse(undefined);
++    const r3 = schema.parse(undefined);
+
++    r1.set("from-r1", 99);
++    r2.set("from-r2", 100);
+
++    expect(r3.size).toBe(1);
++    expect(r3.has("from-r1")).toBe(false);
++    expect(r3.has("from-r2")).toBe(false);
++  });
+
++  it("Set default: three independent parses do not share state", () => {
++    const schema = z.set(z.number()).default(new Set([1, 2, 3]));
+
++    const r1 = schema.parse(undefined);
++    const r2 = schema.parse(undefined);
++    const r3 = schema.parse(undefined);
+
++    r1.add(99);
++    r2.add(100);
+
++    expect(r3.size).toBe(3);
++    expect(r3.has(99)).toBe(false);
++    expect(r3.has(100)).toBe(false);
++  });
++});
+*** End Patch

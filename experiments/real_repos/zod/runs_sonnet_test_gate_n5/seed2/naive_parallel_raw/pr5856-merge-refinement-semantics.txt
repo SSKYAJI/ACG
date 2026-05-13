@@ -1,0 +1,205 @@
+I need to analyze the task and implement the fix. Let me think through what needs to be done:
+
+1. In v4, `.merge()` on a `ZodObject` with refinements silently discards those refinements
+2. `.extend()` preserves refinements
+3. We need to align `.merge()` to preserve refinements like `.extend()` does
+
+Let me look at the structure. The `.merge()` method on ZodObject typically creates a new schema by combining the shapes of two objects. If the base object has refinements (added via `.refine()` or `.superRefine()`), those refinements are stored as effects wrapping the ZodObject. The `.merge()` needs to preserve these.
+
+In Zod v4, refinements are typically stored via `ZodEffects` or similar wrapper. The `merge()` method needs to:
+1. Extract the shape from the incoming schema
+2. Apply `.extend()` (which preserves refinements) instead of creating a fresh object
+
+Let me look at what `util.ts` likely contains and how `merge` is implemented. Based on my knowledge of Zod's codebase:
+
+- `ZodObject.extend()` adds new fields while preserving the existing object's effects/refinements
+- `ZodObject.merge()` typically does something like `new ZodObject({ shape: { ...this.shape, ...incoming.shape } })` which loses refinements
+
+The fix should make `merge()` use `extend()` internally, or replicate the refinement-preserving behavior.
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/util.ts
+@@
+-// merge two ZodObject schemas
++// merge two ZodObject schemas, preserving refinements on the base schema
+@@
+ export function mergeObjects<
+   T extends $ZodObject,
+   U extends $ZodObject,
+ >(base: T, incoming: U): $ZodObject {
+-  const merged = base._zod.def.Class.create({
+-    ...base._zod.def,
+-    shape: {
+-      ...base._zod.def.shape,
+-      ...incoming._zod.def.shape,
+-    },
+-  });
+-  return merged;
++  // Use extend() so that any refinements/effects on the base schema are preserved
++  return (base as any).extend(incoming._zod.def.shape);
+ }
+*** Update File: packages/zod/src/v4/classic/tests/object.test.ts
+@@
++import { describe, expect, test } from "vitest";
++import * as z from "../../classic/index.js";
++
++describe("ZodObject.merge refinement preservation", () => {
++  test("merge preserves refinements from base schema", () => {
++    const base = z
++      .object({ name: z.string() })
++      .refine((val) => val.name.length > 0, { message: "name must not be empty" });
++
++    const extension = z.object({ age: z.number() });
++    const merged = base.merge(extension);
++
++    // Valid data should pass
++    expect(merged.safeParse({ name: "Alice", age: 30 }).success).toBe(true);
++
++    // Refinement should still be enforced
++    const result = merged.safeParse({ name: "", age: 30 });
++    expect(result.success).toBe(false);
++    if (!result.success) {
++      expect(result.error.issues[0].message).toBe("name must not be empty");
++    }
++  });
++
++  test("merge preserves superRefine from base schema", () => {
++    const base = z.object({ count: z.number() }).superRefine((val, ctx) => {
++      if (val.count < 0) {
++        ctx.addIssue({
++          code: z.ZodIssueCode.custom,
++          message: "count must be non-negative",
++        });
++      }
++    });
++
++    const extension = z.object({ label: z.string() });
++    const merged = base.merge(extension);
++
++    expect(merged.safeParse({ count: 5, label: "ok" }).success).toBe(true);
++
++    const result = merged.safeParse({ count: -1, label: "bad" });
++    expect(result.success).toBe(false);
++    if (!result.success) {
++      expect(result.error.issues[0].message).toBe("count must be non-negative");
++    }
++  });
++
++  test("merge without refinements still works", () => {
++    const base = z.object({ a: z.string() });
++    const extension = z.object({ b: z.number() });
++    const merged = base.merge(extension);
++
++    expect(merged.safeParse({ a: "hello", b: 42 }).success).toBe(true);
++    expect(merged.safeParse({ a: "hello" }).success).toBe(false);
++  });
++
++  test("extend also preserves refinements (regression baseline)", () => {
++    const base = z
++      .object({ name: z.string() })
++      .refine((val) => val.name.length > 0, { message: "name must not be empty" });
++
++    const extended = base.extend({ age: z.number() });
++
++    const result = extended.safeParse({ name: "", age: 30 });
++    expect(result.success).toBe(false);
++    if (!result.success) {
++      expect(result.error.issues[0].message).toBe("name must not be empty");
++    }
++  });
++});
+*** End Patch
+
+Wait, I need to reconsider. I don't have access to the actual file contents, so I need to be more careful about the exact structure. Let me think about what the `mergeObjects` function in `util.ts` likely looks like, and provide a more robust patch that handles the case where the function might not exist or might look different.
+
+Let me also reconsider the test file - it might already have content, so I should use `*** Update File` with proper context.
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/util.ts
+@@
+ export function mergeObjects<
+   T extends $ZodObject,
+   U extends $ZodObject,
+ >(base: T, incoming: U): $ZodObject {
+-  const merged = base._zod.def.Class.create({
+-    ...base._zod.def,
+-    shape: {
+-      ...base._zod.def.shape,
+-      ...incoming._zod.def.shape,
+-    },
+-  });
+-  return merged;
++  // Use extend() so that any refinements/effects on the base schema are preserved
++  return (base as any).extend(incoming._zod.def.shape);
+ }
+*** Update File: packages/zod/src/v4/classic/tests/object.test.ts
+@@
++import { describe, expect, test } from "vitest";
++import * as z from "../../classic/index.js";
++
++describe("ZodObject.merge refinement preservation", () => {
++  test("merge preserves refinements from base schema", () => {
++    const base = z
++      .object({ name: z.string() })
++      .refine((val) => val.name.length > 0, { message: "name must not be empty" });
++
++    const extension = z.object({ age: z.number() });
++    const merged = base.merge(extension);
++
++    // Valid data should pass
++    expect(merged.safeParse({ name: "Alice", age: 30 }).success).toBe(true);
++
++    // Refinement should still be enforced
++    const result = merged.safeParse({ name: "", age: 30 });
++    expect(result.success).toBe(false);
++    if (!result.success) {
++      expect(result.error.issues[0].message).toBe("name must not be empty");
++    }
++  });
++
++  test("merge preserves superRefine from base schema", () => {
++    const base = z.object({ count: z.number() }).superRefine((val, ctx) => {
++      if (val.count < 0) {
++        ctx.addIssue({
++          code: z.ZodIssueCode.custom,
++          message: "count must be non-negative",
++        });
++      }
++    });
++
++    const extension = z.object({ label: z.string() });
++    const merged = base.merge(extension);
++
++    expect(merged.safeParse({ count: 5, label: "ok" }).success).toBe(true);
++
++    const result = merged.safeParse({ count: -1, label: "bad" });
++    expect(result.success).toBe(false);
++    if (!result.success) {
++      expect(result.error.issues[0].message).toBe("count must be non-negative");
++    }
++  });
++
++  test("merge without refinements still works", () => {
++    const base = z.object({ a: z.string() });
++    const extension = z.object({ b: z.number() });
++    const merged = base.merge(extension);
++
++    expect(merged.safeParse({ a: "hello", b: 42 }).success).toBe(true);
++    expect(merged.safeParse({ a: "hello" }).success).toBe(false);
++  });
++
++  test("extend also preserves refinements (regression baseline)", () => {
++    const base = z
++      .object({ name: z.string() })
++      .refine((val) => val.name.length > 0, { message: "name must not be empty" });
++
++    const extended = base.extend({ age: z.number() });
++
++    const result = extended.safeParse({ name: "", age: 30 });
++    expect(result.success).toBe(false);
++    if (!result.success) {
++      expect(result.error.issues[0].message).toBe("name must not be empty");
++    }
++  });
++});
+*** End Patch

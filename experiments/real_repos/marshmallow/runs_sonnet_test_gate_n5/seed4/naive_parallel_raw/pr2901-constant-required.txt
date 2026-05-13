@@ -1,0 +1,65 @@
+I'll analyze the issue with the `Constant` field and `required=True`. Let me look at the relevant code.
+
+The `Constant` field in marshmallow sets a constant value regardless of input. When `required=True` is passed, it likely conflicts with some validation in the `__init__` method. Let me fix this.
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+ class Constant(Field):
+     """A field that (de)serializes to a preset constant.  If you only want the
+     constant added for serialization or deserialization, you should use
+     ``dump_default`` or ``load_default`` instead.
+ 
+     :param constant: The constant returned for field ``value``. Can be any value.
+ 
+     .. versionadded:: 2.0.0
+     """
+ 
+     #: Default error messages.
+     default_error_messages = {"required": "Missing data for required field."}
+ 
+     def __init__(self, constant: typing.Any, **kwargs):
++        # Constant fields always provide their value, so required=True is valid
++        # but we need to ensure load_default is set to allow deserialization
++        if "load_default" not in kwargs and "missing" not in kwargs:
++            kwargs.setdefault("load_default", constant)
+         super().__init__(**kwargs)
+         self.constant = constant
+         self.load_default = constant
+         self.missing_ = constant
+*** Update File: tests/test_fields.py
+@@
+ class TestConstant:
+@@
+     def test_constant_is_always_used(self):
+-        field = fields.Constant("something")
+-        assert field.serialize("whatever", {}) == "something"
++        field = fields.Constant("something")
++        assert field.serialize("whatever", {}) == "something"
++
++    def test_constant_with_required_true(self):
++        """Constant field should accept required=True without raising an error."""
++        field = fields.Constant("something", required=True)
++        assert field.constant == "something"
++        assert field.load_default == "something"
++
++    def test_constant_with_required_true_deserializes(self):
++        """Constant field with required=True should deserialize correctly."""
++        import marshmallow as ma
++
++        class MySchema(ma.Schema):
++            value = fields.Constant("fixed", required=True)
++
++        result = MySchema().load({})
++        assert result == {"value": "fixed"}
++
++    def test_constant_with_required_true_serializes(self):
++        """Constant field with required=True should serialize correctly."""
++        import marshmallow as ma
++
++        class MySchema(ma.Schema):
++            value = fields.Constant("fixed", required=True)
++
++        result = MySchema().dump({})
++        assert result == {"value": "fixed"}
+*** End Patch

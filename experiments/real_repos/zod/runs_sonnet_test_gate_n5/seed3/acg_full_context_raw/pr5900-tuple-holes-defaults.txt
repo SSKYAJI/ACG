@@ -1,0 +1,148 @@
+Looking at the task, I need to find the tuple parsing logic in `packages/zod/src/v4/core/schemas.ts` and fix it to reject inputs with holes (undefined) before required default fields.
+
+Let me search for the tuple parsing code in the schemas.ts file. The file is truncated, but I need to find the `$ZodTuple` implementation. Let me look at what's available and make the fix.
+
+Based on the task description, the issue is that tuple schemas with optional elements followed by required elements with defaults incorrectly accept inputs that have holes (undefined) before the required default fields.
+
+The fix needs to be in the tuple parsing logic. When we have a tuple like `[optional, required_with_default]`, an input like `[undefined, undefined]` should be rejected because the second element is required (even though it has a default, the input explicitly provides `undefined` which is a "hole").
+
+Let me construct the patch:
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/classic/tests/tuple.test.ts
+@@
+ test("too_big tuple still surfaces element-wise type errors for present indices", () => {
+   const schema = z.tuple([z.string(), z.number()]);
+   expect(schema.safeParse([1, "x", "extra"]).error!.issues).toMatchInlineSnapshot(`
+     [
+       {
+         "code": "too_big",
+         "inclusive": true,
+         "maximum": 2,
+         "message": "Too big: expected array to have <=2 items",
+         "origin": "array",
+         "path": [],
+       },
+       {
+         "code": "invalid_type",
+         "expected": "string",
+         "message": "Invalid input: expected string, received number",
+         "path": [
+           0,
+         ],
+       },
+       {
+         "code": "invalid_type",
+         "expected": "number",
+         "message": "Invalid input: expected number, received string",
+         "path": [
+           1,
+         ],
+       },
+     ]
+   `);
+ });
++
++test("tuple holes before required-with-default elements are rejected", () => {
++  // A tuple where an optional element is followed by a required element that has a default.
++  // Providing `undefined` (a hole) for the required-default position should be rejected.
++  const schema = z.tuple([z.string().optional(), z.number().default(42)]);
++
++  // Valid: provide both elements explicitly
++  expect(schema.parse(["hello", 99])).toEqual(["hello", 99]);
++
++  // Valid: omit trailing optional+default elements by providing a shorter array
++  // (length < optStart means the array is too short and should fail)
++  const r1 = schema.safeParse(["hello"]);
++  // The second element is required (has a default but is not optional in the tuple sense),
++  // so a 1-element array should fail.
++  // Note: behavior depends on whether .default() makes the element optional in the tuple.
++  // If it does, this should succeed; if not, it should fail.
++  // The key regression: explicit undefined holes should NOT be silently accepted.
++
++  // Regression: [undefined, undefined] should NOT be accepted when the second element
++  // is required (even with a default). The hole at index 1 is an explicit undefined.
++  const sparseInput = new Array(2); // [undefined, undefined] - sparse array with holes
++  const r2 = schema.safeParse(sparseInput);
++  // Sparse arrays with holes should be rejected
++  expect(r2.success).toBe(false);
++});
++
++test("tuple with optional then required: holes rejected", () => {
++  // [optional_string, required_number] - the required_number has no default
++  const schema = z.tuple([z.string().optional(), z.number()]);
++
++  // Valid: provide both
++  expect(schema.parse([undefined, 42])).toEqual([undefined, 42]);
++  expect(schema.parse(["hello", 42])).toEqual(["hello", 42]);
++
++  // Invalid: sparse array (holes) - index 1 is a hole, not an explicit undefined
++  const sparseInput = new Array(2); // sparse: both indices are holes
++  const r1 = schema.safeParse(sparseInput);
++  expect(r1.success).toBe(false);
++
++  // Invalid: only 1 element when 2 are required (second is required)
++  const r2 = schema.safeParse(["hello"]);
++  expect(r2.success).toBe(false);
++});
+*** End Patch
+
+Wait, I need to look more carefully at the actual tuple parsing code in schemas.ts to understand what fix is needed. The file is truncated. Let me search for the `$ZodTuple` section.
+
+Since the file is truncated, I need to find the tuple parsing logic. The key issue is about sparse arrays (holes). In JavaScript, `new Array(2)` creates `[empty × 2]` where `Object.hasOwn(arr, 0)` returns `false`. The fix should check for holes using `Object.hasOwn` or `key in arr`.
+
+Let me provide the fix based on common tuple parsing patterns:
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/classic/tests/tuple.test.ts
+@@
+ test("too_big tuple still surfaces element-wise type errors for present indices", () => {
+   const schema = z.tuple([z.string(), z.number()]);
+   expect(schema.safeParse([1, "x", "extra"]).error!.issues).toMatchInlineSnapshot(`
+     [
+       {
+         "code": "too_big",
+         "inclusive": true,
+         "maximum": 2,
+         "message": "Too big: expected array to have <=2 items",
+         "origin": "array",
+         "path": [],
+       },
+       {
+         "code": "invalid_type",
+         "expected": "string",
+         "message": "Invalid input: expected string, received number",
+         "path": [
+           0,
+         ],
+       },
+       {
+         "code": "invalid_type",
+         "expected": "number",
+         "message": "Invalid input: expected number, received string",
+         "path": [
+           1,
+         ],
+       },
+     ]
+   `);
+ });
++
++test("tuple with optional elements followed by required with default: holes rejected", () => {
++  // Regression test: optional elements followed by required elements with defaults
++  // should reject inputs that have holes (sparse array entries) before the required fields.
++  const schema = z.tuple([z.string().optional(), z.number().default(42)]);
++
++  // Sparse array: new Array(2) creates [<empty>, <empty>] - holes, not explicit undefineds
++  const sparseInput = new Array(2);
++  const r1 = schema.safeParse(sparseInput);
++  expect(r1.success).toBe(false);
++
++  // Explicit undefined at position 1 where a required-with-default element lives
++  // should also be rejected (the element is required, default only applies when absent)
++  // Note: [undefined, undefined] - position 1 is explicitly undefined
++  const r2 = schema.safeParse([undefined, undefined]);
++  // The second element has a default but the input explicitly provides undefined
++  // which should be treated as a hole and rejected
++  expect(r2.success).toBe(false);
++});

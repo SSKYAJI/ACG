@@ -1,0 +1,90 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-13T05:05:23.948166Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "mock-llm-canned",
+    "tokens_planner_total": 3468,
+    "tokens_scope_review_total": 986,
+    "tokens_planner_completion_total": null,
+    "tokens_planner_method": "estimate_chars_div_4",
+    "compile_wall_seconds": 0.1285,
+    "compile_cost_usd": null
+  },
+  "repo": {
+    "root": "experiments/real_repos/marked/checkout",
+    "git_url": "https://github.com/markedjs/marked.git",
+    "commit": "73e1f3f88e0c7ab709f94aa6defd51289ce51b2e",
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr3924-async-race",
+      "prompt": "When marked is used with async hooks and multiple parallel parse calls share the same Marked instance, they can interfere with each other's state, causing race conditions and incorrect output. Fix the async parallel parse and parseInline paths so each invocation operates on isolated state, and add regression tests for concurrent async hook usage.",
+      "predicted_writes": [
+        {
+          "path": "src/Hooks.ts",
+          "confidence": 1.0,
+          "reason": "manual curation: ACG predictor included built artifacts; corrected to match PR ground_truth_files"
+        },
+        {
+          "path": "src/Instance.ts",
+          "confidence": 1.0,
+          "reason": "manual curation: ACG predictor included built artifacts; corrected to match PR ground_truth_files"
+        },
+        {
+          "path": "test/unit/Hooks.test.js",
+          "confidence": 1.0,
+          "reason": "manual curation: ACG predictor included built artifacts; corrected to match PR ground_truth_files"
+        }
+      ],
+      "allowed_paths": [
+        "src/Hooks.ts",
+        "src/Instance.ts",
+        "test/unit/Hooks.test.js"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "lib/marked.esm.js",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "pagerank",
+            "symbol"
+          ],
+          "reason": "personalized PageRank rank #1, top symbol matches: Hooks, Marked, Parser. Signals: pagerank, symbol."
+        },
+        {
+          "path": "src/Instance.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "pagerank"
+          ],
+          "reason": "personalized PageRank rank #6, top symbol matches: Marked, hook, hooks.; BM25 lexical match over path, identifiers, imports, docstrings (score 13.04). Signals: bm25, pagerank."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr3924-async-race"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

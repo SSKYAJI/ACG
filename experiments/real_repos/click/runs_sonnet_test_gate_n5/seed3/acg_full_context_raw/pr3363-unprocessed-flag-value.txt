@@ -1,0 +1,157 @@
+Looking at the task, I need to fix `Option` initialization so that when `flag_value` is set to a non-basic type (e.g., an enum), the option's type is automatically set to `UNPROCESSED` instead of raising a `TypeError`.
+
+Let me find the relevant code in `core.py`. The `Option.__init__` method handles `flag_value` and sets the type. I need to find where the type is inferred from `flag_value`.
+
+The key logic is in `Option.__init__` where it tries to guess the type from `flag_value`. When `flag_value` is an enum or other non-basic type, `types._default_text_stdin()` or type guessing fails. The fix should set `type` to `UNPROCESSED` when the guessed type would fail.
+
+Let me look at the relevant section. The type guessing happens via `_default_text_stdout` or similar. In Click, `types.convert_type(None, value)` is used to guess types. When `flag_value` is an enum, `convert_type` would return `STRING` or raise an error.
+
+The fix: when `flag_value` is provided and `type` is not explicitly set, if the flag_value is not a basic Python type (str, int, float, bool), set `type` to `UNPROCESSED`.
+
+I need to find the exact code in `core.py` that handles this. Since the file is truncated, I'll look for the `Option.__init__` pattern where `flag_value` interacts with type setting.
+
+Based on Click's source code, the relevant section in `Option.__init__` is where it does:
+```python
+if self.flag_value is not None:
+    if self.type is _default_text_stdout:
+        self.type = types.convert_type(None, self.flag_value)
+```
+
+The fix should check if `flag_value` is a basic type before calling `convert_type`, and fall back to `UNPROCESSED` if not.
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+-from . import types
++from . import types
++from .types import UNPROCESSED
+@@
+ context line
+*** End Patch
+
+Let me reconsider. I need to find the actual lines in `core.py`. Since the file is truncated, I'll search for the `flag_value` handling pattern based on Click's known source.
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+ from . import types
+ from .exceptions import Abort
+@@
+-from . import types
++from . import types
+*** End Patch
+
+I need to look more carefully. Let me provide the actual fix based on Click's source code for `Option.__init__`:
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+         if self.is_flag and self.flag_value is None:
+             self.flag_value = True
+ 
+         if self.is_flag and self.type is _default_text_stdout:
+             self.type = types.BOOL
+         elif self.flag_value is not None and self.type is _default_text_stdout:
+-            self.type = types.convert_type(None, self.flag_value)
++            try:
++                self.type = types.convert_type(None, self.flag_value)
++            except TypeError:
++                self.type = types.UNPROCESSED
+*** End Patch
+
+Wait, I need exact context lines. Since the file is truncated, let me try to find the right section. Let me provide a more targeted patch based on what I know about Click's source:
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+         if self.is_flag and self.flag_value is None:
+             self.flag_value = True
+ 
+         if self.is_flag and self.type is _default_text_stdout:
+             self.type = types.BOOL
+         elif self.flag_value is not None and self.type is _default_text_stdout:
+-            self.type = types.convert_type(None, self.flag_value)
++            try:
++                self.type = types.convert_type(None, self.flag_value)
++            except TypeError:
++                self.type = types.UNPROCESSED
+*** Update File: tests/test_options.py
+@@
+ def test_l
+@@
++import enum
++
++
++def test_flag_value_enum_type():
++    """When flag_value is a non-basic type like an enum, the option type
++    should be set to UNPROCESSED instead of raising a TypeError."""
++    import enum
++
++    class Color(enum.Enum):
++        RED = 1
++        GREEN = 2
++
++    opt = click.Option(["--color/--no-color"], flag_value=Color.RED)
++    assert opt.type is click.UNPROCESSED
++    assert opt.flag_value is Color.RED
++
++
+*** End Patch
+
+Hmm, I'm not confident about the exact context lines since the file is truncated. Let me try a different approach and look for what I can anchor on.
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+         if self.is_flag and self.flag_value is None:
+             self.flag_value = True
+ 
+         if self.is_flag and self.type is _default_text_stdout:
+             self.type = types.BOOL
+         elif self.flag_value is not None and self.type is _default_text_stdout:
+-            self.type = types.convert_type(None, self.flag_value)
++            try:
++                self.type = types.convert_type(None, self.flag_value)
++            except TypeError:
++                self.type = types.UNPROCESSED
+*** Update File: tests/test_options.py
+@@
+ def test_l
+*** End Patch
+
+I realize I keep going back and forth. Let me commit to a single clean patch:
+
+*** Begin Patch
+*** Update File: src/click/core.py
+@@
+         if self.is_flag and self.flag_value is None:
+             self.flag_value = True
+ 
+         if self.is_flag and self.type is _default_text_stdout:
+             self.type = types.BOOL
+         elif self.flag_value is not None and self.type is _default_text_stdout:
+-            self.type = types.convert_type(None, self.flag_value)
++            try:
++                self.type = types.convert_type(None, self.flag_value)
++            except TypeError:
++                self.type = types.UNPROCESSED
+*** Update File: tests/test_options.py
+@@
+ def test_l
++import enum as _enum
++
++
++def test_flag_value_non_basic_type_uses_unprocessed():
++    """When flag_value is set to a non-basic type (e.g. an enum member),
++    the option type should be automatically set to UNPROCESSED."""
++
++    class Color(_enum.Enum):
++        RED = 1
++        GREEN = 2
++
++    opt = click.Option(["--flag"], is_flag=True, flag_value=Color.RED)
++    assert opt.type is click.UNPROCESSED
++    assert opt.flag_value is Color.RED
++
++
+*** End Patch

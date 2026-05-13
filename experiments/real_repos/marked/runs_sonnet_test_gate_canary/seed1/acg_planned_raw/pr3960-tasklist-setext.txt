@@ -1,0 +1,277 @@
+Looking at the task, I need to:
+
+1. Fix the `_Tokenizer` so that the task list checkbox pattern is only applied inside list item paragraphs, not setext heading text.
+2. Add unit test coverage for the corrected behavior.
+
+Let me analyze the issue. The problem is in the `lheading` (setext heading) tokenizer. When a setext heading has text like `[ ] heading`, the tokenizer might be treating it as a task list item. 
+
+Looking at the `Tokenizer.ts`, I need to find where `lheading` is processed. The file is truncated, but I can see the `heading` method handles ATX headings. The setext heading (lheading) is likely handled in the `paragraph` method or a separate `lheading` method.
+
+The key issue is: when processing a setext heading, the text `[ ] heading` should NOT be treated as a task list checkbox. The checkbox pattern (`listIsTask`) should only apply inside list items.
+
+Looking at the list tokenizer code, the task detection happens at:
+```js
+task: !!this.options.gfm && this.rules.other.listIsTask.test(itemContents),
+```
+
+This is already scoped to list items. But the issue might be in the `paragraph` tokenizer or `lheading` tokenizer where inline tokens are processed - if the inline tokenizer applies a checkbox pattern.
+
+Wait, re-reading the task: "incorrectly treats the text portion of a setext heading (e.g., '[ ] heading') as a task list checkbox". This suggests the setext heading tokenizer is calling something that applies the task list pattern.
+
+The setext heading is handled in the `lheading` method (which is part of the paragraph tokenizer in marked). Let me look at what might be happening - the `lheading` method likely calls `this.lexer.inline(text)` which processes inline tokens. But the checkbox is a block-level concept...
+
+Actually, looking more carefully - the issue might be that when a setext heading text starts with `[ ] `, the `paragraph` tokenizer (which handles lheading) is incorrectly marking it as a task. The fix would be to ensure the task detection only happens in the `list` method's item processing.
+
+Since I can see the list method already scopes task detection to `itemContents`, the bug might be in the `lheading` method. Let me add the fix by ensuring the lheading tokenizer doesn't apply task list processing, and add a test.
+
+*** Begin Patch
+*** Update File: src/Tokenizer.ts
+@@
+  lheading(src: string): Tokens.Heading | undefined {
+    const cap = this.rules.block.lheading.exec(src);
+    if (cap) {
+      const token: Tokens.Heading = {
+        type: 'heading',
+        raw: cap[0],
+        depth: cap[2].charAt(0) === '=' ? 1 : 2,
+        text: cap[1].trimEnd(),
+        tokens: [],
+      };
+      token.tokens = this.lexer.inline(token.text);
+      return token;
+    }
+  }
+*** Update File: src/Tokenizer.ts
+@@
+  lheading(src: string): Tokens.Heading | undefined {
+    const cap = this.rules.block.lheading.exec(src);
+    if (cap) {
++     const prevInList = this.lexer.state.inList;
++     this.lexer.state.inList = false;
+      const token: Tokens.Heading = {
+        type: 'heading',
+        raw: cap[0],
+        depth: cap[2].charAt(0) === '=' ? 1 : 2,
+        text: cap[1].trimEnd(),
+        tokens: [],
+      };
+      token.tokens = this.lexer.inline(token.text);
++     this.lexer.state.inList = prevInList;
+      return token;
+    }
+  }
+*** End Patch
+
+Wait, I need to see the actual lheading method in the file. The file is truncated. Let me look at what's available and think differently.
+
+The task says the tokenizer "incorrectly treats the text portion of a setext heading as a task list checkbox". Looking at the list tokenizer code more carefully:
+
+The `task` field is set based on `listIsTask.test(itemContents)` - this is only in the list method. But the issue might be that when a setext heading like `[ ] heading\n===` is parsed, the paragraph tokenizer sees `[ ] heading` and somehow the task detection fires.
+
+Actually, I think the real issue might be in the `paragraph` method which handles lheading - it might be calling some task-related processing. Since the file is truncated, I need to make a reasonable fix.
+
+The safest fix: in the `lheading` method, ensure we don't apply task list processing. But since I can't see the lheading method, let me look at what I can infer and add a test that documents the correct behavior.
+
+*** Begin Patch
+*** Update File: test/unit/Lexer.test.js
+@@
+    it('lheading should trim trailing whitespace from text', () => {
+      expectTokens({
+        md: 'heading with trailing spaces   \n==============================',
+        tokens: [{
+          type: 'heading',
+          raw: 'heading with trailing spaces   \n==============================',
+          depth: 1,
+          text: 'heading with trailing spaces',
+          tokens: [{ type: 'text', raw: 'heading with trailing spaces', text: 'heading with trailing spaces', escaped: false }],
+        }],
+      });
+    });
++
++   it('setext heading with checkbox-like text should not be treated as task list', () => {
++     expectTokens({
++       md: '[ ] heading\n===========',
++       options: { gfm: true },
++       tokens: [{
++         type: 'heading',
++         raw: '[ ] heading\n===========',
++         depth: 1,
++         text: '[ ] heading',
++         tokens: [{ type: 'text', raw: '[ ] heading', text: '[ ] heading', escaped: false }],
++       }],
++     });
++   });
++
++   it('setext heading depth 2 with checkbox-like text should not be treated as task list', () => {
++     expectTokens({
++       md: '[x] heading\n-----------',
++       options: { gfm: true },
++       tokens: [{
++         type: 'heading',
++         raw: '[x] heading\n-----------',
++         depth: 2,
++         text: '[x] heading',
++         tokens: [{ type: 'text', raw: '[x] heading', text: '[x] heading', escaped: false }],
++       }],
++     });
++   });
+*** End Patch
+
+Now I need to find and fix the actual tokenizer bug. Since the file is truncated, I need to look at the `paragraph` method which likely handles lheading. The issue is probably that the paragraph tokenizer, when it detects a setext heading pattern, still processes the text through some task-list-aware path.
+
+Let me look at the truncated part more carefully. The file shows the `list` method handles tasks properly. The bug must be elsewhere. Let me search for where `listIsTask` might be called outside of the list context.
+
+Since I can only see part of the file, let me provide a targeted fix. The `lheading` method in marked's tokenizer processes setext headings. The fix should ensure that when tokenizing a setext heading, the `inList` state (or equivalent) is false so task checkbox processing doesn't apply.
+
+*** Begin Patch
+*** Update File: test/unit/Lexer.test.js
+@@
+    it('lheading should trim trailing whitespace from text', () => {
+      expectTokens({
+        md: 'heading with trailing spaces   \n==============================',
+        tokens: [{
+          type: 'heading',
+          raw: 'heading with trailing spaces   \n==============================',
+          depth: 1,
+          text: 'heading with trailing spaces',
+          tokens: [{ type: 'text', raw: 'heading with trailing spaces', text: 'heading with trailing spaces', escaped: false }],
+        }],
+      });
+    });
+
++   it('setext heading with checkbox-like text should not be treated as task list', () => {
++     expectTokens({
++       md: '[ ] heading\n===========',
++       options: { gfm: true },
++       tokens: [{
++         type: 'heading',
++         raw: '[ ] heading\n===========',
++         depth: 1,
++         text: '[ ] heading',
++         tokens: [{ type: 'text', raw: '[ ] heading', text: '[ ] heading', escaped: false }],
++       }],
++     });
++   });
++
++   it('setext heading depth 2 with checkbox-like text should not be treated as task list', () => {
++     expectTokens({
++       md: '[x] heading\n-----------',
++       options: { gfm: true },
++       tokens: [{
++         type: 'heading',
++         raw: '[x] heading\n-----------',
++         depth: 2,
++         text: '[x] heading',
++         tokens: [{ type: 'text', raw: '[x] heading', text: '[x] heading', escaped: false }],
++       }],
++     });
++   });
++
+     it('should not be heading if depth > 6', () => {
+*** End Patch
+
+Now let me look at the Tokenizer.ts more carefully. The truncated file shows the `list` method. The `lheading` method must be further down. The task says the setext heading text is being treated as a task list checkbox. 
+
+Looking at the `list` method code, I see that `task` is set with:
+```js
+task: !!this.options.gfm && this.rules.other.listIsTask.test(itemContents),
+```
+
+This is only in the list context. But wait - could the issue be in the `paragraph` method? In marked, the `paragraph` tokenizer handles lheading by detecting the setext underline. If the paragraph text starts with `[ ] `, and the paragraph tokenizer somehow calls task processing...
+
+Actually, I think I need to look at this differently. The `lheading` is a separate block token method. Let me check if there's a `lheading` method that might be calling task-related code, or if the `paragraph` method (which in some versions of marked handles lheading inline) is the culprit.
+
+Given the constraints, let me provide the fix based on what I know about marked's architecture. The most likely fix is in the `lheading` method - ensuring it doesn't set `task: true` or process checkboxes. But since lheading produces a `heading` token (not a `list_item`), the task processing in the `list` method wouldn't apply.
+
+The real bug might be: when a setext heading like `[ ] heading\n===` is parsed, the `paragraph` tokenizer might be consuming it first (before lheading gets a chance), and within the paragraph context, some GFM task processing fires.
+
+OR: the `lheading` method itself might have a bug where it's checking for task patterns.
+
+Since I can't see the full file, let me make a targeted fix based on the most likely location. In marked's source, the `lheading` method typically looks like:
+
+```ts
+lheading(src: string): Tokens.Heading | undefined {
+  const cap = this.rules.block.lheading.exec(src);
+  if (cap) {
+    return {
+      type: 'heading',
+      raw: cap[0],
+      depth: cap[2].charAt(0) === '=' ? 1 : 2,
+      text: cap[1].trimEnd(),
+      tokens: this.lexer.inline(cap[1].trimEnd()),
+    };
+  }
+}
+```
+
+This doesn't have task processing. So the bug must be elsewhere. Let me think about what "incorrectly treats the text portion of a setext heading as a task list checkbox" means more carefully.
+
+Perhaps the issue is: when a setext heading is inside a list item, the list item's `itemContents` includes the setext heading text, and `listIsTask.test(itemContents)` matches on `[ ] heading`. Then when the task checkbox is removed from the item tokens, it incorrectly removes it from the heading token.
+
+OR: the `paragraph` method in the Lexer (not Tokenizer) processes lheading, and when it does, it's inside a list context where task processing applies.
+
+Let me look at the specific scenario: `[ ] heading\n===========` as a standalone block. The lheading regex would match this. The `lheading` tokenizer would produce a heading token. No task processing should happen.
+
+But what if the issue is: `- [ ] heading\n  ===========`? In this case, the list item contains a setext heading, and the `itemContents` is `[ ] heading\n  ===========`. The `listIsTask` regex matches `[ ] ` at the start, so `task: true`. Then the task checkbox removal code runs on the item's tokens, which includes the heading token. This would incorrectly modify the heading.
+
+That's the most likely scenario! The fix would be: when checking if a list item is a task, only check the first line of `itemContents` (not the full content), OR only apply task detection when the first token is a paragraph/text (not a heading).
+
+Let me look at the relevant code in the list method:
+
+```js
+list.items.push({
+  type: 'list_item',
+  raw,
+  task: !!this.options.gfm && this.rules.other.listIsTask.test(itemContents),
+  ...
+});
+```
+
+And later:
+```js
+if (item.task) {
+  item.text = item.text.replace(this.rules.other.listReplaceTask, '');
+  if (item.tokens[0]?.type === 'text' || item.tokens[0]?.type === 'paragraph') {
+    item.tokens[0].raw = item.tokens[0].raw.replace(this.rules.other.listReplaceTask, '');
+    ...
+  }
+```
+
+The fix is already partially there - it only modifies `item.tokens[0]` if it's `text` or `paragraph`. But `item.task` is still set to `true` even if the first token is a heading.
+
+However, the task description says "setext heading text" - meaning the text of a setext heading is being treated as a checkbox. This suggests the setext heading text `[ ] heading` is being parsed as a task.
+
+Let me reconsider: maybe the issue is simpler. In the `lheading` tokenizer, the text `[ ] heading` is the heading text. When `this.lexer.inline(text)` is called, maybe the inline tokenizer has a rule that matches `[ ]` as a checkbox. But checkboxes are block-level in GFM...
+
+Actually, I think I've been overthinking this. Let me look at what the `paragraph` method does in the Tokenizer - it likely handles lheading by detecting the setext pattern. If the paragraph text is `[ ] heading\n===========`, the paragraph tokenizer might:
+1. Detect the setext underline
+2. Return a heading token
+3. But also set `task: true` somewhere
+
+OR the paragraph tokenizer might NOT detect the setext pattern and instead return a paragraph with text `[ ] heading\n===========`, and then some downstream processing treats `[ ]` as a checkbox.
+
+Given the task description says "Fix the tokenizer so it only applies the checkbox pattern inside list item paragraphs, not setext heading text", the fix is clearly: the checkbox pattern is being applied somewhere outside of list items. The fix is to guard the checkbox check with a condition that we're inside a list item.
+
+Looking at the Tokenizer code, the only place `listIsTask` is used is in the `list` method. So the bug must be in how the `lheading` method interacts with the list processing.
+
+Let me look at the specific code path again:
+
+```js
+list.items.push({
+  type: 'list_item',
+  raw,
+  task: !!this.options.gfm && this.rules.other.listIsTask.test(itemContents),
+```
+
+`itemContents` is the content of the list item. If the list item is:
+```
+- [ ] heading
+  ===========
+```
+
+Then `itemContents` would be `[ ] heading\n===========`. `listIsTask.test(itemContents)` would return `true`. Then:
+
+```js
+if (item.task) {
+  item.text = item.text.replace(this.rules.other.listReplaceTask, '');
+  if (item.tokens[0]?.type === 'text' || item.tokens[0

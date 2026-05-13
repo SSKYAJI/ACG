@@ -1,0 +1,62 @@
+*** Begin Patch
+*** Add File: tests/test_email_idn.py
+"""Regression tests for IDN email validation (pr2937)."""
+import pytest
+from marshmallow.validate import Email
+
+
+class TestEmailIDNValidation:
+    """Tests for internationalized domain name (IDN) email validation."""
+
+    def setup_method(self):
+        self.validator = Email()
+
+    def test_valid_idn_email(self):
+        """Valid IDN email addresses should be accepted."""
+        # Standard IDN domain
+        assert self.validator._validate("user@münchen.de") is True
+
+    def test_valid_ascii_email(self):
+        """Standard ASCII email addresses should be accepted."""
+        assert self.validator._validate("user@example.com") is True
+        assert self.validator._validate("test.user@sub.example.org") is True
+
+    def test_idn_domain_label_starts_with_hyphen(self):
+        """IDN email with domain label starting with hyphen should be rejected."""
+        assert self.validator._validate("user@-münchen.de") is False
+
+    def test_idn_domain_label_ends_with_hyphen(self):
+        """IDN email with domain label ending with hyphen should be rejected."""
+        assert self.validator._validate("user@münchen-.de") is False
+
+    def test_ascii_domain_label_starts_with_hyphen(self):
+        """ASCII email with domain label starting with hyphen should be rejected."""
+        assert self.validator._validate("user@-example.com") is False
+
+    def test_ascii_domain_label_ends_with_hyphen(self):
+        """ASCII email with domain label ending with hyphen should be rejected."""
+        assert self.validator._validate("user@example-.com") is False
+
+    def test_raises_validation_error_for_idn_leading_hyphen(self):
+        """Email validator should raise ValidationError for IDN domain with leading hyphen."""
+        with pytest.raises(Exception):
+            self.validator("user@-münchen.de")
+
+    def test_raises_validation_error_for_idn_trailing_hyphen(self):
+        """Email validator should raise ValidationError for IDN domain with trailing hyphen."""
+        with pytest.raises(Exception):
+            self.validator("user@münchen-.de")
+
+    def test_valid_idn_subdomain(self):
+        """Valid IDN subdomain email should be accepted."""
+        # münchen is a valid IDN label
+        assert self.validator._validate("user@mail.münchen.de") is True
+
+    def test_idn_subdomain_label_starts_with_hyphen(self):
+        """IDN email with subdomain label starting with hyphen should be rejected."""
+        assert self.validator._validate("user@-mail.münchen.de") is False
+
+    def test_idn_subdomain_label_ends_with_hyphen(self):
+        """IDN email with subdomain label ending with hyphen should be rejected."""
+        assert self.validator._validate("user@mail-.münchen.de") is False
+*** End Patch

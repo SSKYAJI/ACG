@@ -1,0 +1,434 @@
+{
+  "backend": "local",
+  "created_at": "2026-05-13T07:20:02Z",
+  "evidence_kind": "naive_parallel_blind_applied_diff",
+  "execution_mode": "applied_diff_live",
+  "lockfile": "experiments/real_repos/marshmallow/agent_lock_combined.json",
+  "model": {
+    "model": "claude-sonnet-4-6",
+    "provider": "openai-compatible",
+    "url": "https://api.anthropic.com/v1"
+  },
+  "repo": {
+    "commit": "fea5428567960f15be0c9a3a4b99c0d9bb63848c",
+    "local_path": "/Users/prajit/Desktop/projects/cognition/experiments/real_repos/marshmallow/checkout",
+    "url": "https://github.com/marshmallow-code/marshmallow.git"
+  },
+  "run_id": "greenhouse-local-naive_parallel_blind-20260513-072002",
+  "strategy": "naive_parallel_blind",
+  "suite_name": "marshmallow-sonnet-test-gate-n5-seed5",
+  "summary_metrics": {
+    "acus_consumed_total": null,
+    "applied_changed_files_total": 0,
+    "blocked_invalid_write_count": 17,
+    "compile_cost_usd": null,
+    "compile_wall_seconds": null,
+    "cost_method": null,
+    "cost_per_completed_task": null,
+    "cost_source": null,
+    "cost_usd_total": null,
+    "cupp_rate": 0.0,
+    "first_run_pass_rate": 0.0,
+    "human_interventions": 0,
+    "integration_burden": {
+      "blocked_events_total": 17,
+      "changed_file_mentions_total": 7,
+      "changed_lines_added": null,
+      "changed_lines_deleted": null,
+      "changed_lines_total": null,
+      "diff_stats_kind": null,
+      "duplicate_file_touches": 0,
+      "out_of_bounds_files_total": 7,
+      "overlapping_files": [],
+      "overlapping_task_pairs": 0,
+      "review_file_mentions_total": 24,
+      "review_unique_files_total": 10,
+      "unique_changed_files": 7
+    },
+    "merge_conflicts": 0,
+    "model_silence_count": 0,
+    "oob_files_per_task_mean": 2.3333,
+    "out_of_bounds_write_count": 7,
+    "overlapping_write_pairs": 0,
+    "patch_na_count": 0,
+    "proposal_completion_rate": 0.6667,
+    "proposal_status_counts": {
+      "declined": 0,
+      "ok": 3,
+      "transport_error": 0,
+      "truncated": 0,
+      "unparseable": 0
+    },
+    "replan_rescued_count": 0,
+    "resolved_unsafe_rate": 0.0,
+    "successful_parallel_speedup": null,
+    "task_completion_rate": 0.0,
+    "tasks_completed": 0,
+    "tasks_completed_per_hour": 0.0,
+    "tasks_total": 3,
+    "tested_completion_rate": 0.0,
+    "tested_tasks_completed": 0,
+    "tests_ran_count": 3,
+    "tests_total_run": 0,
+    "tokens_all_in": 936,
+    "tokens_completion_method": "provider_usage_completion_tokens",
+    "tokens_completion_total": 7702,
+    "tokens_orchestrator_overhead": null,
+    "tokens_per_cupp": null,
+    "tokens_planner_completion_total": null,
+    "tokens_planner_method": null,
+    "tokens_planner_total": null,
+    "tokens_prompt_method": "provider_usage_prompt_tokens",
+    "tokens_prompt_total": 936,
+    "tokens_scope_review_total": null,
+    "tokens_total_per_task_mean": 2879.3333,
+    "tokens_worker_prompt_total": 936,
+    "total_cost_usd_with_compile": null,
+    "total_wall_seconds_with_compile": 53.621,
+    "typecheck_fail_count": 0,
+    "typecheck_pass_count": 0,
+    "typecheck_skipped_count": 3,
+    "unresolved_safe_rate": 0.3333,
+    "unresolved_unsafe_rate": 0.6667,
+    "wall_time_seconds": 53.621
+  },
+  "tasks": [
+    {
+      "actual_changed_files": [],
+      "actual_changed_files_kind": "naive_parallel_blind_applied_diff",
+      "allowed_write_globs": [
+        "src/marshmallow/validate.py",
+        "tests/test_validate.py"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "raw_reply": null,
+        "session_id": null
+      },
+      "blocked_write_events": [
+        {
+          "description": "Update",
+          "file": "validate.go",
+          "reason": "path 'validate.go' is outside task 'pr2937-email-idn''s allowed_paths (src/marshmallow/validate.py, tests/test_validate.py)"
+        },
+        {
+          "description": "Update",
+          "file": "validate_test.go",
+          "reason": "path 'validate_test.go' is outside task 'pr2937-email-idn''s allowed_paths (src/marshmallow/validate.py, tests/test_validate.py)"
+        },
+        {
+          "description": "Update",
+          "file": "validate.go",
+          "reason": "path 'validate.go' is outside task 'pr2937-email-idn''s allowed_paths (src/marshmallow/validate.py, tests/test_validate.py)"
+        },
+        {
+          "description": "Update",
+          "file": "validate.go",
+          "reason": "path 'validate.go' is outside task 'pr2937-email-idn''s allowed_paths (src/marshmallow/validate.py, tests/test_validate.py)"
+        },
+        {
+          "description": "Update",
+          "file": "validate_test.go",
+          "reason": "path 'validate_test.go' is outside task 'pr2937-email-idn''s allowed_paths (src/marshmallow/validate.py, tests/test_validate.py)"
+        }
+      ],
+      "fail_to_pass_passed": 0,
+      "fail_to_pass_total": 10,
+      "failure_reason": "BLOCKED_BY_SCOPE",
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": null,
+        "cost_usd": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "patch_applies": null,
+        "tokens_completion": 959,
+        "tokens_prompt": 328,
+        "typecheck_diagnostic_count": null,
+        "typecheck_exit_code": null,
+        "typecheck_ran": false,
+        "typecheck_wall_seconds": null,
+        "wall_time_seconds": 12.7425
+      },
+      "out_of_bounds_files": [],
+      "overlaps_with": [],
+      "overlay_applied": true,
+      "overlay_skip_reason": "",
+      "pass_to_pass_passed": 0,
+      "pass_to_pass_total": 197,
+      "patch_na_reason": null,
+      "predicted_write_files": [
+        "src/marshmallow/validate.py",
+        "tests/test_validate.py"
+      ],
+      "prompt": "The validate.Email validator accepts some internationalized domain name (IDN) email addresses that should be rejected as invalid. Email addresses with domain labels that start or end with a hyphen (e.g. 'user@-m\u00fcnchen.de', 'user@m\u00fcnchen-.de') are not rejected. Fix the validator so it correctly rejects these malformed IDN email addresses, and add regression tests for the invalid IDN cases.",
+      "proposal_status": "ok",
+      "proposal_write_count": 5,
+      "session_id": null,
+      "status": "blocked",
+      "task_id": "pr2937-email-idn",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "tests_collection_error": true,
+      "tests_exit_code": 4,
+      "tests_failed_count": null,
+      "tests_passed_count": null,
+      "tests_ran": true,
+      "tests_skip_reason": "",
+      "tests_total_count": null,
+      "timestamps": {
+        "finished_at": "2026-05-13T07:20:02Z",
+        "started_at": "2026-05-13T07:19:08Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "marshmallow/__init__.py",
+        "marshmallow/exceptions.py",
+        "marshmallow/fields.py",
+        "marshmallow/schema.py",
+        "marshmallow/validate.py",
+        "tests/test_constant_field.py"
+      ],
+      "actual_changed_files_kind": "naive_parallel_blind_applied_diff",
+      "allowed_write_globs": [
+        "src/marshmallow/fields.py",
+        "tests/test_fields.py"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "raw_reply": null,
+        "session_id": null
+      },
+      "blocked_write_events": [
+        {
+          "description": "Add",
+          "file": "marshmallow/__init__.py",
+          "reason": "path 'marshmallow/__init__.py' is outside task 'pr2901-constant-required''s allowed_paths (src/marshmallow/fields.py, tests/test_fields.py)"
+        },
+        {
+          "description": "Add",
+          "file": "marshmallow/exceptions.py",
+          "reason": "path 'marshmallow/exceptions.py' is outside task 'pr2901-constant-required''s allowed_paths (src/marshmallow/fields.py, tests/test_fields.py)"
+        },
+        {
+          "description": "Add",
+          "file": "marshmallow/validate.py",
+          "reason": "path 'marshmallow/validate.py' is outside task 'pr2901-constant-required''s allowed_paths (src/marshmallow/fields.py, tests/test_fields.py)"
+        },
+        {
+          "description": "Add",
+          "file": "marshmallow/fields.py",
+          "reason": "path 'marshmallow/fields.py' is outside task 'pr2901-constant-required''s allowed_paths (src/marshmallow/fields.py, tests/test_fields.py)"
+        },
+        {
+          "description": "Add",
+          "file": "marshmallow/schema.py",
+          "reason": "path 'marshmallow/schema.py' is outside task 'pr2901-constant-required''s allowed_paths (src/marshmallow/fields.py, tests/test_fields.py)"
+        },
+        {
+          "description": "Add",
+          "file": "tests/__init__.py",
+          "reason": "path 'tests/__init__.py' is outside task 'pr2901-constant-required''s allowed_paths (src/marshmallow/fields.py, tests/test_fields.py)"
+        },
+        {
+          "description": "Add",
+          "file": "tests/test_constant_field.py",
+          "reason": "path 'tests/test_constant_field.py' is outside task 'pr2901-constant-required''s allowed_paths (src/marshmallow/fields.py, tests/test_fields.py)"
+        }
+      ],
+      "fail_to_pass_passed": 0,
+      "fail_to_pass_total": 1,
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": null,
+        "cost_usd": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "patch_applies": true,
+        "tokens_completion": 5587,
+        "tokens_prompt": 297,
+        "typecheck_diagnostic_count": null,
+        "typecheck_exit_code": null,
+        "typecheck_ran": false,
+        "typecheck_wall_seconds": null,
+        "wall_time_seconds": 52.2545
+      },
+      "out_of_bounds_files": [
+        "marshmallow/__init__.py",
+        "marshmallow/exceptions.py",
+        "marshmallow/fields.py",
+        "marshmallow/schema.py",
+        "marshmallow/validate.py",
+        "tests/test_constant_field.py"
+      ],
+      "overlaps_with": [],
+      "overlay_applied": true,
+      "overlay_skip_reason": "",
+      "pass_to_pass_passed": 0,
+      "pass_to_pass_total": 366,
+      "patch_na_reason": null,
+      "predicted_write_files": [
+        "src/marshmallow/fields.py",
+        "tests/test_fields.py"
+      ],
+      "prompt": "Using the Constant field with required=True raises a ValueError unexpectedly. The Constant field should accept required=True without raising an error, since it always provides its constant value. Fix the Constant field initialization so it works correctly with required=True and add regression tests for this case.",
+      "proposal_status": "ok",
+      "proposal_write_count": 7,
+      "session_id": null,
+      "status": "completed_unsafe",
+      "task_id": "pr2901-constant-required",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "tests_collection_error": true,
+      "tests_exit_code": 4,
+      "tests_failed_count": null,
+      "tests_passed_count": null,
+      "tests_ran": true,
+      "tests_skip_reason": "",
+      "tests_total_count": null,
+      "timestamps": {
+        "finished_at": "2026-05-13T07:20:02Z",
+        "started_at": "2026-05-13T07:19:08Z"
+      }
+    },
+    {
+      "actual_changed_files": [
+        "tests/test_enum_by_name.py"
+      ],
+      "actual_changed_files_kind": "naive_parallel_blind_applied_diff",
+      "allowed_write_globs": [
+        "src/marshmallow/class_registry.py",
+        "src/marshmallow/fields.py",
+        "tests/test_deserialization.py"
+      ],
+      "approved_replan_files": [],
+      "artifacts": {
+        "branch": null,
+        "commit": null,
+        "diff_path": null,
+        "log_path": null,
+        "pr_url": null,
+        "raw_reply": null,
+        "session_id": null
+      },
+      "blocked_write_events": [
+        {
+          "description": "Update",
+          "file": "marshmallow/fields.py",
+          "reason": "path 'marshmallow/fields.py' is outside task 'pr2902-enum-by-name''s allowed_paths (src/marshmallow/class_registry.py, src/marshmallow/fields.py, tests/test_deserialization.py)"
+        },
+        {
+          "description": "Update",
+          "file": "marshmallow/fields.py",
+          "reason": "path 'marshmallow/fields.py' is outside task 'pr2902-enum-by-name''s allowed_paths (src/marshmallow/class_registry.py, src/marshmallow/fields.py, tests/test_deserialization.py)"
+        },
+        {
+          "description": "Update",
+          "file": "marshmallow/fields.py",
+          "reason": "path 'marshmallow/fields.py' is outside task 'pr2902-enum-by-name''s allowed_paths (src/marshmallow/class_registry.py, src/marshmallow/fields.py, tests/test_deserialization.py)"
+        },
+        {
+          "description": "Update",
+          "file": "marshmallow/fields.py",
+          "reason": "path 'marshmallow/fields.py' is outside task 'pr2902-enum-by-name''s allowed_paths (src/marshmallow/class_registry.py, src/marshmallow/fields.py, tests/test_deserialization.py)"
+        },
+        {
+          "description": "Add",
+          "file": "tests/test_enum_by_name.py",
+          "reason": "path 'tests/test_enum_by_name.py' is outside task 'pr2902-enum-by-name''s allowed_paths (src/marshmallow/class_registry.py, src/marshmallow/fields.py, tests/test_deserialization.py)"
+        }
+      ],
+      "fail_to_pass_passed": 0,
+      "fail_to_pass_total": 3,
+      "failure_reason": null,
+      "metrics": {
+        "acus_consumed": null,
+        "changed_lines_added": null,
+        "changed_lines_deleted": null,
+        "changed_lines_kind": null,
+        "cost_source": null,
+        "cost_usd": null,
+        "human_interventions": 0,
+        "model_calls": 1,
+        "patch_applies": true,
+        "tokens_completion": 1156,
+        "tokens_prompt": 311,
+        "typecheck_diagnostic_count": null,
+        "typecheck_exit_code": null,
+        "typecheck_ran": false,
+        "typecheck_wall_seconds": null,
+        "wall_time_seconds": 12.5784
+      },
+      "out_of_bounds_files": [
+        "tests/test_enum_by_name.py"
+      ],
+      "overlaps_with": [],
+      "overlay_applied": true,
+      "overlay_skip_reason": "",
+      "pass_to_pass_passed": 0,
+      "pass_to_pass_total": 368,
+      "patch_na_reason": null,
+      "predicted_write_files": [
+        "src/marshmallow/fields.py",
+        "src/marshmallow/class_registry.py",
+        "tests/test_deserialization.py"
+      ],
+      "prompt": "The Enum field's by-name lookup incorrectly returns non-member attributes of the enum class (e.g., methods or properties) when looking up enum members by name. Fix the Enum field so that by-name lookup only returns actual enum members, not arbitrary class attributes, and add regression tests for accessing non-member enum attributes.",
+      "proposal_status": "ok",
+      "proposal_write_count": 5,
+      "session_id": null,
+      "status": "completed_unsafe",
+      "task_id": "pr2902-enum-by-name",
+      "test": {
+        "command": null,
+        "duration_seconds": null,
+        "exit_code": null,
+        "failed_tests": [],
+        "passed": null,
+        "ran": false
+      },
+      "tests_collection_error": true,
+      "tests_exit_code": 4,
+      "tests_failed_count": null,
+      "tests_passed_count": null,
+      "tests_ran": true,
+      "tests_skip_reason": "",
+      "tests_total_count": null,
+      "timestamps": {
+        "finished_at": "2026-05-13T07:20:02Z",
+        "started_at": "2026-05-13T07:19:08Z"
+      }
+    }
+  ],
+  "version": "0.1"
+}

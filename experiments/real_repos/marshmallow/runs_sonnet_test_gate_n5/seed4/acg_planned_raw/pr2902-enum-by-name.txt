@@ -1,0 +1,125 @@
+I need to find the Enum field's `_deserialize` method in `fields.py` to understand the by-name lookup issue. Let me look at the relevant section.
+
+The issue is that when looking up enum members by name, the code likely uses `getattr(enum_type, value)` or similar, which would return any class attribute (methods, properties, etc.), not just enum members.
+
+Let me find the Enum field implementation by searching for the relevant code pattern. Based on the task description, I need to fix the by-name lookup to only return actual enum members.
+
+The fix should use `enum_type[value]` (which only looks up enum members by name) instead of `getattr(enum_type, value)` or similar approaches that would return non-member attributes.
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+-from enum import Enum as EnumType
++from enum import Enum as EnumType, EnumMeta
+@@
+     def _deserialize(
+         self,
+         value: typing.Any,
+         attr: str | None,
+         data: typing.Mapping[str, typing.Any] | None,
+         **kwargs,
+     ) -> EnumType:
+         try:
+             if self.by_value:
+                 return self.enum(value)
+             else:
+-                return self.enum[value]
++                # Use enum.__members__ to ensure only actual enum members are returned,
++                # not arbitrary class attributes (methods, properties, etc.)
++                try:
++                    return self.enum.__members__[value]
++                except KeyError:
++                    raise ValueError(f"{value!r} is not a valid {self.enum.__name__} member name")
+         except (ValueError, KeyError) as error:
+             raise self.make_error("by_value", input=value, value=self.enum) from error
+*** Update File: tests/test_deserialization.py
+@@
+ from tests.base import (
+     ALL_FIELDS,
+     DateEnum,
+     GenderEnum,
+     HairColorEnum,
+     assert_date_equal,
+     assert_time_equal,
+     central,
+     predicate,
+ )
+@@
++class TestEnumFieldByNameLookup:
++    """Regression tests for Enum field by-name lookup."""
++
++    def test_enum_by_name_returns_member(self):
++        from enum import Enum
++
++        class Color(Enum):
++            RED = 1
++            GREEN = 2
++            BLUE = 3
++
++        field = fields.Enum(Color, by_value=False)
++        assert field.deserialize("RED") == Color.RED
++        assert field.deserialize("GREEN") == Color.GREEN
++        assert field.deserialize("BLUE") == Color.BLUE
++
++    def test_enum_by_name_does_not_return_non_member_attributes(self):
++        """Enum by-name lookup should not return methods or other class attributes."""
++        from enum import Enum
++
++        class MyEnum(Enum):
++            MEMBER = 1
++
++            def my_method(self):
++                return "not a member"
++
++        field = fields.Enum(MyEnum, by_value=False)
++        # Looking up a valid member should work
++        assert field.deserialize("MEMBER") == MyEnum.MEMBER
++        # Looking up a method name should raise ValidationError, not return the method
++        with pytest.raises(ValidationError):
++            field.deserialize("my_method")
++
++    def test_enum_by_name_does_not_return_class_properties(self):
++        """Enum by-name lookup should not return class-level properties."""
++        from enum import Enum
++
++        class StatusEnum(Enum):
++            ACTIVE = "active"
++            INACTIVE = "inactive"
++
++            @classmethod
++            def get_active(cls):
++                return cls.ACTIVE
++
++        field = fields.Enum(StatusEnum, by_value=False)
++        # Valid member lookup
++        assert field.deserialize("ACTIVE") == StatusEnum.ACTIVE
++        # Class method name should raise ValidationError
++        with pytest.raises(ValidationError):
++            field.deserialize("get_active")
++
++    def test_enum_by_name_invalid_name_raises_validation_error(self):
++        from enum import Enum
++
++        class SimpleEnum(Enum):
++            FOO = 1
++            BAR = 2
++
++        field = fields.Enum(SimpleEnum, by_value=False)
++        with pytest.raises(ValidationError):
++            field.deserialize("NONEXISTENT")
++
++    def test_enum_by_name_dunder_method_raises_validation_error(self):
++        """Dunder methods should not be returned by by-name lookup."""
++        from enum import Enum
++
++        class MyEnum(Enum):
++            VALUE = 42
++
++        field = fields.Enum(MyEnum, by_value=False)
++        with pytest.raises(ValidationError):
++            field.deserialize("__members__")
++        with pytest.raises(ValidationError):
++            field.deserialize("__class__")
++
++
+*** End Patch

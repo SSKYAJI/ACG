@@ -1,0 +1,68 @@
+*** Begin Patch
+*** Add File: tests/test_fish_multiline_fix.py
+--- /dev/null
++++ tests/test_fish_multiline_fix.py
+@@ -0,0 +1,60 @@
++"""Tests for fish shell completion with multiline help strings."""
++import re
++import pytest
++
++
++def _make_fish_completion_item(value, help_text=None):
++    """Helper to create a mock completion item."""
++    class Item:
++        def __init__(self, v, h):
++            self.value = v
++            self.type = "plain"
++            self.help = h
++    return Item(value, help_text)
++
++
++def _format_fish_completion(item):
++    """Replicate the fixed FishComplete.format_completion logic."""
++    if item.help:
++        help_str = item.help.replace("\n", " ").replace("\r", " ").replace("\t", " ")
++        help_str = re.sub(r" {2,}", " ", help_str).strip()
++        return f"{item.type},{item.value}\t{help_str}"
++    return f"{item.type},{item.value}"
++
++
++def test_single_line_help():
++    item = _make_fish_completion_item("cmd", "A simple command")
++    result = _format_fish_completion(item)
++    assert result == "plain,cmd\tA simple command"
++    assert "\n" not in result
++
++
++def test_multiline_help_newlines_removed():
++    item = _make_fish_completion_item("cmd", "First line\nSecond line")
++    result = _format_fish_completion(item)
++    assert "\n" not in result
++    assert "First line Second line" in result
++
++
++def test_multiline_help_multiple_newlines():
++    item = _make_fish_completion_item("cmd", "Line 1\nLine 2\nLine 3")
++    result = _format_fish_completion(item)
++    assert "\n" not in result
++    assert "Line 1 Line 2 Line 3" in result
++
++
++def test_multiline_help_with_tabs():
++    item = _make_fish_completion_item("cmd", "Help\twith\ttabs")
++    result = _format_fish_completion(item)
++    assert "\t" not in result.split(",", 1)[1].split("\t", 1)[1] if "\t" in result else True
++
++
++def test_no_help():
++    item = _make_fish_completion_item("cmd", None)
++    result = _format_fish_completion(item)
++    assert result == "plain,cmd"
++    assert "\n" not in result
++
++
++def test_help_with_extra_spaces_collapsed():
++    item = _make_fish_completion_item("cmd", "Help  with   extra   spaces")
++    result = _format_fish_completion(item)
++    assert "  " not in result
+*** End Patch

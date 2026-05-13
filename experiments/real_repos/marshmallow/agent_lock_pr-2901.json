@@ -1,0 +1,89 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-13T05:05:14.945291Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "claude-sonnet-4-6",
+    "tokens_planner_total": 6396,
+    "tokens_scope_review_total": 1007,
+    "tokens_planner_completion_total": 203,
+    "tokens_planner_method": "provider_usage",
+    "compile_wall_seconds": 5.8638,
+    "compile_cost_usd": null
+  },
+  "repo": {
+    "root": "experiments/real_repos/marshmallow/checkout",
+    "git_url": null,
+    "commit": null,
+    "languages": [
+      "python"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr2901-constant-required",
+      "prompt": "Using the Constant field with required=True raises a ValueError unexpectedly. The Constant field should accept required=True without raising an error, since it always provides its constant value. Fix the Constant field initialization so it works correctly with required=True and add regression tests for this case.",
+      "predicted_writes": [
+        {
+          "path": "src/marshmallow/fields.py",
+          "confidence": 0.95,
+          "reason": "The Constant field initialization needs to be fixed to accept required=True without raising a ValueError. Signals: bm25, llm, pagerank, symbol. Scope review promoted this retrieved candidate to must_write after non-review signals met hard-scope rules."
+        },
+        {
+          "path": "tests/test_fields.py",
+          "confidence": 0.9,
+          "reason": "Regression tests for Constant field with required=True should be added to the fields test file. Signals: bm25, llm, testlink. Scope review promoted this retrieved candidate to must_write after non-review signals met hard-scope rules."
+        }
+      ],
+      "allowed_paths": [
+        "src/marshmallow/fields.py",
+        "tests/test_fields.py"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "src/marshmallow/fields.py",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "llm",
+            "pagerank",
+            "scope_review",
+            "symbol"
+          ],
+          "reason": "The Constant field initialization needs to be fixed to accept required=True without raising a ValueError. Signals: bm25, llm, pagerank, symbol. Scope review promoted this retrieved candidate to must_write after non-review signals met hard-scope rules."
+        },
+        {
+          "path": "tests/test_fields.py",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "llm",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Regression tests for Constant field with required=True should be added to the fields test file. Signals: bm25, llm, testlink. Scope review promoted this retrieved candidate to must_write after non-review signals met hard-scope rules."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr2901-constant-required"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

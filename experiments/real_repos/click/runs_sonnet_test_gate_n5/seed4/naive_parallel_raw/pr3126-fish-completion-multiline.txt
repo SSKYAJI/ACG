@@ -1,0 +1,110 @@
+Looking at the task, I need to fix fish shell completion to handle multiline help strings. The issue is that when help text contains newlines, it breaks the fish completion script format.
+
+Let me analyze the problem and implement the fix:
+
+1. In fish completion, help text is used in `complete` commands with `-d` flag
+2. If help text contains newlines, it would break the fish completion syntax
+3. The fix should strip/replace newlines in help text for fish completions
+
+*** Begin Patch
+*** Update File: src/click/shell_completion.py
+@@
+ class ShellComplete:
+@@
+     def _get_completion_record(
+         self,
+         ctx: Context,
+         param: t.Optional["Parameter"] = None,
+     ) -> str:
+@@
+ class FishComplete(ShellComplete):
+@@
+     source_template = FISH_SOURCE
+ 
+     def format_completion(self, item: CompletionItem) -> str:
+-        if item.help:
+-            return f"echo {item.value}\t{item.help}"
+-
+-        return f"echo {item.value}"
++        if item.help:
++            help_str = item.help.split("\n")[0]
++            return f"echo {item.value}\t{help_str}"
++
++        return f"echo {item.value}"
+*** Update File: tests/test_shell_completion.py
+@@
+ from click.shell_completion import (
+@@
+ def test_fish_multiline_help() -> None:
++    """Fish completion should only use the first line of multiline help text."""
++    from click.shell_completion import CompletionItem, FishComplete
++
++    cli = click.Group()
++
++    @cli.command()
++    @click.pass_context
++    def cmd(ctx: click.Context) -> None:
++        pass
++
++    item = CompletionItem("value", help="First line\nSecond line\nThird line")
++    ctx = click.Context(cli)
++    comp = FishComplete(cli, ctx, "test", {})
++    result = comp.format_completion(item)
++    assert "\n" not in result
++    assert "First line" in result
++    assert "Second line" not in result
+*** End Patch
+
+Wait, I need to look at the actual source code structure more carefully. Let me reconsider the patch based on what the actual code likely looks like.
+
+*** Begin Patch
+*** Update File: src/click/shell_completion.py
+@@
+ class FishComplete(ShellComplete):
+@@
+     def format_completion(self, item: CompletionItem) -> str:
+-        if item.help:
+-            return f"echo {item.value}\t{item.help}"
+-
+-        return f"echo {item.value}"
++        if item.help:
++            help_str = item.help.split("\n")[0]
++            return f"echo {item.value}\t{help_str}"
++
++        return f"echo {item.value}"
+*** Update File: tests/test_shell_completion.py
+@@
+ from click.shell_completion import (
+@@
++
++
++def test_fish_multiline_help() -> None:
++    """Fish completion should only use the first line of multiline help text."""
++    from click.shell_completion import CompletionItem, FishComplete
++
++    @click.group()
++    def cli() -> None:
++        pass
++
++    item = CompletionItem("value", help="First line\nSecond line\nThird line")
++    ctx = click.Context(cli)
++    comp = FishComplete(cli, ctx, "test", {})
++    result = comp.format_completion(item)
++    assert "\n" not in result
++    assert "First line" in result
++    assert "Second line" not in result
+*** End Patch
+
+I need to be more careful about the context. Let me provide a proper patch with sufficient context:
+
+*** Begin Patch
+*** Update File: src/click/shell_completion.py
+@@
+     def format_completion(self, item: CompletionItem) -> str:
+         if item.help:
+-            return f"echo {item.value}\t{item.help}"
++            help_str = item.help.split("\n")[0]
++            return f"echo {item.value}\t{help_str}"
+ 
+         return f"echo {item.value}"
+*** End Patch

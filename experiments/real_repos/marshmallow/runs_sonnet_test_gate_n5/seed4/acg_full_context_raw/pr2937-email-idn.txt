@@ -1,0 +1,88 @@
+Looking at the code, the issue is in the `Email.__call__` method. When an IDN domain is encoded via `domain_part.encode("idna").decode("ascii")`, the resulting punycode is then validated against `DOMAIN_REGEX`. However, the `encode("idna")` call doesn't raise an error for labels starting or ending with hyphens - it successfully encodes them, and the resulting punycode might pass the regex.
+
+The fix is to validate each label of the domain to ensure no label starts or ends with a hyphen, before or after IDN encoding.
+
+Let me check: for `user@-münchen.de`, the domain is `-münchen.de`. The label `-münchen` starts with a hyphen. After IDNA encoding, this might become `-xn--mnchen-3ya` or similar, which would actually be caught by `DOMAIN_REGEX` since it requires `[A-Z0-9]` at start. But let me think more carefully...
+
+Actually `DOMAIN_REGEX` is `(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+ ...` - this requires labels to start with `[A-Z0-9]`. So `-münchen` encoded would start with `-` and fail. But `münchen-` encoded... let me think. `münchen-` would encode to something like `mnchen--3ya-` which ends with `-`, and the regex requires ending with `[A-Z0-9]`. So it should be caught too.
+
+Wait, but the task says these ARE being accepted. Let me re-read the code. The `encode("idna")` call - if it raises `UnicodeError`, we fall through to `raise ValidationError`. But if it succeeds, we check `DOMAIN_REGEX`. 
+
+The issue might be that `encode("idna")` raises `UnicodeError` for these cases (since IDNA doesn't allow labels starting/ending with hyphens), so we `pass` and then `raise ValidationError`... but wait, that would mean they ARE rejected. 
+
+Hmm, let me reconsider. Perhaps `encode("idna")` does NOT raise for `-münchen` and produces something that passes the regex. The safest fix is to explicitly check each label for leading/trailing hyphens after the IDNA encoding step.
+
+The fix: after successfully encoding to IDNA, check that no label in the encoded domain starts or ends with a hyphen.
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+                 raise ValidationError(message)
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
++                        # Reject labels that start or end with a hyphen
++                        labels = domain_part.split(".")
++                        if any(
++                            label.startswith("-") or label.endswith("-")
++                            for label in labels
++                        ):
++                            raise ValidationError(message)
+                         return value
+                 raise ValidationError(message)
+*** Update File: tests/test_validate.py
+@@
+     "δοκ.ιμή@παράδειγμα.δοκιμή",
+     ],
+ )
+ def test_email_valid(valid_email):
+@@
+     "δοκ.ιμή@παράδειγμα.δοκιμή",
++    "user@münchen.de",
++    "user@xn--mnchen-3ya.de",
+     ],
+ )
+ def test_email_valid(valid_email):
+*** Update File: tests/test_validate.py
+@@
+         "user@example",
+         "@nouser.com",
+         "example.com",
+         "user",
+         "",
+         None,
+     ],
+ )
+ def test_email_invalid(invalid_email):
+@@
+         "user@example",
+         "@nouser.com",
+         "example.com",
+         "user",
+         "",
+         None,
++        # IDN domain labels must not start or end with a hyphen
++        "user@-münchen.de",
++        "user@münchen-.de",
++        "user@-example.com",
++        "user@example-.com",
+     ],
+ )
+ def test_email_invalid(invalid_email):
+*** End Patch

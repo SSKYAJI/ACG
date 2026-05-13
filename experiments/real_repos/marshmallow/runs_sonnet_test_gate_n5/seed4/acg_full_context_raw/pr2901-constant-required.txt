@@ -1,0 +1,62 @@
+Looking at the code, I can see the issue. In `fields.py`, the `Constant` field's `__init__` method sets a `load_default` (the constant value), but then calls `super().__init__()` with `required=True`, which raises a `ValueError` because `load_default` is not `missing_`.
+
+Let me find the `Constant` field in the file. Since the file is truncated, I need to look at what's visible and make the fix based on the pattern. The `Constant` field likely does something like:
+
+```python
+class Constant(Field):
+    def __init__(self, constant, **kwargs):
+        super().__init__(load_default=constant, dump_default=constant, **kwargs)
+```
+
+The fix should be: when `required=True` is passed to `Constant`, we should not raise the error since the constant value is always provided. The simplest fix is to skip the validation check in `Field.__init__` when the field is a `Constant`, or better, have `Constant.__init__` pop `required` from kwargs and handle it specially.
+
+The cleanest fix is in `Field.__init__`: the check `if required is True and load_default is not missing_` should not raise for `Constant` fields. But a better approach is to have `Constant` handle this by not passing `load_default` to super when `required=True`, or by overriding the check.
+
+Actually, the best fix is in `Constant.__init__`: strip `required` from kwargs before calling super, then set `self.required` after. Or simply: in `Field.__init__`, the check should be removed/modified, and `Constant` should handle it.
+
+The simplest targeted fix: in `Constant.__init__`, handle `required=True` by not passing `load_default` to the parent's validation check. We can do this by calling super without `load_default` when required=True, then setting it manually. But that's complex.
+
+Easiest: modify `Constant.__init__` to temporarily bypass the check by setting required after calling super.
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+        if required is True and load_default is not missing_:
+            raise ValueError("'load_default' must not be set for required fields.")
+        self.required = required
+@@
+        if required is True and load_default is not missing_ and not isinstance(self, Constant):
+            raise ValueError("'load_default' must not be set for required fields.")
+        self.required = required
+*** Update File: tests/test_fields.py
+@@
+    def test_error_raised_if_missing_is_set_on_required_field(self):
+        with pytest.raises(
+            ValueError, match="'load_default' must not be set for required fields"
+        ):
+            fields.Raw(required=True, load_default=42)
+@@
+    def test_error_raised_if_missing_is_set_on_required_field(self):
+        with pytest.raises(
+            ValueError, match="'load_default' must not be set for required fields"
+        ):
+            fields.Raw(required=True, load_default=42)
+
+    def test_constant_field_accepts_required_true(self):
+        # Constant should not raise when required=True is passed
+        field = fields.Constant(42, required=True)
+        assert field.required is True
+        assert field.load_default == 42
+
+    def test_constant_field_required_true_in_schema(self):
+        class MySchema(Schema):
+            value = fields.Constant(42, required=True)
+
+        # Should load successfully even when field is absent (constant provides value)
+        result = MySchema().load({})
+        assert result == {"value": 42}
+
+        # Should also work when field is present
+        result = MySchema().load({"value": 42})
+        assert result == {"value": 42}
+*** End Patch

@@ -1,0 +1,132 @@
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+             if isinstance(a
++# … [truncated; original file is 18487 bytes]
+*** End Patch
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+         yield (stream_mixer.stdout, stream_mixer.stderr, stream_mixer.output)
+        finally:
+            for key, value in old_env.items():
+                if value is None:
+                    try:
+                        del os.environ[key]
+                    except Exception:
+                        pass
+                else:
+                    os.environ[key] = value
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+            sys.stdin = old_stdin
+*** End Patch
+
+I need to see the full invoke method. Let me look at the truncated part more carefully and provide the correct fix.
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+        finally:
+            for key, value in old_env.items():
+                if value is None:
+                    try:
+                        del os.environ[key]
+                    except Exception:
+                        pass
+                else:
+                    os.environ[key] = value
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+            sys.stdin = old_stdin
+            termui.visible_prompt_func = old_visible_prompt_func
+            termui.hidden_prompt_func = old_hidden_prompt_func
+            termui._getchar = old__getchar_func
+            utils.should_strip_ansi = old_should_strip_ansi  # type: ignore
+            _compat.should_strip_ansi = old__compat_should_strip_ansi
+            formatting.FORCED_WIDTH = old_forced_width
+@@
++            sys.stdout.flush()
++            sys.stderr.flush()
+             sys.stdout = old_stdout
+             sys.stderr = old_stderr
+             sys.stdin = old_stdin
+*** End Patch
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+        finally:
+            for key, value in old_env.items():
+                if value is None:
+                    try:
+                        del os.environ[key]
+                    except Exception:
+                        pass
+                else:
+                    os.environ[key] = value
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+            sys.stdin = old_stdin
+            termui.visible_prompt_func = old_visible_prompt_func
+-            termui.hidden_prompt_func = old_hidden_prompt_func
++            termui.hidden_prompt_func = old_hidden_prompt_func
+*** End Patch
+
+Let me provide a clean, correct patch:
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+            os.environ[key] = value
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+            sys.stdin = old_stdin
++ sys.stdout.flush()
++ sys.stderr.flush()
+*** End Patch
+
+I need to be more careful. Let me provide the exact correct patch:
+
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+        finally:
+            for key, value in old_env.items():
+                if value is None:
+                    try:
+                        del os.environ[key]
+                    except Exception:
+                        pass
+                else:
+                    os.environ[key] = value
++            sys.stdout.flush()
++            sys.stderr.flush()
+             sys.stdout = old_stdout
+             sys.stderr = old_stderr
+             sys.stdin = old_stdin
+             termui.visible_prompt_func = old_visible_prompt_func
+             termui.hidden_prompt_func = old_hidden_prompt_func
+             termui._getchar = old__getchar_func
+             utils.should_strip_ansi = old_should_strip_ansi  # type: ignore
+             _compat.should_strip_ansi = old__compat_should_strip_ansi
+             formatting.FORCED_WIDTH = old_forced_width
+*** End Patch
+
+*** Update File: tests/test_testing.py
+@@
+     assert err.getvalue() == b"\\udce2"
++
++
++def test_stderr_unflushed():
++    """Data written to stderr without explicit flush should be captured."""
++
++    @click.command()
++    def cli():
++        print("to stderr", file=sys.stderr, flush=False)
++
++    runner = CliRunner()
++    result = runner.invoke(cli)
++    assert result.stderr == "to stderr\n"
+*** End Patch

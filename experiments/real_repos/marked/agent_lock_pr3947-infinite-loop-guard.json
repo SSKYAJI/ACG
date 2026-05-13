@@ -1,0 +1,111 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-13T05:05:17.487862Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "mock-llm-canned",
+    "tokens_planner_total": 2975,
+    "tokens_scope_review_total": 1616,
+    "tokens_planner_completion_total": null,
+    "tokens_planner_method": "estimate_chars_div_4",
+    "compile_wall_seconds": 0.4126,
+    "compile_cost_usd": null
+  },
+  "repo": {
+    "root": "experiments/real_repos/marked/checkout",
+    "git_url": "https://github.com/markedjs/marked.git",
+    "commit": "98b38246c0ce4d0fb6c73c6fe8b26f7f6d3940f6",
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr3947-infinite-loop-guard",
+      "prompt": "The marked lexer enters an infinite loop when parsing certain indented code blocks that contain blank lines with special characters (e.g., a tab followed by a vertical tab). Add a loop-termination guard so that if the remaining source does not shrink between iterations the parser breaks out cleanly and refactor the existing inline infinite-loop error path to reuse the same guard logic.",
+      "predicted_writes": [
+        {
+          "path": "src/Lexer.ts",
+          "confidence": 1.0,
+          "reason": "manual curation: ACG predictor included built artifacts; corrected to match PR ground_truth_files"
+        },
+        {
+          "path": "src/helpers.ts",
+          "confidence": 1.0,
+          "reason": "manual curation: ACG predictor included built artifacts; corrected to match PR ground_truth_files"
+        },
+        {
+          "path": "test/specs/redos/code_blank_line.cjs",
+          "confidence": 1.0,
+          "reason": "manual curation: ACG predictor included built artifacts; corrected to match PR ground_truth_files"
+        }
+      ],
+      "allowed_paths": [
+        "src/Lexer.ts",
+        "src/helpers.ts",
+        "test/specs/redos/code_blank_line.cjs"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "lib/marked.esm.js",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "pagerank",
+            "symbol"
+          ],
+          "reason": "personalized PageRank rank #1, top symbol matches: $e, A, E.; BM25 lexical match over path, identifiers, imports, docstrings (score 24.60). Signals: bm25, pagerank, symbol."
+        },
+        {
+          "path": "lib/marked.umd.js",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "pagerank"
+          ],
+          "reason": "personalized PageRank rank #2, top symbol matches: G, a, blockTokens.; BM25 lexical match over path, identifiers, imports, docstrings (score 27.80). Signals: bm25, pagerank."
+        },
+        {
+          "path": "src/Lexer.ts",
+          "tier": "must_write",
+          "score": 0.9,
+          "signals": [
+            "bm25",
+            "pagerank"
+          ],
+          "reason": "personalized PageRank rank #8, top symbol matches: _Lexer, blockTokens, if.; BM25 lexical match over path, identifiers, imports, docstrings (score 7.89). Signals: bm25, pagerank."
+        },
+        {
+          "path": "src/rules.ts",
+          "tier": "must_write",
+          "score": 0.85,
+          "signals": [
+            "bm25",
+            "symbol"
+          ],
+          "reason": "Symbol 'inline' referenced in prompt; defined in src/rules.ts. Signals: bm25, symbol."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr3947-infinite-loop-guard"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

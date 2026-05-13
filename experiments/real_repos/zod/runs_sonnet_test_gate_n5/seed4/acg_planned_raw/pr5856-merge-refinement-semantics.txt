@@ -1,0 +1,155 @@
+Looking at the task, I need to:
+
+1. Find where `.merge()` is implemented in the v4 codebase and update it to preserve refinements
+2. Add regression tests
+
+Let me analyze the code. The `util.ts` file is truncated, so I need to look at what's available. The key function I need to find is likely in the schemas file, but based on the task description, I need to update `util.ts`.
+
+Looking at the existing code in `util.ts`, I can see `mergeDefs` function. The `.merge()` method on ZodObject likely uses this. The issue is that when merging, refinements (stored as checks in the `_zod.def`) are being discarded.
+
+In Zod v4, refinements added via `.refine()` or `.superRefine()` are stored as `checks` in the schema's def. When `.merge()` creates a new object, it only takes the shape/catchall from the incoming object but discards the checks from the original object.
+
+The fix should be in the `mergeDefs` function or wherever `.merge()` is implemented. Since the task says to update `util.ts`, I'll add a helper function there that properly merges defs while preserving checks/refinements.
+
+Looking at the `mergeDefs` function - it simply overwrites properties. The fix needs to concatenate the `checks` arrays from both defs rather than overwriting.
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/util.ts
+@@
+ export function mergeDefs(...defs: Record<string, any>[]): any {
+   const mergedDescriptors: Record<string, PropertyDescriptor> = {};
+ 
+   for (const def of defs) {
+     const descriptors = Object.getOwnPropertyDescriptors(def);
+     Object.assign(mergedDescriptors, descriptors);
+   }
+ 
+   return Object.defineProperties({}, mergedDescriptors);
+ }
++
++export function mergeObjectDefs(baseDef: Record<string, any>, incomingDef: Record<string, any>): any {
++  // Merge all properties from both defs, with incoming taking precedence,
++  // but concatenate `checks` arrays so refinements from the base are preserved.
++  const merged = mergeDefs(baseDef, incomingDef);
++
++  const baseChecks: any[] = baseDef.checks ?? [];
++  const incomingChecks: any[] = incomingDef.checks ?? [];
++  const combinedChecks = [...baseChecks, ...incomingChecks];
++
++  if (combinedChecks.length > 0) {
++    Object.defineProperty(merged, "checks", {
++      value: combinedChecks,
++      writable: true,
++      enumerable: true,
++      configurable: true,
++    });
++  } else {
++    // Ensure checks is not set if neither had any
++    delete merged.checks;
++  }
++
++  return merged;
++}
+*** Update File: packages/zod/src/v4/classic/tests/object.test.ts
+@@
+ test("unknownkeys merging", () => {
+   // This one is "strict"
+   const a = z.looseObject({
+     a: z.string(),
+   });
+ 
+   const b = z.strictObject({ b: z.string() });
+ 
+   // incoming object overrides
+   const c = a.merge(b);
+   expect(c._zod.def.catchall).toBeInstanceOf(core.$ZodNever);
+ });
++
++test("merge() preserves refinements from base object", () => {
++  const base = z
++    .object({ a: z.string(), b: z.number() })
++    .refine((data) => data.b > 0, { message: "b must be positive" });
++
++  const incoming = z.object({ c: z.string() });
++  const merged = base.merge(incoming);
++
++  // Valid data should pass
++  expect(merged.parse({ a: "hello", b: 1, c: "world" })).toEqual({ a: "hello", b: 1, c: "world" });
++
++  // Data that violates the base refinement should fail
++  const result = merged.safeParse({ a: "hello", b: -1, c: "world" });
++  expect(result.success).toBe(false);
++  if (!result.success) {
++    expect(result.error.issues[0].message).toBe("b must be positive");
++  }
++});
++
++test("merge() preserves superRefine from base object", () => {
++  const base = z.object({ a: z.string() }).superRefine((data, ctx) => {
++    if (data.a.length < 3) {
++      ctx.addIssue({
++        code: "custom",
++        message: "a must be at least 3 characters",
++      });
++    }
++  });
++
++  const incoming = z.object({ b: z.number() });
++  const merged = base.merge(incoming);
++
++  expect(merged.parse({ a: "abc", b: 1 })).toEqual({ a: "abc", b: 1 });
++
++  const result = merged.safeParse({ a: "ab", b: 1 });
++  expect(result.success).toBe(false);
++  if (!result.success) {
++    expect(result.error.issues[0].message).toBe("a must be at least 3 characters");
++  }
++});
++
++test("merge() preserves refinements from incoming object", () => {
++  const base = z.object({ a: z.string() });
++  const incoming = z
++    .object({ b: z.number() })
++    .refine((data) => data.b > 0, { message: "b must be positive" });
++
++  const merged = base.merge(incoming);
++
++  expect(merged.parse({ a: "hello", b: 1 })).toEqual({ a: "hello", b: 1 });
++
++  const result = merged.safeParse({ a: "hello", b: -1 });
++  expect(result.success).toBe(false);
++  if (!result.success) {
++    expect(result.error.issues[0].message).toBe("b must be positive");
++  }
++});
++
++test("merge() preserves refinements from both base and incoming objects", () => {
++  const base = z
++    .object({ a: z.string(), b: z.number() })
++    .refine((data) => data.b > 0, { message: "b must be positive" });
++
++  const incoming = z
++    .object({ c: z.string() })
++    .refine((data) => data.c.length > 0, { message: "c must not be empty" });
++
++  const merged = base.merge(incoming);
++
++  // Both refinements should be active
++  expect(merged.parse({ a: "hello", b: 1, c: "world" })).toEqual({ a: "hello", b: 1, c: "world" });
++
++  const result1 = merged.safeParse({ a: "hello", b: -1, c: "world" });
++  expect(result1.success).toBe(false);
++
++  const result2 = merged.safeParse({ a: "hello", b: 1, c: "" });
++  expect(result2.success).toBe(false);
++});
++
++test("merge() without refinements still works correctly", () => {
++  const base = z.object({ a: z.string() });
++  const incoming = z.object({ b: z.number() });
++  const merged = base.merge(incoming);
++
++  expect(merged.parse({ a: "hello", b: 1 })).toEqual({ a: "hello", b: 1 });
++  expect(merged.safeParse({ a: 123, b: 1 }).success).toBe(false);
++});
+*** End Patch

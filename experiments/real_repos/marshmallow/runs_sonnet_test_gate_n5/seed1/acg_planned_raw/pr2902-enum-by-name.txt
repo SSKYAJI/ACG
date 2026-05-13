@@ -1,0 +1,119 @@
+I need to find the Enum field's `_deserialize` method in `fields.py` to fix the by-name lookup issue. Let me look at the relevant section.
+
+The issue is that when looking up enum members by name, the code likely uses `getattr(enum_type, value)` or similar, which would return non-member attributes (methods, properties, etc.). The fix should use `enum_type[value]` or check that the result is actually an enum member.
+
+Let me find the Enum field in fields.py. Since the file is truncated, I need to work with what I know about marshmallow's Enum field implementation. The typical implementation uses `getattr` for by-name lookup, which is the bug. The fix is to use `self.enum[value]` (bracket notation) which only works for enum members.
+
+Now let me add regression tests to `test_deserialization.py`.
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+from enum import Enum as EnumType
+@@
+-from enum import Enum as EnumType
++from enum import Enum as EnumType, EnumMeta
+*** Update File: src/marshmallow/fields.py
+@@
+        if self.by_value:
+            try:
+                return self.enum(value)
+            except ValueError:
+                raise self.make_error("by_value", input=value, value=self.enum)
+        try:
+            return getattr(self.enum, value)
+        except AttributeError:
+            raise self.make_error("by_name", input=value, name=self.enum)
+@@
+        if self.by_value:
+            try:
+                return self.enum(value)
+            except ValueError:
+                raise self.make_error("by_value", input=value, value=self.enum)
+        try:
+            return self.enum[value]
+        except KeyError:
+            raise self.make_error("by_name", input=value, name=self.enum)
+*** Update File: tests/test_deserialization.py
+@@
+from marshmallow.exceptions import ValidationError
+from tests.base import (
+    ALL_FIELDS,
+    DateEnum,
+    GenderEnum,
+    HairColorEnum,
+    assert_date_equal,
+    assert_time_equal,
+    central,
+    predicate,
+)
+@@
+from marshmallow.exceptions import ValidationError
+from tests.base import (
+    ALL_FIELDS,
+    DateEnum,
+    GenderEnum,
+    HairColorEnum,
+    assert_date_equal,
+    assert_time_equal,
+    central,
+    predicate,
+)
+import enum as enum_module
+*** Update File: tests/test_deserialization.py
+@@
+class TestDeserializingNone:
+@@
+class _EnumWithMethod(enum_module.Enum):
+    RED = 1
+    GREEN = 2
+    BLUE = 3
+
+    def describe(self):
+        return f"I am {self.name}"
+
+    @classmethod
+    def class_method(cls):
+        return "class_method"
+
+    @property
+    def prop(self):
+        return "prop_value"
+
+
+class TestDeserializingNone:
+*** Update File: tests/test_deserialization.py
+@@
+class TestFieldDeserialization:
+    def test_float_field_deserialization(self):
+@@
+class TestEnumFieldByNameLookup:
+    def test_by_name_returns_enum_member(self):
+        field = fields.Enum(_EnumWithMethod, by_value=False)
+        assert field.deserialize("RED") == _EnumWithMethod.RED
+        assert field.deserialize("GREEN") == _EnumWithMethod.GREEN
+
+    def test_by_name_does_not_return_method(self):
+        field = fields.Enum(_EnumWithMethod, by_value=False)
+        with pytest.raises(ValidationError):
+            field.deserialize("describe")
+
+    def test_by_name_does_not_return_class_method(self):
+        field = fields.Enum(_EnumWithMethod, by_value=False)
+        with pytest.raises(ValidationError):
+            field.deserialize("class_method")
+
+    def test_by_name_does_not_return_property(self):
+        field = fields.Enum(_EnumWithMethod, by_value=False)
+        with pytest.raises(ValidationError):
+            field.deserialize("prop")
+
+    def test_by_name_invalid_name_raises_validation_error(self):
+        field = fields.Enum(_EnumWithMethod, by_value=False)
+        with pytest.raises(ValidationError):
+            field.deserialize("NONEXISTENT")
+
+
+class TestFieldDeserialization:
+    def test_float_field_deserialization(self):
+*** End Patch

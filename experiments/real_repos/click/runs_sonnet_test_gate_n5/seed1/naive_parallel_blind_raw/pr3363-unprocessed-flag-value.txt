@@ -1,0 +1,210 @@
+I need to create a solution for fixing Option initialization when `flag_value` is set to a non-basic type. Let me create the necessary files.
+
+*** Begin Patch
+*** Add File: option.py
++ import enum
++ 
++ # Basic types that can be directly used as option types
++ BASIC_TYPES = (str, int, float, bool, bytes)
++ 
++ 
++ class OptionType(enum.Enum):
++     UNPROCESSED = "unprocessed"
++     STRING = "string"
++     INT = "int"
++     FLOAT = "float"
++     BOOL = "bool"
++     BYTES = "bytes"
++ 
++ 
++ # Mapping from basic Python types to OptionType
++ _TYPE_MAP = {
++     str: OptionType.STRING,
++     int: OptionType.INT,
++     float: OptionType.FLOAT,
++     bool: OptionType.BOOL,
++     bytes: OptionType.BYTES,
++ }
++ 
++ 
++ class Option:
++     """Represents a command-line option."""
++
++     def __init__(self, *opts, flag_value=None, default=None, type=None, **kwargs):
++         self.opts = opts
++         self.default = default
++         self.kwargs = kwargs
++ 
++         # Determine the option type based on flag_value and type arguments
++         if flag_value is not None:
++             # If flag_value is provided, check if it's a basic type instance
++             if isinstance(flag_value, BASIC_TYPES):
++                 # Use the type of flag_value to determine option type
++                 inferred_type = builtins_type(flag_value)
++                 self.type = _TYPE_MAP.get(inferred_type, OptionType.UNPROCESSED)
++             else:
++                 # Non-basic type (e.g., enum value): use UNPROCESSED
++                 self.type = OptionType.UNPROCESSED
++             self.flag_value = flag_value
++         else:
++             self.flag_value = None
++             if type is not None:
++                 if type in _TYPE_MAP:
++                     self.type = _TYPE_MAP[type]
++                 else:
++                     self.type = OptionType.UNPROCESSED
++             else:
++                 self.type = OptionType.STRING
++ 
++     def process_value(self, value):
++         """Process a value according to this option's type."""
++         if self.flag_value is not None:
++             return self.flag_value
++         if self.type == OptionType.UNPROCESSED:
++             return value
++         elif self.type == OptionType.INT:
++             return int(value)
++         elif self.type == OptionType.FLOAT:
++             return float(value)
++         elif self.type == OptionType.BOOL:
++             return bool(value)
++         elif self.type == OptionType.BYTES:
++             return bytes(value, 'utf-8') if isinstance(value, str) else bytes(value)
++         else:
++             return value
++ 
++     def __repr__(self):
++         return (
++             f"Option(opts={self.opts!r}, flag_value={self.flag_value!r}, "
++             f"type={self.type!r}, default={self.default!r})"
++         )
++ 
++ 
++ # Keep a reference to the built-in type() function since we shadow it with a parameter
++ builtins_type = __builtins__["type"] if isinstance(__builtins__, dict) else __builtins__.__class__.__mro__[0]
+*** Add File: test_option.py
++ import enum
++ import pytest
++ from option import Option, OptionType
++ 
++ 
++ class Color(enum.Enum):
++     RED = 1
++     GREEN = 2
++     BLUE = 3
++ 
++ 
++ class TestOptionFlagValue:
++     def test_flag_value_basic_int(self):
++         """When flag_value is an int, type should be INT."""
++         opt = Option("--verbose", flag_value=1)
++         assert opt.type == OptionType.INT
++         assert opt.flag_value == 1
++ 
++     def test_flag_value_basic_str(self):
++         """When flag_value is a str, type should be STRING."""
++         opt = Option("--mode", flag_value="fast")
++         assert opt.type == OptionType.STRING
++         assert opt.flag_value == "fast"
++ 
++     def test_flag_value_basic_bool(self):
++         """When flag_value is a bool, type should be BOOL."""
++         opt = Option("--enable", flag_value=True)
++         assert opt.type == OptionType.BOOL
++         assert opt.flag_value is True
++ 
++     def test_flag_value_basic_float(self):
++         """When flag_value is a float, type should be FLOAT."""
++         opt = Option("--ratio", flag_value=1.5)
++         assert opt.type == OptionType.FLOAT
++         assert opt.flag_value == 1.5
++ 
++     def test_flag_value_enum_sets_unprocessed(self):
++         """When flag_value is an enum, type should be UNPROCESSED."""
++         opt = Option("--color", flag_value=Color.RED)
++         assert opt.type == OptionType.UNPROCESSED
++         assert opt.flag_value == Color.RED
++ 
++     def test_flag_value_enum_green(self):
++         """When flag_value is an enum value GREEN, type should be UNPROCESSED."""
++         opt = Option("--color", flag_value=Color.GREEN)
++         assert opt.type == OptionType.UNPROCESSED
++         assert opt.flag_value == Color.GREEN
++ 
++     def test_flag_value_custom_object_sets_unprocessed(self):
++         """When flag_value is a custom object, type should be UNPROCESSED."""
++         class MyObj:
++             pass
++         obj = MyObj()
++         opt = Option("--obj", flag_value=obj)
++         assert opt.type == OptionType.UNPROCESSED
++         assert opt.flag_value is obj
++ 
++     def test_no_flag_value_default_type_string(self):
++         """When no flag_value and no type, default type should be STRING."""
++         opt = Option("--name")
++         assert opt.type == OptionType.STRING
++         assert opt.flag_value is None
++ 
++     def test_no_flag_value_explicit_type_int(self):
++         """When type=int is given, type should be INT."""
++         opt = Option("--count", type=int)
++         assert opt.type == OptionType.INT
++ 
++     def test_no_flag_value_explicit_type_float(self):
++         """When type=float is given, type should be FLOAT."""
++         opt = Option("--ratio", type=float)
++         assert opt.type == OptionType.FLOAT
++ 
++     def test_no_flag_value_non_basic_type_sets_unprocessed(self):
++         """When type is a non-basic type, type should be UNPROCESSED."""
++         opt = Option("--color", type=Color)
++         assert opt.type == OptionType.UNPROCESSED
++ 
++     def test_process_value_with_enum_flag_value(self):
++         """process_value should return the enum flag_value directly."""
++         opt = Option("--color", flag_value=Color.BLUE)
++         result = opt.process_value(None)
++         assert result == Color.BLUE
++ 
++     def test_process_value_with_int_flag_value(self):
++         """process_value should return the int flag_value directly."""
++         opt = Option("--verbose", flag_value=42)
++         result = opt.process_value(None)
++         assert result == 42
++ 
++     def test_process_value_unprocessed_returns_raw(self):
++         """process_value with UNPROCESSED type returns raw value."""
++         opt = Option("--color", type=Color)
++         result = opt.process_value("some_raw_value")
++         assert result == "some_raw_value"
++ 
++     def test_process_value_int_conversion(self):
++         """process_value with INT type converts string to int."""
++         opt = Option("--count", type=int)
++         result = opt.process_value("42")
++         assert result == 42
++         assert isinstance(result, int)
++ 
++     def test_process_value_float_conversion(self):
++         """process_value with FLOAT type converts string to float."""
++         opt = Option("--ratio", type=float)
++         result = opt.process_value("3.14")
++         assert abs(result - 3.14) < 1e-9
++ 
++     def test_repr(self):
++         """repr should include opts, flag_value, type, and default."""
++         opt = Option("--color", flag_value=Color.RED)
++         r = repr(opt)
++         assert "--color" in r
++         assert "UNPROCESSED" in r
+*** Update File: option.py
+@@
++ # Keep a reference to the built-in type() function since we shadow it with a parameter
++ builtins_type = __builtins__["type"] if isinstance(__builtins__, dict) else __builtins__.__class__.__mro__[0]
+- # Keep a reference to the built-in type() function since we shadow it with a parameter
+- builtins_type = __builtins__["type"] if isinstance(__builtins__, dict) else __builtins__.__class__.__mro__[0]
++ # Keep a reference to the built-in type() function since we shadow it with a parameter
++ import builtins as _builtins
++ builtins_type = _builtins.type
+*** End Patch

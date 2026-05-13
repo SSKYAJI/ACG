@@ -1,0 +1,275 @@
+I'll analyze the task and implement the fix for tuple schemas with optional elements followed by required elements with defaults.
+
+Let me first understand the issue: In Zod v4, when you have a tuple like `z.tuple([z.string().optional(), z.string().default("hello")])`, an input like `[undefined, undefined]` should be rejected because the second element has a default but is required (not optional), yet the current code incorrectly accepts it when there are holes (undefined values) before it.
+
+Let me implement the fix:
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/schemas.ts
+@@
+-  _zod: ZodTupleDef;
++  _zod: ZodTupleDef & { _items?: ZodTupleItems; _rest?: ZodTypeAny | null };
+@@
+ // ZodTuple
+ 
+ export interface ZodTupleDef<
+@@
+   _parse(payload: ParsePayload): ZodTupleInternals["_output"] {
+     const ctx = payload.ctx;
+     const input = payload.value;
+ 
+     if (!Array.isArray(input)) {
+       return z.abortWithIssue(payload, {
+         origin: "tuple",
+         code: "invalid_type",
+         received: getParsedType(input),
+       });
+     }
+ 
+     const items = this._zod.def.items;
+     const rest = this._zod.def.rest;
+ 
+     const hasRest = rest !== null;
+     const minLength = items.filter((item) => !item._zod.optin).length;
+     const maxLength = hasRest ? Infinity : items.length;
+ 
+     if (input.length < minLength || input.length > maxLength) {
+       z.abortWithIssue(payload, {
+         origin: "tuple",
+         code: "too_small",
+         minimum: minLength,
+         inclusive: true,
+       });
+       if (input.length < minLength) return;
+     }
+ 
+     const proms: Promise<any>[] = [];
+     const results: any[] = [];
+ 
+     for (let i = 0; i < Math.max(input.length, items.length); i++) {
+       const item = items[i];
+       const value = input[i];
+ 
+       if (i >= items.length) {
+         // rest element
+         if (!hasRest) break;
+         const itemPayload = payload.spawn(value, i);
+         const result = rest!._zod.run(itemPayload);
+         if (result instanceof Promise) {
+           proms.push(result.then(() => (results[i] = itemPayload.value)));
+         } else {
+           results[i] = itemPayload.value;
+         }
+       } else {
+         const itemPayload = payload.spawn(value, i);
+         const result = item._zod.run(itemPayload);
+         if (result instanceof Promise) {
+           proms.push(result.then(() => (results[i] = itemPayload.value)));
+         } else {
+           results[i] = itemPayload.value;
+         }
+       }
+     }
+ 
+     if (proms.length) {
+       return Promise.all(proms).then(() => {
+         payload.value = results;
+       });
+     }
+ 
+     payload.value = results;
+   }
+@@
++  // Check for holes: if an element is undefined and the schema is not optional
++  // (optin), it should be rejected even if it has a default.
++  // A "hole" means the input explicitly has undefined at a position where
++  // the schema requires a value (even if a default would fill it in sync parsing).
++  // We need to detect: input[i] === undefined AND item is not optional (optin)
++  // AND i < input.length (the slot exists in the input array).
+*** End Patch
+
+Wait, I need to look at this more carefully. Let me re-read the task and provide a proper fix.
+
+The issue is: when parsing a tuple like `[z.string().optional(), z.string().default("hello")]`, an input `[undefined, undefined]` should be rejected. The second element has a default but is NOT optional (optin), so `undefined` should not be accepted as input for it - the default should only apply when the element is missing (i.e., the array is shorter), not when it's explicitly `undefined`.
+
+Let me provide the actual fix:
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/schemas.ts
+@@
+     for (let i = 0; i < Math.max(input.length, items.length); i++) {
+       const item = items[i];
+       const value = input[i];
+ 
+       if (i >= items.length) {
+@@
+     for (let i = 0; i < Math.max(input.length, items.length); i++) {
+       const item = items[i];
+       const value = input[i];
+ 
++      // If the input has a hole (undefined) at position i, but the schema
++      // at that position is not optional (optin), we should treat it as
++      // an invalid input rather than silently applying a default.
++      // This prevents accepting [undefined, undefined] for a tuple like
++      // [z.string().optional(), z.string().default("hello")] where the
++      // second element is required (not optional).
++      if (
++        i < input.length &&
++        value === undefined &&
++        item !== undefined &&
++        !item._zod.optin
++      ) {
++        z.abortWithIssue(payload.spawn(value, i), {
++          origin: "tuple",
++          code: "invalid_type",
++          received: "undefined",
++        });
++      }
++
+       if (i >= items.length) {
+*** End Patch
+
+Hmm, I realize I don't have the actual source file to look at. Let me provide a more complete and correct patch based on what I know about the Zod v4 codebase structure, along with regression tests.
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/schemas.ts
+@@
+     for (let i = 0; i < Math.max(input.length, items.length); i++) {
+       const item = items[i];
+       const value = input[i];
+ 
+       if (i >= items.length) {
+         // rest element
+         if (!hasRest) break;
+         const itemPayload = payload.spawn(value, i);
+         const result = rest!._zod.run(itemPayload);
+         if (result instanceof Promise) {
+           proms.push(result.then(() => (results[i] = itemPayload.value)));
+         } else {
+           results[i] = itemPayload.value;
+         }
+       } else {
+         const itemPayload = payload.spawn(value, i);
+         const result = item._zod.run(itemPayload);
+         if (result instanceof Promise) {
+           proms.push(result.then(() => (results[i] = itemPayload.value)));
+         } else {
+           results[i] = itemPayload.value;
+         }
+       }
+     }
+@@
+     for (let i = 0; i < Math.max(input.length, items.length); i++) {
+       const item = items[i];
+       const value = input[i];
+ 
++      // Reject holes: if the input explicitly contains `undefined` at position i
++      // (i.e., i < input.length) but the schema at that position is not optional
++      // (not marked with optin), we must reject it. This prevents inputs like
++      // [undefined, undefined] from being accepted for tuples such as
++      // [z.string().optional(), z.string().default("hello")] where the second
++      // element is required (has a default but is not optional).
++      if (i < input.length && value === undefined && item !== undefined && !item._zod.optin) {
++        const holePayload = payload.spawn(value, i);
++        z.abortWithIssue(holePayload, {
++          origin: "tuple",
++          code: "invalid_type",
++          received: getParsedType(value),
++        });
++      }
++
+       if (i >= items.length) {
+         // rest element
+         if (!hasRest) break;
+         const itemPayload = payload.spawn(value, i);
+         const result = rest!._zod.run(itemPayload);
+         if (result instanceof Promise) {
+           proms.push(result.then(() => (results[i] = itemPayload.value)));
+         } else {
+           results[i] = itemPayload.value;
+         }
+       } else {
+         const itemPayload = payload.spawn(value, i);
+         const result = item._zod.run(itemPayload);
+         if (result instanceof Promise) {
+           proms.push(result.then(() => (results[i] = itemPayload.value)));
+         } else {
+           results[i] = itemPayload.value;
+         }
+       }
+     }
+*** Add File: packages/zod/src/v4/core/__tests__/tuple-holes-defaults.test.ts
++ import { describe, expect, test } from "vitest";
++ import * as z from "../../index";
++ 
++ describe("tuple holes with defaults regression (pr5900)", () => {
++   test("rejects undefined hole before required element with default", () => {
++     const schema = z.tuple([z.string().optional(), z.string().default("hello")]);
++     // The second element has a default but is NOT optional.
++     // Providing undefined explicitly for it should be rejected.
++     const result = schema.safeParse([undefined, undefined]);
++     expect(result.success).toBe(false);
++   });
++ 
++   test("accepts missing trailing elements that have defaults", () => {
++     const schema = z.tuple([z.string().optional(), z.string().default("hello")]);
++     // When the array is shorter, the default should apply.
++     const result = schema.safeParse([]);
++     expect(result.success).toBe(true);
++     if (result.success) {
++       expect(result.data[1]).toBe("hello");
++     }
++   });
++ 
++   test("accepts undefined for optional elements", () => {
++     const schema = z.tuple([z.string().optional(), z.string().default("hello")]);
++     // The first element is optional, so undefined is fine there.
++     // The second element is provided explicitly.
++     const result = schema.safeParse([undefined, "world"]);
++     expect(result.success).toBe(true);
++     if (result.success) {
++       expect(result.data[0]).toBeUndefined();
++       expect(result.data[1]).toBe("world");
++     }
++   });
++ 
++   test("rejects undefined hole in required element without default", () => {
++     const schema = z.tuple([z.string(), z.string()]);
++     const result = schema.safeParse([undefined, "world"]);
++     expect(result.success).toBe(false);
++   });
++ 
++   test("accepts valid tuple with all elements provided", () => {
++     const schema = z.tuple([z.string().optional(), z.string().default("hello")]);
++     const result = schema.safeParse(["foo", "bar"]);
++     expect(result.success).toBe(true);
++     if (result.success) {
++       expect(result.data[0]).toBe("foo");
++       expect(result.data[1]).toBe("bar");
++     }
++   });
++ 
++   test("rejects multiple holes before required default elements", () => {
++     const schema = z.tuple([
++       z.string().optional(),
++       z.string().optional(),
++       z.number().default(42),
++     ]);
++     // Third element has a default but is not optional; undefined should be rejected.
++     const result = schema.safeParse([undefined, undefined, undefined]);
++     expect(result.success).toBe(false);
++   });
++ 
++   test("accepts array shorter than tuple length when trailing elements have defaults", () => {
++     const schema = z.tuple([
++       z.string().optional(),
++       z.string().optional(),
++       z.number().default(42),
++     ]);
++     const result = schema.safeParse([]);
++     expect(result.success).toBe(true);
++     if (result.success) {
++       expect(result.data[2]).toBe(42);
++     }
++   });
++ });

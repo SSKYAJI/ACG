@@ -1,0 +1,145 @@
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ proposed 2 writes (13.34s, 1052 tokens)
+   ALLOWED pr2902-enum-by-name → src/marshmallow/fields.py
+   BLOCKED pr2902-enum-by-name → tests/test_enum_by_name.py: path 
+'tests/test_enum_by_name.py' is outside task 'pr2902-enum-by-name''s 
+allowed_paths (src/marshmallow/class_registry.py, src/marshmallow/fields.py, 
+tests/test_deserialization.py)
+ proposed 7 writes (15.91s, 1247 tokens)
+   BLOCKED pr2937-email-idn → validate.go: path 'validate.go' is outside task 
+'pr2937-email-idn''s allowed_paths (src/marshmallow/validate.py, 
+tests/test_validate.py)
+   BLOCKED pr2937-email-idn → validate_test.go: path 'validate_test.go' is 
+outside task 'pr2937-email-idn''s allowed_paths (src/marshmallow/validate.py, 
+tests/test_validate.py)
+   BLOCKED pr2937-email-idn → validate.go: path 'validate.go' is outside task 
+'pr2937-email-idn''s allowed_paths (src/marshmallow/validate.py, 
+tests/test_validate.py)
+   BLOCKED pr2937-email-idn → validate_test.go: path 'validate_test.go' is 
+outside task 'pr2937-email-idn''s allowed_paths (src/marshmallow/validate.py, 
+tests/test_validate.py)
+   BLOCKED pr2937-email-idn → idn_email_fix.go: path 'idn_email_fix.go' is 
+outside task 'pr2937-email-idn''s allowed_paths (src/marshmallow/validate.py, 
+tests/test_validate.py)
+   BLOCKED pr2937-email-idn → validator.go: path 'validator.go' is outside task 
+'pr2937-email-idn''s allowed_paths (src/marshmallow/validate.py, 
+tests/test_validate.py)
+   BLOCKED pr2937-email-idn → validator_test.go: path 'validator_test.go' is 
+outside task 'pr2937-email-idn''s allowed_paths (src/marshmallow/validate.py, 
+tests/test_validate.py)
+[worker pr2901-constant-required] still waiting at 30s...
+ proposed 6 writes (32.37s, 3259 tokens)
+   BLOCKED pr2901-constant-required → marshmallow/__init__.py: path 
+'marshmallow/__init__.py' is outside task 'pr2901-constant-required''s 
+allowed_paths (src/marshmallow/fields.py, tests/test_fields.py)
+   BLOCKED pr2901-constant-required → marshmallow/exceptions.py: path 
+'marshmallow/exceptions.py' is outside task 'pr2901-constant-required''s 
+allowed_paths (src/marshmallow/fields.py, tests/test_fields.py)
+   BLOCKED pr2901-constant-required → marshmallow/fields.py: path 
+'marshmallow/fields.py' is outside task 'pr2901-constant-required''s 
+allowed_paths (src/marshmallow/fields.py, tests/test_fields.py)
+   BLOCKED pr2901-constant-required → marshmallow/schema.py: path 
+'marshmallow/schema.py' is outside task 'pr2901-constant-required''s 
+allowed_paths (src/marshmallow/fields.py, tests/test_fields.py)
+   BLOCKED pr2901-constant-required → tests/__init__.py: path 
+'tests/__init__.py' is outside task 'pr2901-constant-required''s allowed_paths 
+(src/marshmallow/fields.py, tests/test_fields.py)
+   BLOCKED pr2901-constant-required → tests/test_constant_required.py: path 
+'tests/test_constant_required.py' is outside task 'pr2901-constant-required''s 
+allowed_paths (src/marshmallow/fields.py, tests/test_fields.py)
+[naive_parallel_blind/local] wrote experiments/real_repos/marshmallow/runs_sonnet_test_gate_n5/seed4/eval_run_naive_parallel_blind.json — completed=0/3, evidence=naive_parallel_blind_applied_diff, overlaps=0, oob=7, blocked=14, wall=33.682s
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ proposed 2 writes (10.04s, 727 tokens)
+   ALLOWED pr2901-constant-required → src/marshmallow/fields.py
+   ALLOWED pr2901-constant-required → tests/test_fields.py
+ proposed 4 writes (14.04s, 1304 tokens)
+   ALLOWED pr2902-enum-by-name → src/marshmallow/fields.py
+   ALLOWED pr2902-enum-by-name → tests/test_deserialization.py
+   ALLOWED pr2902-enum-by-name → src/marshmallow/fields.py
+   ALLOWED pr2902-enum-by-name → tests/test_deserialization.py
+[worker pr2937-email-idn] still waiting at 30s...
+ proposed 5 writes (31.08s, 2461 tokens)
+   ALLOWED pr2937-email-idn → src/marshmallow/validate.py
+   ALLOWED pr2937-email-idn → src/marshmallow/validate.py
+   ALLOWED pr2937-email-idn → src/marshmallow/validate.py
+   ALLOWED pr2937-email-idn → src/marshmallow/validate.py
+   ALLOWED pr2937-email-idn → tests/test_validate.py
+[naive_parallel/local] wrote experiments/real_repos/marshmallow/runs_sonnet_test_gate_n5/seed4/eval_run_naive.json — completed=0/3, evidence=applied_diff, overlaps=0, oob=0, blocked=0, wall=32.101s
+ starting (group 1)
+ starting (group 1)
+ starting (group 1)
+ proposed 2 writes (17.04s, 935 tokens)
+   ALLOWED pr2901-constant-required → src/marshmallow/fields.py
+   ALLOWED pr2901-constant-required → tests/test_fields.py
+ proposed 4 writes (20.73s, 1228 tokens)
+   ALLOWED pr2937-email-idn → src/marshmallow/validate.py
+   ALLOWED pr2937-email-idn → src/marshmallow/validate.py
+   ALLOWED pr2937-email-idn → tests/test_validate.py
+   ALLOWED pr2937-email-idn → tests/test_validate.py
+[worker pr2902-enum-by-name] still waiting at 30s...
+ proposed 16 writes (55.50s, 4769 tokens)
+   ALLOWED pr2902-enum-by-name → src/marshmallow/fields.py
+   ALLOWED pr2902-enum-by-name → src/marshmallow/fields.py
+   ALLOWED pr2902-enum-by-name → tests/test_deserialization.py
+   ALLOWED pr2902-enum-by-name → src/marshmallow/fields.py
+   ALLOWED pr2902-enum-by-name → src/marshmallow/fields.py
+   ALLOWED pr2902-enum-by-name → src/marshmallow/fields.py
+   ALLOWED pr2902-enum-by-name → src/marshmallow/fields.py
+   ALLOWED pr2902-enum-by-name → tests/test_deserialization.py
+   ALLOWED pr2902-enum-by-name → src/marshmallow/fields.py
+   ALLOWED pr2902-enum-by-name → tests/test_deserialization.py
+   ALLOWED pr2902-enum-by-name → src/marshmallow/fields.py
+   ALLOWED pr2902-enum-by-name → tests/test_deserialization.py
+   ALLOWED pr2902-enum-by-name → src/marshmallow/fields.py
+   ALLOWED pr2902-enum-by-name → tests/test_deserialization.py
+   ALLOWED pr2902-enum-by-name → src/marshmallow/fields.py
+   ALLOWED pr2902-enum-by-name → tests/test_deserialization.py
+[acg_planned_full_context/local] wrote experiments/real_repos/marshmallow/runs_sonnet_test_gate_n5/seed4/eval_run_acg_full_context.json — completed=0/3, evidence=applied_diff, overlaps=0, oob=0, blocked=0, wall=56.603s
+ starting (group 1)
+ starting (group 1)
+ starting (group 1)
+ proposed 2 writes (19.99s, 1311 tokens)
+   ALLOWED pr2902-enum-by-name → src/marshmallow/fields.py
+   ALLOWED pr2902-enum-by-name → tests/test_deserialization.py
+ proposed 10 writes (29.73s, 2489 tokens)
+   ALLOWED pr2937-email-idn → src/marshmallow/validate.py
+   ALLOWED pr2937-email-idn → src/marshmallow/validate.py
+   ALLOWED pr2937-email-idn → src/marshmallow/validate.py
+   ALLOWED pr2937-email-idn → src/marshmallow/validate.py
+   ALLOWED pr2937-email-idn → src/marshmallow/validate.py
+   ALLOWED pr2937-email-idn → src/marshmallow/validate.py
+   BLOCKED pr2937-email-idn → tests/_idn_email_regression.py: path 
+'tests/_idn_email_regression.py' is outside task 'pr2937-email-idn''s 
+allowed_paths (src/marshmallow/validate.py, tests/test_validate.py)
+   ALLOWED pr2937-email-idn → tests/test_validate.py
+   ALLOWED pr2937-email-idn → src/marshmallow/validate.py
+   ALLOWED pr2937-email-idn → tests/test_validate.py
+[worker pr2901-constant-required] still waiting at 30s...
+ proposed 12 writes (40.56s, 3231 tokens)
+   ALLOWED pr2901-constant-required → src/marshmallow/fields.py
+   ALLOWED pr2901-constant-required → src/marshmallow/fields.py
+   ALLOWED pr2901-constant-required → src/marshmallow/fields.py
+   ALLOWED pr2901-constant-required → src/marshmallow/fields.py
+   ALLOWED pr2901-constant-required → src/marshmallow/fields.py
+   ALLOWED pr2901-constant-required → tests/test_fields.py
+   ALLOWED pr2901-constant-required → src/marshmallow/fields.py
+   ALLOWED pr2901-constant-required → tests/test_fields.py
+   ALLOWED pr2901-constant-required → src/marshmallow/fields.py
+   ALLOWED pr2901-constant-required → tests/test_fields.py
+   ALLOWED pr2901-constant-required → src/marshmallow/fields.py
+   ALLOWED pr2901-constant-required → tests/test_fields.py
+[acg_planned/local] wrote experiments/real_repos/marshmallow/runs_sonnet_test_gate_n5/seed4/eval_run_acg.json — completed=0/3, evidence=applied_diff, overlaps=0, oob=0, blocked=1, wall=41.848s
+[worker single_agent_applied] still waiting at 30s...
+[worker single_agent_applied] still waiting at 60s...
+[worker single_agent_applied] still waiting at 90s...
+[worker single_agent_applied] still waiting at 120s...
+[worker single_agent_applied] still waiting at 150s...
+[worker single_agent_applied] still waiting at 180s...
+[worker single_agent_applied] still waiting at 210s...
+[worker single_agent_applied] still waiting at 240s...
+[single_agent/local] wrote experiments/real_repos/marshmallow/runs_sonnet_test_gate_n5/seed4/eval_run_single_agent.json — completed=0/3, evidence=suite_applied_diff, overlaps=0, oob=0, blocked=0, wall=264.932s
+[combined] wrote experiments/real_repos/marshmallow/runs_sonnet_test_gate_n5/seed4/eval_run_combined.json

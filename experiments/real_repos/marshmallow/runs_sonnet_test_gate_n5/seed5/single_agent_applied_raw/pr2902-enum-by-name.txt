@@ -1,0 +1,108 @@
+*** Begin Patch
+*** Add File: tests/test_enum_by_name.py
+"""Regression tests for Enum field by-name lookup (pr2902)."""
+import pytest
+import enum
+from marshmallow import fields, ValidationError
+
+
+class Color(enum.Enum):
+    RED = 1
+    GREEN = 2
+    BLUE = 3
+
+    def describe(self):
+        return f"I am {self.name}"
+
+    @property
+    def hex_value(self):
+        return f"#{self.value:06x}"
+
+
+class Status(enum.Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    PENDING = "pending"
+
+    @classmethod
+    def default(cls):
+        return cls.ACTIVE
+
+
+class TestEnumByNameLookup:
+    """Tests for Enum field by-name lookup."""
+
+    def test_valid_enum_member_by_name(self):
+        """Valid enum member names should be deserialized correctly."""
+        field = fields.Enum(Color, load_by_name=True)
+        assert field._deserialize("RED", "color", {}) == Color.RED
+        assert field._deserialize("GREEN", "color", {}) == Color.GREEN
+        assert field._deserialize("BLUE", "color", {}) == Color.BLUE
+
+    def test_invalid_name_raises_validation_error(self):
+        """Non-existent names should raise ValidationError."""
+        field = fields.Enum(Color, load_by_name=True)
+        with pytest.raises(ValidationError):
+            field._deserialize("YELLOW", "color", {})
+
+    def test_method_name_not_returned_as_member(self):
+        """Method names should not be returned as enum members."""
+        field = fields.Enum(Color, load_by_name=True)
+        # 'describe' is a method, not an enum member
+        with pytest.raises(ValidationError):
+            field._deserialize("describe", "color", {})
+
+    def test_property_name_not_returned_as_member(self):
+        """Property names should not be returned as enum members."""
+        field = fields.Enum(Color, load_by_name=True)
+        # 'hex_value' is a property, not an enum member
+        with pytest.raises(ValidationError):
+            field._deserialize("hex_value", "color", {})
+
+    def test_classmethod_name_not_returned_as_member(self):
+        """Class method names should not be returned as enum members."""
+        field = fields.Enum(Status, load_by_name=True)
+        # 'default' is a classmethod, not an enum member
+        with pytest.raises(ValidationError):
+            field._deserialize("default", "status", {})
+
+    def test_dunder_method_not_returned_as_member(self):
+        """Dunder method names should not be returned as enum members."""
+        field = fields.Enum(Color, load_by_name=True)
+        with pytest.raises(ValidationError):
+            field._deserialize("__class__", "color", {})
+
+    def test_enum_by_value_still_works(self):
+        """Enum by-value lookup should still work correctly."""
+        field = fields.Enum(Color, by_value=True)
+        assert field._deserialize(1, "color", {}) == Color.RED
+        assert field._deserialize(2, "color", {}) == Color.GREEN
+
+    def test_enum_by_value_invalid_raises_error(self):
+        """Invalid enum value should raise ValidationError."""
+        field = fields.Enum(Color, by_value=True)
+        with pytest.raises(ValidationError):
+            field._deserialize(99, "color", {})
+
+    def test_enum_serialize_by_name(self):
+        """Enum serialization should return member name."""
+        field = fields.Enum(Color)
+        assert field._serialize(Color.RED, "color", {}) == "RED"
+
+    def test_enum_serialize_by_value(self):
+        """Enum serialization with by_value should return member value."""
+        field = fields.Enum(Color, by_value=True)
+        assert field._serialize(Color.RED, "color", {}) == 1
+
+    def test_enum_serialize_none(self):
+        """Enum serialization of None should return None."""
+        field = fields.Enum(Color)
+        assert field._serialize(None, "color", {}) is None
+
+    def test_valid_status_enum_by_name(self):
+        """Valid Status enum member names should be deserialized correctly."""
+        field = fields.Enum(Status, load_by_name=True)
+        assert field._deserialize("ACTIVE", "status", {}) == Status.ACTIVE
+        assert field._deserialize("INACTIVE", "status", {}) == Status.INACTIVE
+        assert field._deserialize("PENDING", "status", {}) == Status.PENDING
+*** End Patch

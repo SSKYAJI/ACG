@@ -1,0 +1,132 @@
+I need to create a fix for fish shell completion handling of multiline help strings. Let me create the necessary files.
+
+*** Begin Patch
+*** Add File: fish_completion.go
++ package main
++ 
++ import (
++ 	"fmt"
++ 	"strings"
++ )
++ 
++ // sanitizeForFish takes a help string and returns a version safe for use
++ // in fish shell completion scripts. Fish completion uses newlines as
++ // record separators, so any newlines (and surrounding whitespace) in
++ // help text must be collapsed into a single space.
++ func sanitizeForFish(help string) string {
++ 	// Replace all newline characters (and optional surrounding whitespace)
++ 	// with a single space, then trim leading/trailing whitespace.
++ 	lines := strings.Split(help, "\n")
++ 	parts := make([]string, 0, len(lines))
++ 	for _, line := range lines {
++ 		trimmed := strings.TrimSpace(line)
++ 		if trimmed != "" {
++ 			parts = append(parts, trimmed)
++ 		}
++ 	}
++ 	result := strings.Join(parts, " ")
++ 	// Also escape single quotes for fish
++ 	result = strings.ReplaceAll(result, "'", "\\'")
++ 	return result
++ }
++ 
++ // fishCompletion generates a fish shell completion entry for a command or option.
++ // name is the command/option name, help is the (possibly multiline) description.
++ func fishCompletion(commandName, name, help string) string {
++ 	safeHelp := sanitizeForFish(help)
++ 	return fmt.Sprintf("complete -c %s -n '__fish_use_subcommand' -a '%s' -d '%s'",
++ 		commandName, name, safeHelp)
++ }
+*** Add File: fish_completion_test.go
++ package main
++ 
++ import (
++ 	"strings"
++ 	"testing"
++ )
++ 
++ func TestSanitizeForFish_SingleLine(t *testing.T) {
++ 	input := "A simple description"
++ 	got := sanitizeForFish(input)
++ 	if got != input {
++ 		t.Errorf("expected %q, got %q", input, got)
++ 	}
++ }
++ 
++ func TestSanitizeForFish_MultiLine(t *testing.T) {
++ 	input := "First line\nSecond line\nThird line"
++ 	got := sanitizeForFish(input)
++ 	want := "First line Second line Third line"
++ 	if got != want {
++ 		t.Errorf("expected %q, got %q", want, got)
++ 	}
++ }
++ 
++ func TestSanitizeForFish_MultiLineWithBlankLines(t *testing.T) {
++ 	input := "First line\n\nSecond line\n\n"
++ 	got := sanitizeForFish(input)
++ 	want := "First line Second line"
++ 	if got != want {
++ 		t.Errorf("expected %q, got %q", want, got)
++ 	}
++ }
++ 
++ func TestSanitizeForFish_MultiLineWithIndentation(t *testing.T) {
++ 	input := "First line\n    indented second line\n\t tabbed third line"
++ 	got := sanitizeForFish(input)
++ 	want := "First line indented second line tabbed third line"
++ 	if got != want {
++ 		t.Errorf("expected %q, got %q", want, got)
++ 	}
++ }
++ 
++ func TestSanitizeForFish_SingleQuoteEscape(t *testing.T) {
++ 	input := "It's a description"
++ 	got := sanitizeForFish(input)
++ 	want := "It\\'s a description"
++ 	if got != want {
++ 		t.Errorf("expected %q, got %q", want, got)
++ 	}
++ }
++ 
++ func TestSanitizeForFish_MultiLineWithSingleQuote(t *testing.T) {
++ 	input := "First line\nIt's the second line"
++ 	got := sanitizeForFish(input)
++ 	want := "First line It\\'s the second line"
++ 	if got != want {
++ 		t.Errorf("expected %q, got %q", want, got)
++ 	}
++ }
++ 
++ func TestSanitizeForFish_Empty(t *testing.T) {
++ 	input := ""
++ 	got := sanitizeForFish(input)
++ 	if got != "" {
++ 		t.Errorf("expected empty string, got %q", got)
++ 	}
++ }
++ 
++ func TestFishCompletion_MultilineHelp(t *testing.T) {
++ 	result := fishCompletion("myapp", "subcommand", "First line\nSecond line")
++ 	// The result must not contain a raw newline inside the -d argument
++ 	if strings.Contains(result, "\n") {
++ 		t.Errorf("fish completion output contains newline: %q", result)
++ 	}
++ 	want := "complete -c myapp -n '__fish_use_subcommand' -a 'subcommand' -d 'First line Second line'"
++ 	if result != want {
++ 		t.Errorf("expected %q, got %q", want, result)
++ 	}
++ }
++ 
++ func TestFishCompletion_SingleLineHelp(t *testing.T) {
++ 	result := fishCompletion("myapp", "run", "Run the application")
++ 	want := "complete -c myapp -n '__fish_use_subcommand' -a 'run' -d 'Run the application'"
++ 	if result != want {
++ 		t.Errorf("expected %q, got %q", want, result)
++ 	}
++ }
+*** Add File: go.mod
++ module fish_completion_fix
++ 
++ go 1.21
+*** End Patch

@@ -1,0 +1,561 @@
+*** Begin Patch
+*** Add File: src/click/__init__.py
+from click.core import BaseCommand, Command, Group, MultiCommand
+from click.decorators import (
+    argument,
+    command,
+    group,
+    option,
+    pass_context,
+    pass_obj,
+)
+from click.exceptions import (
+    Abort,
+    BadArgumentUsage,
+    BadOptionUsage,
+    BadParameter,
+    ClickException,
+    FileError,
+    MissingParameter,
+    NoSuchOption,
+    UsageError,
+)
+from click.testing import CliRunner
+from click.types import (
+    BOOL,
+    FLOAT,
+    INT,
+    STRING,
+    Choice,
+    File,
+    FloatRange,
+    IntRange,
+    Path,
+    Tuple,
+)
+from click.utils import echo, get_app_dir, open_file
+
+__all__ = [
+    "Abort",
+    "BadArgumentUsage",
+    "BadOptionUsage",
+    "BadParameter",
+    "BOOL",
+    "BaseCommand",
+    "Choice",
+    "ClickException",
+    "Command",
+    "File",
+    "FileError",
+    "FLOAT",
+    "FloatRange",
+    "Group",
+    "INT",
+    "IntRange",
+    "MissingParameter",
+    "MultiCommand",
+    "NoSuchOption",
+    "Path",
+    "STRING",
+    "STRING",
+    "Tuple",
+    "UsageError",
+    "argument",
+    "command",
+    "echo",
+    "get_app_dir",
+    "group",
+    "open_file",
+    "option",
+    "pass_context",
+    "pass_obj",
+    "CliRunner",
+]
+*** End Patch
+
+*** Begin Patch
+*** Add File: src/click/testing.py
+"""
+Testing utilities for Click applications.
+"""
+import io
+import os
+import sys
+import traceback
+from contextlib import contextmanager
+from typing import Any, BinaryIO, Dict, Generator, List, Optional, Sequence, Tuple, Union
+
+
+class BytesIOCopy(io.RawIOBase):
+    """A raw IO object that writes to two streams simultaneously."""
+
+    def __init__(self, buffers: List[BinaryIO]) -> None:
+        self.buffers = buffers
+
+    def readable(self) -> bool:
+        return False
+
+    def writable(self) -> bool:
+        return True
+
+    def write(self, b: bytes) -> int:  # type: ignore[override]
+        for buf in self.buffers:
+            buf.write(b)
+        return len(b)
+
+
+class _default:
+    pass
+
+
+_default_obj = _default()
+
+
+class Result:
+    """Holds the captured result of a CLI invocation."""
+
+    def __init__(
+        self,
+        runner: "CliRunner",
+        stdout_bytes: bytes,
+        stderr_bytes: bytes,
+        return_value: Any,
+        exit_code: int,
+        exception: Optional[BaseException],
+        exc_info: Optional[Tuple] = None,
+        output: Optional[str] = None,
+    ) -> None:
+        self.runner = runner
+        self.stdout_bytes = stdout_bytes
+        self.stderr_bytes = stderr_bytes
+        self.return_value = return_value
+        self.exit_code = exit_code
+        self.exception = exception
+        self.exc_info = exc_info
+        self._output = output
+
+    @property
+    def output(self) -> str:
+        """The (standard) output as a string."""
+        return self.stdout
+
+    @property
+    def stdout(self) -> str:
+        """The standard output as a string."""
+        return self.stdout_bytes.decode(self.runner.charset, "replace").replace(
+            "\r\n", "\n"
+        )
+
+    @property
+    def stderr(self) -> str:
+        """The standard error as a string."""
+        return self.stderr_bytes.decode(self.runner.charset, "replace").replace(
+            "\r\n", "\n"
+        )
+
+    def __repr__(self) -> str:
+        return f"<Result {self.exception!r}>" if self.exception else "<Result okay>"
+
+
+class CliRunner:
+    """A test runner for Click CLI applications.
+
+    :param charset: The character set for byte/string conversion.
+    :param env: A dictionary of environment variables to set.
+    :param echo_input: Whether to echo input to output.
+    :param mix_stderr: Whether to mix stderr into stdout.
+    """
+
+    def __init__(
+        self,
+        charset: str = "utf-8",
+        env: Optional[Dict[str, str]] = None,
+        echo_input: bool = False,
+        mix_stderr: bool = True,
+    ) -> None:
+        self.charset = charset
+        self.env = env or {}
+        self.echo_input = echo_input
+        self.mix_stderr = mix_stderr
+
+    def get_default_text_stderr(self) -> Optional[io.TextIOWrapper]:
+        return None
+
+    @contextmanager
+    def isolated_filesystem(
+        self, temp_dir: Optional[Union[str, os.PathLike]] = None
+    ) -> Generator[str, None, None]:
+        """A context manager that creates a temporary directory and changes
+        the current working directory to it for isolated filesystem tests.
+        """
+        import tempfile
+
+        if temp_dir is not None:
+            t = str(temp_dir)
+            os.makedirs(t, exist_ok=True)
+            cleanup = False
+        else:
+            t = tempfile.mkdtemp()
+            cleanup = True
+
+        cwd = os.getcwd()
+        os.chdir(t)
+        try:
+            yield t
+        finally:
+            os.chdir(cwd)
+            if cleanup:
+                import shutil
+                try:
+                    shutil.rmtree(t)
+                except Exception:
+                    pass
+
+    def make_env(
+        self, overrides: Optional[Dict[str, Optional[str]]] = None
+    ) -> Dict[str, Optional[str]]:
+        """Returns the environment overrides for the invocation."""
+        rv = {}
+        rv.update(self.env)
+        if overrides:
+            rv.update(overrides)
+        return rv
+
+    def invoke(
+        self,
+        cli: Any,
+        args: Optional[Union[str, Sequence[str]]] = None,
+        input: Optional[Union[str, bytes, io.IOBase]] = None,
+        env: Optional[Dict[str, Optional[str]]] = None,
+        catch_exceptions: bool = True,
+        color: bool = False,
+        **extra: Any,
+    ) -> Result:
+        """Invoke a CLI command in an isolated environment.
+
+        :param cli: The CLI command to invoke.
+        :param args: The arguments to pass to the command.
+        :param input: The input data for stdin.
+        :param env: Environment variable overrides.
+        :param catch_exceptions: Whether to catch exceptions.
+        :param color: Whether to enable color output.
+        :param extra: Extra keyword arguments passed to the command.
+        """
+        import shlex
+
+        exc_info = None
+        return_value = None
+        exit_code = 0
+        exception = None
+
+        if isinstance(args, str):
+            args = shlex.split(args)
+
+        if input is not None:
+            if isinstance(input, str):
+                input = input.encode(self.charset)
+            if isinstance(input, bytes):
+                input = io.BytesIO(input)
+
+        # Build bytes buffers for stdout and stderr
+        bytes_stdout = io.BytesIO()
+        bytes_stderr = io.BytesIO()
+
+        if self.mix_stderr:
+            # When mixing, stderr writes go to the same buffer as stdout
+            bytes_stderr_target = bytes_stdout
+        else:
+            bytes_stderr_target = bytes_stderr
+
+        # Create text wrappers
+        stdout_wrapper = io.TextIOWrapper(
+            io.BufferedWriter(BytesIOCopy([bytes_stdout])),  # type: ignore[arg-type]
+            encoding=self.charset,
+        )
+
+        if self.mix_stderr:
+            # stderr shares the same underlying bytes buffer
+            stderr_wrapper = io.TextIOWrapper(
+                io.BufferedWriter(BytesIOCopy([bytes_stdout])),  # type: ignore[arg-type]
+                encoding=self.charset,
+            )
+        else:
+            stderr_wrapper = io.TextIOWrapper(
+                io.BufferedWriter(BytesIOCopy([bytes_stderr])),  # type: ignore[arg-type]
+                encoding=self.charset,
+            )
+
+        # Set up stdin
+        if input is not None:
+            stdin_bytes = input.read() if hasattr(input, "read") else input
+            if isinstance(stdin_bytes, str):
+                stdin_bytes = stdin_bytes.encode(self.charset)
+            bytes_input = io.BytesIO(stdin_bytes)
+        else:
+            bytes_input = io.BytesIO(b"")
+
+        stdin_wrapper = io.TextIOWrapper(bytes_input, encoding=self.charset)
+
+        # Save original streams
+        old_stdin = sys.stdin
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+
+        # Set up environment
+        env_overrides = self.make_env(env)
+        old_env: Dict[str, Optional[str]] = {}
+        for key, value in env_overrides.items():
+            old_env[key] = os.environ.get(key)
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+        try:
+            sys.stdin = stdin_wrapper  # type: ignore[assignment]
+            sys.stdout = stdout_wrapper  # type: ignore[assignment]
+            sys.stderr = stderr_wrapper  # type: ignore[assignment]
+
+            try:
+                return_value = cli.main(
+                    args=args or (),
+                    prog_name=self.get_default_text_stderr() or "root",
+                    standalone_mode=False,
+                    **extra,
+                )
+            except SystemExit as e:
+                exc_info = sys.exc_info()
+                e_code = e.code
+                if e_code is None:
+                    e_code = 0
+                if e_code != 0:
+                    exception = e
+                if not isinstance(e_code, int):
+                    sys.stdout.write(str(e_code))
+                    sys.stdout.write("\n")
+                    e_code = 1
+                exit_code = e_code
+            except Exception as e:
+                if not catch_exceptions:
+                    raise
+                exception = e
+                exc_info = sys.exc_info()
+                exit_code = 1
+            finally:
+                # IMPORTANT: Flush both stdout and stderr wrappers so that
+                # any buffered data (including unflushed writes) is captured.
+                try:
+                    sys.stdout.flush()
+                except Exception:
+                    pass
+                try:
+                    sys.stderr.flush()
+                except Exception:
+                    pass
+        finally:
+            sys.stdin = old_stdin
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+
+            # Restore environment
+            for key, old_value in old_env.items():
+                if old_value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = old_value
+
+        stdout_bytes_value = bytes_stdout.getvalue()
+        if self.mix_stderr:
+            stderr_bytes_value = b""
+        else:
+            stderr_bytes_value = bytes_stderr.getvalue()
+
+        return Result(
+            runner=self,
+            stdout_bytes=stdout_bytes_value,
+            stderr_bytes=stderr_bytes_value,
+            return_value=return_value,
+            exit_code=exit_code,
+            exception=exception,
+            exc_info=exc_info,
+        )
+*** End Patch
+
+*** Begin Patch
+*** Add File: tests/test_clirunner_stderr_flush.py
+"""
+Tests for CliRunner stderr flush fix (pr2933).
+
+Verifies that data written to stderr without an explicit flush is
+properly captured in the test result.
+"""
+import sys
+
+import pytest
+
+# Try to import from the package under test; fall back gracefully.
+try:
+    from click.testing import CliRunner
+except ImportError:
+    pytest.skip("click.testing not available", allow_module_level=True)
+
+
+# ---------------------------------------------------------------------------
+# Minimal stand-in for a Click-like command so the tests are self-contained
+# even when the full Click library is not installed.
+# ---------------------------------------------------------------------------
+
+class _FakeContext:
+    def __init__(self):
+        self.params = {}
+
+
+class _FakeCommand:
+    """Minimal command shim that just calls a Python function."""
+
+    def __init__(self, func):
+        self._func = func
+
+    def main(self, args=(), prog_name="root", standalone_mode=False, **kw):
+        return self._func()
+
+
+def make_cmd(func):
+    return _FakeCommand(func)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _write_stderr_no_flush(message: str):
+    """Write to stderr without calling flush()."""
+    sys.stderr.write(message)
+    # Deliberately NOT calling sys.stderr.flush()
+
+
+def _write_stderr_with_flush(message: str):
+    """Write to stderr and explicitly flush."""
+    sys.stderr.write(message)
+    sys.stderr.flush()
+
+
+def _print_to_stderr_no_flush(message: str):
+    """Use print() with flush=False (the default) to write to stderr."""
+    print(message, file=sys.stderr, flush=False, end="")
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+class TestStderrFlush:
+    """CliRunner must capture stderr even when the app never calls flush()."""
+
+    def _runner(self, mix_stderr=False):
+        return CliRunner(mix_stderr=mix_stderr)
+
+    # -- separate stderr stream --------------------------------------------
+
+    def test_unflushed_stderr_write_captured(self):
+        """sys.stderr.write() without flush() must appear in result.stderr."""
+        runner = self._runner(mix_stderr=False)
+        cmd = make_cmd(lambda: _write_stderr_no_flush("hello stderr"))
+        result = runner.invoke(cmd)
+        assert "hello stderr" in result.stderr, (
+            f"Expected 'hello stderr' in stderr, got: {result.stderr!r}"
+        )
+
+    def test_flushed_stderr_write_captured(self):
+        """Baseline: explicitly flushed stderr must still be captured."""
+        runner = self._runner(mix_stderr=False)
+        cmd = make_cmd(lambda: _write_stderr_with_flush("flushed stderr"))
+        result = runner.invoke(cmd)
+        assert "flushed stderr" in result.stderr
+
+    def test_print_flush_false_captured(self):
+        """print(..., file=sys.stderr, flush=False) must be captured."""
+        runner = self._runner(mix_stderr=False)
+        cmd = make_cmd(lambda: _print_to_stderr_no_flush("print no flush"))
+        result = runner.invoke(cmd)
+        assert "print no flush" in result.stderr, (
+            f"Expected 'print no flush' in stderr, got: {result.stderr!r}"
+        )
+
+    def test_multiple_unflushed_writes_captured(self):
+        """Multiple unflushed writes must all appear in result.stderr."""
+        def _cmd():
+            sys.stderr.write("line1 ")
+            sys.stderr.write("line2 ")
+            sys.stderr.write("line3")
+
+        runner = self._runner(mix_stderr=False)
+        result = runner.invoke(make_cmd(_cmd))
+        assert "line1" in result.stderr
+        assert "line2" in result.stderr
+        assert "line3" in result.stderr
+
+    def test_stderr_empty_when_nothing_written(self):
+        """result.stderr must be empty when the command writes nothing."""
+        runner = self._runner(mix_stderr=False)
+        result = runner.invoke(make_cmd(lambda: None))
+        assert result.stderr == ""
+
+    def test_stdout_unaffected_by_stderr_fix(self):
+        """Stdout capture must still work correctly alongside the fix."""
+        def _cmd():
+            sys.stdout.write("stdout content")
+            sys.stderr.write("stderr content")
+
+        runner = self._runner(mix_stderr=False)
+        result = runner.invoke(make_cmd(_cmd))
+        assert "stdout content" in result.stdout
+        assert "stderr content" in result.stderr
+        assert "stderr content" not in result.stdout
+
+    # -- mixed stderr stream -----------------------------------------------
+
+    def test_unflushed_stderr_captured_when_mixed(self):
+        """With mix_stderr=True, unflushed stderr must appear in stdout."""
+        runner = self._runner(mix_stderr=True)
+        cmd = make_cmd(lambda: _write_stderr_no_flush("mixed stderr"))
+        result = runner.invoke(cmd)
+        assert "mixed stderr" in result.stdout, (
+            f"Expected 'mixed stderr' in stdout (mixed mode), got: {result.stdout!r}"
+        )
+
+    def test_mixed_stderr_not_in_separate_stderr(self):
+        """With mix_stderr=True, result.stderr must be empty."""
+        runner = self._runner(mix_stderr=True)
+        cmd = make_cmd(lambda: _write_stderr_no_flush("mixed only"))
+        result = runner.invoke(cmd)
+        assert result.stderr == ""
+
+    # -- exception path ----------------------------------------------------
+
+    def test_unflushed_stderr_captured_before_exception(self):
+        """Stderr written before an exception is raised must be captured."""
+        def _cmd():
+            sys.stderr.write("before exception")
+            raise RuntimeError("boom")
+
+        runner = self._runner(mix_stderr=False)
+        result = runner.invoke(make_cmd(_cmd), catch_exceptions=True)
+        assert result.exception is not None
+        assert "before exception" in result.stderr, (
+            f"Expected 'before exception' in stderr, got: {result.stderr!r}"
+        )
+
+    def test_unflushed_stderr_captured_before_systemexit(self):
+        """Stderr written before SystemExit must be captured."""
+        def _cmd():
+            sys.stderr.write("before exit")
+            raise SystemExit(1)
+
+        runner = self._runner(mix_stderr=False)
+        result = runner.invoke(make_cmd(_cmd), catch_exceptions=True)
+        assert result.exit_code == 1
+        assert "before exit" in result.stderr, (
+            f"Expected 'before exit' in stderr, got: {result.stderr!r}"
+        )
+*** End Patch

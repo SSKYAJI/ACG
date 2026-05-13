@@ -1,0 +1,87 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-13T05:05:08.659355Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "claude-sonnet-4-6",
+    "tokens_planner_total": 6701,
+    "tokens_scope_review_total": 1046,
+    "tokens_planner_completion_total": 200,
+    "tokens_planner_method": "provider_usage",
+    "compile_wall_seconds": 6.1001,
+    "compile_cost_usd": null
+  },
+  "repo": {
+    "root": "experiments/real_repos/marshmallow/checkout",
+    "git_url": null,
+    "commit": "4acb783c73130f762aa5b0df6b65ff7685d5ff2c",
+    "languages": [
+      "python"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr2937-email-idn",
+      "prompt": "The validate.Email validator accepts some internationalized domain name (IDN) email addresses that should be rejected as invalid. Email addresses with domain labels that start or end with a hyphen (e.g. 'user@-m\u00fcnchen.de', 'user@m\u00fcnchen-.de') are not rejected. Fix the validator so it correctly rejects these malformed IDN email addresses, and add regression tests for the invalid IDN cases.",
+      "predicted_writes": [
+        {
+          "path": "src/marshmallow/validate.py",
+          "confidence": 0.95,
+          "reason": "The Email validator needs to be fixed to reject IDN domain labels starting or ending with a hyphen. Signals: bm25, llm. Scope review promoted this retrieved candidate to must_write after non-review signals met hard-scope rules."
+        },
+        {
+          "path": "tests/test_validate.py",
+          "confidence": 0.95,
+          "reason": "Regression tests for invalid IDN email addresses need to be added here. Signals: bm25, llm, testlink. Scope review promoted this retrieved candidate to must_write after non-review signals met hard-scope rules."
+        }
+      ],
+      "allowed_paths": [
+        "src/marshmallow/validate.py",
+        "tests/test_validate.py"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "src/marshmallow/validate.py",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "llm",
+            "scope_review"
+          ],
+          "reason": "The Email validator needs to be fixed to reject IDN domain labels starting or ending with a hyphen. Signals: bm25, llm. Scope review promoted this retrieved candidate to must_write after non-review signals met hard-scope rules."
+        },
+        {
+          "path": "tests/test_validate.py",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "bm25",
+            "llm",
+            "scope_review",
+            "testlink"
+          ],
+          "reason": "Regression tests for invalid IDN email addresses need to be added here. Signals: bm25, llm, testlink. Scope review promoted this retrieved candidate to must_write after non-review signals met hard-scope rules."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr2937-email-idn"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

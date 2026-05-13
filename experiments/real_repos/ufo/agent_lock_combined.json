@@ -1,0 +1,85 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-13T06:26:56.885219Z",
+  "generator": {
+    "tool": "acg",
+    "version": "0.1.0",
+    "model": "mock-llm-canned",
+    "tokens_planner_total": 2073,
+    "tokens_scope_review_total": 1258,
+    "tokens_planner_completion_total": null,
+    "tokens_planner_method": "estimate_chars_div_4",
+    "compile_wall_seconds": 0.087,
+    "compile_cost_usd": null
+  },
+  "repo": {
+    "root": "experiments/real_repos/ufo/checkout",
+    "git_url": null,
+    "commit": "a7b94e69ff6159de8ddfd4940c90db4708c0d67e",
+    "languages": [
+      "typescript"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "pr335-withoutbase-collapse-leading-slashes",
+      "prompt": "withoutBase should normalize paths with repeated leading slashes the same way it handles ordinary leading slashes. Currently a path with multiple leading slashes is not stripped consistently against its base. Fix the normalization behavior and add regression tests.",
+      "predicted_writes": [
+        {
+          "path": "src/utils.ts",
+          "confidence": 0.95,
+          "reason": "Ground-truth implementation file from PR #335; withoutBase normalization lives here."
+        },
+        {
+          "path": "test/base.test.ts",
+          "confidence": 0.95,
+          "reason": "Ground-truth regression test file from PR #335 for withoutBase base path behavior."
+        }
+      ],
+      "allowed_paths": [
+        "src/utils.ts",
+        "test/base.test.ts"
+      ],
+      "candidate_context_paths": [],
+      "file_scopes": [
+        {
+          "path": "src/utils.ts",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "explicit",
+            "ground_truth"
+          ],
+          "reason": "Ground-truth implementation file from PR #335; withoutBase normalization lives here."
+        },
+        {
+          "path": "test/base.test.ts",
+          "tier": "must_write",
+          "score": 0.95,
+          "signals": [
+            "explicit",
+            "ground_truth",
+            "testlink"
+          ],
+          "reason": "Ground-truth regression test file from PR #335 for withoutBase base path behavior."
+        }
+      ],
+      "depends_on": [],
+      "parallel_group": 1,
+      "rationale": null
+    }
+  ],
+  "execution_plan": {
+    "groups": [
+      {
+        "id": 1,
+        "tasks": [
+          "pr335-withoutbase-collapse-leading-slashes"
+        ],
+        "type": "parallel",
+        "waits_for": []
+      }
+    ]
+  },
+  "conflicts_detected": []
+}

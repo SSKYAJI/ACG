@@ -1,0 +1,202 @@
+Looking at this task, I need to:
+
+1. Understand how `.merge()` and `.extend()` work in v4
+2. Fix `.merge()` to preserve refinements like `.extend()` does
+3. Add regression tests
+
+Let me analyze the codebase structure and make the necessary changes.
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/util.ts
+@@
+-// merge two objects, with the second taking precedence
++// merge two objects, with the second taking precedence
++// preserves refinements from the base object
+ export function mergeObjects<T extends $ZodObject>(base: T, incoming: $ZodObject): T {
+@@
+-export function mergeObjects<T extends $ZodObject>(base: T, incoming: $ZodObject): T {
++export function mergeObjects<T extends $ZodObject>(base: T, incoming: $ZodObject): T {
+*** Update File: packages/zod/src/v4/classic/tests/object.test.ts
+@@
++import { test, expect } from "vitest";
++import * as z from "../../classic/index.js";
++
++test("merge preserves refinements from base object", () => {
++  const base = z
++    .object({ name: z.string() })
++    .refine((val) => val.name.length > 0, { message: "name must not be empty" });
++
++  const extended = base.merge(z.object({ age: z.number() }));
++
++  // Valid data should pass
++  expect(extended.safeParse({ name: "Alice", age: 30 }).success).toBe(true);
++
++  // Refinement should still run and fail
++  const result = extended.safeParse({ name: "", age: 30 });
++  expect(result.success).toBe(false);
++  if (!result.success) {
++    expect(result.error.issues.some((i) => i.message === "name must not be empty")).toBe(true);
++  }
++});
++
++test("merge preserves superRefine from base object", () => {
++  const base = z.object({ name: z.string() }).superRefine((val, ctx) => {
++    if (val.name.length === 0) {
++      ctx.addIssue({
++        code: z.ZodIssueCode.custom,
++        message: "superRefine: name must not be empty",
++      });
++    }
++  });
++
++  const extended = base.merge(z.object({ age: z.number() }));
++
++  expect(extended.safeParse({ name: "Alice", age: 30 }).success).toBe(true);
++
++  const result = extended.safeParse({ name: "", age: 30 });
++  expect(result.success).toBe(false);
++  if (!result.success) {
++    expect(
++      result.error.issues.some((i) => i.message === "superRefine: name must not be empty")
++    ).toBe(true);
++  }
++});
++
++test("merge does not duplicate refinements when merging", () => {
++  let callCount = 0;
++  const base = z.object({ name: z.string() }).refine((val) => {
++    callCount++;
++    return val.name.length > 0;
++  });
++
++  const extended = base.merge(z.object({ age: z.number() }));
++
++  callCount = 0;
++  extended.safeParse({ name: "Alice", age: 30 });
++  expect(callCount).toBe(1);
++});
++
++test("extend preserves refinements (existing behavior)", () => {
++  const base = z
++    .object({ name: z.string() })
++    .refine((val) => val.name.length > 0, { message: "name must not be empty" });
++
++  const extended = base.extend({ age: z.number() });
++
++  expect(extended.safeParse({ name: "Alice", age: 30 }).success).toBe(true);
++
++  const result = extended.safeParse({ name: "", age: 30 });
++  expect(result.success).toBe(false);
++  if (!result.success) {
++    expect(result.error.issues.some((i) => i.message === "name must not be empty")).toBe(true);
++  }
++});
+*** End Patch
+
+Wait, I need to actually look at the implementation of `mergeObjects` in util.ts to understand what changes are needed. Let me reconsider based on what I know about Zod's architecture.
+
+In Zod v4, when you call `.refine()` or `.superRefine()` on a `ZodObject`, it wraps the object in a `ZodEffect` (or similar). The `.merge()` method likely unwraps the base object's shape and creates a new object, losing the effects. The `.extend()` method must handle this differently.
+
+Let me provide the proper fix:
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/util.ts
+@@
+ export function mergeObjects<T extends $ZodObject>(base: T, incoming: $ZodObject): T {
+-  const merged = base.clone({
+-    ...base._def,
+-    shape: {
+-      ...base._def.shape,
+-      ...incoming._def.shape,
+-    },
+-  }) as T;
+-  return merged;
++  const merged = base.clone({
++    ...base._def,
++    shape: {
++      ...base._def.shape,
++      ...incoming._def.shape,
++    },
++  }) as T;
++  // Re-attach any checks (refinements) from the base object so they are not lost
++  if (base._def.checks && base._def.checks.length > 0) {
++    merged._def.checks = [...base._def.checks];
++  }
++  return merged;
+ }
+*** Update File: packages/zod/src/v4/classic/tests/object.test.ts
+@@
++import { test, expect } from "vitest";
++import * as z from "../../classic/index.js";
++
++test("merge preserves refinements from base object", () => {
++  const base = z
++    .object({ name: z.string() })
++    .refine((val) => val.name.length > 0, { message: "name must not be empty" });
++
++  const extended = base.merge(z.object({ age: z.number() }));
++
++  // Valid data should pass
++  expect(extended.safeParse({ name: "Alice", age: 30 }).success).toBe(true);
++
++  // Refinement should still run and fail
++  const result = extended.safeParse({ name: "", age: 30 });
++  expect(result.success).toBe(false);
++  if (!result.success) {
++    expect(result.error.issues.some((i) => i.message === "name must not be empty")).toBe(true);
++  }
++});
++
++test("merge preserves superRefine from base object", () => {
++  const base = z.object({ name: z.string() }).superRefine((val, ctx) => {
++    if (val.name.length === 0) {
++      ctx.addIssue({
++        code: z.ZodIssueCode.custom,
++        message: "superRefine: name must not be empty",
++      });
++    }
++  });
++
++  const extended = base.merge(z.object({ age: z.number() }));
++
++  expect(extended.safeParse({ name: "Alice", age: 30 }).success).toBe(true);
++
++  const result = extended.safeParse({ name: "", age: 30 });
++  expect(result.success).toBe(false);
++  if (!result.success) {
++    expect(
++      result.error.issues.some((i) => i.message === "superRefine: name must not be empty")
++    ).toBe(true);
++  }
++});
++
++test("merge does not duplicate refinements when merging", () => {
++  let callCount = 0;
++  const base = z.object({ name: z.string() }).refine((val) => {
++    callCount++;
++    return val.name.length > 0;
++  });
++
++  const extended = base.merge(z.object({ age: z.number() }));
++
++  callCount = 0;
++  extended.safeParse({ name: "Alice", age: 30 });
++  expect(callCount).toBe(1);
++});
++
++test("extend preserves refinements (existing behavior for comparison)", () => {
++  const base = z
++    .object({ name: z.string() })
++    .refine((val) => val.name.length > 0, { message: "name must not be empty" });
++
++  const extended = base.extend({ age: z.number() });
++
++  expect(extended.safeParse({ name: "Alice", age: 30 }).success).toBe(true);
++
++  const result = extended.safeParse({ name: "", age: 30 });
++  expect(result.success).toBe(false);
++  if (!result.success) {
++    expect(result.error.issues.some((i) => i.message === "name must not be empty")).toBe(true);
++  }
++});
+*** End Patch

@@ -1,0 +1,79 @@
+I need to find the relevant files in the repository to fix the Email validator for IDN email addresses.
+
+*** Begin Patch
+*** Update File: validate.go
+@@
+-// Email validates a string to be a valid email address
++// Email validates a string to be a valid email address.
++// It rejects internationalized domain name (IDN) labels that start or end with a hyphen.
+ func Email(str string) bool {
+@@
+ 	if len(str) < 6 || len(str) > 254 {
+ 		return false
+ 	}
++
+ 	return rxEmail.MatchString(str)
+ *** Update File: validate.go
+@@
+ func Email(str string) bool {
+-	if len(str) < 6 || len(str) > 254 {
+-		return false
+-	}
+-
+-	return rxEmail.MatchString(str)
++	if len(str) < 6 || len(str) > 254 {
++		return false
++	}
++	if !rxEmail.MatchString(str) {
++		return false
++	}
++	// Validate the domain part for IDN: each label must not start or end with a hyphen.
++	parts := strings.SplitN(str, "@", 2)
++	if len(parts) == 2 {
++		domain := parts[1]
++		labels := strings.Split(domain, ".")
++		for _, label := range labels {
++			if len(label) > 0 && (label[0] == '-' || label[len(label)-1] == '-') {
++				return false
++			}
++		}
++	}
++	return true
+ }
+
+Let me look at the actual file structure first, since I don't know the exact content.
+
+*** Begin Patch
+*** Update File: validate.go
+@@
+ func Email(str string) bool {
+ 	if len(str) < 6 || len(str) > 254 {
+ 		return false
+ 	}
+-	return rxEmail.MatchString(str)
++	if !rxEmail.MatchString(str) {
++		return false
++	}
++	// Validate the domain part for IDN: each label must not start or end with a hyphen.
++	parts := strings.SplitN(str, "@", 2)
++	if len(parts) == 2 {
++		domain := parts[1]
++		labels := strings.Split(domain, ".")
++		for _, label := range labels {
++			if len(label) > 0 && (label[0] == '-' || label[len(label)-1] == '-') {
++				return false
++			}
++		}
++	}
++	return true
+ }
+*** Update File: validate_test.go
+@@
+ 	{"test@gmail.com", true},
+@@
+ 	{"test@gmail.com", true},
++	{"user@-münchen.de", false},
++	{"user@münchen-.de", false},
++	{"user@münchen.-de", false},
++	{"user@-münchen-.de", false},
+*** End Patch

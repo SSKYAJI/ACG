@@ -1,0 +1,80 @@
+*** Begin Patch
+*** Add File: tests/test_unprocessed_flag_value.py
+--- /dev/null
++++ tests/test_unprocessed_flag_value.py
+@@ -0,0 +1,70 @@
++"""Tests for Option flag_value with non-basic types."""
++import enum
++import pytest
++
++
++class Color(enum.Enum):
++    RED = 1
++    GREEN = 2
++    BLUE = 3
++
++
++def test_flag_value_enum_no_type_error():
++    """Option with enum flag_value should not raise TypeError."""
++    try:
++        import click
++    except ImportError:
++        pytest.skip("click not available")
++
++    # This should not raise TypeError
++    @click.command()
++    @click.option("--red", "color", flag_value=Color.RED)
++    @click.option("--green", "color", flag_value=Color.GREEN)
++    def cmd(color):
++        if color is not None:
++            click.echo(color.name)
++
++    from click.testing import CliRunner
++    runner = CliRunner()
++
++    result = runner.invoke(cmd, ["--red"])
++    assert result.exit_code == 0, f"exit_code={result.exit_code}, output={result.output}"
++    assert "RED" in result.output
++
++    result = runner.invoke(cmd, ["--green"])
++    assert result.exit_code == 0
++    assert "GREEN" in result.output
++
++
++def test_flag_value_basic_type_str():
++    """Option with str flag_value should work as before."""
++    try:
++        import click
++    except ImportError:
++        pytest.skip("click not available")
++
++    @click.command()
++    @click.option("--opt", "val", flag_value="yes")
++    def cmd(val):
++        click.echo(val or "none")
++
++    from click.testing import CliRunner
++    runner = CliRunner()
++    result = runner.invoke(cmd, ["--opt"])
++    assert result.exit_code == 0
++    assert "yes" in result.output
++
++
++def test_flag_value_basic_type_int():
++    """Option with int flag_value should work as before."""
++    try:
++        import click
++    except ImportError:
++        pytest.skip("click not available")
++
++    @click.command()
++    @click.option("--opt", "val", flag_value=42)
++    def cmd(val):
++        click.echo(str(val or 0))
++
++    from click.testing import CliRunner
++    runner = CliRunner()
++    result = runner.invoke(cmd, ["--opt"])
++    assert result.exit_code == 0
++    assert "42" in result.output
+*** End Patch

@@ -1,0 +1,187 @@
+Looking at the task, I need to:
+
+1. Update `packages/zod/src/v4/core/util.ts` to make `.merge()` preserve refinements like `.extend()` does
+2. Add regression tests
+
+Let me first understand the structure by examining what's likely in the codebase based on the task description.
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/util.ts
+@@
+-export function mergeObjects<T extends $ZodObject, U extends $ZodObject>(
+-  base: T,
+-  incoming: U
+-): $ZodObject {
+-  const merged = base.extend(incoming.shape);
+-  return merged;
+-}
++export function mergeObjects<T extends $ZodObject, U extends $ZodObject>(
++  base: T,
++  incoming: U
++): $ZodObject {
++  // extend() already preserves refinements on `base`, so we start from there.
++  const extended = base.extend(incoming.shape) as $ZodObject;
++
++  // Re-apply any refinements that were attached to `incoming` so they are not
++  // silently discarded.
++  const incomingChecks = (incoming as any)._def?.checks ?? [];
++  if (incomingChecks.length === 0) {
++    return extended;
++  }
++
++  // Clone the _def and merge the checks arrays so both sets of refinements
++  // are preserved on the resulting object.
++  const mergedDef = {
++    ...(extended as any)._def,
++    checks: [
++      ...((extended as any)._def?.checks ?? []),
++      ...incomingChecks,
++    ],
++  };
++
++  const result = new (extended.constructor as any)(mergedDef);
++  return result;
++}
+*** Add File: packages/zod/src/v4/core/__tests__/merge-refinements.test.ts
++import { describe, expect, it } from "vitest";
++import * as z from "../../index";
++
++describe("ZodObject.merge() refinement preservation", () => {
++  it("preserves refinements from the base object after merge", () => {
++    const base = z
++      .object({ a: z.string() })
++      .refine((val) => val.a.length > 0, { message: "a must not be empty" });
++
++    const incoming = z.object({ b: z.number() });
++
++    const merged = base.merge(incoming);
++
++    // Valid data should pass
++    expect(merged.safeParse({ a: "hello", b: 1 }).success).toBe(true);
++
++    // Data that violates the base refinement should fail
++    const result = merged.safeParse({ a: "", b: 1 });
++    expect(result.success).toBe(false);
++    if (!result.success) {
++      const messages = result.error.issues.map((i) => i.message);
++      expect(messages).toContain("a must not be empty");
++    }
++  });
++
++  it("preserves refinements from the incoming object after merge", () => {
++    const base = z.object({ a: z.string() });
++
++    const incoming = z
++      .object({ b: z.number() })
++      .refine((val) => val.b > 0, { message: "b must be positive" });
++
++    const merged = base.merge(incoming);
++
++    // Valid data should pass
++    expect(merged.safeParse({ a: "hello", b: 1 }).success).toBe(true);
++
++    // Data that violates the incoming refinement should fail
++    const result = merged.safeParse({ a: "hello", b: -1 });
++    expect(result.success).toBe(false);
++    if (!result.success) {
++      const messages = result.error.issues.map((i) => i.message);
++      expect(messages).toContain("b must be positive");
++    }
++  });
++
++  it("preserves refinements from both base and incoming objects after merge", () => {
++    const base = z
++      .object({ a: z.string() })
++      .refine((val) => val.a.length > 0, { message: "a must not be empty" });
++
++    const incoming = z
++      .object({ b: z.number() })
++      .refine((val) => val.b > 0, { message: "b must be positive" });
++
++    const merged = base.merge(incoming);
++
++    // Valid data should pass
++    expect(merged.safeParse({ a: "hello", b: 1 }).success).toBe(true);
++
++    // Data that violates the base refinement should fail
++    const resultBase = merged.safeParse({ a: "", b: 1 });
++    expect(resultBase.success).toBe(false);
++    if (!resultBase.success) {
++      const messages = resultBase.error.issues.map((i) => i.message);
++      expect(messages).toContain("a must not be empty");
++    }
++
++    // Data that violates the incoming refinement should fail
++    const resultIncoming = merged.safeParse({ a: "hello", b: -1 });
++    expect(resultIncoming.success).toBe(false);
++    if (!resultIncoming.success) {
++      const messages = resultIncoming.error.issues.map((i) => i.message);
++      expect(messages).toContain("b must be positive");
++    }
++  });
++
++  it("merge() with refinements behaves the same as extend() with refinements", () => {
++    const base = z
++      .object({ a: z.string() })
++      .refine((val) => val.a.length > 0, { message: "a must not be empty" });
++
++    const incoming = z.object({ b: z.number() });
++
++    const merged = base.merge(incoming);
++    const extended = base.extend(incoming.shape);
++
++    const validData = { a: "hello", b: 1 };
++    const invalidData = { a: "", b: 1 };
+
++    expect(merged.safeParse(validData).success).toBe(
++      extended.safeParse(validData).success
++    );
++    expect(merged.safeParse(invalidData).success).toBe(
++      extended.safeParse(invalidData).success
++    );
++  });
++
++  it("preserves superRefine checks from base object after merge", () => {
++    const base = z
++      .object({ a: z.string(), b: z.string() })
++      .superRefine((val, ctx) => {
++        if (val.a === val.b) {
++          ctx.addIssue({
++            code: "custom",
++            message: "a and b must be different",
++          });
++        }
++      });
++
++    const incoming = z.object({ c: z.number() });
++
++    const merged = base.merge(incoming);
++
++    // Valid data should pass
++    expect(merged.safeParse({ a: "hello", b: "world", c: 1 }).success).toBe(
++      true
++    );
++
++    // Data that violates the superRefine should fail
++    const result = merged.safeParse({ a: "same", b: "same", c: 1 });
++    expect(result.success).toBe(false);
++    if (!result.success) {
++      const messages = result.error.issues.map((i) => i.message);
++      expect(messages).toContain("a and b must be different");
++    }
++  });
++
++  it("merge without any refinements still works correctly", () => {
++    const base = z.object({ a: z.string() });
++    const incoming = z.object({ b: z.number() });
++
++    const merged = base.merge(incoming);
+
++    expect(merged.safeParse({ a: "hello", b: 1 }).success).toBe(true);
++    expect(merged.safeParse({ a: 123, b: 1 }).success).toBe(false);
++    expect(merged.safeParse({ a: "hello", b: "not a number" }).success).toBe(
++      false
++    );
++  });
++});
+*** End Patch

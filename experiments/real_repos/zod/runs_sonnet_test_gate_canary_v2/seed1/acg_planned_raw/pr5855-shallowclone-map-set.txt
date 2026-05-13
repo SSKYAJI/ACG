@@ -1,0 +1,42 @@
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/util.ts
+@@
+ export function shallowClone(o: any): any {
+   if (isPlainObject(o)) return { ...o };
+   if (Array.isArray(o)) return [...o];
++  if (o instanceof Map) return new Map(o);
++  if (o instanceof Set) return new Set(o);
+   return o;
+ }
+*** Update File: packages/zod/src/v4/classic/tests/default.test.ts
+@@
+ test("defaulted array schema returns shallow clone", () => {
+   const schema = z.array(z.string()).default(["x"]);
+   const result1 = schema.parse(undefined);
+   const result2 = schema.parse(undefined);
+   expect(result1).not.toBe(result2);
+   expect(result1).toEqual(result2);
+ });
++
++test("defaulted Map schema returns independent copy", () => {
++  const schema = z.map(z.string(), z.number()).default(new Map([["a", 1]]));
++  const result1 = schema.parse(undefined);
++  const result2 = schema.parse(undefined);
++  expect(result1).not.toBe(result2);
++  expect(result1).toEqual(result2);
++  result1.set("b", 2);
++  expect(result1.size).toBe(2);
++  expect(result2.size).toBe(1);
++});
++
++test("defaulted Set schema returns independent copy", () => {
++  const schema = z.set(z.string()).default(new Set(["x"]));
++  const result1 = schema.parse(undefined);
++  const result2 = schema.parse(undefined);
++  expect(result1).not.toBe(result2);
++  expect(result1).toEqual(result2);
++  result1.add("y");
++  expect(result1.size).toBe(2);
++  expect(result2.size).toBe(1);
++});
+*** End Patch

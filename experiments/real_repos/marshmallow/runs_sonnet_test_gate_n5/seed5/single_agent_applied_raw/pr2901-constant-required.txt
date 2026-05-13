@@ -1,0 +1,68 @@
+*** Begin Patch
+*** Add File: tests/test_constant_required.py
+"""Regression tests for Constant field with required=True (pr2901)."""
+import pytest
+import marshmallow
+from marshmallow import fields, Schema, ValidationError
+
+
+class TestConstantFieldRequired:
+    """Tests for Constant field with required=True."""
+
+    def test_constant_field_required_true_no_error(self):
+        """Constant field should accept required=True without raising ValueError."""
+        # This should not raise a ValueError
+        field = fields.Constant(constant="value", required=True)
+        assert field.required is True
+
+    def test_constant_field_required_false_default(self):
+        """Constant field should work with required=False (default)."""
+        field = fields.Constant(constant="value")
+        assert field.required is False
+
+    def test_constant_field_required_true_serializes(self):
+        """Constant field with required=True should serialize correctly."""
+        field = fields.Constant(constant=42, required=True)
+        result = field._serialize(None, "field", {})
+        assert result == 42
+
+    def test_constant_field_required_true_deserializes(self):
+        """Constant field with required=True should deserialize correctly."""
+        field = fields.Constant(constant="hello", required=True)
+        result = field._deserialize("anything", "field", {})
+        assert result == "hello"
+
+    def test_constant_field_in_schema_with_required_true(self):
+        """Constant field with required=True should work in a Schema."""
+        class MySchema(Schema):
+            name = fields.String()
+            status = fields.Constant(constant="active", required=True)
+
+        schema = MySchema()
+        result = schema.dump({"name": "test"})
+        assert result["status"] == "active"
+
+    def test_constant_field_various_types_with_required(self):
+        """Constant field with required=True should work with various constant types."""
+        # String constant
+        f1 = fields.Constant(constant="string_val", required=True)
+        assert f1.constant == "string_val"
+
+        # Integer constant
+        f2 = fields.Constant(constant=100, required=True)
+        assert f2.constant == 100
+
+        # Boolean constant
+        f3 = fields.Constant(constant=True, required=True)
+        assert f3.constant is True
+
+        # None constant
+        f4 = fields.Constant(constant=None, required=True)
+        assert f4.constant is None
+
+    def test_constant_field_load_default_set(self):
+        """Constant field should set load_default to the constant value."""
+        field = fields.Constant(constant="myvalue", required=True)
+        assert field.load_default == "myvalue"
+        assert field.dump_default == "myvalue"
+*** End Patch

@@ -1,0 +1,102 @@
+*** Begin Patch
+*** Add File: tests/test_enum_by_name.py
+"""Regression tests for Enum field by-name lookup."""
+import enum
+import pytest
+
+from marshmallow.exceptions import ValidationError
+from marshmallow.fields import Enum
+
+
+class Color(enum.Enum):
+    RED = 1
+    GREEN = 2
+    BLUE = 3
+
+    def describe(self):
+        return f"I am {self.name}"
+
+    @property
+    def hex_value(self):
+        return f"#{self.value:06x}"
+
+    @classmethod
+    def from_string(cls, s):
+        return cls[s.upper()]
+
+
+class TestEnumByNameLookup:
+    """Tests that Enum by-name lookup only returns actual enum members."""
+
+    def test_valid_member_by_name(self):
+        """Should successfully deserialize valid enum member names."""
+        field = Enum(Color)
+        assert field._deserialize("RED", None, None) == Color.RED
+        assert field._deserialize("GREEN", None, None) == Color.GREEN
+        assert field._deserialize("BLUE", None, None) == Color.BLUE
+
+    def test_invalid_name_raises_validation_error(self):
+        """Should raise ValidationError for names that don't exist."""
+        field = Enum(Color)
+        with pytest.raises(ValidationError):
+            field._deserialize("PURPLE", None, None)
+
+    def test_method_name_raises_validation_error(self):
+        """Should raise ValidationError when looking up a method name."""
+        field = Enum(Color)
+        with pytest.raises(ValidationError):
+            field._deserialize("describe", None, None)
+
+    def test_property_name_raises_validation_error(self):
+        """Should raise ValidationError when looking up a property name."""
+        field = Enum(Color)
+        with pytest.raises(ValidationError):
+            field._deserialize("hex_value", None, None)
+
+    def test_classmethod_name_raises_validation_error(self):
+        """Should raise ValidationError when looking up a classmethod name."""
+        field = Enum(Color)
+        with pytest.raises(ValidationError):
+            field._deserialize("from_string", None, None)
+
+    def test_dunder_method_raises_validation_error(self):
+        """Should raise ValidationError when looking up dunder methods."""
+        field = Enum(Color)
+        with pytest.raises(ValidationError):
+            field._deserialize("__class__", None, None)
+
+    def test_enum_member_lookup_uses_bracket_notation(self):
+        """Enum[name] only returns actual members, not arbitrary attributes."""
+        # Verify that Color["describe"] raises KeyError (not returning the method)
+        with pytest.raises(KeyError):
+            _ = Color["describe"]
+
+        # Verify that Color["RED"] works correctly
+        assert Color["RED"] == Color.RED
+
+    def test_by_value_still_works(self):
+        """by_value=True should still work correctly."""
+        field = Enum(Color, by_value=True)
+        assert field._deserialize(1, None, None) == Color.RED
+        assert field._deserialize(2, None, None) == Color.GREEN
+
+    def test_by_value_invalid_raises_validation_error(self):
+        """by_value=True should raise ValidationError for invalid values."""
+        field = Enum(Color, by_value=True)
+        with pytest.raises(ValidationError):
+            field._deserialize(999, None, None)
+
+    def test_serialize_by_name(self):
+        """Serialization by name should work correctly."""
+        field = Enum(Color)
+        assert field._serialize(Color.RED, None, None) == "RED"
+        assert field._serialize(Color.GREEN, None, None) == "GREEN"
+
+    def test_serialize_by_value(self):
+        """Serialization by value should work correctly."""
+        field = Enum(Color, by_value=True)
+        assert field._serialize(Color.RED, None, None) == 1
+        assert field._serialize(Color.GREEN, None, None) == 2
+*** End Patch
+
+Now let me also add a proper `__init__.py` for marshmallow to make it importable:

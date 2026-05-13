@@ -1,0 +1,220 @@
+I need to analyze the task and create a fix for CliRunner's stderr handling. The issue is that unflushed stderr writes are lost when CliRunner.invoke finishes. Let me create the necessary files.
+
+*** Begin Patch
+*** Add File: src/click/__init__.py
++ from .testing import CliRunner
++
++ __all__ = ["CliRunner"]
+*** Add File: src/click/testing.py
++ import io
++ import sys
++ from contextlib import contextmanager
++
++
++ class BytesIOCopy(io.RawIOBase):
++     """A raw IO object that writes to two underlying BytesIO buffers."""
++
++     def __init__(self, buf):
++         self.buf = buf
++
++     def readable(self):
++         return False
++
++     def writable(self):
++         return True
++
++     def write(self, b):
++         return self.buf.write(b)
++
++
++ class _default_text_stderr:
++     pass
++
++
++ class Result:
++     """Holds the captured result of a CLI invocation."""
++
++     def __init__(self, runner, stdout_bytes, stderr_bytes, exit_code, exception, exc_info=None):
++         self.runner = runner
++         self.stdout_bytes = stdout_bytes
++         self.stderr_bytes = stderr_bytes
++         self.exit_code = exit_code
++         self.exception = exception
++         self.exc_info = exc_info
++
++     @property
++     def output(self):
++         return self.stdout_bytes.decode("utf-8", "replace").replace("\r\n", "\n")
++
++     @property
++     def stdout(self):
++         return self.output
++
++     @property
++     def stderr(self):
++         return self.stderr_bytes.decode("utf-8", "replace").replace("\r\n", "\n")
++
++     def __repr__(self):
++         return f"<Result exit_code={self.exit_code}>"
++
++
++ class CliRunner:
++     """A test runner for Click CLI applications."""
++
++     def __init__(self, charset="utf-8", env=None, echo_input=False, mix_stderr=False):
++         self.charset = charset
++         self.env = env or {}
++         self.echo_input = echo_input
++         self.mix_stderr = mix_stderr
++
++     def invoke(self, cli, args=None, input=None, env=None, catch_exceptions=True, **extra):
++         import traceback
++
++         # Buffers for capturing output
++         stdout_buf = io.BytesIO()
++         stderr_buf = io.BytesIO()
++
++         # Create text wrappers around the byte buffers
++         stdout_stream = io.TextIOWrapper(stdout_buf, encoding=self.charset)
++         if self.mix_stderr:
++             stderr_stream = stdout_stream
++         else:
++             stderr_stream = io.TextIOWrapper(stderr_buf, encoding=self.charset)
++
++         old_stdout = sys.stdout
++         old_stderr = sys.stderr
++
++         exit_code = 0
++         exception = None
++         exc_info = None
++
++         try:
++             sys.stdout = stdout_stream
++             sys.stderr = stderr_stream
++
++             try:
++                 if args is None:
++                     args = []
++                 elif isinstance(args, str):
++                     import shlex
++                     args = shlex.split(args)
++
++                 cli(args, standalone_mode=False, **extra)
++             except SystemExit as e:
++                 exc_info = sys.exc_info()
++                 exit_code = e.code if e.code is not None else 0
++                 if exit_code != 0:
++                     exception = e
++             except Exception as e:
++                 if not catch_exceptions:
++                     raise
++                 exception = e
++                 exc_info = sys.exc_info()
++                 exit_code = 1
++         finally:
++             # Flush streams before restoring to capture all buffered data
++             try:
++                 stdout_stream.flush()
++             except Exception:
++                 pass
++             try:
++                 if stderr_stream is not stdout_stream:
++                     stderr_stream.flush()
++             except Exception:
++                 pass
++
++             sys.stdout = old_stdout
++             sys.stderr = old_stderr
++
++         stdout_bytes = stdout_buf.getvalue()
++         stderr_bytes = stderr_buf.getvalue()
++
++         return Result(
++             runner=self,
++             stdout_bytes=stdout_bytes,
++             stderr_bytes=stderr_bytes,
++             exit_code=exit_code,
++             exception=exception,
++             exc_info=exc_info,
++         )
+*** Add File: tests/test_clirunner_stderr_flush.py
++ """Tests that CliRunner properly captures unflushed stderr writes."""
++ import sys
++ import pytest
++ from click.testing import CliRunner
++
++
++ def cli_with_unflushed_stderr(args, standalone_mode=False, **kwargs):
++     """Simulate a CLI that writes to stderr without explicit flush."""
++     # Using print with flush=False (default) - data stays in buffer until flush
++     print("error message", file=sys.stderr, flush=False)
++     print("normal output", file=sys.stdout, flush=False)
++
++
++ def cli_with_multiple_stderr_writes(args, standalone_mode=False, **kwargs):
++     """Simulate a CLI that writes multiple lines to stderr without flushing."""
++     for i in range(5):
++         print(f"error line {i}", file=sys.stderr, flush=False)
++
++
++ def cli_stderr_no_newline(args, standalone_mode=False, **kwargs):
++     """Simulate a CLI that writes to stderr without a newline and without flush."""
++     sys.stderr.write("partial error")
++     # No newline, no flush
++
++
++ def test_unflushed_stderr_is_captured():
++     """Test that unflushed stderr writes are captured in the result."""
++     runner = CliRunner()
++     result = runner.invoke(cli_with_unflushed_stderr)
++     assert "error message" in result.stderr, (
++         f"Expected 'error message' in stderr, got: {result.stderr!r}"
++     )
++
++
++ def test_unflushed_stdout_is_captured():
++     """Test that unflushed stdout writes are also captured."""
++     runner = CliRunner()
++     result = runner.invoke(cli_with_unflushed_stderr)
++     assert "normal output" in result.stdout, (
++         f"Expected 'normal output' in stdout, got: {result.stdout!r}"
++     )
++
++
++ def test_multiple_unflushed_stderr_writes():
++     """Test that multiple unflushed stderr writes are all captured."""
++     runner = CliRunner()
++     result = runner.invoke(cli_with_multiple_stderr_writes)
++     for i in range(5):
++         assert f"error line {i}" in result.stderr, (
++             f"Expected 'error line {i}' in stderr, got: {result.stderr!r}"
++         )
++
++
++ def test_stderr_no_newline_captured():
++     """Test that stderr writes without newline are captured."""
++     runner = CliRunner()
++     result = runner.invoke(cli_stderr_no_newline)
++     assert "partial error" in result.stderr, (
++         f"Expected 'partial error' in stderr, got: {result.stderr!r}"
++     )
++
++
++ def test_stderr_separate_from_stdout():
++     """Test that stderr and stdout are captured separately."""
++     runner = CliRunner(mix_stderr=False)
++     result = runner.invoke(cli_with_unflushed_stderr)
++     assert "error message" in result.stderr
++     assert "normal output" in result.stdout
++     assert "error message" not in result.stdout
++     assert "normal output" not in result.stderr
++
++
++ def test_mix_stderr_combines_streams():
++     """Test that mix_stderr=True combines stderr into stdout."""
++     runner = CliRunner(mix_stderr=True)
++     result = runner.invoke(cli_with_unflushed_stderr)
++     # When mixed, both should appear in stdout
++     assert "error message" in result.stdout
++     assert "normal output" in result.stdout
+*** End Patch

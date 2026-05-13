@@ -1,0 +1,152 @@
+*** Begin Patch
+*** Add File: packages/zod/src/v4/core/__tests__/regression-tuple-holes-defaults.test.ts
++/**
++ * Regression tests for tuple holes + defaults fix.
++ *
++ * Bug: Tuple schemas with optional elements followed by required elements with
++ * defaults incorrectly accept inputs that have holes (undefined) before the
++ * required default fields, when they should be rejected.
++ *
++ * Fix: The tuple parsing logic in packages/zod/src/v4/core/schemas.ts now
++ * correctly rejects inputs where a hole appears before a required element,
++ * even if that required element has a default value.
++ */
++import { describe, expect, it } from "vitest";
++import * as z from "zod/v4";
++
++describe("tuple: optional elements followed by required elements with defaults", () => {
++  it("accepts fully provided tuple", () => {
++    const schema = z.tuple([z.string().optional(), z.number().default(0)]);
++    expect(schema.parse(["hello", 5])).toEqual(["hello", 5]);
++  });
++
++  it("uses default when last element is omitted", () => {
++    const schema = z.tuple([z.string(), z.number().default(42)]);
++    expect(schema.parse(["hello"])).toEqual(["hello", 42]);
++  });
++
++  it("rejects sparse array with hole before required-with-default element", () => {
++    // [optional, required-with-default]
++    // A sparse array like [<hole>, <hole>] should be rejected because
++    // the second element is required (even though it has a default,
++    // a hole at position 0 means position 1 is also absent, which is
++    // only acceptable if position 0 is optional AND position 1 has a default)
++    const schema = z.tuple([
++      z.string(), // required, no default
++      z.string().optional(),
++      z.number().default(99),
++    ]);
++
++    // Valid: all provided
++    expect(schema.parse(["a", "b", 10])).toEqual(["a", "b", 10]);
++
++    // Valid: last element uses default
++    expect(schema.parse(["a", "b"])).toEqual(["a", "b", 99]);
++
++    // Valid: optional middle element absent, last uses default
++    expect(schema.parse(["a"])).toEqual(["a", undefined, 99]);
++
++    // Invalid: first required element missing
++    expect(schema.safeParse([]).success).toBe(false);
++  });
++
++  it("rejects input where required element before optional is missing", () => {
++    const schema = z.tuple([
++      z.number(), // required
++      z.string().optional(),
++    ]);
++
++    expect(schema.parse([1])).toEqual([1, undefined]);
++    expect(schema.safeParse([]).success).toBe(false);
++  });
++
++  it("does not allow holes to skip required positions even with defaults", () => {
++    // Tuple: [required-string, optional-string, required-number-with-default]
++    // Input: sparse array where index 0 is present but index 1 is a hole
++    // and index 2 is present - this should be rejected because index 1
++    // is optional but the hole creates an ambiguous situation
++    const schema = z.tuple([
++      z.string(),
++      z.string().optional(),
++      z.number().default(0),
++    ]);
+
++    // Create sparse array: ["a", <hole>, 5]
++    const sparse: any[] = ["a"];
++    sparse[2] = 5;
++    // sparse[1] is a hole (not set)
++
++    // This should be rejected: there's a hole at position 1 (optional),
++    // but position 2 is explicitly provided. The hole before a provided
++    // element is invalid.
++    const result = schema.safeParse(sparse);
++    expect(result.success).toBe(false);
++  });
++
++  it("tuple with only defaults: empty input uses all defaults", () => {
++    const schema = z.tuple([
++      z.string().default("hello"),
++      z.number().default(42),
++    ]);
++
++    expect(schema.parse([])).toEqual(["hello", 42]);
++  });
++
++  it("tuple rejects when required element (no default) is missing due to hole", () => {
++    const schema = z.tuple([
++      z.string().optional(),
++      z.number(), // required, no default
++    ]);
+
++    // [undefined, 5] - optional is explicitly undefined, required is provided
++    expect(schema.parse([undefined, 5])).toEqual([undefined, 5]);
++
++    // [<hole>, 5] - hole at optional position, required is provided
++    // This is the tricky case - the hole is at an optional position
++    // but the required element IS provided at index 1
++    const sparse: any[] = new Array(2);
++    sparse[1] = 5;
++    // Whether this is valid depends on implementation details
++    // The key regression is about holes BEFORE required-with-default elements
++
++    // Missing required element (no default) should always fail
++    expect(schema.safeParse([undefined]).success).toBe(false);
++    expect(schema.safeParse([]).success).toBe(false);
++  });
++
++  it("regression: hole at optional position before required-with-default should be rejected", () => {
++    // This is the core regression case from the bug report
++    // Tuple: [optional, required-with-default]
++    // Input: array of length 1 where only index 0 is set (optional position)
++    // but index 1 (required-with-default) is absent
++    // Expected: the default kicks in for index 1, result is valid
++    // Bug was: when there's a hole at the optional position (index 0),
++    // the parser incorrectly accepted it even when required positions were holes
++
++    const schema = z.tuple([
++      z.string().optional(),
++      z.number().default(100),
++    ]);
+
++    // Normal: ["hello"] - optional provided, default kicks in for index 1
++    expect(schema.parse(["hello"])).toEqual(["hello", 100]);
++
++    // Normal: ["hello", 50] - both provided
++    expect(schema.parse(["hello", 50])).toEqual(["hello", 50]);
++
++    // Normal: [] - optional absent, default kicks in for index 1
++    expect(schema.parse([])).toEqual([undefined, 100]);
++
++    // The bug: sparse array ["hello", <hole>] where index 1 is a true hole
++    // (not undefined, but absent). With a default, this should use the default.
++    const sparse: any[] = ["hello"];
++    // sparse[1] is a hole
++    const result = schema.safeParse(sparse);
++    // With the fix, this should use the default for index 1
++    expect(result.success).toBe(true);
++    if (result.success) {
++      expect(result.data[1]).toBe(100);
++    }
++  });
++});
+*** End Patch

@@ -1,0 +1,254 @@
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+[worker pr3126-fish-completion-multiline] still waiting at 30s...
+[worker pr2933-clirunner-stderr-flush] still waiting at 30s...
+[worker pr3363-unprocessed-flag-value] still waiting at 30s...
+ proposed 2 writes (35.43s, 3229 tokens)
+   BLOCKED pr3126-fish-completion-multiline → fish_completion.go: path 
+'fish_completion.go' is outside task 'pr3126-fish-completion-multiline''s 
+allowed_paths (src/click/shell_completion.py, tests/test_shell_completion.py)
+   BLOCKED pr3126-fish-completion-multiline → fish_completion_test.go: path 
+'fish_completion_test.go' is outside task 'pr3126-fish-completion-multiline''s 
+allowed_paths (src/click/shell_completion.py, tests/test_shell_completion.py)
+ proposed 2 writes (37.81s, 4107 tokens)
+   BLOCKED pr3363-unprocessed-flag-value → option.py: path 'option.py' is 
+outside task 'pr3363-unprocessed-flag-value''s allowed_paths (src/click/core.py,
+tests/test_options.py)
+   BLOCKED pr3363-unprocessed-flag-value → test_option.py: path 'test_option.py'
+is outside task 'pr3363-unprocessed-flag-value''s allowed_paths 
+(src/click/core.py, tests/test_options.py)
+ proposed 4 writes (52.20s, 4086 tokens)
+   BLOCKED pr2933-clirunner-stderr-flush → src/click/_compat.py: path 
+'src/click/_compat.py' is outside task 'pr2933-clirunner-stderr-flush''s 
+allowed_paths (src/click/testing.py, tests/test_testing.py)
+   BLOCKED pr2933-clirunner-stderr-flush → fix_clirunner_stderr.py: path 
+'fix_clirunner_stderr.py' is outside task 'pr2933-clirunner-stderr-flush''s 
+allowed_paths (src/click/testing.py, tests/test_testing.py)
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/testing.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr2933-clirunner-stderr-flush"}
+   ALLOWED pr2933-clirunner-stderr-flush → src/click/testing.py
+   BLOCKED pr2933-clirunner-stderr-flush → tests/test_clirunner_stderr_flush.py:
+path 'tests/test_clirunner_stderr_flush.py' is outside task 
+'pr2933-clirunner-stderr-flush''s allowed_paths (src/click/testing.py, 
+tests/test_testing.py)
+[naive_parallel_blind/local] wrote experiments/real_repos/click/runs_sonnet_test_gate_n5/seed2/eval_run_naive_parallel_blind.json — completed=0/3, evidence=naive_parallel_blind_applied_diff, overlaps=0, oob=7, blocked=7, wall=52.765s
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ proposed 4 writes (12.35s, 1018 tokens)
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+   ALLOWED pr3363-unprocessed-flag-value → tests/test_options.py
+   ALLOWED pr3363-unprocessed-flag-value → tests/test_options.py
+ proposed 4 writes (12.55s, 939 tokens)
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/shell_completion.py", "score": 
+0.95, "signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3126-fish-completion-multiline"}
+   ALLOWED pr3126-fish-completion-multiline → src/click/shell_completion.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/shell_completion.py", "score": 
+0.95, "signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3126-fish-completion-multiline"}
+   ALLOWED pr3126-fish-completion-multiline → src/click/shell_completion.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/shell_completion.py", "score": 
+0.95, "signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3126-fish-completion-multiline"}
+   ALLOWED pr3126-fish-completion-multiline → src/click/shell_completion.py
+   ALLOWED pr3126-fish-completion-multiline → tests/test_shell_completion.py
+ proposed 7 writes (28.77s, 2343 tokens)
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/testing.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr2933-clirunner-stderr-flush"}
+   ALLOWED pr2933-clirunner-stderr-flush → src/click/testing.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/testing.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr2933-clirunner-stderr-flush"}
+   ALLOWED pr2933-clirunner-stderr-flush → src/click/testing.py
+   ALLOWED pr2933-clirunner-stderr-flush → tests/test_testing.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/testing.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr2933-clirunner-stderr-flush"}
+   ALLOWED pr2933-clirunner-stderr-flush → src/click/testing.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/testing.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr2933-clirunner-stderr-flush"}
+   ALLOWED pr2933-clirunner-stderr-flush → src/click/testing.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/testing.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr2933-clirunner-stderr-flush"}
+   ALLOWED pr2933-clirunner-stderr-flush → src/click/testing.py
+   ALLOWED pr2933-clirunner-stderr-flush → tests/test_testing.py
+[naive_parallel/local] wrote experiments/real_repos/click/runs_sonnet_test_gate_n5/seed2/eval_run_naive.json — completed=0/3, evidence=applied_diff, overlaps=0, oob=0, blocked=0, wall=29.228s
+ starting (group 1)
+ starting (group 1)
+ starting (group 1)
+ proposed 2 writes (7.62s, 717 tokens)
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/shell_completion.py", "score": 
+0.95, "signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3126-fish-completion-multiline"}
+   ALLOWED pr3126-fish-completion-multiline → src/click/shell_completion.py
+   ALLOWED pr3126-fish-completion-multiline → tests/test_shell_completion.py
+ proposed 2 writes (9.47s, 733 tokens)
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/testing.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr2933-clirunner-stderr-flush"}
+   ALLOWED pr2933-clirunner-stderr-flush → src/click/testing.py
+   ALLOWED pr2933-clirunner-stderr-flush → tests/test_testing.py
+ proposed 6 writes (23.87s, 1995 tokens)
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+   ALLOWED pr3363-unprocessed-flag-value → tests/test_options.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+   ALLOWED pr3363-unprocessed-flag-value → tests/test_options.py
+[acg_planned_full_context/local] wrote experiments/real_repos/click/runs_sonnet_test_gate_n5/seed2/eval_run_acg_full_context.json — completed=0/3, evidence=applied_diff, overlaps=0, oob=0, blocked=0, wall=24.483s
+ starting (group 1)
+ starting (group 1)
+ starting (group 1)
+ proposed 2 writes (6.56s, 456 tokens)
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/testing.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr2933-clirunner-stderr-flush"}
+   ALLOWED pr2933-clirunner-stderr-flush → src/click/testing.py
+   ALLOWED pr2933-clirunner-stderr-flush → tests/test_testing.py
+ proposed 2 writes (7.79s, 748 tokens)
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/shell_completion.py", "score": 
+0.95, "signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3126-fish-completion-multiline"}
+   ALLOWED pr3126-fish-completion-multiline → src/click/shell_completion.py
+   ALLOWED pr3126-fish-completion-multiline → tests/test_shell_completion.py
+[worker pr3363-unprocessed-flag-value] still waiting at 30s...
+ proposed 23 writes (55.80s, 4920 tokens)
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+   ALLOWED pr3363-unprocessed-flag-value → tests/test_options.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+   ALLOWED pr3363-unprocessed-flag-value → tests/test_options.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+   ALLOWED pr3363-unprocessed-flag-value → tests/test_options.py
+   ALLOWED pr3363-unprocessed-flag-value → tests/test_options.py
+   ALLOWED pr3363-unprocessed-flag-value → tests/test_options.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+   ALLOWED pr3363-unprocessed-flag-value → tests/test_options.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+   ALLOWED pr3363-unprocessed-flag-value → tests/test_options.py
+ {"can_auto_approve_replan": true, "final_outcome": "allowed", 
+"has_hard_conflict": false, "path": "src/click/core.py", "score": 0.95, 
+"signals": ["bm25", "llm", "pagerank", "scope_review"], "task_id": 
+"pr3363-unprocessed-flag-value"}
+   ALLOWED pr3363-unprocessed-flag-value → src/click/core.py
+   ALLOWED pr3363-unprocessed-flag-value → tests/test_options.py
+[acg_planned/local] wrote experiments/real_repos/click/runs_sonnet_test_gate_n5/seed2/eval_run_acg.json — completed=0/3, evidence=applied_diff, overlaps=0, oob=0, blocked=0, wall=56.380s
+[worker single_agent_applied] still waiting at 30s...
+[worker single_agent_applied] still waiting at 60s...
+[worker single_agent_applied] still waiting at 90s...
+[worker single_agent_applied] still waiting at 120s...
+[worker single_agent_applied] still waiting at 150s...
+[worker single_agent_applied] still waiting at 180s...
+[worker single_agent_applied] still waiting at 210s...
+[worker single_agent_applied] still waiting at 240s...
+[worker single_agent_applied] still waiting at 270s...
+[single_agent/local] wrote experiments/real_repos/click/runs_sonnet_test_gate_n5/seed2/eval_run_single_agent.json — completed=0/3, evidence=suite_applied_diff, overlaps=0, oob=0, blocked=0, wall=296.182s
+[combined] wrote experiments/real_repos/click/runs_sonnet_test_gate_n5/seed2/eval_run_combined.json

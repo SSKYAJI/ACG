@@ -1,0 +1,79 @@
+*** Begin Patch
+*** Add File: tests/test_constant_required.py
+--- /dev/null
++++ tests/test_constant_required.py
+@@ -0,0 +1,72 @@
++"""Regression tests for Constant field with required=True (pr2901)."""
++import pytest
++import marshmallow
++from marshmallow import Schema, fields
++from marshmallow.exceptions import ValidationError
++
++
++class TestConstantFieldRequired:
++    """Tests for Constant field with required=True."""
++
++    def test_constant_field_required_true_no_error(self):
++        """Constant field with required=True should not raise ValueError."""
++        # This should not raise a ValueError
++        field = fields.Constant(42, required=True)
++        assert field.constant == 42
++
++    def test_constant_field_required_false_no_error(self):
++        """Constant field with required=False should not raise ValueError."""
++        field = fields.Constant(42, required=False)
++        assert field.constant == 42
++
++    def test_constant_field_default_required(self):
++        """Constant field without required argument should work."""
++        field = fields.Constant(42)
++        assert field.constant == 42
++
++    def test_constant_field_required_true_serializes(self):
++        """Constant field with required=True should serialize correctly."""
++        class MySchema(Schema):
++            value = fields.Constant(42, required=True)
++
++        schema = MySchema()
++        result = schema.dump({"value": "anything"})
++        assert result["value"] == 42
++
++    def test_constant_field_required_true_deserializes(self):
++        """Constant field with required=True should deserialize correctly."""
++        class MySchema(Schema):
++            value = fields.Constant(42, required=True)
++
++        schema = MySchema()
++        result = schema.load({"value": "anything"})
++        assert result["value"] == 42
++
++    def test_constant_field_required_true_with_missing_data(self):
++        """Constant field with required=True should still provide constant when data is missing."""
++        class MySchema(Schema):
++            value = fields.Constant(42, required=True)
++
++        schema = MySchema()
++        # Since Constant always provides a value, missing data should still work
++        result = schema.load({})
++        assert result["value"] == 42
++
++    def test_constant_field_string_value(self):
++        """Constant field with string value and required=True should work."""
++        field = fields.Constant("hello", required=True)
++        assert field.constant == "hello"
++
++    def test_constant_field_none_value(self):
++        """Constant field with None value and required=True should work."""
++        field = fields.Constant(None, required=True)
++        assert field.constant is None
++
++    def test_constant_field_load_default_is_constant(self):
++        """Constant field's load_default should be set to the constant value."""
++        field = fields.Constant(42, required=True)
++        assert field.load_default == 42
++
++    def test_constant_field_dump_default_is_constant(self):
++        """Constant field's dump_default should be set to the constant value."""
++        field = fields.Constant(42, required=True)
++        assert field.dump_default == 42
+*** End Patch

@@ -1,0 +1,39 @@
+*** Begin Patch
+*** Update File: src/click/testing.py
+@@
+             yield (stream_mixer.stdout, stream_mixer.stderr, stream_mixer.output)
+        finally:
+            for key, value in old_env.items():
+@@
+             yield (stream_mixer.stdout, stream_mixer.stderr, stream_mixer.output)
+        finally:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            for key, value in old_env.items():
+*** Update File: tests/test_testing.py
+@@
+ def test_isolation_stderr_errors():
+     """Writing to stderr should escape invalid characters instead of
+     raising a UnicodeEncodeError.
+     """
+     runner = CliRunner()
+ 
+     with runner.isolation() as (_, err, _):
+         click.echo("\udce2", err=True, nl=False)
+ 
+     assert err.getvalue() == b"\\udce2"
++
++
++def test_stderr_unflushed():
++    """Data written to stderr without an explicit flush should be captured."""
++
++    @click.command()
++    def cli():
++        # Use print with flush=False so the data sits in the TextIOWrapper buffer
++        print("unflushed stderr", file=sys.stderr, flush=False)
++
++    runner = CliRunner()
++    result = runner.invoke(cli)
++    assert result.exit_code == 0
++    assert result.stderr == "unflushed stderr\n"
+*** End Patch

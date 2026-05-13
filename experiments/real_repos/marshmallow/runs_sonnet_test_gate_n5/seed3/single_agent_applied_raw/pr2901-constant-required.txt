@@ -1,0 +1,147 @@
+*** Begin Patch
+*** Add File: tests/test_fields.py
+"""Tests for marshmallow fields."""
+import enum
+import pytest
+
+from marshmallow.exceptions import ValidationError
+from marshmallow.fields import Constant, Enum
+
+
+class TestConstant:
+    """Tests for the Constant field."""
+
+    def test_constant_basic(self):
+        """Constant field should always return its constant value."""
+        field = Constant(42)
+        assert field._serialize(None, None, None) == 42
+        assert field._deserialize(None, None, None) == 42
+
+    def test_constant_string(self):
+        """Constant field should work with string constants."""
+        field = Constant("hello")
+        assert field._serialize(None, None, None) == "hello"
+        assert field._deserialize(None, None, None) == "hello"
+
+    def test_constant_with_required_true(self):
+        """Constant field should accept required=True without raising ValueError."""
+        # This should not raise a ValueError
+        field = Constant(42, required=True)
+        assert field.required is True
+        assert field.constant == 42
+
+    def test_constant_with_required_false(self):
+        """Constant field should accept required=False (default)."""
+        field = Constant(42, required=False)
+        assert field.required is False
+        assert field.constant == 42
+
+    def test_constant_required_true_default_value(self):
+        """Constant field with required=True should still provide constant value."""
+        field = Constant(99, required=True)
+        assert field.constant == 99
+        assert field.dump_default == 99
+        assert field.load_default == 99
+
+    def test_constant_none_value(self):
+        """Constant field should work with None as constant."""
+        field = Constant(None)
+        assert field._serialize(None, None, None) is None
+        assert field._deserialize(None, None, None) is None
+
+    def test_constant_dict_value(self):
+        """Constant field should work with dict as constant."""
+        const = {"key": "value"}
+        field = Constant(const)
+        assert field._serialize(None, None, None) == const
+        assert field._deserialize(None, None, None) == const
+
+    def test_constant_required_true_no_value_error(self):
+        """Creating Constant(value, required=True) must not raise ValueError."""
+        try:
+            field = Constant("test", required=True)
+        except ValueError as e:
+            pytest.fail(f"Constant(required=True) raised ValueError unexpectedly: {e}")
+
+    def test_constant_ignores_input_on_serialize(self):
+        """Constant field should ignore the input value and return constant."""
+        field = Constant("constant_value")
+        assert field._serialize("some_other_value", None, None) == "constant_value"
+        assert field._serialize(12345, None, None) == "constant_value"
+
+    def test_constant_ignores_input_on_deserialize(self):
+        """Constant field should ignore the input value and return constant."""
+        field = Constant("constant_value")
+        assert field._deserialize("some_other_value", None, None) == "constant_value"
+        assert field._deserialize(12345, None, None) == "constant_value"
+
+
+class MyEnum(enum.Enum):
+    FOO = 1
+    BAR = 2
+    BAZ = 3
+
+    def my_method(self):
+        return "method_result"
+
+    @property
+    def my_property(self):
+        return "property_result"
+
+
+class TestEnum:
+    """Tests for the Enum field."""
+
+    def test_enum_serialize_by_name(self):
+        """Enum field should serialize to name by default."""
+        field = Enum(MyEnum)
+        assert field._serialize(MyEnum.FOO, None, None) == "FOO"
+        assert field._serialize(MyEnum.BAR, None, None) == "BAR"
+
+    def test_enum_serialize_by_value(self):
+        """Enum field should serialize to value when by_value=True."""
+        field = Enum(MyEnum, by_value=True)
+        assert field._serialize(MyEnum.FOO, None, None) == 1
+        assert field._serialize(MyEnum.BAR, None, None) == 2
+
+    def test_enum_deserialize_by_name(self):
+        """Enum field should deserialize from name by default."""
+        field = Enum(MyEnum)
+        assert field._deserialize("FOO", None, None) == MyEnum.FOO
+        assert field._deserialize("BAR", None, None) == MyEnum.BAR
+
+    def test_enum_deserialize_by_value(self):
+        """Enum field should deserialize from value when by_value=True."""
+        field = Enum(MyEnum, by_value=True)
+        assert field._deserialize(1, None, None) == MyEnum.FOO
+        assert field._deserialize(2, None, None) == MyEnum.BAR
+
+    def test_enum_deserialize_invalid_name(self):
+        """Enum field should raise ValidationError for invalid name."""
+        field = Enum(MyEnum)
+        with pytest.raises(ValidationError):
+            field._deserialize("INVALID", None, None)
+
+    def test_enum_deserialize_invalid_value(self):
+        """Enum field should raise ValidationError for invalid value."""
+        field = Enum(MyEnum, by_value=True)
+        with pytest.raises(ValidationError):
+            field._deserialize(999, None, None)
+
+    def test_enum_by_name_does_not_return_method(self):
+        """Enum by-name lookup should not return non-member attributes like methods."""
+        field = Enum(MyEnum)
+        with pytest.raises(ValidationError):
+            field._deserialize("my_method", None, None)
+
+    def test_enum_by_name_does_not_return_property(self):
+        """Enum by-name lookup should not return non-member attributes like properties."""
+        field = Enum(MyEnum)
+        with pytest.raises(ValidationError):
+            field._deserialize("my_property", None, None)
+
+    def test_enum_serialize_none(self):
+        """Enum field should serialize None to None."""
+        field = Enum(MyEnum)
+        assert field._serialize(None, None, None) is None
+*** End Patch

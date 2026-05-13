@@ -1,0 +1,87 @@
+I'll analyze the task and implement the fix for IDN email validation.
+
+Let me first understand the issue: Email addresses with domain labels starting or ending with hyphens (like `user@-münchen.de` or `user@münchen-.de`) should be rejected, but currently aren't being caught.
+
+The fix needs to be in the `validate.py` file where the `Email` validator is implemented. The domain label validation needs to check that after converting IDN labels to their punycode form (or even before), labels don't start or end with hyphens.
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+ import re
+ import typing
++import unicodedata
+ 
+ from marshmallow import types
+@@
+     USER_REGEX = re.compile(
+         r"(^[-!#$%&'*+/=?^_`{}|~0-9A-Z]+"
+         r"(\.[-!#$%&'*+/=?^_`{}|~0-9A-Z]+)*\Z"  # dot-atom
+@@
+     DOMAIN_REGEX = re.compile(
+         # domain
+         r"(?:[A-Z0-9]"  # domain part start
+-        r"(?:[A-Z0-9-]{0,61}[A-Z0-9])?"  # domain part continuation
++        r"(?:[A-Z0-9-]{0,61}[A-Z0-9])?"  # domain part continuation (ASCII)
+         r"\.)+[A-Z]{2,6}\Z",  # TLD
+         re.IGNORECASE,
+     )
+@@
+     DOMAIN_WHITELIST = ("localhost",)
+ 
++    UNI_DOMAIN_LABEL_REGEX = re.compile(
++        r"^[^\-].*[^\-]$|^[^\-]$",
++        re.IGNORECASE,
++    )
++
+     def __init__(
+         self,
+         *,
+@@
+     def _validate_domain(self, domain: str) -> bool:
+         if domain in self.DOMAIN_WHITELIST:
+             return True
++
++        # Check each label for leading/trailing hyphens (handles IDN labels too)
++        labels = domain.split(".")
++        for label in labels:
++            if not label:
++                return False
++            if label.startswith("-") or label.endswith("-"):
++                return False
++            # Try to encode as IDNA to validate internationalized labels
++            try:
++                label.encode("idna")
++            except (UnicodeError, UnicodeDecodeError):
++                pass  # Will be caught by regex checks below
++
+         if self.DOMAIN_REGEX.match(domain):
+             return True
+ 
+*** Update File: tests/test_validate.py
+@@
+         "user.@example.com",
+         "user@example..com",
+     )
++    invalid_idn_emails = (
++        "user@-münchen.de",
++        "user@münchen-.de",
++        "user@-example.com",
++        "user@example-.com",
++        "user@foo.-bar.com",
++        "user@foo.bar-.com",
++    )
+     valid_emails = (
+@@
+     def test_email_invalid(self, invalid_emails):
+         validator = validate.Email()
+         for email in invalid_emails:
+             with pytest.raises(ValidationError):
+                 validator(email)
+ 
++    @pytest.mark.parametrize("email", invalid_idn_emails)
++    def test_email_invalid_idn(self, email):
++        validator = validate.Email()
++        with pytest.raises(ValidationError, match="Not a valid email address"):
++            validator(email)
++
+*** End Patch

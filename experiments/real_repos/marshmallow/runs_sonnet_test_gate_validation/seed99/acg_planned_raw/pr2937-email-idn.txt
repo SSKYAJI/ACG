@@ -1,0 +1,74 @@
+Looking at the code, the issue is in the `Email.__call__` method. When an IDN domain is encoded via `domain_part.encode("idna").decode("ascii")`, the resulting punycode is then validated against `DOMAIN_REGEX`. However, the `encode("idna")` call can succeed even for labels starting or ending with hyphens (like `-münchen` or `münchen-`), producing something like `xn---mnchen-3ya` which starts with a hyphen after `xn--` prefix... actually let me think more carefully.
+
+The real issue: `domain_part.encode("idna")` may raise `UnicodeError` for some invalid labels, but for labels like `-münchen` or `münchen-`, Python's `encodings.idna` might not raise an error. The encoded form would be something like `xn---mnchen-3ya` which starts with a hyphen (after the dot), so `DOMAIN_REGEX` should catch it... but wait, the regex requires labels to start with `[A-Z0-9]`, so it should reject labels starting with `-`.
+
+Let me reconsider: the issue might be that `encode("idna")` succeeds and produces a valid-looking punycode that passes the regex. Or perhaps Python's idna encoding doesn't validate the hyphen rule.
+
+The fix should validate each label of the domain to ensure no label starts or ends with a hyphen before or after IDNA encoding.
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+                 raise ValidationError(message)
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part_encoded = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     # Reject labels that start or end with a hyphen
+                     labels = domain_part_encoded.split(".")
+                     if any(label.startswith("-") or label.endswith("-") for label in labels):
+                         raise ValidationError(message)
+                     if self.DOMAIN_REGEX.match(domain_part_encoded):
+                         return value
+                 raise ValidationError(message)
+*** Update File: tests/test_validate.py
+@@
+         "δοκ.ιμή@παράδειγμα.δοκιμή",
+     ],
+ )
+ def test_email_valid(valid_email):
+@@
+         "δοκ.ιμή@παράδειγμα.δοκιμή",
+         "user@münchen.de",
+         "user@xn--mnchen-3ya.de",
+     ],
+ )
+ def test_email_valid(valid_email):
+@@
+         "user@example",
+         "@nouser.com",
+         "example.com",
+         "user",
+         "",
+         None,
+     ],
+ )
+ def test_email_invalid(invalid_email):
+@@
+         "user@example",
+         "@nouser.com",
+         "example.com",
+         "user",
+         "",
+         None,
+         "user@-münchen.de",
+         "user@münchen-.de",
+         "user@-example.com",
+         "user@example-.com",
+     ],
+ )
+ def test_email_invalid(invalid_email):
+*** End Patch

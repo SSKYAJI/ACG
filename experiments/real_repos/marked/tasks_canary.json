@@ -1,0 +1,12 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr3960-tasklist-setext",
+      "prompt": "The GFM tokenizer incorrectly treats the text portion of a setext heading (e.g., '[ ] heading') as a task list checkbox, producing wrong output. Fix the tokenizer so it only applies the checkbox pattern inside list item paragraphs, not setext heading text, and add unit and spec coverage for the corrected behavior.",
+      "hints": {
+        "touches": ["tokenizer", "tasklist", "setext", "heading", "gfm"]
+      }
+    }
+  ]
+}

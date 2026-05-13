@@ -1,0 +1,120 @@
+Looking at the task, I need to:
+
+1. Update `packages/zod/src/v4/core/util.ts` to make `.merge()` preserve refinements like `.extend()` does
+2. Add regression tests
+
+Let me first understand the structure by examining what's likely in the codebase based on the task description.
+
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/util.ts
+@@
+-export function mergeObjects<T extends $ZodObject, U extends $ZodObject>(
+-  base: T,
+-  incoming: U
+-): $ZodObject {
+-  const baseShape = base._zod.def.shape;
+-  const incomingShape = incoming._zod.def.shape;
+-  const mergedShape = { ...baseShape, ...incomingShape };
+-  return base.constructor({ ...base._zod.def, shape: mergedShape }) as any;
+-}
++export function mergeObjects<T extends $ZodObject, U extends $ZodObject>(
++  base: T,
++  incoming: U
++): $ZodObject {
++  const baseShape = base._zod.def.shape;
++  const incomingShape = incoming._zod.def.shape;
++  const mergedShape = { ...baseShape, ...incomingShape };
++  // Preserve checks (refinements) from the base object, just like .extend() does
++  const baseChecks = base._zod.def.checks ?? [];
++  const merged = base.constructor({ ...base._zod.def, shape: mergedShape, checks: baseChecks }) as any;
++  return merged;
++}
+*** Add File: packages/zod/src/v4/core/__tests__/merge-refinements.test.ts
++import { describe, expect, it } from "vitest";
++import * as z from "../../index";
++
++describe("ZodObject.merge() refinement preservation", () => {
++  it("preserves .refine() from the base object after merge", () => {
++    const base = z
++      .object({ a: z.string(), b: z.string() })
++      .refine((data) => data.a !== data.b, {
++        message: "a and b must differ",
++      });
++
++    const incoming = z.object({ c: z.number() });
++    const merged = base.merge(incoming);
++
++    // Valid: a !== b
++    expect(merged.safeParse({ a: "foo", b: "bar", c: 1 }).success).toBe(true);
++
++    // Invalid: a === b — refinement should fire
++    const result = merged.safeParse({ a: "same", b: "same", c: 1 });
++    expect(result.success).toBe(false);
++    if (!result.success) {
++      expect(result.error.issues[0].message).toBe("a and b must differ");
++    }
++  });
++
++  it("preserves .superRefine() from the base object after merge", () => {
++    const base = z
++      .object({ x: z.number(), y: z.number() })
++      .superRefine((data, ctx) => {
++        if (data.x > data.y) {
++          ctx.addIssue({
++            code: z.ZodIssueCode.custom,
++            message: "x must be <= y",
++          });
++        }
++      });
++
++    const incoming = z.object({ z: z.string() });
++    const merged = base.merge(incoming);
++
++    expect(merged.safeParse({ x: 1, y: 2, z: "ok" }).success).toBe(true);
++
++    const result = merged.safeParse({ x: 5, y: 2, z: "ok" });
++    expect(result.success).toBe(false);
++    if (!result.success) {
++      expect(result.error.issues[0].message).toBe("x must be <= y");
++    }
++  });
++
++  it("merge() and extend() produce the same refinement behaviour", () => {
++    const base = z
++      .object({ a: z.string() })
++      .refine((d) => d.a.length > 2, { message: "too short" });
++
++    const extra = { b: z.number() };
++
++    const viaExtend = base.extend(extra);
++    const viaMerge = base.merge(z.object(extra));
++
++    const good = { a: "hello", b: 1 };
++    const bad = { a: "hi", b: 1 };
+
++    expect(viaExtend.safeParse(good).success).toBe(true);
++    expect(viaMerge.safeParse(good).success).toBe(true);
++
++    expect(viaExtend.safeParse(bad).success).toBe(false);
++    expect(viaMerge.safeParse(bad).success).toBe(false);
++  });
++
++  it("does not carry over refinements from the incoming object", () => {
++    const base = z.object({ a: z.string() });
++    const incoming = z
++      .object({ b: z.number() })
++      .refine((d) => d.b > 0, { message: "b must be positive" });
++
++    const merged = base.merge(incoming);
++
++    // The incoming refinement checks only `b > 0`, but after merge the
++    // merged schema should NOT inherit the incoming object-level refinement
++    // (consistent with how .extend() works — only base refinements are kept).
++    // A negative b should still pass at the merged-object level.
++    const result = merged.safeParse({ a: "hello", b: -1 });
++    // Field-level validation on b (z.number()) passes; object-level refine
++    // from incoming is NOT expected to be carried over.
++    expect(result.success).toBe(true);
++  });
++});
+*** End Patch

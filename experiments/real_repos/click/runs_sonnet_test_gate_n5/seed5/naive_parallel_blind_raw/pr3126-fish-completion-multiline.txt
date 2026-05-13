@@ -1,0 +1,291 @@
+I need to create a fix for fish shell completion handling of multiline help strings. Let me create the necessary files.
+
+*** Begin Patch
+*** Add File: fish_completion.go
++ package main
++ 
++ import (
++ 	"fmt"
++ 	"strings"
++ )
++ 
++ // sanitizeForFish takes a help string and returns a version safe for use
++ // in fish shell completion scripts. Fish completion uses newlines as
++ // record separators, so any newlines (and surrounding whitespace) in
++ // help text must be collapsed into a single space.
++ func sanitizeForFish(help string) string {
++ 	// Split on newlines, trim each line, and rejoin with a space.
++ 	lines := strings.Split(help, "\n")
++ 	parts := make([]string, 0, len(lines))
++ 	for _, line := range lines {
++ 		trimmed := strings.TrimSpace(line)
++ 		if trimmed != "" {
++ 			parts = append(parts, trimmed)
++ 		}
++ 	}
++ 	result := strings.Join(parts, " ")
++ 	// Also escape single quotes for fish.
++ 	result = strings.ReplaceAll(result, "'", "\\'")
++ 	return result
++ }
++ 
++ // fishCompletionEntry represents a single fish completion line.
++ type fishCompletionEntry struct {
++ 	Command     string
++ 	Short       string
++ 	Long        string
++ 	Description string
++ 	IsFlag      bool
++ 	NoFiles     bool
++ }
++ 
++ // String renders the fishCompletionEntry as a fish complete command.
++ func (e fishCompletionEntry) String() string {
++ 	var sb strings.Builder
++ 	sb.WriteString("complete")
++ 	if e.NoFiles {
++ 		sb.WriteString(" -f")
++ 	}
++ 	if e.Command != "" {
++ 		sb.WriteString(" -c ")
++ 		sb.WriteString(e.Command)
++ 	}
++ 	if e.Short != "" {
++ 		sb.WriteString(" -s ")
++ 		sb.WriteString(e.Short)
++ 	}
++ 	if e.Long != "" {
++ 		sb.WriteString(" -l ")
++ 		sb.WriteString(e.Long)
++ 	}
++ 	if e.Description != "" {
++ 		sb.WriteString(" -d '")
++ 		sb.WriteString(sanitizeForFish(e.Description))
++ 		sb.WriteString("'")
++ 	}
++ 	return sb.String()
++ }
++ 
++ // GenerateFishCompletion generates a fish completion script for the given
++ // command, its subcommands, and its flags. Help strings that span multiple
++ // lines are collapsed to a single line so that the generated script is valid.
++ func GenerateFishCompletion(commandName string, subcommands []SubCommand, flags []Flag) string {
++ 	var sb strings.Builder
++ 
++ 	// Disable file completions for the top-level command by default.
++ 	sb.WriteString(fmt.Sprintf("complete -f -c %s\n", commandName))
++ 
++ 	for _, sub := range subcommands {
++ 		entry := fishCompletionEntry{
++ 			Command:     commandName,
++ 			Long:        sub.Name,
++ 			Description: sub.Help,
++ 			NoFiles:     true,
++ 		}
++ 		sb.WriteString(entry.String())
++ 		sb.WriteString("\n")
++ 	}
++ 
++ 	for _, flag := range flags {
++ 		entry := fishCompletionEntry{
++ 			Command:     commandName,
++ 			Short:       flag.Short,
++ 			Long:        flag.Long,
++ 			Description: flag.Help,
++ 			NoFiles:     true,
++ 		}
++ 		sb.WriteString(entry.String())
++ 		sb.WriteString("\n")
++ 	}
++ 
++ 	return sb.String()
++ }
++ 
++ // SubCommand holds the name and help text for a subcommand.
++ type SubCommand struct {
++ 	Name string
++ 	Help string
++ }
++ 
++ // Flag holds the short name, long name, and help text for a flag.
++ type Flag struct {
++ 	Short string
++ 	Long  string
++ 	Help  string
++ }
+*** Add File: fish_completion_test.go
++ package main
++ 
++ import (
++ 	"strings"
++ 	"testing"
++ )
++ 
++ func TestSanitizeForFish_SingleLine(t *testing.T) {
++ 	input := "A simple description"
++ 	want := "A simple description"
++ 	got := sanitizeForFish(input)
++ 	if got != want {
++ 		t.Errorf("sanitizeForFish(%q) = %q; want %q", input, got, want)
++ 	}
++ }
++ 
++ func TestSanitizeForFish_MultiLine(t *testing.T) {
++ 	input := "First line\nSecond line\nThird line"
++ 	want := "First line Second line Third line"
++ 	got := sanitizeForFish(input)
++ 	if got != want {
++ 		t.Errorf("sanitizeForFish(%q) = %q; want %q", input, got, want)
++ 	}
++ }
++ 
++ func TestSanitizeForFish_MultiLineWithLeadingTrailingSpaces(t *testing.T) {
++ 	input := "  First line  \n  Second line  \n"
++ 	want := "First line Second line"
++ 	got := sanitizeForFish(input)
++ 	if got != want {
++ 		t.Errorf("sanitizeForFish(%q) = %q; want %q", input, got, want)
++ 	}
++ }
++ 
++ func TestSanitizeForFish_EmptyLines(t *testing.T) {
++ 	input := "First line\n\n\nFourth line"
++ 	want := "First line Fourth line"
++ 	got := sanitizeForFish(input)
++ 	if got != want {
++ 		t.Errorf("sanitizeForFish(%q) = %q; want %q", input, got, want)
++ 	}
++ }
++ 
++ func TestSanitizeForFish_SingleQuoteEscaping(t *testing.T) {
++ 	input := "It's a description"
++ 	want := "It\\'s a description"
++ 	got := sanitizeForFish(input)
++ 	if got != want {
++ 		t.Errorf("sanitizeForFish(%q) = %q; want %q", input, got, want)
++ 	}
++ }
++ 
++ func TestSanitizeForFish_MultiLineWithSingleQuote(t *testing.T) {
++ 	input := "It's the first line\nIt's the second line"
++ 	want := "It\\'s the first line It\\'s the second line"
++ 	got := sanitizeForFish(input)
++ 	if got != want {
++ 		t.Errorf("sanitizeForFish(%q) = %q; want %q", input, got, want)
++ 	}
++ }
++ 
++ func TestFishCompletionEntry_NoDescription(t *testing.T) {
++ 	e := fishCompletionEntry{
++ 		Command: "mytool",
++ 		Long:    "verbose",
++ 		NoFiles: true,
++ 	}
++ 	got := e.String()
++ 	want := "complete -f -c mytool -l verbose"
++ 	if got != want {
++ 		t.Errorf("fishCompletionEntry.String() = %q; want %q", got, want)
++ 	}
++ }
++ 
++ func TestFishCompletionEntry_WithSingleLineDescription(t *testing.T) {
++ 	e := fishCompletionEntry{
++ 		Command:     "mytool",
++ 		Short:       "v",
++ 		Long:        "verbose",
++ 		Description: "Enable verbose output",
++ 		NoFiles:     true,
++ 	}
++ 	got := e.String()
++ 	want := "complete -f -c mytool -s v -l verbose -d 'Enable verbose output'"
++ 	if got != want {
++ 		t.Errorf("fishCompletionEntry.String() = %q; want %q", got, want)
++ 	}
++ }
++ 
++ func TestFishCompletionEntry_WithMultiLineDescription(t *testing.T) {
++ 	e := fishCompletionEntry{
++ 		Command:     "mytool",
++ 		Short:       "v",
++ 		Long:        "verbose",
++ 		Description: "Enable verbose output\nThis prints extra information\nUseful for debugging",
++ 		NoFiles:     true,
++ 	}
++ 	got := e.String()
++ 	want := "complete -f -c mytool -s v -l verbose -d 'Enable verbose output This prints extra information Useful for debugging'"
++ 	if got != want {
++ 		t.Errorf("fishCompletionEntry.String() = %q; want %q", got, want)
++ 	}
++ }
++ 
++ func TestGenerateFishCompletion_Basic(t *testing.T) {
++ 	subcommands := []SubCommand{
++ 		{Name: "run", Help: "Run the application"},
++ 		{Name: "build", Help: "Build the application"},
++ 	}
++ 	flags := []Flag{
++ 		{Short: "v", Long: "verbose", Help: "Enable verbose mode"},
++ 		{Short: "h", Long: "help", Help: "Show help"},
++ 	}
++ 
++ 	got := GenerateFishCompletion("mytool", subcommands, flags)
++ 
++ 	if !strings.Contains(got, "complete -f -c mytool") {
++ 		t.Errorf("expected top-level disable-files line, got:\n%s", got)
++ 	}
++ 	if !strings.Contains(got, "-l run") {
++ 		t.Errorf("expected subcommand 'run', got:\n%s", got)
++ 	}
++ 	if !strings.Contains(got, "-l build") {
++ 		t.Errorf("expected subcommand 'build', got:\n%s", got)
++ 	}
++ 	if !strings.Contains(got, "-s v -l verbose") {
++ 		t.Errorf("expected flag 'verbose', got:\n%s", got)
++ 	}
++ }
++ 
++ func TestGenerateFishCompletion_MultiLineHelp(t *testing.T) {
++ 	subcommands := []SubCommand{
++ 		{
++ 			Name: "deploy",
++ 			Help: "Deploy the application\nThis will push to production\nUse with caution",
++ 		},
++ 	}
++ 	flags := []Flag{
++ 		{
++ 			Short: "e",
++ 			Long:  "env",
++ 			Help:  "Target environment\nCan be staging or production",
++ 		},
++ 	}
++ 
++ 	got := GenerateFishCompletion("mytool", subcommands, flags)
++ 
++ 	// Verify no raw newlines appear inside quoted description strings.
++ 	lines := strings.Split(got, "\n")
++ 	for _, line := range lines {
++ 		if line == "" {
++ 			continue
++ 		}
++ 		// Each non-empty line should be a complete fish complete command.
++ 		if !strings.HasPrefix(line, "complete") {
++ 			t.Errorf("unexpected line in fish completion output: %q", line)
++ 		}
++ 	}
++ 
++ 	if !strings.Contains(got, "Deploy the application This will push to production Use with caution") {
++ 		t.Errorf("expected collapsed multiline subcommand help, got:\n%s", got)
++ 	}
++ 	if !strings.Contains(got, "Target environment Can be staging or production") {
++ 		t.Errorf("expected collapsed multiline flag help, got:\n%s", got)
++ 	}
++ }
++ 
++ func TestGenerateFishCompletion_NoSubcommandsNoFlags(t *testing.T) {
++ 	got := GenerateFishCompletion("mytool", nil, nil)
++ 	want := "complete -f -c mytool\n"
++ 	if got != want {
++ 		t.Errorf("GenerateFishCompletion with no subcommands/flags = %q; want %q", got, want)
++ 	}
++ }
+*** End Patch

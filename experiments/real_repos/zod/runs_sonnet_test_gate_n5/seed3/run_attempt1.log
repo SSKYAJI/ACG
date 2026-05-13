@@ -1,0 +1,107 @@
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ proposed 2 writes (8.48s, 725 tokens)
+   ALLOWED pr5855-shallowclone-map-set → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5855-shallowclone-map-set → 
+packages/zod/src/v4/core/__tests__/shallowclone-map-set.test.ts
+ proposed 2 writes (24.04s, 2153 tokens)
+   ALLOWED pr5856-merge-refinement-semantics → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5856-merge-refinement-semantics → 
+packages/zod/src/v4/core/__tests__/merge-refinements.test.ts
+ proposed 3 writes (26.14s, 2191 tokens)
+   ALLOWED pr5900-tuple-holes-defaults → packages/zod/src/v4/core/schemas.ts
+   ALLOWED pr5900-tuple-holes-defaults → 
+packages/zod/src/v4/core/__tests__/tuple-holes.test.ts
+   ALLOWED pr5900-tuple-holes-defaults → 
+packages/zod/src/v4/core/__tests__/tuple-holes-defaults.test.ts
+[naive_parallel_blind/local] wrote experiments/real_repos/zod/runs_sonnet_test_gate_n5/seed3/eval_run_naive_parallel_blind.json — completed=0/3, evidence=naive_parallel_blind_applied_diff, overlaps=0, oob=0, blocked=0, wall=61.384s
+ starting (group 0)
+ starting (group 0)
+ starting (group 0)
+ proposed 2 writes (5.59s, 512 tokens)
+   ALLOWED pr5855-shallowclone-map-set → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5855-shallowclone-map-set → 
+packages/zod/src/v4/classic/tests/default.test.ts
+ proposed 5 writes (17.98s, 1766 tokens)
+   ALLOWED pr5856-merge-refinement-semantics → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5856-merge-refinement-semantics → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5856-merge-refinement-semantics → 
+packages/zod/src/v4/classic/tests/object.test.ts
+   ALLOWED pr5856-merge-refinement-semantics → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5856-merge-refinement-semantics → 
+packages/zod/src/v4/classic/tests/object.test.ts
+[worker pr5900-tuple-holes-defaults] still waiting at 30s...
+[worker pr5900-tuple-holes-defaults] still waiting at 60s...
+[worker pr5900-tuple-holes-defaults] still waiting at 90s...
+ proposed 15 writes (116.04s, 11534 tokens)
+   ALLOWED pr5900-tuple-holes-defaults → packages/zod/src/v4/core/schemas.ts
+   ALLOWED pr5900-tuple-holes-defaults → 
+packages/zod/src/v4/classic/tests/tuple.test.ts
+   ALLOWED pr5900-tuple-holes-defaults → packages/zod/src/v4/core/schemas.ts
+   ALLOWED pr5900-tuple-holes-defaults → 
+packages/zod/src/v4/classic/tests/tuple.test.ts
+   ALLOWED pr5900-tuple-holes-defaults → packages/zod/src/v4/core/schemas.ts
+   ALLOWED pr5900-tuple-holes-defaults → 
+packages/zod/src/v4/classic/tests/tuple.test.ts
+   ALLOWED pr5900-tuple-holes-defaults → packages/zod/src/v4/core/schemas.ts
+   ALLOWED pr5900-tuple-holes-defaults → 
+packages/zod/src/v4/classic/tests/tuple.test.ts
+   ALLOWED pr5900-tuple-holes-defaults → 
+packages/zod/src/v4/classic/tests/tuple.test.ts
+   ALLOWED pr5900-tuple-holes-defaults → packages/zod/src/v4/core/schemas.ts
+   ALLOWED pr5900-tuple-holes-defaults → 
+packages/zod/src/v4/classic/tests/tuple.test.ts
+   ALLOWED pr5900-tuple-holes-defaults → packages/zod/src/v4/core/schemas.ts
+   ALLOWED pr5900-tuple-holes-defaults → 
+packages/zod/src/v4/classic/tests/tuple.test.ts
+   ALLOWED pr5900-tuple-holes-defaults → packages/zod/src/v4/core/schemas.ts
+   ALLOWED pr5900-tuple-holes-defaults → 
+packages/zod/src/v4/classic/tests/tuple.test.ts
+[naive_parallel/local] wrote experiments/real_repos/zod/runs_sonnet_test_gate_n5/seed3/eval_run_naive.json — completed=0/3, evidence=applied_diff, overlaps=0, oob=0, blocked=0, wall=154.118s
+ starting (group 1)
+ starting (group 1)
+ starting (group 1)
+ proposed 2 writes (5.97s, 503 tokens)
+   ALLOWED pr5855-shallowclone-map-set → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5855-shallowclone-map-set → 
+packages/zod/src/v4/classic/tests/default.test.ts
+ proposed 0 writes (27.47s, 1867 tokens)
+[worker pr5856-merge-refinement-semantics] still waiting at 30s...
+[worker pr5856-merge-refinement-semantics] still waiting at 60s...
+ proposed 9 writes (62.57s, 7239 tokens)
+   ALLOWED pr5856-merge-refinement-semantics → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5856-merge-refinement-semantics → 
+packages/zod/src/v4/classic/tests/object.test.ts
+   ALLOWED pr5856-merge-refinement-semantics → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5856-merge-refinement-semantics → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5856-merge-refinement-semantics → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5856-merge-refinement-semantics → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5856-merge-refinement-semantics → 
+packages/zod/src/v4/classic/tests/object.test.ts
+   ALLOWED pr5856-merge-refinement-semantics → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5856-merge-refinement-semantics → 
+packages/zod/src/v4/classic/tests/object.test.ts
+[acg_planned_full_context/local] wrote experiments/real_repos/zod/runs_sonnet_test_gate_n5/seed3/eval_run_acg_full_context.json — completed=0/3, evidence=applied_diff, overlaps=1, oob=0, blocked=0, wall=106.732s
+ starting (group 1)
+ starting (group 1)
+ starting (group 1)
+ proposed 2 writes (5.96s, 503 tokens)
+   ALLOWED pr5855-shallowclone-map-set → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5855-shallowclone-map-set → 
+packages/zod/src/v4/classic/tests/default.test.ts
+[worker pr5856-merge-refinement-semantics] still waiting at 30s...
+[worker pr5900-tuple-holes-defaults] still waiting at 30s...
+ proposed 4 writes (34.55s, 3340 tokens)
+   ALLOWED pr5856-merge-refinement-semantics → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5856-merge-refinement-semantics → 
+packages/zod/src/v4/classic/tests/object.test.ts
+   ALLOWED pr5856-merge-refinement-semantics → packages/zod/src/v4/core/util.ts
+   ALLOWED pr5856-merge-refinement-semantics → 
+packages/zod/src/v4/classic/tests/object.test.ts
+ proposed 0 writes (39.43s, 2660 tokens)
+[acg_planned/local] wrote experiments/real_repos/zod/runs_sonnet_test_gate_n5/seed3/eval_run_acg.json — completed=0/3, evidence=applied_diff, overlaps=1, oob=0, blocked=0, wall=81.949s
+[worker single_agent_applied] still waiting at 30s...
+[worker single_agent_applied] still waiting at 60s...
+[single_agent/local] wrote experiments/real_repos/zod/runs_sonnet_test_gate_n5/seed3/eval_run_single_agent.json — completed=0/3, evidence=suite_applied_diff, overlaps=0, oob=0, blocked=0, wall=67.929s
+[combined] wrote experiments/real_repos/zod/runs_sonnet_test_gate_n5/seed3/eval_run_combined.json

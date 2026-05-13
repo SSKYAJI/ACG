@@ -1,0 +1,281 @@
+I need to create a fix for fish shell completion handling of multiline help strings. Let me create the necessary files.
+
+*** Begin Patch
+*** Add File: fish_completion.go
++ package main
++ 
++ import (
++ 	"fmt"
++ 	"strings"
++ )
++ 
++ // sanitizeForFish takes a help string and returns a version safe for use
++ // in fish shell completion scripts. Fish completion uses newlines as
++ // record separators, so any embedded newlines in help text must be
++ // removed or replaced to avoid generating malformed completion scripts.
++ func sanitizeForFish(help string) string {
++ 	// Replace newlines (and carriage returns) with a single space so that
++ 	// multiline help text becomes a single, readable line.
++ 	replacer := strings.NewReplacer(
++ 		"\r\n", " ",
++ 		"\r", " ",
++ 		"\n", " ",
++ 	)
++ 	sanitized := replacer.Replace(help)
++ 
++ 	// Collapse runs of whitespace that may result from the replacement.
++ 	parts := strings.Fields(sanitized)
++ 	return strings.Join(parts, " ")
++ }
++ 
++ // fishCompletionEntry represents a single fish `complete` invocation.
++ type fishCompletionEntry struct {
++ 	Command     string
++ 	ShortFlag   string
++ 	LongFlag    string
++ 	Description string
++ 	NoFiles     bool
++ }
++ 
++ // String renders the entry as a fish `complete` command.
++ func (e fishCompletionEntry) String() string {
++ 	var b strings.Builder
++ 
++ 	b.WriteString("complete")
++ 
++ 	if e.NoFiles {
++ 		b.WriteString(" -f")
++ 	}
++ 
++ 	if e.Command != "" {
++ 		fmt.Fprintf(&b, " -c %s", e.Command)
++ 	}
++ 
++ 	if e.ShortFlag != "" {
++ 		fmt.Fprintf(&b, " -s %s", e.ShortFlag)
++ 	}
++ 
++ 	if e.LongFlag != "" {
++ 		fmt.Fprintf(&b, " -l %s", e.LongFlag)
++ 	}
++ 
++ 	if e.Description != "" {
++ 		// sanitizeForFish ensures no newlines slip into the -d argument.
++ 		safe := sanitizeForFish(e.Description)
++ 		// Escape single quotes inside the description.
++ 		safe = strings.ReplaceAll(safe, "'", "\\'")
++ 		fmt.Fprintf(&b, " -d '%s'", safe)
++ 	}
++ 
++ 	return b.String()
++ }
++ 
++ func main() {
++ 	// Example demonstrating that multiline help text is handled correctly.
++ 	entries := []fishCompletionEntry{
++ 		{
++ 			Command:     "mytool",
++ 			LongFlag:    "output",
++ 			ShortFlag:   "o",
++ 			Description: "Set the output file.\nThis can be any writable path.\r\nDefaults to stdout.",
++ 			NoFiles:     false,
++ 		},
++ 		{
++ 			Command:     "mytool",
++ 			LongFlag:    "verbose",
++ 			ShortFlag:   "v",
++ 			Description: "Enable verbose mode",
++ 			NoFiles:     true,
++ 		},
++ 	}
++ 
++ 	for _, e := range entries {
++ 		fmt.Println(e.String())
++ 	}
++ }
+*** Add File: fish_completion_test.go
++ package main
++ 
++ import (
++ 	"strings"
++ 	"testing"
++ )
++ 
++ // TestSanitizeForFish verifies that newlines and carriage returns are
++ // removed from help strings so that fish completion scripts remain valid.
++ func TestSanitizeForFish(t *testing.T) {
++ 	tests := []struct {
++ 		name  string
++ 		input string
++ 		want  string
++ 	}{
++ 		{
++ 			name:  "no newlines",
++ 			input: "simple description",
++ 			want:  "simple description",
++ 		},
++ 		{
++ 			name:  "unix newline",
++ 			input: "line one\nline two",
++ 			want:  "line one line two",
++ 		},
++ 		{
++ 			name:  "windows newline",
++ 			input: "line one\r\nline two",
++ 			want:  "line one line two",
++ 		},
++ 		{
++ 			name:  "carriage return only",
++ 			input: "line one\rline two",
++ 			want:  "line one line two",
++ 		},
++ 		{
++ 			name:  "multiple newlines",
++ 			input: "first\nsecond\nthird",
++ 			want:  "first second third",
++ 		},
++ 		{
++ 			name:  "leading and trailing newlines",
++ 			input: "\nsome text\n",
++ 			want:  "some text",
++ 		},
++ 		{
++ 			name:  "newline with extra spaces",
++ 			input: "word1  \n  word2",
++ 			want:  "word1 word2",
++ 		},
++ 		{
++ 			name:  "empty string",
++ 			input: "",
++ 			want:  "",
++ 		},
++ 		{
++ 			name:  "only newlines",
++ 			input: "\n\n\n",
++ 			want:  "",
++ 		},
++ 	}
++ 
++ 	for _, tc := range tests {
++ 		t.Run(tc.name, func(t *testing.T) {
++ 			got := sanitizeForFish(tc.input)
++ 			if got != tc.want {
++ 				t.Errorf("sanitizeForFish(%q) = %q; want %q", tc.input, got, tc.want)
++ 			}
++ 		})
++ 	}
++ }
++ 
++ // TestFishCompletionEntryString verifies that fishCompletionEntry.String()
++ // produces valid single-line fish complete commands even when the
++ // description contains newlines.
++ func TestFishCompletionEntryString(t *testing.T) {
++ 	tests := []struct {
++ 		name  string
++ 		entry fishCompletionEntry
++ 		// wantContains are substrings that must appear in the output.
++ 		wantContains []string
++ 		// wantAbsent are substrings that must NOT appear in the output.
++ 		wantAbsent []string
++ 	}{
++ 		{
++ 			name: "simple entry",
++ 			entry: fishCompletionEntry{
++ 				Command:     "mytool",
++ 				LongFlag:    "verbose",
++ 				ShortFlag:   "v",
++ 				Description: "Enable verbose mode",
++ 				NoFiles:     true,
++ 			},
++ 			wantContains: []string{
++ 				"complete",
++ 				"-f",
++ 				"-c mytool",
++ 				"-s v",
++ 				"-l verbose",
++ 				"-d 'Enable verbose mode'",
++ 			},
++ 			wantAbsent: []string{"\n", "\r"},
++ 		},
++ 		{
++ 			name: "multiline description unix",
++ 			entry: fishCompletionEntry{
++ 				Command:     "mytool",
++ 				LongFlag:    "output",
++ 				ShortFlag:   "o",
++ 				Description: "Set the output file.\nThis can be any writable path.",
++ 			},
++ 			wantContains: []string{
++ 				"-d 'Set the output file. This can be any writable path.'",
++ 			},
++ 			wantAbsent: []string{"\n", "\r"},
++ 		},
++ 		{
++ 			name: "multiline description windows",
++ 			entry: fishCompletionEntry{
++ 				Command:     "mytool",
++ 				LongFlag:    "output",
++ 				Description: "Set the output file.\r\nThis can be any writable path.",
++ 			},
++ 			wantContains: []string{
++ 				"-d 'Set the output file. This can be any writable path.'",
++ 			},
++ 			wantAbsent: []string{"\n", "\r"},
++ 		},
++ 		{
++ 			name: "description with single quote",
++ 			entry: fishCompletionEntry{
++ 				Command:     "mytool",
++ 				LongFlag:    "name",
++ 				Description: "The user's name",
++ 			},
++ 			wantContains: []string{
++ 				`-d 'The user\'s name'`,
++ 			},
++ 			wantAbsent: []string{"\n"},
++ 		},
++ 		{
++ 			name: "no description",
++ 			entry: fishCompletionEntry{
++ 				Command:  "mytool",
++ 				LongFlag: "quiet",
++ 			},
++ 			wantAbsent: []string{"-d", "\n"},
++ 		},
++ 		{
++ 			name: "no files flag absent when false",
++ 			entry: fishCompletionEntry{
++ 				Command:     "mytool",
++ 				LongFlag:    "config",
++ 				Description: "Config file",
++ 				NoFiles:     false,
++ 			},
++ 			wantContains: []string{"-l config"},
++ 			wantAbsent:   []string{" -f "},
++ 		},
++ 	}
++ 
++ 	for _, tc := range tests {
++ 		t.Run(tc.name, func(t *testing.T) {
++ 			got := tc.entry.String()
++ 
++ 			// The output must be a single line.
++ 			if strings.ContainsAny(got, "\n\r") {
++ 				t.Errorf("entry.String() contains newline characters: %q", got)
++ 			}
++ 
++ 			for _, sub := range tc.wantContains {
++ 				if !strings.Contains(got, sub) {
++ 					t.Errorf("entry.String() = %q; want it to contain %q", got, sub)
++ 				}
++ 			}
++ 
++ 			for _, sub := range tc.wantAbsent {
++ 				if strings.Contains(got, sub) {
++ 					t.Errorf("entry.String() = %q; want it NOT to contain %q", got, sub)
++ 				}
++ 			}
++ 		})
++ 	}
++ }
+*** End Patch

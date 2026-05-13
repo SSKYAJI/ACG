@@ -1,0 +1,130 @@
+Looking at the code, the issue is in the `Email.__call__` method. When an IDN domain is encoded via `domain_part.encode("idna").decode("ascii")`, the resulting punycode is then validated against `DOMAIN_REGEX`. However, the `encode("idna")` call doesn't raise an error for labels starting or ending with hyphens - it encodes them, and the resulting punycode might pass the regex.
+
+The fix is to validate each label of the domain to ensure none start or end with a hyphen before accepting the IDN-encoded form.
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+                 raise ValidationError(message)
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+                 raise ValidationError(message)
+-
++
++    @staticmethod
++    def _domain_labels_valid(domain_part: str) -> bool:
++        """Return True if no label in the domain starts or ends with a hyphen."""
++        labels = domain_part.split(".")
++        for label in labels:
++            if label.startswith("-") or label.endswith("-"):
++                return False
++        return True
++
+*** End Patch
+
+That approach won't work cleanly. Let me re-read the file and produce a proper patch.
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+                 raise ValidationError(message)
+
+        return value
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
++                    # Reject labels that start or end with a hyphen before IDNA encoding
++                    labels = domain_part.split(".")
++                    if any(
++                        label.startswith("-") or label.endswith("-")
++                        for label in labels
++                    ):
++                        raise ValidationError(message)
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+                 raise ValidationError(message)
+
+        return value
+*** Update File: tests/test_validate.py
+@@
+ @pytest.mark.parametrize(
+     "invalid_email",
+     [
+         "niceandsimple\n@example.com",
+         "NiCeAnDsImPlE@eXaMpLe.CoM\n",
+         'a"b(c)d,e:f;g<h>i[j\\k]l@example.com',
+         'just"not"right@example.com',
+         'this is"not\allowed@example.com',
+         'this\\ still\\"not\\\\allowed@example.com',
+         '"much.more unusual"@example.com',
+         '"very.(),:;<>[]".VERY."very@\\ "very".unusual"@strange.example.com',
+         '" "@example.org',
+         "user@example",
+         "@nouser.com",
+         "example.com",
+         "user",
+         "",
+         None,
+     ],
+ )
+ def test_email_invalid(invalid_email):
+@@
+ @pytest.mark.parametrize(
+     "invalid_email",
+     [
+         "niceandsimple\n@example.com",
+         "NiCeAnDsImPlE@eXaMpLe.CoM\n",
+         'a"b(c)d,e:f;g<h>i[j\\k]l@example.com',
+         'just"not"right@example.com',
+         'this is"not\allowed@example.com',
+         'this\\ still\\"not\\\\allowed@example.com',
+         '"much.more unusual"@example.com',
+         '"very.(),:;<>[]".VERY."very@\\ "very".unusual"@strange.example.com',
+         '" "@example.org',
+         "user@example",
+         "@nouser.com",
+         "example.com",
+         "user",
+         "",
+         None,
++        # IDN domains with labels starting or ending with a hyphen
++        "user@-münchen.de",
++        "user@münchen-.de",
++        "user@-example.com",
++        "user@example-.com",
+     ],
+ )
+ def test_email_invalid(invalid_email):
+*** End Patch

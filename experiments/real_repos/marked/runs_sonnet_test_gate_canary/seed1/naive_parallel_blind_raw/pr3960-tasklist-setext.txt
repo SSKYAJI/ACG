@@ -1,0 +1,404 @@
+Looking at this task, I need to fix a GFM tokenizer that incorrectly treats setext heading text as task list checkboxes. Let me create the necessary files.
+
+*** Begin Patch
+*** Add File: gfm/tokenizer.js
++ // GFM Tokenizer with task list checkbox support
++ // Checkboxes are only applied inside list item paragraphs, not setext headings.
++
++ 'use strict';
++
++ /**
++  * Tokenize GFM markdown into an array of tokens.
++  * @param {string} src - The markdown source string.
++  * @returns {Array} tokens
++  */
++ function tokenize(src) {
++   const tokens = [];
++   const lines = src.split('\n');
++   let i = 0;
++
++   while (i < lines.length) {
++     // Check for setext heading (underline on next line)
++     if (i + 1 < lines.length && /^[=\-]{2,}\s*$/.test(lines[i + 1])) {
++       const level = lines[i + 1][0] === '=' ? 1 : 2;
++       tokens.push({
++         type: 'heading',
++         depth: level,
++         // Do NOT apply checkbox pattern here — setext heading text is raw text
++         text: lines[i].trim(),
++       });
++       i += 2;
++       continue;
++     }
++
++     // ATX heading
++     const atxMatch = lines[i].match(/^(#{1,6})\s+(.*?)(?:\s+#+\s*)?$/);
++     if (atxMatch) {
++       tokens.push({
++         type: 'heading',
++         depth: atxMatch[1].length,
++         text: atxMatch[2].trim(),
++       });
++       i++;
++       continue;
++     }
++
++     // Unordered list item
++     const ulMatch = lines[i].match(/^(\s*)([-*+])\s+(.*)/);
++     if (ulMatch) {
++       const itemText = ulMatch[3];
++       const checkboxMatch = itemText.match(/^\[([ xX])\]\s+(.*)/);
++       let checked = null;
++       let text = itemText;
++       if (checkboxMatch) {
++         checked = checkboxMatch[1].toLowerCase() === 'x';
++         text = checkboxMatch[2];
++       }
++       tokens.push({
++         type: 'list_item',
++         task: checkboxMatch !== null,
++         checked,
++         text,
++       });
++       i++;
++       continue;
++     }
++
++     // Ordered list item
++     const olMatch = lines[i].match(/^(\s*)\d+[.)]\s+(.*)/);
++     if (olMatch) {
++       const itemText = olMatch[2];
++       const checkboxMatch = itemText.match(/^\[([ xX])\]\s+(.*)/);
++       let checked = null;
++       let text = itemText;
++       if (checkboxMatch) {
++         checked = checkboxMatch[1].toLowerCase() === 'x';
++         text = checkboxMatch[2];
++       }
++       tokens.push({
++         type: 'list_item',
++         task: checkboxMatch !== null,
++         checked,
++         text,
++       });
++       i++;
++       continue;
++     }
++
++     // Blank line
++     if (/^\s*$/.test(lines[i])) {
++       tokens.push({ type: 'space' });
++       i++;
++       continue;
++     }
++
++     // Paragraph / plain text
++     let text = lines[i];
++     i++;
++     tokens.push({ type: 'paragraph', text });
++     continue;
++   }
++
++   return tokens;
++ }
++
++ module.exports = { tokenize };
+*** Add File: gfm/tokenizer.test.js
++ 'use strict';
++
++ const { tokenize } = require('./tokenizer');
++
++ // ---------------------------------------------------------------------------
++ // Setext headings — checkbox pattern must NOT be applied
++ // ---------------------------------------------------------------------------
++
++ test('setext h1: "[ ] heading" is a plain heading, not a task item', () => {
++   const tokens = tokenize('[ ] heading\n===========');
++   expect(tokens).toHaveLength(1);
++   expect(tokens[0].type).toBe('heading');
++   expect(tokens[0].depth).toBe(1);
++   expect(tokens[0].text).toBe('[ ] heading');
++ });
++
++ test('setext h2: "[x] heading" is a plain heading, not a task item', () => {
++   const tokens = tokenize('[x] heading\n-----------');
++   expect(tokens).toHaveLength(1);
++   expect(tokens[0].type).toBe('heading');
++   expect(tokens[0].depth).toBe(2);
++   expect(tokens[0].text).toBe('[x] heading');
++ });
++
++ test('setext h1: normal text is preserved as-is', () => {
++   const tokens = tokenize('Hello World\n===========');
++   expect(tokens).toHaveLength(1);
++   expect(tokens[0].type).toBe('heading');
++   expect(tokens[0].text).toBe('Hello World');
++ });
++
++ // ---------------------------------------------------------------------------
++ // ATX headings — checkbox pattern must NOT be applied
++ // ---------------------------------------------------------------------------
++
++ test('ATX heading: "# [ ] heading" is a plain heading', () => {
++   const tokens = tokenize('# [ ] heading');
++   expect(tokens).toHaveLength(1);
++   expect(tokens[0].type).toBe('heading');
++   expect(tokens[0].depth).toBe(1);
++   expect(tokens[0].text).toBe('[ ] heading');
++ });
++
++ // ---------------------------------------------------------------------------
++ // List items — checkbox pattern MUST be applied
++ // ---------------------------------------------------------------------------
++
++ test('unordered list item with unchecked checkbox', () => {
++   const tokens = tokenize('- [ ] task one');
++   expect(tokens).toHaveLength(1);
++   expect(tokens[0].type).toBe('list_item');
++   expect(tokens[0].task).toBe(true);
++   expect(tokens[0].checked).toBe(false);
++   expect(tokens[0].text).toBe('task one');
++ });
++
++ test('unordered list item with checked checkbox', () => {
++   const tokens = tokenize('- [x] task two');
++   expect(tokens).toHaveLength(1);
++   expect(tokens[0].type).toBe('list_item');
++   expect(tokens[0].task).toBe(true);
++   expect(tokens[0].checked).toBe(true);
++   expect(tokens[0].text).toBe('task two');
++ });
++
++ test('unordered list item with uppercase X checkbox', () => {
++   const tokens = tokenize('- [X] task three');
++   expect(tokens).toHaveLength(1);
++   expect(tokens[0].type).toBe('list_item');
++   expect(tokens[0].task).toBe(true);
++   expect(tokens[0].checked).toBe(true);
++   expect(tokens[0].text).toBe('task three');
++ });
++
++ test('unordered list item without checkbox', () => {
++   const tokens = tokenize('- plain item');
++   expect(tokens).toHaveLength(1);
++   expect(tokens[0].type).toBe('list_item');
++   expect(tokens[0].task).toBe(false);
++   expect(tokens[0].checked).toBeNull();
++   expect(tokens[0].text).toBe('plain item');
++ });
++
++ test('ordered list item with unchecked checkbox', () => {
++   const tokens = tokenize('1. [ ] ordered task');
++   expect(tokens).toHaveLength(1);
++   expect(tokens[0].type).toBe('list_item');
++   expect(tokens[0].task).toBe(true);
++   expect(tokens[0].checked).toBe(false);
++   expect(tokens[0].text).toBe('ordered task');
++ });
++
++ test('ordered list item with checked checkbox', () => {
++   const tokens = tokenize('1. [x] ordered done');
++   expect(tokens).toHaveLength(1);
++   expect(tokens[0].type).toBe('list_item');
++   expect(tokens[0].task).toBe(true);
++   expect(tokens[0].checked).toBe(true);
++   expect(tokens[0].text).toBe('ordered done');
++ });
++
++ // ---------------------------------------------------------------------------
++ // Mixed document
++ // ---------------------------------------------------------------------------
++
++ test('mixed document: setext heading followed by task list', () => {
++   const src = [
++     '[ ] not a task',
++     '===============',
++     '',
++     '- [ ] real task',
++     '- [x] done task',
++   ].join('\n');
++
++   const tokens = tokenize(src);
++
++   // heading
++   expect(tokens[0].type).toBe('heading');
++   expect(tokens[0].depth).toBe(1);
++   expect(tokens[0].text).toBe('[ ] not a task');
++
++   // blank line
++   expect(tokens[1].type).toBe('space');
++
++   // unchecked task
++   expect(tokens[2].type).toBe('list_item');
++   expect(tokens[2].task).toBe(true);
++   expect(tokens[2].checked).toBe(false);
++   expect(tokens[2].text).toBe('real task');
++
++   // checked task
++   expect(tokens[3].type).toBe('list_item');
++   expect(tokens[3].task).toBe(true);
++   expect(tokens[3].checked).toBe(true);
++   expect(tokens[3].text).toBe('done task');
++ });
+*** Add File: gfm/spec.md
++ # GFM Task List Checkbox — Specification
++
++ This document specifies the correct behaviour of the GFM tokenizer with respect
++ to task-list checkboxes and setext headings.
++
++ ---
++
++ ## 1. Task-list checkboxes are only recognised inside list items
++
++ A checkbox marker (`[ ]` or `[x]`) at the start of a list-item paragraph
++ signals a GFM task-list item.  The tokenizer MUST set `task: true` and record
++ `checked: false` (space) or `checked: true` (`x` / `X`) on the resulting
++ `list_item` token.
++
++ ### 1.1 Unordered list — unchecked
++
++ Input:
++
++ ```markdown
++ - [ ] Buy milk
++ ```
++
++ Expected token:
++
++ ```json
++ { "type": "list_item", "task": true, "checked": false, "text": "Buy milk" }
++ ```
++
++ ### 1.2 Unordered list — checked
++
++ Input:
++
++ ```markdown
++ - [x] Buy milk
++ ```
++
++ Expected token:
++
++ ```json
++ { "type": "list_item", "task": true, "checked": true, "text": "Buy milk" }
++ ```
++
++ ### 1.3 Ordered list — unchecked
++
++ Input:
++
++ ```markdown
++ 1. [ ] Write tests
++ ```
++
++ Expected token:
++
++ ```json
++ { "type": "list_item", "task": true, "checked": false, "text": "Write tests" }
++ ```
++
++ ---
++
++ ## 2. Setext heading text is never treated as a checkbox
++
++ A setext heading is formed by a line of text followed immediately by a line of
++ `=` or `-` characters.  Even when the text line begins with `[ ]` or `[x]`,
++ the tokenizer MUST NOT apply the checkbox pattern.  The full text line is
++ preserved verbatim as the heading text.
++
++ ### 2.1 Setext h1 with checkbox-like prefix — NOT a task
++
++ Input:
++
++ ```markdown
++ [ ] heading
++ ===========
++ ```
++
++ Expected token:
++
++ ```json
++ { "type": "heading", "depth": 1, "text": "[ ] heading" }
++ ```
++
++ The token MUST NOT contain `task` or `checked` fields, and the `text` value
++ MUST be `"[ ] heading"`, not `"heading"`.
++
++ ### 2.2 Setext h2 with checked checkbox-like prefix — NOT a task
++
++ Input:
++
++ ```markdown
++ [x] heading
++ -----------
++ ```
++
++ Expected token:
++
++ ```json
++ { "type": "heading", "depth": 2, "text": "[x] heading" }
++ ```
++
++ ---
++
++ ## 3. ATX heading text is never treated as a checkbox
++
++ Similarly, ATX headings (`# …`) MUST NOT have the checkbox pattern applied to
++ their text content.
++
++ ### 3.1 ATX h1 with checkbox-like prefix — NOT a task
++
++ Input:
++
++ ```markdown
++ # [ ] heading
++ ```
++
++ Expected token:
++
++ ```json
++ { "type": "heading", "depth": 1, "text": "[ ] heading" }
++ ```
++
++ ---
++
++ ## 4. Mixed document
++
++ When a setext heading with a checkbox-like prefix appears before a genuine task
++ list, the tokenizer MUST produce the correct token types for each construct.
++
++ Input:
++
++ ```markdown
++ [ ] not a task
++ ===============
++
++ - [ ] real task
++ - [x] done task
++ ```
++
++ Expected tokens (in order):
++
++ ```json
++ [
++   { "type": "heading",   "depth": 1, "text": "[ ] not a task" },
++   { "type": "space" },
++   { "type": "list_item", "task": true,  "checked": false, "text": "real task" },
++   { "type": "list_item", "task": true,  "checked": true,  "text": "done task" }
++ ]
++ ```
+*** Add File: package.json
++ {
++   "name": "gfm-tokenizer",
++   "version": "1.0.0",
++   "description": "GFM tokenizer with correct task-list checkbox scoping",
++   "main": "gfm/tokenizer.js",
++   "scripts": {
++     "test": "jest"
++   },
++   "devDependencies": {
++     "jest": "^29.0.0"
++   },
++   "license": "MIT"
++ }
+*** End Patch

@@ -1,0 +1,71 @@
+*** Begin Patch
+*** Update File: packages/zod/src/v4/core/util.ts
+@@
+-export function shallowClone<T>(value: T): T {
+-  if (Array.isArray(value)) return [...value] as T;
+-  if (value instanceof Date) return new Date(value) as T;
+-  if (typeof value === "object" && value !== null) return { ...value };
+-  return value;
+-}
++export function shallowClone<T>(value: T): T {
++  if (Array.isArray(value)) return [...value] as T;
++  if (value instanceof Date) return new Date(value) as T;
++  if (value instanceof Map) return new Map(value) as T;
++  if (value instanceof Set) return new Set(value) as T;
++  if (typeof value === "object" && value !== null) return { ...value };
++  return value;
++}
+*** End Patch
+*** Update File: packages/zod/src/v4/core/__tests__/shallowclone-map-set.test.ts
+@@
++import { expect, test } from "vitest";
++import * as z from "../../index";
++
++test("defaulted Map field returns independent copy on each parse", () => {
++  const schema = z.object({
++    data: z.map(z.string(), z.number()).default(new Map([["a", 1]])),
++  });
++
++  const result1 = schema.parse({});
++  result1.data.set("b", 2);
++
++  const result2 = schema.parse({});
++  expect(result2.data.has("b")).toBe(false);
++  expect(result2.data.size).toBe(1);
++});
++
++test("defaulted Set field returns independent copy on each parse", () => {
++  const schema = z.object({
++    data: z.set(z.string()).default(new Set(["x", "y"])),
++  });
++
++  const result1 = schema.parse({});
++  result1.data.add("z");
++
++  const result2 = schema.parse({});
++  expect(result2.data.has("z")).toBe(false);
++  expect(result2.data.size).toBe(2);
++});
++
++test("defaulted Map at top level returns independent copy on each parse", () => {
++  const schema = z.map(z.string(), z.number()).default(new Map([["key", 42]]));
++
++  const result1 = schema.parse(undefined);
++  result1.set("extra", 99);
++
++  const result2 = schema.parse(undefined);
++  expect(result2.has("extra")).toBe(false);
++  expect(result2.size).toBe(1);
++});
++
++test("defaulted Set at top level returns independent copy on each parse", () => {
++  const schema = z.set(z.string()).default(new Set(["hello"]));
++
++  const result1 = schema.parse(undefined);
++  result1.add("world");
++
++  const result2 = schema.parse(undefined);
++  expect(result2.has("world")).toBe(false);
++  expect(result2.size).toBe(1);
++});
+*** End Patch

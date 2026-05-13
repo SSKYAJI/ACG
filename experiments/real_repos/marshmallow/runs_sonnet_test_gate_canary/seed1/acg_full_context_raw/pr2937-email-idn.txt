@@ -1,0 +1,57 @@
+Looking at the `DOMAIN_REGEX` in `validate.py`, I need to understand why it allows domain labels starting or ending with hyphens.
+
+The current regex for domain labels is:
+```
+(?:[A-Z0-9_UNICODE_](?:[A-Z0-9_UNICODE_-]{0,61}[A-Z0-9_UNICODE_])?\.)+ 
+```
+
+This correctly requires labels to start and end with alphanumeric characters (not hyphens). However, the issue is with the final label (TLD part):
+```
+(?:[A-Z_UNICODE_]{2,6}|[A-Z0-9_UNICODE_-]{2,})
+```
+
+The second alternative `[A-Z0-9_UNICODE_-]{2,}` allows hyphens at start/end of the TLD.
+
+But wait - the issue is about labels like `-münchen` or `münchen-`. Let me re-examine the regex more carefully.
+
+The first part: `[A-Z0-9_UNICODE_](?:[A-Z0-9_UNICODE_-]{0,61}[A-Z0-9_UNICODE_])?` - this requires starting with alphanumeric. But for a label like `-münchen`, the `-` would need to match `[A-Z0-9_UNICODE_]` which it doesn't... unless the unicode letters range `\u00a1-\uffff` somehow includes `-`? No, `-` is ASCII 0x2D.
+
+Wait, let me look at the regex more carefully. The issue might be that for `münchen-`, the label `münchen-` matches because `münchen` matches the first char, then `nchen-` matches `[A-Z0-9_UNICODE_-]{0,61}` without requiring a final non-hyphen char (since the final `[A-Z0-9_UNICODE_]` is inside `(?:...)?` making it optional).
+
+That's the bug! The `(?:[A-Z0-9_UNICODE_-]{0,61}[A-Z0-9_UNICODE_])?` group is optional, so a label like `münchen-` could match as: `m` matches the first char, then the optional group is skipped, and `ünchen-` is... no that doesn't work either.
+
+Actually the issue is simpler: `münchen-` - the whole middle+end group `(?:[A-Z0-9_UNICODE_-]{0,61}[A-Z0-9_UNICODE_])?` is optional. So `münchen-` could match if `-` is consumed by the dot... No.
+
+The fix should add explicit negative lookaheads for hyphens at start/end of each label.
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+     DOMAIN_REGEX = re.compile(
+         # domain
+         r"(?:[A-Z0-9" + _UNICODE_LETTERS + r"]"
+         r"(?:[A-Z0-9" + _UNICODE_LETTERS + r"-]{0,61}"
+         r"[A-Z0-9" + _UNICODE_LETTERS + r"])?\.)+"
+         r"(?:[A-Z" + _UNICODE_LETTERS + r"]{2,6}"
+         r"|[A-Z0-9" + _UNICODE_LETTERS + r"-]{2,})\Z"
+         # literal form, ipv4 address (SMTP 4.1.3)
+         r"|^\[(25[0-5]|2[0-4]\d|[0-1]?\d?\d)"
+         r"(\.(25[0-5]|2[0-4]\d|[0-1]?\d?\d)){3}\]\Z",
+         re.IGNORECASE | re.UNICODE,
+     )
++ 
++     # Regex to check that no domain label starts or ends with a hyphen
++     DOMAIN_LABEL_HYPHEN_REGEX = re.compile(
++         r"(^|\.)-|-(\.|\Z)",
++         re.IGNORECASE | re.UNICODE,
++     )
+@@
+         if domain_part not in self.DOMAIN_WHITELIST:
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 raise ValidationError(message)
++ 
++             if self.DOMAIN_LABEL_HYPHEN_REGEX.search(domain_part):
++                 raise ValidationError(message)
+ 
+         return value
+*** End Patch

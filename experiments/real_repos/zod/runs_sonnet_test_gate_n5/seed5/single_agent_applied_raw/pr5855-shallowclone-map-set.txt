@@ -1,0 +1,113 @@
+*** Begin Patch
+*** Add File: packages/zod/src/v4/core/__tests__/regression-map-set-default.test.ts
++/**
++ * Regression tests for shallowClone Map and Set fix.
++ *
++ * Bug: Map and Set values returned by defaulted schemas are shared references
++ * rather than independent copies. After parsing an object with a defaulted
++ * Map or Set field, mutating the returned value affects subsequent parses.
++ *
++ * Fix: shallowClone in packages/zod/src/v4/core/util.ts now handles Map and
++ * Set types by creating new instances via `new Map(value)` and `new Set(value)`.
++ */
++import { describe, expect, it } from "vitest";
++import * as z from "zod/v4";
++
++describe("Map default - independent copies per parse", () => {
++  it("mutating parsed Map default does not affect next parse", () => {
++    const schema = z.object({
++      tags: z.map(z.string(), z.number()).default(new Map([["a", 1], ["b", 2]])),
++    });
++
++    const first = schema.parse({});
++    expect(first.tags.size).toBe(2);
++
++    // Mutate the first result
++    first.tags.set("c", 3);
++    first.tags.delete("a");
++
++    // Second parse should return a fresh copy of the default
++    const second = schema.parse({});
++    expect(second.tags.size).toBe(2);
++    expect(second.tags.has("a")).toBe(true);
++    expect(second.tags.has("c")).toBe(false);
++  });
++
++  it("parsed Map default is not the same reference as the default value", () => {
++    const defaultMap = new Map([["key", 42]]);
++    const schema = z.object({
++      data: z.map(z.string(), z.number()).default(defaultMap),
++    });
++
++    const result = schema.parse({});
++    expect(result.data).not.toBe(defaultMap);
++  });
++
++  it("two parses return different Map instances", () => {
++    const schema = z.object({
++      data: z.map(z.string(), z.number()).default(new Map()),
++    });
++
++    const r1 = schema.parse({});
++    const r2 = schema.parse({});
++    expect(r1.data).not.toBe(r2.data);
++  });
++});
++
++describe("Set default - independent copies per parse", () => {
++  it("mutating parsed Set default does not affect next parse", () => {
++    const schema = z.object({
++      items: z.set(z.string()).default(new Set(["x", "y"])),
++    });
++
++    const first = schema.parse({});
++    expect(first.items.size).toBe(2);
++
++    // Mutate the first result
++    first.items.add("z");
++    first.items.delete("x");
++
++    // Second parse should return a fresh copy of the default
++    const second = schema.parse({});
++    expect(second.items.size).toBe(2);
++    expect(second.items.has("x")).toBe(true);
++    expect(second.items.has("z")).toBe(false);
++  });
++
++  it("parsed Set default is not the same reference as the default value", () => {
++    const defaultSet = new Set([1, 2, 3]);
++    const schema = z.object({
++      nums: z.set(z.number()).default(defaultSet),
++    });
++
++    const result = schema.parse({});
++    expect(result.nums).not.toBe(defaultSet);
++  });
++
++  it("two parses return different Set instances", () => {
++    const schema = z.object({
++      nums: z.set(z.number()).default(new Set()),
++    });
++
++    const r1 = schema.parse({});
++    const r2 = schema.parse({});
++    expect(r1.nums).not.toBe(r2.nums);
++  });
++
++  it("mutating original default does not affect parsed result", () => {
++    const defaultSet = new Set(["a"]);
++    const schema = z.object({
++      items: z.set(z.string()).default(defaultSet),
++    });
++
++    const result = schema.parse({});
++
++    // Mutate the original default after parsing
++    defaultSet.add("b");
++
++    // The parsed result should not be affected
++    expect(result.items.has("b")).toBe(false);
++    expect(result.items.size).toBe(1);
++  });
++});
+*** End Patch

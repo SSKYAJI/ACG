@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr388-cachedmethod-descriptor-inspection",
+      "prompt": "Class-level inspection of cached methods can fail when descriptor access receives no instance object. Fix descriptor access so inspecting cached methods on the class works correctly and add regression tests."
+    }
+  ]
+}

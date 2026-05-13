@@ -1,0 +1,12 @@
+{
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "pr3126-fish-completion-multiline",
+      "prompt": "Fix fish shell completion so that commands and options with multiline help strings are handled correctly. Currently, multiline help text causes broken or malformed fish completion scripts.",
+      "hints": {
+        "touches": ["fish", "shell_completion", "completion", "multiline", "help"]
+      }
+    }
+  ]
+}

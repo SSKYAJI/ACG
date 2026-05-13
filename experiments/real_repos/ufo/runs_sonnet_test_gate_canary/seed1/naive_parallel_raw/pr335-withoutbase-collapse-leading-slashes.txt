@@ -1,0 +1,48 @@
+Looking at the code, I need to understand how `withoutBase` works and fix the leading slash normalization.
+
+Let me examine the relevant files:
+
+**src/utils.ts** - The `withoutBase` function likely normalizes paths but doesn't handle repeated leading slashes consistently.
+
+**test/base.test.ts** - Need to add regression tests.
+
+Let me trace through the logic. The `withoutBase` function in `src/utils.ts` needs to normalize multiple leading slashes to a single slash before comparison.
+
+*** Begin Patch
+*** Update File: src/utils.ts
+@@
+ export function withoutBase(input: string, base: string) {
+   if (isEmptyURL(base)) {
+     return input;
+   }
+-  const _base = withoutTrailingSlash(base);
+-  if (!input.startsWith(_base)) {
++  const _base = withoutTrailingSlash(base);
++  const _input = input.replace(/^\/+/, "/");
++  if (!_input.startsWith(_base)) {
+     return input;
+   }
+-  const trimmed = input.slice(_base.length);
++  const trimmed = _input.slice(_base.length);
+   return trimmed.startsWith("/") ? trimmed : "/" + trimmed;
+ }
+*** Update File: test/base.test.ts
+@@
+ import { describe, expect, it } from "vitest";
+ import {
+   withBase,
+   withoutBase,
+   isRelativeURL,
+   hasProtocol,
+ } from "../src/index";
+@@
+   describe("withoutBase", () => {
+     const tests: [string, string, string][] = [
+       ["/foo/bar", "/foo", "/bar"],
++      ["//foo/bar", "/foo", "/bar"],
++      ["///foo/bar", "/foo", "/bar"],
++      ["//foo/bar/baz", "/foo/bar", "/baz"],
+       ["/foo/bar/", "/foo", "/bar/"],
+       ["/foo", "/foo", "/"],
+       ["/foo/", "/foo", "/"],
+*** End Patch

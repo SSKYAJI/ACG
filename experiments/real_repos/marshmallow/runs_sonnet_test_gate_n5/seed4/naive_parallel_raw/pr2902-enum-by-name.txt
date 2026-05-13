@@ -1,0 +1,121 @@
+Looking at the task, I need to fix the Enum field's by-name lookup to only return actual enum members, not arbitrary class attributes like methods or properties.
+
+Let me analyze what needs to be changed:
+
+1. In `fields.py`, the `Enum` field's `_serialize` and `_deserialize` methods need to be fixed to only look up actual enum members by name.
+2. Add regression tests in `tests/test_deserialization.py`.
+
+The typical pattern for by-name lookup in marshmallow's Enum field would be something like `getattr(self.enum, value)` which would return any attribute, not just enum members. The fix should use `self.enum[value]` (dictionary-style access) which only returns enum members, or check `isinstance(result, self.enum)`.
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+     def _serialize(self, value, attr, obj, **kwargs):
+         if value is None:
+             return None
+         self._check_valid(value)
+         if self.by_value:
+             return value.value
+-        return value.name
++        if not isinstance(value, self.enum):
++            raise self.make_error("by_name", input=value, names=[m.name for m in self.enum])
++        return value.name
+@@
+     def _deserialize(self, value, attr, data, **kwargs):
+         if self.by_value:
+             try:
+                 return self.enum(value)
+             except ValueError as error:
+                 raise self.make_error("by_value", input=value, values=self.load_by_value) from error
+         try:
+-            return getattr(self.enum, value)
+-        except AttributeError as error:
++            return self.enum[value]
++        except KeyError as error:
+             raise self.make_error("by_name", input=value, names=self.load_by_name) from error
+*** Update File: tests/test_deserialization.py
+@@
+ import pytest
+@@
+ import enum
+@@
+ class TestEnumField:
+@@
+     def test_enum_field_by_name(self, schema):
+@@
++    def test_enum_field_by_name_non_member_attribute(self):
++        """Regression test: by-name lookup should not return non-member attributes."""
++        import enum as enum_module
++
++        class MyEnum(enum_module.Enum):
++            RED = 1
++            GREEN = 2
++
++            def my_method(self):
++                return "method"
++
++            @classmethod
++            def my_class_method(cls):
++                return "class_method"
++
++        field = fields.Enum(MyEnum, by_name=True)
++        # Valid members should work
++        assert field.deserialize("RED") == MyEnum.RED
++        assert field.deserialize("GREEN") == MyEnum.GREEN
++        # Non-member attributes should raise ValidationError
++        with pytest.raises(ValidationError):
++            field.deserialize("my_method")
++        with pytest.raises(ValidationError):
++            field.deserialize("my_class_method")
++
+*** End Patch
+
+Wait, I need to look more carefully at the actual code structure. Let me reconsider the context needed for the Update File hunks.
+
+*** Begin Patch
+*** Update File: src/marshmallow/fields.py
+@@
+     def _deserialize(self, value, attr, data, **kwargs):
+         if self.by_value:
+             try:
+                 return self.enum(value)
+             except ValueError as error:
+                 raise self.make_error("by_value", input=value, values=self.load_by_value) from error
+         try:
+-            return getattr(self.enum, value)
+-        except AttributeError as error:
++            return self.enum[value]
++        except KeyError as error:
+             raise self.make_error("by_name", input=value, names=self.load_by_name) from error
+*** Update File: tests/test_deserialization.py
+@@
+ class TestEnumField:
+@@
+     def test_enum_field_by_name(self, schema):
+         result = schema.load({"color": "green"})
+         assert result["color"] == Color.green
++
++    def test_enum_field_by_name_non_member_attribute(self):
++        """Regression test: by-name lookup should not return non-member attributes."""
++
++        class MyEnum(enum.Enum):
++            RED = 1
++            GREEN = 2
++
++            def my_method(self):
++                return "method"
++
++            @classmethod
++            def my_class_method(cls):
++                return "class_method"
++
++        field = fields.Enum(MyEnum, by_name=True)
++        # Valid members should work
++        assert field.deserialize("RED") == MyEnum.RED
++        assert field.deserialize("GREEN") == MyEnum.GREEN
++        # Non-member attributes should raise ValidationError
++        with pytest.raises(ValidationError):
++            field.deserialize("my_method")
++        with pytest.raises(ValidationError):
++            field.deserialize("my_class_method")
+*** End Patch

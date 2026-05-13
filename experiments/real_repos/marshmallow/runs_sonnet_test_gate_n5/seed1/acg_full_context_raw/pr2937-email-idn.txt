@@ -1,0 +1,80 @@
+Looking at the code, I need to understand the issue. When an IDN email like `user@-münchen.de` is processed, the domain part `-münchen.de` gets encoded via `domain_part.encode("idna").decode("ascii")`. The IDNA encoding of `-münchen` would produce something like `-xn--mnchen-3ya`, which starts with a hyphen. The `DOMAIN_REGEX` should reject labels starting or ending with hyphens, but let me check...
+
+The `DOMAIN_REGEX` is:
+```
+(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+ (?:[A-Z]{2,6}|[A-Z0-9-]{2,})\Z
+```
+
+The first character must be `[A-Z0-9]`, so labels starting with `-` should be rejected. But the issue is that `encode("idna")` might raise a `UnicodeError` for labels starting/ending with hyphens, or it might succeed and produce something that passes the regex.
+
+Let me think: `-münchen` - the IDNA encoding might actually succeed (producing `-xn--mnchen-3ya`) or fail. If it succeeds, the regex `[A-Z0-9](?:...)` would reject it since it starts with `-`. But wait - the TLD part regex is `[A-Z0-9-]{2,}` which DOES allow hyphens at start/end.
+
+Actually, the real issue is that `münchen-.de` - the label `münchen-` when encoded becomes `xn--mnchen-3ya-` which ends with a hyphen. The DOMAIN_REGEX's first part requires labels to start with `[A-Z0-9]` but the last label regex `[A-Z0-9-]{2,}` allows hyphens anywhere.
+
+The fix should validate that after IDNA encoding, each label doesn't start or end with a hyphen. I'll add a check after the IDNA encoding.
+
+*** Begin Patch
+*** Update File: src/marshmallow/validate.py
+@@
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         return value
+                 raise ValidationError(message)
+@@
+             if not self.DOMAIN_REGEX.match(domain_part):
+                 try:
+                     domain_part = domain_part.encode("idna").decode("ascii")
+                 except UnicodeError:
+                     pass
+                 else:
+                     if self.DOMAIN_REGEX.match(domain_part):
+                         # Reject labels that start or end with a hyphen
+                         labels = domain_part.rstrip(".").split(".")
+                         if any(label.startswith("-") or label.endswith("-") for label in labels):
+                             raise ValidationError(message)
+                         return value
+                 raise ValidationError(message)
+*** Update File: tests/test_validate.py
+@@
+         "δοκ.ιμή@παράδειγμα.δοκιμή",
+     ],
+ )
+ def test_email_valid(valid_email):
+@@
+         "δοκ.ιμή@παράδειγμα.δοκιμή",
+         "user@münchen.de",
+         "user@xn--mnchen-3ya.de",
+     ],
+ )
+ def test_email_valid(valid_email):
+@@
+         "user@example",
+         "@nouser.com",
+         "example.com",
+         "user",
+         "",
+         None,
+     ],
+ )
+ def test_email_invalid(invalid_email):
+@@
+         "user@example",
+         "@nouser.com",
+         "example.com",
+         "user",
+         "",
+         None,
+         # IDN domain labels must not start or end with a hyphen
+         "user@-münchen.de",
+         "user@münchen-.de",
+         "user@-example.com",
+         "user@example-.com",
+     ],
+ )
+ def test_email_invalid(invalid_email):
+*** End Patch
