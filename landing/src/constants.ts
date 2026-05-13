@@ -1,7 +1,7 @@
 /** Replace placeholders before publishing. Every external URL used on the site should live here. */
 export const LINKS = {
   demoVideoWatch: "https://youtu.be/dQw4w9WgXcQ",
-  docsHome: "https://example.com/acg-docs",
+  docsHome: "https://acg-docs.vercel.app/",
   githubRepo: "https://github.com/example/acg",
 
   linkedin: {
