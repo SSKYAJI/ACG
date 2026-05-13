@@ -704,6 +704,14 @@ input:focus-visible,
     grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
     gap: var(--space-10);
   }
+
+  /*
+   * Grid uses align-items: start so cards stay top-aligned. The left column must still
+   * span the full row height or position:sticky has no scroll range (column was only as tall as the headline).
+   */
+  .pipeline-left-col {
+    align-self: stretch;
+  }
 }
 
 .pipeline-anchor {
