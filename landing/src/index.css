@@ -707,12 +707,21 @@ input:focus-visible,
 }
 
 .pipeline-anchor {
-  position: sticky;
-  top: 5.5rem;
-  align-self: start;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+@media (min-width: 880px) {
+  .pipeline-anchor {
+    position: sticky;
+    top: 5.5rem;
+    align-self: start;
+    /* Fill viewport below nav; center headline block vertically while scrolling */
+    height: calc(100svh - 5.5rem);
+    justify-content: center;
+    align-items: flex-start;
+  }
 }
 
 .pipeline-anchor .section-heading {
