@@ -776,23 +776,6 @@ input:focus-visible,
   border: 0;
 }
 
-.impact-list {
-  list-style: none;
-  margin: var(--space-4) 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  font-size: 0.95rem;
-  color: var(--text);
-}
-
-.impact-bullet {
-  color: var(--accent-orange);
-  font-weight: 800;
-  margin-right: 0.4rem;
-}
-
 .story-strip-card {
   flex: 0 0 min(340px, 85vw);
   padding: var(--space-6);

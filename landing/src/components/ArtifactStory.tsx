@@ -40,29 +40,12 @@ export function ArtifactStory() {
     <section className="story-section" id="artifacts" aria-labelledby="story-heading">
       <div className="container pipeline-grid">
         <div className="pipeline-anchor">
-          <p className="section-heading">Impact</p>
           <h2 className="h2 type-section-title" id="story-heading">
             From repo scan to <span className="emphasis-orange">safer parallel execution</span>
           </h2>
           <p className="muted story-lead">
-            ACG turns ambiguous PRs into bounded contracts. Teams ship parallel work without spending
-            review cycles cleaning up out-of-scope writes — narrower diffs, fewer rollbacks, lower
-            token spend per task.
+            Scan → predict writes → enforce boundaries → run agents in parallel.
           </p>
-          <ul className="impact-list">
-            <li>
-              <span className="impact-bullet">→</span> Out-of-scope writes blocked at the edit
-              boundary, not in code review.
-            </li>
-            <li>
-              <span className="impact-bullet">→</span> Planner prompts scoped to predicted writes —
-              not the whole repo.
-            </li>
-            <li>
-              <span className="impact-bullet">→</span> Parallel tasks ship in safe groups defined by
-              a conflict-aware solver.
-            </li>
-          </ul>
         </div>
 
         <div className="pipeline-stack" aria-labelledby="story-heading">
