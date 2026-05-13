@@ -423,29 +423,6 @@ input:focus-visible,
   max-width: 560px;
 }
 
-.hero-scroll-cue {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: var(--space-4);
-  color: rgb(105 107 117);
-  opacity: 0.9;
-}
-
-.hero-scroll-text {
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.hero-scroll-line {
-  display: inline-block;
-  width: 56px;
-  height: 1px;
-  background: rgb(26 26 26 / 0.22);
-}
-
 .install-label {
   text-align: center;
 }
